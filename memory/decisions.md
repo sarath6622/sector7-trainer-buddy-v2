@@ -83,3 +83,23 @@
 **Consequences:** Full control over components, no dependency on external package updates. Initial setup time to install needed components.
 
 ---
+
+## ADR-009: Dark Theme with Orange Accent — Always-Dark Mode
+
+**Date:** March 2026
+**Status:** Accepted
+**Context:** Sector 7's main website (sector7.in) uses a dark theme with orange (#E8651A) accent color. The PWA should match the gym's brand identity for a cohesive experience.
+**Decision:** App uses dark mode only (no light/dark toggle). The `dark` class is applied to `<html>` root. Both `:root` and `.dark` CSS custom properties are set to the same dark theme values. Primary color is Sector 7 orange (`oklch(0.637 0.179 38.5)` ≈ `#E8651A`). Background is near-black (`oklch(0.13 0 0)`). Cards/popovers use slightly lighter dark (`oklch(0.17 0 0)`). Sidebar uses `oklch(0.15 0 0)` for visual hierarchy.
+**Consequences:** Consistent brand identity. No need to maintain two color schemes. All semantic color tokens (bg-background, text-foreground, etc.) automatically apply the dark theme.
+
+---
+
+## ADR-010: Inter + JetBrains Mono as App Fonts
+
+**Date:** March 2026
+**Status:** Accepted
+**Context:** Need a modern, highly legible font for a gym management app used on mobile. Default Geist font was functional but didn't match the brand's aesthetic.
+**Decision:** Replace Geist with Inter (sans-serif) and JetBrains Mono (monospace), loaded via `next/font/google` for zero layout shift. Inter provides excellent readability at all sizes, widely adopted in modern SaaS/fitness apps.
+**Consequences:** Slightly larger font download on first visit. Better brand alignment and readability.
+
+---

@@ -94,21 +94,21 @@
 
 ## Phase 4 — Attendance & Session Management (Week 4 — MVP milestone)
 
-- [ ] **S7-F4-01** | @backend | L | Implement session management service: startSession (mark attendance + set timer), endSession (stop timer + record duration), markNoShow
+- [x] **S7-F4-01** | @backend | L | Implement session management service: startSession (mark attendance + set timer), endSession (stop timer + record duration), markNoShow
   - Depends on: S7-F3-02
-- [ ] **S7-F4-02** | @backend | M | Implement session API routes for trainer (POST /api/trainer/sessions/[id]/start, /end, /no-show)
+- [x] **S7-F4-02** | @backend | M | Implement session API routes for trainer (POST /api/trainer/sessions/[id]/start, /end, /no-show)
   - Depends on: S7-F4-01
-- [ ] **S7-F4-03** | @backend | M | Implement admin session view API (GET /api/admin/sessions with filters for date, trainer, client, status)
+- [x] **S7-F4-03** | @backend | M | Implement admin session view API (GET /api/admin/sessions with filters for date, trainer, client, status)
   - Depends on: S7-F4-01
-- [ ] **S7-F4-04** | @ui | L | Build SessionTimer component: live countdown/up timer, "PT time completed" milestone message, works in background tab (Web Worker)
+- [x] **S7-F4-04** | @ui | L | Build SessionTimer component: live countdown/up timer, "PT time completed" milestone message, works in background tab (Web Worker)
   - Depends on: S7-F0-11
-- [ ] **S7-F4-05** | @ui | XL | Build trainer active session page: Start Workout button, live timer, exercise logging area, End Session button
+- [x] **S7-F4-05** | @ui | XL | Build trainer active session page: Start Workout button, live timer, exercise logging area, End Session button
   - Depends on: S7-F4-02, S7-F4-04
-- [ ] **S7-F4-06** | @ui | M | Build trainer client list page: assigned clients, next session, session count (used/remaining), payment status badge
+- [x] **S7-F4-06** | @ui | M | Build trainer client list page: assigned clients, next session, session count (used/remaining), payment status badge
   - Depends on: S7-F4-02, S7-F2-02
-- [ ] **S7-F4-07** | @ui | M | Build client dashboard: session count card (used/remaining/carry-forward), next session, live timer (when session active)
+- [x] **S7-F4-07** | @ui | M | Build client dashboard: session count card (used/remaining/carry-forward), next session, live timer (when session active)
   - Depends on: S7-F4-02, S7-F4-04
-- [ ] **S7-F4-08** | @qa | L | Session management tests: start → timer → end flow, no-show marking, audit trail verification, concurrent session prevention
+- [x] **S7-F4-08** | @qa | L | Session management tests: start → timer → end flow, no-show marking, audit trail verification, concurrent session prevention
   - Depends on: S7-F4-01
 
 ---

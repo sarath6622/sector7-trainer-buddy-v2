@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -43,7 +44,7 @@ export function TopNav({
   const activeBranch = branches.find((b) => b.id === activeBranchId);
 
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-background px-4">
+    <header className="flex h-14 items-center justify-between border-b border-border/50 bg-background px-4">
       {/* Mobile menu */}
       <div className="flex items-center gap-2 lg:hidden">
         <Sheet>
@@ -55,7 +56,13 @@ export function TopNav({
             <Sidebar navItems={navItems} />
           </SheetContent>
         </Sheet>
-        <span className="text-lg font-bold lg:hidden">Sector 7</span>
+        <Image
+          src="/sector7-logo.png"
+          alt="Sector 7"
+          width={100}
+          height={50}
+          className="h-8 w-auto lg:hidden"
+        />
       </div>
 
       {/* Spacer for desktop */}

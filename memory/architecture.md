@@ -8,13 +8,15 @@
 
 | Layer             | Technology                           | Version | Notes                                           |
 | ----------------- | ------------------------------------ | ------- | ----------------------------------------------- |
-| **Framework**     | Next.js (App Router)                 | 14+     | Full-stack: pages + API routes + server actions |
+| **Framework**     | Next.js (App Router)                 | 16.2    | Full-stack: pages + API routes + server actions |
 | **Language**      | TypeScript                           | 5.x     | Strict mode enabled                             |
 | **Database**      | PostgreSQL                           | 16      | Primary data store                              |
 | **ORM**           | Prisma                               | 5.x     | Schema-first, migrations, type-safe queries     |
 | **Cache**         | Redis                                | 7.x     | Session store, rate limiting, real-time pub/sub |
-| **Auth**          | NextAuth.js (Auth.js)                | 5.x     | RBAC with session strategy                      |
-| **Styling**       | Tailwind CSS                         | 4.x     | Utility-first, mobile-first                     |
+| **Auth**          | NextAuth.js (Auth.js)                | 4.24    | RBAC with JWT session strategy                  |
+| **Styling**       | Tailwind CSS                         | 4.x     | Utility-first, mobile-first, dark theme         |
+| **Font (Sans)**   | Inter                                | latest  | Primary UI font via next/font/google            |
+| **Font (Mono)**   | JetBrains Mono                       | latest  | Code/mono font via next/font/google             |
 | **UI Primitives** | shadcn/ui                            | latest  | Copy-paste components, fully customizable       |
 | **Charts**        | Recharts                             | 2.x     | Client progress, admin dashboards               |
 | **Calendar**      | @fullcalendar/react                  | 6.x     | Trainer schedule, admin scheduling view         |

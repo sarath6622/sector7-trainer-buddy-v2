@@ -4,6 +4,100 @@
 
 ---
 
+### Phase 4 — Attendance & Session Management (All 8 tasks)
+
+- **Completed:** 2026-03-19
+- **Agent:** Multi-agent (backend, ui, qa)
+
+#### S7-F4-01: Session management service
+
+- `src/services/session.service.ts` — startSession, endSession, markNoShow, getSessionById, getTrainerSessions, getClientSessions, getSessionCounts, getActiveSession
+- Concurrent session prevention (only one IN_PROGRESS per trainer)
+- Actual duration calculation on end (millisecond precision → rounded to minutes)
+- Audit logging on start, end, and no-show
+- Branch scoping on all queries
+
+#### S7-F4-02: Trainer session API routes
+
+- `src/app/api/trainer/sessions/[id]/route.ts` — GET session with details
+- `src/app/api/trainer/sessions/[id]/start/route.ts` — POST start session
+- `src/app/api/trainer/sessions/[id]/end/route.ts` — POST end session (with optional notes)
+- `src/app/api/trainer/sessions/[id]/no-show/route.ts` — POST mark no-show
+- `src/app/api/trainer/clients/route.ts` — GET assigned clients with stats
+- All routes scoped to trainer's own trainerProfileId
+
+#### S7-F4-03: Admin session view API
+
+- Already existed from Phase 3 (`src/app/api/admin/sessions/route.ts`)
+- Supports date/trainer/client/status filters + pagination
+
+#### S7-F4-04: SessionTimer component
+
+- `src/components/timer/SessionTimer.tsx` — circular progress ring timer with:
+  - Real-time elapsed time display (updates every second)
+  - Expected duration comparison with progress ring
+  - Overtime detection with destructive color + pulsing message
+  - Three sizes: sm, md, lg
+- `InlineTimer` — compact inline variant without ring
+
+#### S7-F4-05: Trainer dashboard (active session page)
+
+- `src/app/(dashboard)/trainer/page.tsx` — rewritten from placeholder
+- Active session card with live SessionTimer (lg)
+- Today's sessions list with Start/No-Show/End buttons
+- Status badges, confirmation dialogs for destructive actions
+- Prevents starting a new session while one is active
+
+#### S7-F4-06: Trainer client list page
+
+- `src/app/(dashboard)/trainer/clients/page.tsx` — new page
+- Cards grid showing assigned clients from active PT packages
+- Per-client stats: used/remaining/per-month session counts
+- Next session date, no-show warning badges
+
+#### S7-F4-07: Client dashboard page
+
+- `src/app/(dashboard)/client/page.tsx` — rewritten from placeholder
+- `src/app/api/client/dashboard/route.ts` — dashboard data API
+- `src/app/api/client/sessions/route.ts` — client sessions API
+- Live SessionTimer when session is IN_PROGRESS
+- Session count cards (used, remaining, total, carry-forward)
+- Next session + trainer info cards
+- No-show warning
+
+#### S7-F4-08: Session management tests
+
+- `tests/unit/session-service.test.ts` — 11 tests covering:
+  - startSession: not found, invalid status, concurrent session prevention, success + audit
+  - endSession: not found, invalid status, success + duration calc + audit
+  - markNoShow: not found, invalid status, success + audit
+  - getSessionCounts: correct aggregation by status
+
+**Notes:**
+
+- Total: 107 tests passing, build clean
+- Timer uses `setInterval` with Date.now() for accuracy across tab switches
+- Client dashboard API returns sessionCount, nextSession, activeSession, trainer info
+
+---
+
+### Theming — Sector 7 Dark Brand Theme + Modern Font
+
+- **Completed:** 2026-03-19
+- **Agent:** @ui
+- **Files Changed:**
+  - `src/app/globals.css` (modified) — All CSS custom properties updated: dark background, orange primary (#E8651A → oklch(0.637 0.179 38.5)), chart colors themed
+  - `src/app/layout.tsx` (modified) — Added `dark` class to `<html>`, switched from Geist to Inter + JetBrains Mono, updated themeColor
+  - `src/app/(auth)/login/page.tsx` (modified) — Added Sector 7 logo image, dark background
+  - `src/components/layout/Sidebar.tsx` (modified) — Added logo in header, orange active nav highlight
+  - `src/components/layout/TopNav.tsx` (modified) — Added logo on mobile, subtle borders
+  - `public/sector7-logo.png` (created) — Sector 7 logo
+  - `public/manifest.json` (modified) — theme_color=#E8651A, background_color=#1a1a1a
+- **Memory Updated:** architecture.md (font stack, versions), decisions.md (ADR-009 dark theme, ADR-010 fonts)
+- **Notes:** Always-dark mode, no light/dark toggle. Build passes clean.
+
+---
+
 ### Phase 3 — Session Scheduling (All 8 tasks)
 
 - **Completed:** 2026-03-19

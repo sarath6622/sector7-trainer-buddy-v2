@@ -1,12 +1,13 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import Image from 'next/image';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
 const ROLE_REDIRECT: Record<string, string> = {
   SUPER_ADMIN: '/admin',
@@ -63,9 +64,9 @@ function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold">Sector 7</CardTitle>
+    <Card className="w-full max-w-sm border-border/50">
+      <CardHeader className="items-center space-y-4 pb-2">
+        <Image src="/sector7-logo.png" alt="Sector 7" width={180} height={90} priority />
         <p className="text-sm text-muted-foreground">Sign in to your account</p>
       </CardHeader>
       <CardContent>
@@ -97,7 +98,11 @@ function LoginForm() {
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button
+            type="submit"
+            className="w-full bg-primary hover:bg-primary/90"
+            disabled={loading}
+          >
             {loading ? 'Signing in...' : 'Sign in'}
           </Button>
         </form>
@@ -108,7 +113,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-muted px-4">
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4">
       <Suspense>
         <LoginForm />
       </Suspense>
