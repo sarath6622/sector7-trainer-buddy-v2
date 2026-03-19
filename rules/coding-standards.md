@@ -65,6 +65,46 @@ src/components/calendar/TrainerCalendar.tsx → Calendar wrapper
 
 ---
 
+## Mobile-First & PWA Rules
+
+This is a **mobile-first PWA**. Every UI component must be designed for phone screens first, then enhanced for larger screens.
+
+### Layout
+
+- Use `h-dvh` (not `h-screen`) for full-height layouts — handles mobile address bar correctly
+- Design for **320px minimum width** (iPhone SE), enhance upward with `sm:`, `md:`, `lg:`
+- Use `p-4` base padding, `md:p-6` for desktop — never less than 16px on mobile
+- Avoid fixed positioning where possible — use sticky for headers/footers
+
+### Touch Targets
+
+- **Minimum 40px** (h-10) for all interactive elements (buttons, inputs, selects)
+- Icon buttons: `size-10` minimum
+- Table rows with actions: ensure tap targets don't overlap
+- Add adequate spacing between adjacent touch targets (min 8px gap)
+
+### Responsive Patterns
+
+- **Tables**: Hide non-essential columns progressively (`hidden sm:table-cell`, `hidden md:table-cell`)
+- **Forms**: Single column on mobile, 2-column grid from `md:` breakpoint
+- **Cards**: Full width on mobile, grid from `md:` breakpoint
+- **Navigation**: Bottom sheet / hamburger drawer on mobile, sidebar on `lg:`
+
+### Typography
+
+- Use `text-base` (16px) for input fields on mobile to prevent iOS zoom
+- Scale down to `md:text-sm` for desktop density
+- Keep body text readable: min 14px on mobile
+
+### PWA Considerations
+
+- `manifest.json` in `/public/` with app name, icons, theme color
+- Viewport meta: `width=device-width, initial-scale=1, viewport-fit=cover`
+- Apple Web App meta tags for iOS home screen
+- All critical UI must work without JavaScript hydration delay (loading skeletons)
+
+---
+
 ## React Rules
 
 - Functional components only (no class components)

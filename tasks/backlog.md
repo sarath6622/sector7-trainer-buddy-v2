@@ -10,28 +10,19 @@
 
 ### Infra & Scaffold
 
-- [ ] **S7-F0-01** | @devops | S | Initialize Next.js 14 project with TypeScript strict mode, Tailwind CSS 4, ESLint, Prettier
-- [ ] **S7-F0-02** | @devops | S | Create docker-compose.yml (PostgreSQL 16 + Redis 7), .env.example, npm scripts
-- [ ] **S7-F0-03** | @devops | S | Configure Vitest + Testing Library + Supertest, create test helpers directory
-- [ ] **S7-F0-04** | @devops | S | Configure path aliases (@/), tsconfig strict options, lint-staged + husky pre-commit hooks
-- [ ] **S7-F0-05** | @architect | M | Create complete Prisma schema (all models from memory/schema.md), run initial migration
-  - Depends on: S7-F0-01, S7-F0-02
-- [ ] **S7-F0-06** | @architect | S | Generate Prisma client, create prisma.ts singleton in src/lib/
-  - Depends on: S7-F0-05
-- [ ] **S7-F0-07** | @architect | M | Create all Zod validation schemas in src/lib/validators.ts (matching every API input contract)
-  - Depends on: S7-F0-05
-- [ ] **S7-F0-08** | @architect | S | Create TypeScript types in src/types/ (domain.ts, api.ts, enums.ts)
-  - Depends on: S7-F0-05
-- [ ] **S7-F0-09** | @backend | S | Create AppError class in src/lib/errors.ts, error handling utilities
-  - Depends on: S7-F0-01
-- [ ] **S7-F0-10** | @backend | M | Create auditLog() utility in src/lib/audit.ts with full AuditLog write logic
-  - Depends on: S7-F0-06
-- [ ] **S7-F0-11** | @ui | M | Install and configure shadcn/ui, set up component primitives (Button, Input, Card, Badge, Dialog, Table, Select, Tabs, Tooltip, Sheet, DropdownMenu)
-  - Depends on: S7-F0-01
-- [ ] **S7-F0-12** | @ui | M | Create dashboard layout shell: Sidebar (role-based nav), TopNav (user menu, branch selector, notifications bell), responsive mobile drawer
-  - Depends on: S7-F0-11
-- [ ] **S7-F0-13** | @qa | M | Create test fixtures factory (createTestBranch, createTestUser, createTestTrainer, createTestClient, etc.) and test DB setup helper
-  - Depends on: S7-F0-05, S7-F0-03
+- [x] **S7-F0-01** | @devops | S | Initialize Next.js 14 project with TypeScript strict mode, Tailwind CSS 4, ESLint, Prettier
+- [x] **S7-F0-02** | @devops | S | Create docker-compose.yml (PostgreSQL 16 + Redis 7), .env.example, npm scripts
+- [x] **S7-F0-03** | @devops | S | Configure Vitest + Testing Library + Supertest, create test helpers directory
+- [x] **S7-F0-04** | @devops | S | Configure path aliases (@/), tsconfig strict options, lint-staged + husky pre-commit hooks
+- [x] **S7-F0-05** | @architect | M | Create complete Prisma schema (all models from memory/schema.md), run initial migration
+- [x] **S7-F0-06** | @architect | S | Generate Prisma client, create prisma.ts singleton in src/lib/
+- [x] **S7-F0-07** | @architect | M | Create all Zod validation schemas in src/lib/validators.ts (matching every API input contract)
+- [x] **S7-F0-08** | @architect | S | Create TypeScript types in src/types/ (domain.ts, api.ts, enums.ts)
+- [x] **S7-F0-09** | @backend | S | Create AppError class in src/lib/errors.ts, error handling utilities
+- [x] **S7-F0-10** | @backend | M | Create auditLog() utility in src/lib/audit.ts with full AuditLog write logic
+- [x] **S7-F0-11** | @ui | M | Install and configure shadcn/ui, set up component primitives (Button, Input, Card, Badge, Dialog, Table, Select, Tabs, Tooltip, Sheet, DropdownMenu)
+- [x] **S7-F0-12** | @ui | M | Create dashboard layout shell: Sidebar (role-based nav), TopNav (user menu, branch selector, notifications bell), responsive mobile drawer
+- [x] **S7-F0-13** | @qa | M | Create test fixtures factory (createTestBranch, createTestUser, createTestTrainer, createTestClient, etc.) and test DB setup helper
 
 ---
 
@@ -39,64 +30,64 @@
 
 ### Authentication
 
-- [ ] **S7-F1-01** | @backend | L | Implement NextAuth.js with credentials provider, session strategy, RBAC middleware
+- [x] **S7-F1-01** | @backend | L | Implement NextAuth.js with credentials provider, session strategy, RBAC middleware
   - Depends on: S7-F0-06, S7-F0-09
-- [ ] **S7-F1-02** | @architect | M | Create Next.js middleware for auth enforcement + branchId injection into request context
+- [x] **S7-F1-02** | @architect | M | Create Next.js middleware for auth enforcement + branchId injection into request context
   - Depends on: S7-F1-01
-- [ ] **S7-F1-03** | @ui | M | Build login page (email + password), redirect logic based on role
+- [x] **S7-F1-03** | @ui | M | Build login page (email + password), redirect logic based on role
   - Depends on: S7-F1-01, S7-F0-12
-- [ ] **S7-F1-04** | @qa | M | Auth integration tests: login success, invalid credentials, role-based redirect, session persistence
+- [x] **S7-F1-04** | @qa | M | Auth integration tests: login success, invalid credentials, role-based redirect, session persistence
   - Depends on: S7-F1-01, S7-F1-02, S7-F0-13
 
 ### User CRUD (Admin)
 
-- [ ] **S7-F1-05** | @backend | L | Implement user CRUD service (create, list, get, update, soft-delete) with branch scoping + audit logging
+- [x] **S7-F1-05** | @backend | L | Implement user CRUD service (create, list, get, update, soft-delete) with branch scoping + audit logging
   - Depends on: S7-F0-06, S7-F0-07, S7-F0-10
-- [ ] **S7-F1-06** | @backend | M | Implement user CRUD API routes (POST, GET, PUT, DELETE /api/admin/users) with auth + role checks
+- [x] **S7-F1-06** | @backend | M | Implement user CRUD API routes (POST, GET, PUT, DELETE /api/admin/users) with auth + role checks
   - Depends on: S7-F1-05, S7-F1-02
-- [ ] **S7-F1-07** | @ui | L | Build admin client list page: searchable table, filters (status, trainer), payment status badges
+- [x] **S7-F1-07** | @ui | L | Build admin client list page: searchable table, filters (status, trainer), payment status badges
   - Depends on: S7-F1-06, S7-F0-12
-- [ ] **S7-F1-08** | @ui | L | Build admin client profile page: personal info form, health metrics, PT config (session duration override), payment status
+- [x] **S7-F1-08** | @ui | L | Build admin client profile page: personal info form, health metrics, PT config (session duration override), payment status
   - Depends on: S7-F1-06, S7-F0-11
-- [ ] **S7-F1-09** | @ui | M | Build admin trainer list page: table with specialties, client count, availability summary
+- [x] **S7-F1-09** | @ui | M | Build admin trainer list page: table with specialties, client count, availability summary
   - Depends on: S7-F1-06, S7-F0-12
-- [ ] **S7-F1-10** | @ui | M | Build admin trainer profile page: personal info, specialties, working hours config, bio
+- [x] **S7-F1-10** | @ui | M | Build admin trainer profile page: personal info, specialties, working hours config, bio
   - Depends on: S7-F1-06, S7-F0-11
-- [ ] **S7-F1-11** | @qa | M | User CRUD tests: service unit tests (branch scoping, validation), API integration tests (role checks, 403 on cross-branch)
+- [x] **S7-F1-11** | @qa | M | User CRUD tests: service unit tests (branch scoping, validation), API integration tests (role checks, 403 on cross-branch)
   - Depends on: S7-F1-05, S7-F1-06
 
 ---
 
 ## Phase 2 — Trainer-Client Mapping & PT Packages (Week 2-3)
 
-- [ ] **S7-F2-01** | @backend | M | Implement PT package service (create mapping, list, update, deactivate) with branch scoping + audit
+- [x] **S7-F2-01** | @backend | M | Implement PT package service (create mapping, list, update, deactivate) with branch scoping + audit
   - Depends on: S7-F1-05
-- [ ] **S7-F2-02** | @backend | M | Implement PT package API routes (POST, GET, PUT, DELETE /api/admin/mappings)
+- [x] **S7-F2-02** | @backend | M | Implement PT package API routes (POST, GET, PUT, DELETE /api/admin/mappings)
   - Depends on: S7-F2-01, S7-F1-02
-- [ ] **S7-F2-03** | @ui | M | Build trainer-client mapping UI on client profile page: assign trainer, set sessions/month, session charge, start date
+- [x] **S7-F2-03** | @ui | M | Build trainer-client mapping UI on client profile page: assign trainer, set sessions/month, session charge, start date
   - Depends on: S7-F2-02, S7-F1-08
-- [ ] **S7-F2-04** | @qa | S | PT package tests: create mapping, duplicate detection, branch isolation
+- [x] **S7-F2-04** | @qa | S | PT package tests: create mapping, duplicate detection, branch isolation
   - Depends on: S7-F2-01
 
 ---
 
 ## Phase 3 — Session Scheduling (Week 3)
 
-- [ ] **S7-F3-01** | @backend | L | Implement schedule service: create recurring schedule, list by trainer/client, update, deactivate
+- [x] **S7-F3-01** | @backend | L | Implement schedule service: create recurring schedule, list by trainer/client, update, deactivate
   - Depends on: S7-F2-01
-- [ ] **S7-F3-02** | @backend | XL | Implement session generation service: generate monthly instances from schedules, detect conflicts, return warnings
+- [x] **S7-F3-02** | @backend | XL | Implement session generation service: generate monthly instances from schedules, detect conflicts, return warnings
   - Depends on: S7-F3-01
-- [ ] **S7-F3-03** | @backend | M | Implement scheduling API routes (POST, GET, PUT, DELETE /api/admin/schedules + POST /api/admin/schedules/generate)
+- [x] **S7-F3-03** | @backend | M | Implement scheduling API routes (POST, GET, PUT, DELETE /api/admin/schedules + POST /api/admin/schedules/generate)
   - Depends on: S7-F3-01, S7-F3-02
-- [ ] **S7-F3-04** | @backend | M | Implement conflict detection API (GET /api/admin/conflicts) — find overlapping sessions per trainer per date
+- [x] **S7-F3-04** | @backend | M | Implement conflict detection API (GET /api/admin/conflicts) — find overlapping sessions per trainer per date
   - Depends on: S7-F3-02
-- [ ] **S7-F3-05** | @ui | L | Install and configure @fullcalendar/react, create TrainerCalendar wrapper component
+- [x] **S7-F3-05** | @ui | L | Install and configure @fullcalendar/react, create TrainerCalendar wrapper component
   - Depends on: S7-F0-11
-- [ ] **S7-F3-06** | @ui | XL | Build admin scheduling page: trainer calendar view, create schedule modal, month generation button, conflict warning display
+- [x] **S7-F3-06** | @ui | XL | Build admin scheduling page: trainer calendar view, create schedule modal, month generation button, conflict warning display
   - Depends on: S7-F3-03, S7-F3-04, S7-F3-05
-- [ ] **S7-F3-07** | @ui | M | Build trainer schedule page (read-only): daily/weekly/monthly calendar views with session cards showing client name, time, status
+- [x] **S7-F3-07** | @ui | M | Build trainer schedule page (read-only): daily/weekly/monthly calendar views with session cards showing client name, time, status
   - Depends on: S7-F3-03, S7-F3-05
-- [ ] **S7-F3-08** | @qa | L | Scheduling tests: generation logic (correct dates, skip weekends if needed), conflict detection accuracy, branch isolation
+- [x] **S7-F3-08** | @qa | L | Scheduling tests: generation logic (correct dates, skip weekends if needed), conflict detection accuracy, branch isolation
   - Depends on: S7-F3-02, S7-F3-04
 
 ---

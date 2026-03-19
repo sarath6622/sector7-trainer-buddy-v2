@@ -31,7 +31,8 @@ export function createMockRequest(
     init.body = JSON.stringify(body);
   }
 
-  return new NextRequest(urlObj, init);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new NextRequest(urlObj, init as any);
 }
 
 /**

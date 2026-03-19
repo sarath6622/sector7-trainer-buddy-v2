@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 
 interface AuditLogInput {
   action: string;
@@ -6,9 +7,9 @@ interface AuditLogInput {
   subjectType: string;
   subjectId: string;
   branchId: string;
-  oldValue?: Record<string, unknown> | null;
-  newValue?: Record<string, unknown> | null;
-  metadata?: Record<string, unknown> | null;
+  oldValue?: Prisma.InputJsonValue | null;
+  newValue?: Prisma.InputJsonValue | null;
+  metadata?: Prisma.InputJsonValue | null;
   ipAddress?: string;
   userAgent?: string;
 }
