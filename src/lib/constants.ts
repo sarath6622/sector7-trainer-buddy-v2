@@ -12,6 +12,7 @@ import {
   CalendarDays,
   Activity,
   BarChart3,
+  ArrowLeftRight,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,6 +29,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Scheduling', href: '/admin/scheduling', icon: Calendar },
   { label: 'Sessions', href: '/admin/sessions', icon: ClipboardList },
   { label: 'Leaves', href: '/admin/leaves', icon: CalendarDays },
+  { label: 'Reassignment', href: '/admin/reassignments', icon: ArrowLeftRight },
   { label: 'Exercises', href: '/admin/exercises', icon: Dumbbell },
   { label: 'Kickboxing', href: '/admin/kickboxing', icon: Activity },
   { label: 'Payments', href: '/admin/payments', icon: CreditCard },

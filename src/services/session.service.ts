@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
+import { notifySessionStarted, notifyNoShow } from '@/services/notification.service';
 import type { SessionStatus } from '@prisma/client';
 
 interface StartSessionInput {
@@ -102,10 +103,10 @@ export async function startSession({
     },
     include: {
       client: {
-        include: { user: { select: { firstName: true, lastName: true } } },
+        include: { user: { select: { id: true, firstName: true, lastName: true } } },
       },
       trainer: {
-        include: { user: { select: { firstName: true, lastName: true } } },
+        include: { user: { select: { id: true, firstName: true, lastName: true } } },
       },
     },
   });
@@ -118,6 +119,15 @@ export async function startSession({
     branchId,
     newValue: { status: 'IN_PROGRESS', startedAt: now.toISOString() },
     metadata: { clientProfileId: session.clientProfileId, trainerProfileId },
+  });
+
+  // Notify client (fire-and-forget)
+  const trainerUser = updated.trainer.user;
+  notifySessionStarted({
+    branchId,
+    clientUserId: updated.client.user.id,
+    trainerName: `${trainerUser.firstName} ${trainerUser.lastName}`,
+    scheduledTime: session.scheduledTime,
   });
 
   return {
@@ -231,10 +241,10 @@ export async function markNoShow({
     },
     include: {
       client: {
-        include: { user: { select: { firstName: true, lastName: true } } },
+        include: { user: { select: { id: true, firstName: true, lastName: true } } },
       },
       trainer: {
-        include: { user: { select: { firstName: true, lastName: true } } },
+        include: { user: { select: { id: true, firstName: true, lastName: true } } },
       },
     },
   });
@@ -247,6 +257,14 @@ export async function markNoShow({
     branchId,
     newValue: { status: 'NO_SHOW', noShowMarkedAt: now.toISOString() },
     metadata: { clientProfileId: session.clientProfileId, trainerProfileId },
+  });
+
+  // Notify client (fire-and-forget)
+  notifyNoShow({
+    branchId,
+    clientUserId: updated.client.user.id,
+    date: session.scheduledDate.toISOString().slice(0, 10),
+    time: session.scheduledTime,
   });
 
   return { session: updated };

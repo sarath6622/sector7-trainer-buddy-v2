@@ -2,15 +2,13 @@ import { z } from 'zod';
 
 // ─── SHARED PRIMITIVES ──────────────────────────────
 
-const cuidSchema = z.string().cuid();
+const cuidSchema = z.string().min(1, 'ID is required');
 const emailSchema = z.string().email();
 const phoneSchema = z.string().min(7).max(20).optional();
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:MM format');
-const dateSchema = z
-  .string()
-  .refine((val) => !isNaN(Date.parse(val)), {
-    message: 'Must be a valid date string (YYYY-MM-DD or ISO 8601)',
-  });
+const dateSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
+  message: 'Must be a valid date string (YYYY-MM-DD or ISO 8601)',
+});
 const pageSchema = z.coerce.number().int().min(1).default(1);
 const pageSizeSchema = z.coerce.number().int().min(1).max(100).default(20);
 
@@ -344,10 +342,11 @@ export const updateWorkoutSchema = z.object({
 });
 
 export const syncWorkoutsSchema = z.object({
+  sessionInstanceId: cuidSchema,
   logs: z.array(
     workoutEntrySchema.extend({
-      sessionInstanceId: cuidSchema,
-      timestamp: z.string().datetime(),
+      localId: z.string(),
+      createdAt: z.string().datetime(),
     }),
   ),
 });

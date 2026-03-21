@@ -36,7 +36,14 @@ export async function middleware(request: NextRequest) {
   }
 
   // Allow static assets and Next.js internals
-  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.includes('.')) {
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/icons/') ||
+    pathname === '/manifest.json' ||
+    pathname === '/sw.js' ||
+    /\.(png|jpg|jpeg|gif|svg|ico|webp)$/.test(pathname)
+  ) {
     return NextResponse.next();
   }
 
@@ -54,7 +61,13 @@ export async function middleware(request: NextRequest) {
   }
 
   const role = token.role as string;
-  const branchId = token.branchId as string;
+  const branchId = token.branchId as string | undefined;
+
+  // Guard: branchId must be present for any non-auth route
+  if (!branchId && !pathname.startsWith('/api/auth')) {
+    const loginUrl = new URL('/login', request.url);
+    return NextResponse.redirect(loginUrl);
+  }
 
   // Root path → redirect to role-specific dashboard
   if (pathname === '/') {
@@ -78,15 +91,6 @@ export async function middleware(request: NextRequest) {
       const defaultPath = ROLE_DEFAULT_PATH[role] ?? '/login';
       return NextResponse.redirect(new URL(defaultPath, request.url));
     }
-  }
-
-  // Inject branchId into API routes via header for services to consume
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth')) {
-    const response = NextResponse.next();
-    response.headers.set('x-branch-id', branchId);
-    response.headers.set('x-user-id', token.id as string);
-    response.headers.set('x-user-role', role);
-    return response;
   }
 
   return NextResponse.next();

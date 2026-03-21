@@ -221,6 +221,7 @@ model ClientProfile {
   medicalConditions      String?
   fitnessGoals           String?
   sessionDurationOverrideMin Int?
+  paymentStatus          PaymentStatus @default(PENDING)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -564,6 +565,7 @@ model NotificationLog {
   body        String
   metadata    Json?
   sentAt      DateTime?
+  readAt      DateTime?
   failReason  String?
   createdAt   DateTime           @default(now())
 

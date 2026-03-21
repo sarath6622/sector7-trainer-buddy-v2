@@ -2,18 +2,21 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Search } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Mail,
+  Phone,
+  Plus,
+  Search,
+  Target,
+  Users,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -22,6 +25,57 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+
+const AVATAR_COLORS = [
+  {
+    bg: 'from-violet-500/20 to-violet-500/5',
+    ring: 'ring-violet-500/20',
+    text: 'text-violet-600 dark:text-violet-400',
+  },
+  {
+    bg: 'from-blue-500/20 to-blue-500/5',
+    ring: 'ring-blue-500/20',
+    text: 'text-blue-600 dark:text-blue-400',
+  },
+  {
+    bg: 'from-emerald-500/20 to-emerald-500/5',
+    ring: 'ring-emerald-500/20',
+    text: 'text-emerald-600 dark:text-emerald-400',
+  },
+  {
+    bg: 'from-amber-500/20 to-amber-500/5',
+    ring: 'ring-amber-500/20',
+    text: 'text-amber-600 dark:text-amber-400',
+  },
+  {
+    bg: 'from-rose-500/20 to-rose-500/5',
+    ring: 'ring-rose-500/20',
+    text: 'text-rose-600 dark:text-rose-400',
+  },
+  {
+    bg: 'from-cyan-500/20 to-cyan-500/5',
+    ring: 'ring-cyan-500/20',
+    text: 'text-cyan-600 dark:text-cyan-400',
+  },
+  {
+    bg: 'from-pink-500/20 to-pink-500/5',
+    ring: 'ring-pink-500/20',
+    text: 'text-pink-600 dark:text-pink-400',
+  },
+  {
+    bg: 'from-teal-500/20 to-teal-500/5',
+    ring: 'ring-teal-500/20',
+    text: 'text-teal-600 dark:text-teal-400',
+  },
+];
+
+function getColorForName(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]!;
+}
 
 interface ClientUser {
   id: string;
@@ -34,6 +88,7 @@ interface ClientUser {
     id: string;
     currentWeight: number | null;
     fitnessGoals: string | null;
+    paymentStatus: 'PAID' | 'PENDING';
   } | null;
 }
 
@@ -81,6 +136,29 @@ export default function ClientListPage() {
     fetchClients();
   }, [fetchClients]);
 
+  async function togglePaymentStatus(client: ClientUser) {
+    if (!client.clientProfile) return;
+    const newStatus = client.clientProfile.paymentStatus === 'PAID' ? 'PENDING' : 'PAID';
+    try {
+      const res = await fetch(`/api/admin/users/${client.clientProfile.id}/payment-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentStatus: newStatus }),
+      });
+      if (res.ok) {
+        setClients((prev) =>
+          prev.map((c) =>
+            c.id === client.id && c.clientProfile
+              ? { ...c, clientProfile: { ...c.clientProfile, paymentStatus: newStatus } }
+              : c,
+          ),
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update payment status:', err);
+    }
+  }
+
   const filtered = clients.filter((c) => {
     const matchesSearch =
       !search ||
@@ -93,20 +171,35 @@ export default function ClientListPage() {
     return matchesSearch && matchesStatus;
   });
 
+  const activeCount = clients.filter((c) => c.isActive).length;
+  const pendingCount = clients.filter((c) => c.clientProfile?.paymentStatus === 'PENDING').length;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Clients</h1>
+    <div className="mx-auto max-w-5xl space-y-6 pb-8">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {clients.length} total &middot; {activeCount} active
+            {pendingCount > 0 && (
+              <span className="text-amber-600 dark:text-amber-400">
+                {' '}
+                &middot; {pendingCount} payment pending
+              </span>
+            )}
+          </p>
+        </div>
         <Link href="/admin/clients/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button className="gap-2 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700">
+            <Plus className="h-4 w-4" />
             Add Client
           </Button>
         </Link>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -117,7 +210,7 @@ export default function ClientListPage() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? 'all')}>
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-full sm:w-[140px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -128,97 +221,151 @@ export default function ClientListPage() {
         </Select>
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead className="hidden sm:table-cell">Email</TableHead>
-              <TableHead className="hidden md:table-cell">Phone</TableHead>
-              <TableHead className="hidden lg:table-cell">Goals</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-4 w-32" />
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    <Skeleton className="h-4 w-40" />
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <Skeleton className="h-4 w-28" />
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-16" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                  No clients found
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((client) => (
-                <TableRow key={client.id}>
-                  <TableCell>
-                    <Link
-                      href={`/admin/clients/${client.id}`}
-                      className="font-medium hover:underline"
+      {/* Client Cards */}
+      {loading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-48 rounded-2xl" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/60">
+            <Users className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <p className="text-muted-foreground">
+            {search || statusFilter !== 'all' ? 'No clients match your filters' : 'No clients yet'}
+          </p>
+          {!search && statusFilter === 'all' && (
+            <Link href="/admin/clients/new">
+              <Button variant="outline" size="sm" className="gap-2">
+                <Plus className="h-3.5 w-3.5" />
+                Add your first client
+              </Button>
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((client) => {
+            const color = getColorForName(`${client.firstName} ${client.lastName}`);
+            const initials = `${client.firstName[0]}${client.lastName[0]}`.toUpperCase();
+            return (
+              <Link
+                key={client.id}
+                href={`/admin/clients/${client.id}`}
+                className="group rounded-2xl bg-card p-5 ring-1 ring-border/50 transition-all hover:ring-primary/40 hover:shadow-sm"
+              >
+                {/* Top: Avatar + Name + Status */}
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${color.bg} ring-2 ${color.ring}`}
+                  >
+                    <span className={`text-sm font-bold ${color.text}`}>{initials}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-semibold group-hover:text-primary transition-colors">
+                        {client.firstName} {client.lastName}
+                      </p>
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          'shrink-0 text-[10px] px-1.5 py-0',
+                          client.isActive
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                            : 'bg-zinc-500/15 text-zinc-500',
+                        )}
+                      >
+                        {client.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Mail className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{client.email}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Details */}
+                <div className="mt-4 space-y-2">
+                  {client.phone && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5 shrink-0" />
+                      <span>{client.phone}</span>
+                    </div>
+                  )}
+                  {client.clientProfile?.fitnessGoals && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Target className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{client.clientProfile.fitnessGoals}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer: Payment */}
+                <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <CreditCard className="h-3.5 w-3.5" />
+                    <span>Payment</span>
+                  </div>
+                  {client.clientProfile ? (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        togglePaymentStatus(client);
+                      }}
+                      className="cursor-pointer"
                     >
-                      {client.firstName} {client.lastName}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell">{client.email}</TableCell>
-                  <TableCell className="hidden md:table-cell">{client.phone ?? '—'}</TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    {client.clientProfile?.fitnessGoals ?? '—'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={client.isActive ? 'default' : 'secondary'}>
-                      {client.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          'text-xs transition-opacity hover:opacity-80',
+                          client.clientProfile.paymentStatus === 'PAID'
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                            : 'bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
+                        )}
+                      >
+                        {client.clientProfile.paymentStatus === 'PAID' ? 'Paid' : 'Pending'}
+                      </Badge>
+                    </button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* Pagination */}
       {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between rounded-2xl bg-card px-4 py-3 ring-1 ring-border/50">
           <p className="text-sm text-muted-foreground">
-            Showing {(pagination.page - 1) * pagination.pageSize + 1}–
+            {(pagination.page - 1) * pagination.pageSize + 1}–
             {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
             {pagination.total}
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               disabled={pagination.page <= 1}
               onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
             >
-              Previous
+              <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               disabled={pagination.page >= pagination.totalPages}
               onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
             >
-              Next
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>

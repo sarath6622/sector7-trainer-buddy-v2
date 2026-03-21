@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Save, Trash2, X } from 'lucide-react';
+import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -57,6 +58,7 @@ interface TrainerOption {
 }
 
 export default function ClientProfilePage() {
+  const { confirm, ConfirmDialog } = useConfirm();
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -201,7 +203,13 @@ export default function ClientProfilePage() {
   }
 
   async function handleDelete() {
-    if (!confirm('Are you sure you want to deactivate this client?')) return;
+    const ok = await confirm({
+      title: 'Deactivate Client',
+      description: 'Are you sure you want to deactivate this client?',
+      confirmText: 'Deactivate',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -251,7 +259,13 @@ export default function ClientProfilePage() {
   }
 
   async function handleDeactivateMapping(pkgId: string) {
-    if (!confirm('Deactivate this trainer mapping?')) return;
+    const ok = await confirm({
+      title: 'Deactivate Mapping',
+      description: 'Deactivate this trainer mapping?',
+      confirmText: 'Deactivate',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     if (!client?.clientProfile?.id) return;
     try {
       const res = await fetch(`/api/admin/mappings/${pkgId}`, { method: 'DELETE' });
@@ -541,7 +555,12 @@ export default function ClientProfilePage() {
                       <span className="font-medium">
                         {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
                       </span>
-                      <Badge variant="default">Active</Badge>
+                      <Badge
+                        variant="secondary"
+                        className="bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
+                      >
+                        Active
+                      </Badge>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                       <span>{pkg.sessionsPerMonth} sessions/month</span>
@@ -590,6 +609,8 @@ export default function ClientProfilePage() {
           )}
         </CardContent>
       </Card>
+
+      {ConfirmDialog}
     </div>
   );
 }

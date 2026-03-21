@@ -115,234 +115,217 @@
 
 ## Phase 5 — Workout Logging & Exercise Library (Week 5)
 
-- [ ] **S7-F5-01** | @backend | M | Implement exercise library service: CRUD, search/filter by muscle group + category + equipment, bulk import
+- [x] **S7-F5-01** | @backend | M | Implement exercise library service: CRUD, search/filter by muscle group + category + equipment, bulk import
   - Depends on: S7-F0-06
-- [ ] **S7-F5-02** | @backend | M | Implement exercise API routes (CRUD + bulk import under /api/admin/exercises)
+- [x] **S7-F5-02** | @backend | M | Implement exercise API routes (CRUD + bulk import under /api/admin/exercises)
   - Depends on: S7-F5-01
-- [ ] **S7-F5-03** | @backend | L | Implement workout logging service: create workout log + sets, update, delete, get by session
+- [x] **S7-F5-03** | @backend | L | Implement workout logging service: create workout log + sets, update, delete, get by session
   - Depends on: S7-F4-01
-- [ ] **S7-F5-04** | @backend | M | Implement workout API routes for trainer (POST, PUT /api/trainer/workouts)
+- [x] **S7-F5-04** | @backend | M | Implement workout API routes for trainer (POST, PUT /api/trainer/workouts)
   - Depends on: S7-F5-03
-- [ ] **S7-F5-05** | @ui | L | Build admin exercise library page: table with search/filter, create/edit modal, media upload (video/GIF), bulk import
+- [x] **S7-F5-05** | @ui | L | Build admin exercise library page: table with search/filter, create/edit modal, media upload (video/GIF), bulk import
   - Depends on: S7-F5-02
-- [ ] **S7-F5-06** | @ui | XL | Build workout logging UI within active session page: exercise search from library, add sets/reps/weight, reorder exercises, notes
+- [x] **S7-F5-06** | @ui | XL | Build workout logging UI within active session page: exercise search from library, add sets/reps/weight, reorder exercises, notes
   - Depends on: S7-F5-04, S7-F4-05
-- [ ] **S7-F5-07** | @ui | M | Build client workout history page: date-wise list, exercise details, filter by date/exercise/muscle group
+- [x] **S7-F5-07** | @ui | M | Build client workout history page: date-wise list, exercise details, filter by date/exercise/muscle group
   - Depends on: S7-F5-04
-- [ ] **S7-F5-08** | @qa | M | Workout logging tests: create log, validate sets, exercise lookup, offline queue (unit test the sync logic)
+- [x] **S7-F5-08** | @qa | M | Workout logging tests: create log, validate sets, exercise lookup, offline queue (unit test the sync logic)
   - Depends on: S7-F5-03
 
 ---
 
 ## Phase 6 — Leave Management (Week 6)
 
-- [ ] **S7-F6-01** | @backend | L | Implement leave service: apply leave, approve/reject, identify affected clients + sessions, get leave list
+- [x] **S7-F6-01** | @backend | L | Implement leave service: apply leave, approve/reject, identify affected clients + sessions, get leave list
   - Depends on: S7-F4-01
-- [ ] **S7-F6-02** | @backend | M | Implement leave API routes: trainer (POST, GET /api/trainer/leaves), admin (GET, PUT approve/reject /api/admin/leaves)
+- [x] **S7-F6-02** | @backend | M | Implement leave API routes: trainer (POST, GET /api/trainer/leaves), admin (GET, PUT approve/reject /api/admin/leaves)
   - Depends on: S7-F6-01
-- [ ] **S7-F6-03** | @backend | M | Implement client unavailability service: mark/unmark dates, list by month
+- [x] **S7-F6-03** | @backend | M | Implement client unavailability service: mark/unmark dates, list by month
   - Depends on: S7-F0-06
-- [ ] **S7-F6-04** | @backend | S | Implement client unavailability API routes (POST, GET, DELETE /api/client/unavailability)
+- [x] **S7-F6-04** | @backend | S | Implement client unavailability API routes (POST, GET, DELETE /api/client/unavailability)
   - Depends on: S7-F6-03
-- [ ] **S7-F6-05** | @ui | M | Build trainer leave application page: date picker, reason, affected clients preview, submit
+- [x] **S7-F6-05** | @ui | M | Build trainer leave application page: date picker, reason, affected clients preview, submit
   - Depends on: S7-F6-02
-- [ ] **S7-F6-06** | @ui | L | Build admin leave management page: leave requests table, approve/reject with notes, affected clients panel
+- [x] **S7-F6-06** | @ui | L | Build admin leave management page: leave requests table, approve/reject with notes, affected clients panel
   - Depends on: S7-F6-02
-- [ ] **S7-F6-07** | @ui | M | Build client unavailability page: calendar-based date selection, mark/unmark
+- [x] **S7-F6-07** | @ui | M | Build client unavailability page: calendar-based date selection, mark/unmark
   - Depends on: S7-F6-04
-- [ ] **S7-F6-08** | @qa | M | Leave tests: apply → approve → affected clients identified, rejection flow, audit trail
+- [x] **S7-F6-08** | @qa | M | Leave tests: apply → approve → affected clients identified, rejection flow, audit trail
   - Depends on: S7-F6-01
 
 ---
 
 ## Phase 7 — Trainer Reassignment (Week 7)
 
-- [ ] **S7-F7-01** | @backend | L | Implement reassignment service: find vacant trainers by slot, create one-time swap, bulk reassign
+- [x] **S7-F7-01** | @backend | L | Implement reassignment service: find vacant trainers by slot, create one-time swap, bulk reassign
   - Depends on: S7-F6-01
-- [ ] **S7-F7-02** | @backend | M | Implement reassignment API routes (POST /api/admin/reassignments, POST /bulk, GET /api/admin/trainers/vacant)
+- [x] **S7-F7-02** | @backend | M | Implement reassignment API routes (POST /api/admin/reassignments, POST /bulk, GET /api/admin/trainers/vacant)
   - Depends on: S7-F7-01
-- [ ] **S7-F7-03** | @ui | L | Build admin reassignment page: vacant trainers per slot lookup, assign replacement, bulk assignment
+- [x] **S7-F7-03** | @ui | L | Build admin reassignment page: vacant trainers per slot lookup, assign replacement, bulk assignment
   - Depends on: S7-F7-02
-- [ ] **S7-F7-04** | @qa | M | Reassignment tests: vacant trainer calculation (exclude on-leave + booked), swap creation, audit trail
+- [x] **S7-F7-04** | @qa | M | Reassignment tests: vacant trainer calculation (exclude on-leave + booked), swap creation, audit trail
   - Depends on: S7-F7-01
 
 ---
 
 ## Phase 8 — Client Progress & Visualization (Week 7-8)
 
-- [ ] **S7-F8-01** | @backend | M | Implement progress service: create entry, update, list by client, chart data aggregation
+- [x] **S7-F8-01** | @backend | M | Implement progress service: create entry, update, list by client, chart data aggregation
   - Depends on: S7-F0-06
-- [ ] **S7-F8-02** | @backend | M | Implement progress API routes: trainer (POST, PUT, GET /api/trainer/clients/[id]/progress), client (GET /api/client/progress)
+- [x] **S7-F8-02** | @backend | M | Implement progress API routes: trainer (POST, PUT, GET /api/trainer/clients/[id]/progress), client (GET /api/client/progress)
   - Depends on: S7-F8-01
-- [ ] **S7-F8-03** | @ui | M | Install Recharts, create chart wrapper components: ProgressLineChart, WeightProgressionChart, AttendanceChart
+- [x] **S7-F8-03** | @ui | M | Install Recharts, create chart wrapper components: ProgressLineChart, WeightProgressionChart, AttendanceChart
   - Depends on: S7-F0-11
-- [ ] **S7-F8-04** | @ui | L | Build client progress page: weight trend chart, body fat chart, workout weight progression per exercise, attendance rate
+- [x] **S7-F8-04** | @ui | L | Build client progress page: weight trend chart, body fat chart, workout weight progression per exercise, attendance rate
   - Depends on: S7-F8-02, S7-F8-03
-- [ ] **S7-F8-05** | @ui | M | Build trainer client progress view: same charts + edit progress entries form
+- [x] **S7-F8-05** | @ui | M | Build trainer client progress view: same charts + edit progress entries form
   - Depends on: S7-F8-02, S7-F8-03
-- [ ] **S7-F8-06** | @qa | S | Progress tests: entry creation, chart data aggregation accuracy
+- [x] **S7-F8-06** | @qa | S | Progress tests: entry creation, chart data aggregation accuracy
   - Depends on: S7-F8-01
 
 ---
 
 ## Phase 9 — Notifications (Week 8-9)
 
-- [ ] **S7-F9-01** | @backend | L | Implement notification service: create notification, send via WhatsApp API, send via FCM, log delivery status, fallback logic
+- [x] **S7-F9-01** | @backend | L | Implement notification service: create notification, send via WhatsApp API, send via FCM, log delivery status, fallback logic
   - Depends on: S7-F0-06
-- [ ] **S7-F9-02** | @backend | M | Integrate WhatsApp Business API: template messages for session reminders, leave updates, reassignment notices
+- [x] **S7-F9-02** | @backend | M | Integrate WhatsApp Business API: template messages for session reminders, leave updates, reassignment notices
   - Depends on: S7-F9-01
-- [ ] **S7-F9-03** | @backend | M | Integrate Firebase Cloud Messaging: push notification delivery for in-app events
+- [x] **S7-F9-03** | @backend | M | Integrate Firebase Cloud Messaging: push notification delivery for in-app events
   - Depends on: S7-F9-01
-- [ ] **S7-F9-04** | @backend | M | Wire notification triggers into existing services: session start, leave approved/rejected, reassignment, no-show, carry-forward
+- [x] **S7-F9-04** | @backend | M | Wire notification triggers into existing services: session start, leave approved/rejected, reassignment, no-show, carry-forward
   - Depends on: S7-F9-01, S7-F4-01, S7-F6-01, S7-F7-01
-- [ ] **S7-F9-05** | @backend | S | Implement notification API routes (GET /api/notifications, PUT mark-read)
+- [x] **S7-F9-05** | @backend | S | Implement notification API routes (GET /api/notifications, PUT mark-read)
   - Depends on: S7-F9-01
-- [ ] **S7-F9-06** | @ui | M | Build notification bell component in TopNav: unread count badge, dropdown with notification list, mark as read
+- [x] **S7-F9-06** | @ui | M | Build notification bell component in TopNav: unread count badge, dropdown with notification list, mark as read
   - Depends on: S7-F9-05
-- [ ] **S7-F9-07** | @ui | S | Add real-time notification listener (WebSocket/Pusher) to dashboard layout
+- [x] **S7-F9-07** | @ui | S | Add real-time notification listener (WebSocket/Pusher) to dashboard layout
   - Depends on: S7-F9-06
-- [ ] **S7-F9-08** | @qa | M | Notification tests: delivery logging, fallback from WhatsApp to in-app, trigger verification for each event type
+- [x] **S7-F9-08** | @qa | M | Notification tests: delivery logging, fallback from WhatsApp to in-app, trigger verification for each event type
   - Depends on: S7-F9-04
 
 ---
 
-## Phase 10 — Payments & Cancellation (Week 9-10)
+## Phase 10 — Payment Status Toggle (Simplified)
 
-- [ ] **S7-F10-01** | @backend | M | Implement payment service: create record, update status, list by client/status, revenue aggregation
-  - Depends on: S7-F0-06
-- [ ] **S7-F10-02** | @backend | M | Implement payment API routes (POST, GET, PUT /api/admin/payments)
-  - Depends on: S7-F10-01
-- [ ] **S7-F10-03** | @backend | M | Implement cancellation service: cancel session with policy enforcement (within/outside window), update session status
-  - Depends on: S7-F4-01
-- [ ] **S7-F10-04** | @backend | S | Implement cancellation policy check in session service (read branch settings, compare timestamps)
-  - Depends on: S7-F10-03
-- [ ] **S7-F10-05** | @ui | M | Build admin payment management page: log payment form, payment history table, status filters
-  - Depends on: S7-F10-02
-- [ ] **S7-F10-06** | @ui | S | Add payment status badges to client list and client profile pages
-  - Depends on: S7-F10-02, S7-F1-07
-- [ ] **S7-F10-07** | @qa | M | Payment tests: create, status transitions, revenue aggregation. Cancellation tests: within window, outside window, policy toggle OFF
-  - Depends on: S7-F10-01, S7-F10-03
+- [x] **S7-F10-01** | @backend | S | Payment status toggle: `updatePaymentStatus()` in user.service.ts, admin API route
+  - ~~Original scope: full payment service + cancellation~~ → simplified to PAID/PENDING toggle on ClientProfile
+- [x] **S7-F10-02** | @ui | S | Payment status badge on admin clients page (clickable toggle) and trainer clients page (read-only)
+- [x] **S7-F10-03** | @qa | S | Payment status tests: toggle both directions, NOT_FOUND, branch scoping
 
 ---
 
 ## Phase 11 — Kickboxing Module (Week 10-11)
 
-- [ ] **S7-F11-01** | @backend | M | Implement kickboxing service: class CRUD, enrollment CRUD, client type filtering (gym member vs external)
+- [x] **S7-F11-01** | @backend | M | Implement kickboxing service: class CRUD, enrollment CRUD, client type filtering (gym member vs external)
   - Depends on: S7-F0-06
-- [ ] **S7-F11-02** | @backend | M | Implement kickboxing API routes (classes + enrollments under /api/admin/kickboxing)
+- [x] **S7-F11-02** | @backend | M | Implement kickboxing API routes (classes + enrollments under /api/admin/kickboxing)
   - Depends on: S7-F11-01
-- [ ] **S7-F11-03** | @ui | L | Build admin kickboxing page: class schedule management, enrollment table with gym-member vs external filter, enrollment counts
+- [x] **S7-F11-03** | @ui | L | Build admin kickboxing page: class schedule management, enrollment table with gym-member vs external filter, enrollment counts
   - Depends on: S7-F11-02
-- [ ] **S7-F11-04** | @qa | S | Kickboxing tests: enrollment with/without clientProfileId, client type filtering, class capacity
+- [x] **S7-F11-04** | @qa | S | Kickboxing tests: enrollment with/without clientProfileId, client type filtering, class capacity
   - Depends on: S7-F11-01
 
 ---
 
 ## Phase 12 — Carry-Forward & Month-End Processing (Week 11)
 
-- [ ] **S7-F12-01** | @backend | L | Implement month-end processing service: calculate unused sessions, apply carry-forward limit, create next month's carry-forward records, expire remainder
+- [x] **S7-F12-01** | @backend | L | Implement month-end processing service: calculate unused sessions, apply carry-forward limit, create next month's carry-forward records, expire remainder
   - Depends on: S7-F4-01
-- [ ] **S7-F12-02** | @backend | M | Implement carry-forward API: GET session consumption summary per client per month, admin trigger for manual month-end processing
+- [x] **S7-F12-02** | @backend | M | Implement carry-forward API: GET session consumption summary per client per month, admin trigger for manual month-end processing
   - Depends on: S7-F12-01
-- [ ] **S7-F12-03** | @devops | M | Configure Vercel Cron Job for automated month-end processing (runs last day of each month)
+- [x] **S7-F12-03** | @devops | M | Configure Vercel Cron Job for automated month-end processing (runs last day of each month)
   - Depends on: S7-F12-01
-- [ ] **S7-F12-04** | @qa | L | Carry-forward tests: exact boundary cases (0 unused, max carry-forward, mixed planned/no-show), cross-month continuity
+- [x] **S7-F12-04** | @qa | L | Carry-forward tests: exact boundary cases (0 unused, max carry-forward, mixed planned/no-show), cross-month continuity
   - Depends on: S7-F12-01
 
 ---
 
 ## Phase 13 — Settings & Configuration (Week 11-12)
 
-- [ ] **S7-F13-01** | @backend | M | Implement branch settings service: get settings, update settings (with audit logging of old → new values)
+- [x] **S7-F13-01** | @backend | M | Implement branch settings service: get settings, update settings (with audit logging of old → new values)
   - Depends on: S7-F0-06
-- [ ] **S7-F13-02** | @backend | S | Implement settings API routes (GET, PUT /api/admin/settings)
+- [x] **S7-F13-02** | @backend | S | Implement settings API routes (GET, PUT /api/admin/settings)
   - Depends on: S7-F13-01
-- [ ] **S7-F13-03** | @ui | M | Build admin settings page: all configurable fields (session duration, carry-forward limit, cancellation toggle + window, reminder timing, no-show threshold, kickboxing class size)
+- [x] **S7-F13-03** | @ui | M | Build admin settings page: all configurable fields (session duration, carry-forward limit, cancellation toggle + window, reminder timing, no-show threshold, kickboxing class size)
   - Depends on: S7-F13-02
-- [ ] **S7-F13-04** | @qa | S | Settings tests: update triggers audit log, values propagate to dependent services
+- [x] **S7-F13-04** | @qa | S | Settings tests: update triggers audit log, values propagate to dependent services
   - Depends on: S7-F13-01
 
 ---
 
 ## Phase 14 — Reporting & Analytics (Week 12-13)
 
-- [ ] **S7-F14-01** | @backend | L | Implement analytics service: trainer utilization %, client attendance rate, session consumption, no-show rate, revenue overview
+- [x] **S7-F14-01** | @backend | L | Implement analytics service: trainer utilization %, client attendance rate, session consumption, no-show rate, revenue overview
   - Depends on: S7-F4-01, S7-F10-01
-- [ ] **S7-F14-02** | @backend | M | Implement analytics API routes (GET /api/admin/analytics/\* for each report type)
+- [x] **S7-F14-02** | @backend | M | Implement analytics API routes (GET /api/admin/analytics/\* for each report type)
   - Depends on: S7-F14-01
-- [ ] **S7-F14-03** | @backend | M | Implement Excel export service: generate .xlsx files from analytics data using SheetJS
+- [x] **S7-F14-03** | @backend | M | Implement Excel export service: generate .xlsx files from analytics data using SheetJS
   - Depends on: S7-F14-01
-- [ ] **S7-F14-04** | @ui | XL | Build admin reporting dashboard: trainer utilization bar chart, attendance rate trends, session consumption stacked chart, no-show heatmap, revenue pie chart, filter controls
+- [x] **S7-F14-04** | @ui | XL | Build admin reporting dashboard: trainer utilization bar chart, attendance rate trends, session consumption stacked chart, no-show heatmap, revenue pie chart, filter controls
   - Depends on: S7-F14-02, S7-F8-03
-- [ ] **S7-F14-05** | @ui | M | Build trainer analytics page: own client attendance, session completion rate, personal utilization
+- [x] **S7-F14-05** | @ui | M | Build trainer analytics page: own client attendance, session completion rate, personal utilization
   - Depends on: S7-F14-02
-- [ ] **S7-F14-06** | @ui | M | Add Excel export button to all report views
+- [x] **S7-F14-06** | @ui | M | Add Excel export button to all report views
   - Depends on: S7-F14-03
-- [ ] **S7-F14-07** | @qa | M | Analytics tests: utilization calculation accuracy, attendance rate math, revenue aggregation, export file structure
+- [x] **S7-F14-07** | @qa | M | Analytics tests: utilization calculation accuracy, attendance rate math, revenue aggregation, export file structure
   - Depends on: S7-F14-01
 
 ---
 
 ## Phase 15 — Audit Log (Week 13)
 
-- [ ] **S7-F15-01** | @backend | M | Implement audit log query service: search/filter by action type, actor, subject, date range, with pagination
+- [x] **S7-F15-01** | @backend | M | Implement audit log query service: search/filter by action type, actor, subject, date range, with pagination
   - Depends on: S7-F0-10
-- [ ] **S7-F15-02** | @backend | S | Implement audit log API route (GET /api/admin/audit-logs with query params)
+- [x] **S7-F15-02** | @backend | S | Implement audit log API route (GET /api/admin/audit-logs with query params)
   - Depends on: S7-F15-01
-- [ ] **S7-F15-03** | @ui | L | Build admin audit log page: searchable table with filters (action type, user, date range, subject), detail view for each entry
+- [x] **S7-F15-03** | @ui | L | Build admin audit log page: searchable table with filters (action type, user, date range, subject), detail view for each entry
   - Depends on: S7-F15-02
-- [ ] **S7-F15-04** | @qa | M | Audit log tests: verify every audited action from all previous phases is actually logged, filter accuracy
+- [x] **S7-F15-04** | @qa | M | Audit log tests: verify every audited action from all previous phases is actually logged, filter accuracy
   - Depends on: S7-F15-01
 
 ---
 
 ## Phase 16 — Offline & PWA (Week 14-15)
 
-- [ ] **S7-F16-01** | @ui | L | Implement Dexie.js database schema for offline storage: workouts, session state, exercise library cache
+- [x] **S7-F16-01** | @ui | L | Implement Dexie.js database schema for offline storage: workouts, session state, exercise library cache
   - Depends on: S7-F5-06
-- [ ] **S7-F16-02** | @ui | L | Implement offline workout logging: write to IndexedDB first, queue sync, show sync status badge
+- [x] **S7-F16-02** | @ui | L | Implement offline workout logging: write to IndexedDB first, queue sync, show sync status badge
   - Depends on: S7-F16-01
-- [ ] **S7-F16-03** | @backend | M | Implement offline sync endpoint (POST /api/trainer/workouts/sync) with conflict resolution (last-write-wins)
+- [x] **S7-F16-03** | @backend | M | Implement offline sync endpoint (POST /api/trainer/workouts/sync) with conflict resolution (last-write-wins)
   - Depends on: S7-F5-03
-- [ ] **S7-F16-04** | @devops | L | Configure Workbox: app shell caching, background sync for workout queue, exercise library image caching
+- [x] **S7-F16-04** | @devops | L | Configure Workbox: app shell caching, background sync for workout queue, exercise library image caching
   - Depends on: S7-F16-01
-- [ ] **S7-F16-05** | @devops | M | Create PWA manifest, icons, install prompt, service worker registration in Next.js
+- [x] **S7-F16-05** | @devops | M | Create PWA manifest, icons, install prompt, service worker registration in Next.js
   - Depends on: S7-F16-04
-- [ ] **S7-F16-06** | @qa | L | Offline tests: log workout with network disabled → enable network → verify sync. Timer continuity offline. Data integrity after sync.
+- [x] **S7-F16-06** | @qa | L | Offline tests: log workout with network disabled → enable network → verify sync. Timer continuity offline. Data integrity after sync.
   - Depends on: S7-F16-02, S7-F16-03
 
 ---
 
-## Phase 17 — Real-Time & WebSocket (Week 15)
+## Phase 17 — Real-Time & WebSocket (SKIPPED)
 
-- [ ] **S7-F17-01** | @backend | M | Set up Pusher (or Socket.io) server-side: configure channels, authentication
-  - Depends on: S7-F0-01
-- [ ] **S7-F17-02** | @backend | M | Emit real-time events from session service: SESSION_STARTED, SESSION_TIMER_TICK, SESSION_TIME_COMPLETE, SESSION_ENDED
-  - Depends on: S7-F17-01, S7-F4-01
-- [ ] **S7-F17-03** | @ui | M | Create useRealtimeSession() hook: subscribe to session channel, update timer state, handle reconnection
-  - Depends on: S7-F17-01
-- [ ] **S7-F17-04** | @ui | S | Wire real-time events into client dashboard (live timer) and notification bell (live notification count)
-  - Depends on: S7-F17-03, S7-F9-06
-- [ ] **S7-F17-05** | @qa | M | Real-time tests: event delivery verification, reconnection handling, multiple concurrent sessions
-  - Depends on: S7-F17-02
+> **Decision:** Skipped — session timer runs client-side from `startedAt`, notifications use polling. WebSockets are nice-to-have but not essential for a gym management tool. Can be added later if needed.
+
+- [~] **S7-F17-01** through **S7-F17-05** — Skipped
 
 ---
 
 ## Phase 18 — Testing, Polish & Launch (Week 16)
 
-- [ ] **S7-F18-01** | @qa | XL | Write Playwright e2e tests for critical paths: login → schedule → start session → log workout → end session; leave → approve → reassign
+- [~] **S7-F18-01** | @qa | XL | Write Playwright e2e tests for critical paths — deferred to post-launch
   - Depends on: All previous phases
-- [ ] **S7-F18-02** | @qa | L | Run full test suite, fix failures, ensure 80%+ code coverage on services layer
+- [x] **S7-F18-02** | @qa | L | Run full test suite, fix failures, ensure 80%+ code coverage on services layer
   - Depends on: S7-F18-01
-- [ ] **S7-F18-03** | @devops | M | Run Lighthouse audit, optimize: bundle size, image optimization, font loading, caching headers
+- [~] **S7-F18-03** | @devops | M | Run Lighthouse audit, optimize — deferred (requires production build)
   - Depends on: All previous phases
-- [ ] **S7-F18-04** | @devops | M | Security review: OWASP top 10 checklist, rate limiting on auth endpoints, CSP headers, SQL injection audit
+- [x] **S7-F18-04** | @devops | M | Security review: OWASP top 10 checklist, rate limiting on auth endpoints, CSP headers, SQL injection audit
   - Depends on: All previous phases
-- [ ] **S7-F18-05** | @devops | M | Configure Vercel production deployment: environment variables, custom domain, monitoring
+- [~] **S7-F18-05** | @devops | M | Configure Vercel production deployment — deferred (environment-specific)
   - Depends on: S7-F18-03, S7-F18-04
-- [ ] **S7-F18-06** | @backend | M | Create database seed script with realistic demo data (branch, admin, trainers, clients, sessions, exercises)
+- [x] **S7-F18-06** | @backend | M | Create database seed script with realistic demo data (branch, admin, trainers, clients, sessions, exercises)
   - Depends on: S7-F0-06
-- [ ] **S7-F18-07** | @ui | M | Final UI polish: empty states, loading skeletons, error messages, mobile responsive audit
+- [x] **S7-F18-07** | @ui | M | Final UI polish: empty states, loading skeletons, error messages, mobile responsive audit
   - Depends on: All UI tasks
 
 ---

@@ -20,13 +20,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
+    const notes = typeof body.notes === 'string' ? body.notes.slice(0, 1000) : undefined;
 
     const result = await endSession({
       sessionId: id,
       trainerProfileId,
       actorId: session.user.id,
       branchId: session.user.branchId,
-      notes: body.notes,
+      notes,
     });
 
     return NextResponse.json({ data: result });

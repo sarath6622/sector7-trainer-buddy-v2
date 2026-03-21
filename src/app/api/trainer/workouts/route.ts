@@ -1,0 +1,39 @@
+import { NextResponse } from 'next/server';
+import { getServerSession, hasRole } from '@/lib/auth';
+import { toErrorResponse } from '@/lib/errors';
+import { createWorkoutSchema } from '@/lib/validators';
+import * as workoutService from '@/services/workout.service';
+
+export async function POST(req: Request) {
+  try {
+    const session = await getServerSession();
+    if (!session || !hasRole(session.user.role, ['TRAINER', 'KICKBOXING_TRAINER'])) {
+      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
+    }
+
+    const trainerProfileId = session.user.trainerProfileId;
+    if (!trainerProfileId) {
+      return NextResponse.json(
+        { error: 'No trainer profile', code: 'NO_PROFILE' },
+        { status: 400 },
+      );
+    }
+
+    const body = await req.json();
+    const input = createWorkoutSchema.parse(body);
+
+    const workoutLogs = await workoutService.createWorkoutLogs({
+      sessionInstanceId: input.sessionInstanceId,
+      exercises: input.exercises,
+      trainerProfileId,
+      actorId: session.user.id,
+      branchId: session.user.branchId,
+    });
+
+    return NextResponse.json({ data: workoutLogs }, { status: 201 });
+  } catch (error) {
+    console.error('[POST /api/trainer/workouts] Error:', error);
+    const { error: msg, code, status } = toErrorResponse(error);
+    return NextResponse.json({ error: msg, code }, { status });
+  }
+}

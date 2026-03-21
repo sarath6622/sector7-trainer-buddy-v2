@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { Logo } from './Logo';
 import type { NavItem } from '@/lib/constants';
 
 interface SidebarProps {
@@ -18,21 +18,19 @@ export function Sidebar({ navItems, className }: SidebarProps) {
     <aside
       className={cn('flex h-full w-64 flex-col border-r border-border/50 bg-sidebar', className)}
     >
-      <div className="flex h-14 items-center border-b border-border/50 px-4">
+      <div className="flex h-16 items-center border-b border-border/50 px-4">
         <Link href="/">
-          <Image
-            src="/sector7-logo.png"
-            alt="Sector 7"
-            width={120}
-            height={60}
-            className="h-9 w-auto"
-          />
+          <Logo className="h-10" />
         </Link>
       </div>
 
       <nav className="flex-1 space-y-1 p-2">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+          const isDashboard =
+            item.href === '/admin' || item.href === '/trainer' || item.href === '/client';
+          const isActive = isDashboard
+            ? pathname === item.href
+            : pathname === item.href || pathname.startsWith(item.href + '/');
           const Icon = item.icon;
 
           return (

@@ -318,3 +318,39 @@ export async function deleteUser(id: string, branchId: string, actorId: string) 
 
   return { success: true };
 }
+
+/**
+ * Toggle payment status on a client profile (PAID / PENDING).
+ */
+export async function updatePaymentStatus(
+  clientProfileId: string,
+  paymentStatus: 'PAID' | 'PENDING',
+  branchId: string,
+  actorId: string,
+) {
+  const client = await prisma.clientProfile.findFirst({
+    where: { id: clientProfileId, branchId },
+    select: { id: true, paymentStatus: true, userId: true },
+  });
+
+  if (!client) {
+    throw new AppError('NOT_FOUND', 'Client not found', 404);
+  }
+
+  const updated = await prisma.clientProfile.update({
+    where: { id: clientProfileId },
+    data: { paymentStatus },
+  });
+
+  await auditLog({
+    action: 'PAYMENT_STATUS_UPDATED',
+    actorId,
+    subjectType: 'ClientProfile',
+    subjectId: clientProfileId,
+    branchId,
+    oldValue: { paymentStatus: client.paymentStatus },
+    newValue: { paymentStatus },
+  });
+
+  return updated;
+}

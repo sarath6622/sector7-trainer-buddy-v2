@@ -11,6 +11,10 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 vi.mock('@/lib/audit', () => ({ auditLog: vi.fn() }));
+vi.mock('@/services/notification.service', () => ({
+  notifySessionStarted: vi.fn(),
+  notifyNoShow: vi.fn(),
+}));
 
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
@@ -74,13 +78,20 @@ describe('startSession', () => {
       trainerProfileId: TRAINER,
       clientProfileId: 'cp-1',
       durationMin: 60,
+      scheduledTime: '09:00',
     };
 
     (prisma.sessionInstance.findFirst as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce(mockSession) // find session
       .mockResolvedValueOnce(null); // no active session
 
-    const updatedSession = { ...mockSession, status: 'IN_PROGRESS', startedAt: expect.any(Date) };
+    const updatedSession = {
+      ...mockSession,
+      status: 'IN_PROGRESS',
+      startedAt: expect.any(Date),
+      client: { user: { id: 'user-c1', firstName: 'John', lastName: 'Doe' } },
+      trainer: { user: { id: 'user-t1', firstName: 'Jane', lastName: 'Trainer' } },
+    };
     (prisma.sessionInstance.update as ReturnType<typeof vi.fn>).mockResolvedValue(updatedSession);
 
     const result = await sessionService.startSession(input);
@@ -205,6 +216,8 @@ describe('markNoShow', () => {
       branchId: BRANCH,
       trainerProfileId: TRAINER,
       clientProfileId: 'cp-1',
+      scheduledDate: new Date('2026-03-20'),
+      scheduledTime: '09:00',
     };
 
     (prisma.sessionInstance.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
@@ -213,6 +226,8 @@ describe('markNoShow', () => {
     (prisma.sessionInstance.update as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...mockSession,
       status: 'NO_SHOW',
+      client: { user: { id: 'user-c1', firstName: 'John', lastName: 'Doe' } },
+      trainer: { user: { id: 'user-t1', firstName: 'Jane', lastName: 'Trainer' } },
     });
 
     await sessionService.markNoShow(input);

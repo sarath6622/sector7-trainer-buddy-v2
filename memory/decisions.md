@@ -94,7 +94,48 @@
 
 ---
 
-## ADR-010: Inter + JetBrains Mono as App Fonts
+## ADR-010: Light/Dark Theme Toggle (Supersedes ADR-009)
+
+**Date:** 2026-03-21
+**Status:** Accepted (supersedes ADR-009)
+**Context:** ADR-009 mandated always-dark mode. Post-launch UX review revealed that a light mode option improves usability in bright gym environments and aligns with modern SaaS expectations. The Sector 7 brand identity (orange accent, dark sidebar) is preserved in both modes.
+**Decision:** Support both light and dark themes via `next-themes` with a toggle in TopNav. Dark mode remains the default. CSS custom properties use oklch color system with Tailwind v4's `@custom-variant dark`. The brand logo PNG (white text + orange 7 on transparent bg) is placed inside a dark rounded pill container (`bg-zinc-900 rounded-lg`) in light mode to maintain visibility; in dark mode the pill is removed (`dark:bg-transparent`).
+**Consequences:** All pages and components must work in both themes. The `dark:` variant is used throughout Tailwind classes. Login page remains always-dark for brand consistency.
+
+---
+
+## ADR-011: Button Color Theory — Semantic Colors Over Primary Accent
+
+**Date:** 2026-03-21
+**Status:** Accepted
+**Context:** The primary orange accent (`#E8652C`) was being used on all buttons regardless of action type. Orange reads as "warning" in UI conventions, making the interface feel aggressive and reducing visual hierarchy.
+**Decision:** Reserve orange/primary for brand elements only (logo, active nav highlight, avatar accents). Assign semantic colors based on action type:
+
+- **Blue** (`bg-blue-600`): Create/Add actions (Add Client, Add Trainer, New Schedule, Generate, Search)
+- **Emerald green** (`bg-emerald-600`): Approve/Start/Confirm positive actions (Approve Leave, Start Session)
+- **Red** (`destructive` variant): Destructive/dangerous actions (Delete, Reject)
+- **Outline** (`variant="outline"`): Secondary/Cancel actions
+- **Default/Ghost**: Navigation, toggles, minor actions
+  **Consequences:** More intuitive UI — users can quickly identify action types by color. Applied across: admin scheduling, leaves, clients, trainers, exercises, kickboxing, reassignments, audit log pages.
+
+---
+
+## ADR-012: Status Badge Color Semantics
+
+**Date:** 2026-03-21
+**Status:** Accepted
+**Context:** Active/Inactive and Paid/Pending badges all used the orange `default` Badge variant, making status information look like warnings.
+**Decision:** Use semantic colors for status badges:
+
+- **Active / Paid** → Emerald green (`bg-emerald-500/15 text-emerald-600`)
+- **Pending** → Amber (`bg-amber-500/15 text-amber-600`)
+- **Inactive** → Neutral zinc gray (`bg-zinc-500/15 text-zinc-500`)
+  All use `variant="secondary"` as the base with custom color classes applied via `cn()`.
+  **Consequences:** Badges convey meaning at a glance. Green = healthy/complete, amber = needs attention, gray = dormant.
+
+---
+
+## ADR-013: Inter + JetBrains Mono as App Fonts (originally ADR-010)
 
 **Date:** March 2026
 **Status:** Accepted

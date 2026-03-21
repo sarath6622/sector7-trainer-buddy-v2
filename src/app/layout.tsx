@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Toaster } from 'sonner';
 import { Providers } from '@/components/Providers';
 import './globals.css';
 
@@ -40,10 +41,19 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            className: '!bg-card !text-foreground !border-border !ring-1 !ring-border/50',
+          }}
+          richColors
+          closeButton
+        />
       </body>
     </html>
   );

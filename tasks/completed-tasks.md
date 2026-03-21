@@ -4,6 +4,709 @@
 
 ---
 
+## Post-Launch UI Modernization (2026-03-21)
+
+### S7-UX-01: Login Page Redesign
+
+- **Agent:** @ui
+- **Completed:** 2026-03-21
+- **Files Changed:**
+  - `src/app/(auth)/login/page.tsx` — full rewrite: split-screen dark layout (45% brand panel / 55% form), frosted glass card, password show/hide toggle, loading spinner, gradient glow behind desktop logo
+- **Notes:** Always-dark page (`bg-zinc-950`), uses plain `<img>` tag for logo (Next.js Image optimization failed on the PNG)
+
+### S7-UX-02: Logo Component — Brand PNG Integration
+
+- **Agent:** @ui
+- **Completed:** 2026-03-21
+- **Files Changed:**
+  - `src/components/layout/Logo.tsx` — replaced SVG text approximation with actual `sector7-logo-cropped.png`. In light mode, wraps logo in dark rounded pill (`bg-zinc-900 rounded-lg`); in dark mode, renders directly on transparent bg. Supports `variant="auto"` (default) and `variant="dark"` for always-dark contexts
+  - `public/sector7-logo-cropped.png` — created: cropped version of `sector7-logo.png` removing top whitespace (2771x1200 vs original 2771x3464)
+  - `src/components/layout/Sidebar.tsx` — updated Logo usage (`h-10`), sidebar header height increased to `h-16`
+  - `src/components/layout/TopNav.tsx` — updated Logo usage (`h-8` for mobile topbar, `h-10 variant="dark"` for mobile sheet)
+  - `src/middleware.ts` — added regex to allow image file extensions (`.png`, `.jpg`, etc.) through middleware without auth redirect
+- **Memory Updated:** `decisions.md` (ADR-010: light/dark theme toggle)
+
+### S7-UX-03: Button Color Theory — Semantic Colors
+
+- **Agent:** @ui
+- **Completed:** 2026-03-21
+- **Files Changed:**
+  - `src/app/(dashboard)/admin/scheduling/page.tsx` — Cancel → `variant="outline"`, Generate → blue, New Schedule → blue, filter chips → `bg-foreground/text-background`
+  - `src/app/(dashboard)/admin/leaves/page.tsx` — Approve → emerald green
+  - `src/app/(dashboard)/trainer/page.tsx` — Start Session → emerald green
+  - `src/app/(dashboard)/admin/reassignments/page.tsx` — Search → blue
+  - `src/app/(dashboard)/admin/audit-log/page.tsx` — Search → blue
+  - `src/app/(dashboard)/admin/clients/page.tsx` — Add Client → blue
+  - `src/app/(dashboard)/admin/trainers/page.tsx` — Add Trainer → blue
+  - `src/app/(dashboard)/admin/kickboxing/page.tsx` — Add Class → blue
+  - `src/app/(dashboard)/admin/exercises/page.tsx` — Add Exercise → blue
+- **Memory Updated:** `decisions.md` (ADR-011: button color theory)
+
+### S7-UX-04: Status Badge Color Semantics
+
+- **Agent:** @ui
+- **Completed:** 2026-03-21
+- **Files Changed:**
+  - `src/app/(dashboard)/admin/clients/page.tsx` — Active badge → emerald green, Inactive → zinc gray, Paid → emerald green, Pending → amber
+  - `src/app/(dashboard)/admin/trainers/page.tsx` — Active badge → emerald green, Inactive → zinc gray
+  - `src/app/(dashboard)/admin/clients/[id]/page.tsx` — Active badge → emerald green
+- **Memory Updated:** `decisions.md` (ADR-012: status badge color semantics)
+
+### S7-UX-05: Calendar Improvements
+
+- **Agent:** @ui
+- **Completed:** 2026-03-21
+- **Files Changed:**
+  - `src/app/globals.css` — added FullCalendar today highlighting CSS (column header orange pill badge, tinted column stripe)
+  - `src/components/calendar/SessionCalendar.tsx` — added responsive mobile view detection via `matchMedia`, defaults to `timeGridDay` on mobile (<640px), `timeGridWeek` on desktop
+
+### S7-UX-06: DashboardLayout setState Fix
+
+- **Agent:** @ui
+- **Completed:** 2026-03-21
+- **Files Changed:**
+  - `src/app/(dashboard)/layout.tsx` — fixed "Cannot update component while rendering" console error by wrapping `router.push('/login')` in `useEffect`
+
+---
+
+## Phase 18 — Testing, Polish & Launch (Completed 2026-03-20)
+
+### S7-F18-02: Full Test Suite & Coverage
+
+- **233 tests passing** across 23 test files
+- Services layer coverage: **87.55% statements, 91.6% functions** (target: 80%)
+- TypeScript: clean (0 errors)
+
+### S7-F18-04: Security Review & Hardening
+
+- **CRITICAL fix:** Cron endpoint (`/api/cron/month-end`) — changed `if (cronSecret && ...)` to `if (!cronSecret || ...)` to prevent unauthenticated access when CRON_SECRET is unset
+- **HIGH fix:** Middleware — replaced `pathname.includes('.')` wildcard bypass with explicit static asset paths (icons, manifest, sw.js)
+- **HIGH fix:** Removed spoofable `x-branch-id`, `x-user-id`, `x-user-role` response headers from middleware (unused by any API route)
+- **MEDIUM fix:** Added branchId null guard in middleware — redirects to login if branchId missing
+- **MEDIUM fix:** Session end `notes` field — added type check + 1000 char limit
+- **Audit results:** No SQL injection risks (all Prisma ORM), no mass assignment (all Zod-validated), no committed secrets
+
+### S7-F18-06: Enhanced Seed Script
+
+- **File:** `prisma/seed.ts`
+- Added: Past sessions marked as COMPLETED (85%), NO_SHOW (10%), CANCELLED (5%)
+- Added: 2-4 workout logs with sets per completed session
+- Added: Weekly progress entries for all clients (3 weeks)
+- Added: Kickboxing trainer (Priya Menon) with 3 classes (Mon/Wed/Fri), 5 enrollments each
+- Added: 6 sample audit log entries for UI demo
+
+### S7-F18-07: UI Polish
+
+- Pages reviewed for loading states, empty states, and error handling
+- Most pages already had proper states — confirmed trainer/clients, client/progress, admin/audit-log, admin/analytics all have complete UX
+
+**Phase 17 (WebSocket) skipped** — timer runs client-side, notifications use polling. Can be added post-launch.
+
+---
+
+## Phase 16 — Offline & PWA (Completed 2026-03-20)
+
+### S7-F16-01: Dexie.js Offline Database Schema
+
+- **File:** `src/lib/offline-db.ts`
+- Three stores: `workoutQueue` (exercise logs pending sync), `exercises` (cached exercise library), `sessionState` (active session for timer continuity)
+- Full CRUD operations for each store with typed interfaces
+- `OfflineWorkoutEntry` tracks: localId, sessionInstanceId, exerciseId, sets, syncStatus (pending/synced/failed), error messages
+
+### S7-F16-02: Offline Workout Logging
+
+- **File:** `src/lib/offline-sync.ts` — sync engine: groups pending entries by session, batch-submits to sync API, marks synced/failed
+- **File:** `src/hooks/useOfflineWorkout.ts` — React hook with auto-sync on reconnect, pending count, sync status
+- **File:** `src/hooks/useOfflineWorkout.ts` — `useExerciseCache()` hook for offline exercise search (server-first, fallback to IndexedDB)
+- **File:** `src/components/layout/OfflineIndicator.tsx` — amber offline badge + WiFi connection status icon
+
+### S7-F16-03: Offline Sync API Endpoint
+
+- **File:** `src/app/api/trainer/workouts/sync/route.ts` — POST, trainer-only
+- Accepts batch of offline workout entries grouped by sessionInstanceId
+- Processes each entry individually for resilience (partial sync possible)
+- Returns `{ synced, failed, syncedIds, conflicts }`
+- Updated `syncWorkoutsSchema` validator: `sessionInstanceId` at top level, `localId` + `createdAt` per entry
+
+### S7-F16-04 + S7-F16-05: Serwist Service Worker & PWA
+
+- **File:** `src/app/sw.ts` — Serwist service worker with precaching, runtime caching, offline document fallback
+- **File:** `next.config.ts` — `withSerwistInit` wrapping, disabled in development
+- **File:** `src/app/~offline/page.tsx` — Offline fallback page with retry button
+- **File:** `public/manifest.json` — Updated with scope, categories
+- **File:** `tsconfig.json` — Added `webworker` lib and `@serwist/next/typings`
+
+### S7-F16-06: Offline Tests
+
+- **File:** `tests/unit/offline-db.test.ts` — 11 tests: workout queue (add, sync, fail, filter by session, clear synced), exercise cache (store, search by name, search by muscle), session state (save, upsert, clear)
+- **File:** `tests/unit/offline-sync.test.ts` — 5 tests: empty queue, successful sync, API failure, network error, grouping by sessionInstanceId
+
+**Test count:** 233 tests passing (23 files) | TypeScript: clean
+
+---
+
+## Phase 15 — Audit Log (Completed 2026-03-20)
+
+### S7-F15-01: Audit Log Query Service
+
+- **File:** `src/services/auditlog.service.ts`
+- `listAuditLogs()` — paginated search with filters (action, actorId, subjectType, subjectId, dateFrom, dateTo)
+- `getDistinctActions()` — returns unique action types for filter dropdowns
+- `getDistinctSubjectTypes()` — returns unique subject types for filter dropdowns
+- Branch-scoped, date range uses end-of-day for `dateTo`
+
+### S7-F15-02: Audit Log API Routes
+
+- **File:** `src/app/api/admin/audit-logs/route.ts` — GET with query params, admin-only
+- **File:** `src/app/api/admin/audit-logs/filters/route.ts` — GET distinct actions & subject types for filter UI
+
+### S7-F15-03: Admin Audit Log UI Page
+
+- **File:** `src/app/(dashboard)/admin/audit-log/page.tsx`
+- Searchable table with filters: Action (dropdown), Subject Type (dropdown), Date From/To
+- Paginated results with prev/next navigation
+- Detail dialog showing old/new values and metadata as formatted JSON
+- Color-coded action badges (green=CREATED, blue=UPDATED, red=DELETED, amber=STATUS_CHANGE)
+
+### S7-F15-04: Audit Log Tests
+
+- **File:** `tests/unit/auditlog-service.test.ts` — 7 tests
+- Paginated query, filter by action, filter by date range, filter by subjectType+actorId
+- Pagination calculation for page 2, distinct actions, distinct subject types
+
+**Test count:** 217 tests passing (21 files) | TypeScript: clean
+
+---
+
+### Phase 14 — Reporting & Analytics (All 7 tasks)
+
+- **Completed:** 2026-03-20
+- **Agent:** Multi-agent (backend, ui, qa)
+
+#### S7-F14-01: Analytics service
+
+- `src/services/analytics.service.ts`
+- `getTrainerUtilization` — completed/total sessions per trainer → utilization %
+- `getClientAttendance` — attended/no-show/cancelled per client → attendance %
+- `getSessionConsumption` — usage vs plan per client → consumption %
+- `getNoShowRate` — no-shows per trainer → no-show %
+- `getRevenueOverview` — total revenue, paid/pending counts, revenue by payment method
+- `getTrainerAnalytics` — personal analytics for trainer (clients, completion rate, attendance rate, utilization)
+
+#### S7-F14-02: Analytics API routes
+
+- `GET /api/admin/analytics?report=<type>&month=YYYY-MM` — unified route with report type switch
+- Supports: trainer-utilization, client-attendance, session-consumption, no-show-rate, revenue
+- `GET /api/trainer/analytics` — trainer personal analytics (own data only)
+- All admin routes require SUPER_ADMIN/BRANCH_ADMIN, trainer route requires TRAINER
+
+#### S7-F14-03: Excel export
+
+- `GET /api/admin/analytics/export?report=<type>&month=YYYY-MM` — returns .xlsx download
+- Uses SheetJS (xlsx) to generate workbooks with typed columns per report
+- Each report maps to a named sheet with appropriate column headers
+
+#### S7-F14-04 & S7-F14-06: Admin analytics dashboard + export buttons
+
+- `src/app/(dashboard)/admin/analytics/page.tsx`
+- Summary cards: total revenue, avg utilization, avg attendance, total no-shows
+- Tabbed reports: Utilization (bar chart), Attendance (table), Consumption (table), No-Shows (bar chart), Revenue (pie chart + summary)
+- Month picker for date range selection
+- Export button on each tab → opens xlsx download in new tab
+
+#### S7-F14-05: Trainer analytics page
+
+- `src/app/(dashboard)/trainer/analytics/page.tsx`
+- Cards: active clients, completion rate, attendance rate, no-shows
+- Utilization progress bar with percentage
+
+#### S7-F14-07: Analytics tests
+
+- `tests/unit/analytics-service.test.ts` — 8 tests
+- Trainer utilization (60% calc, 0 sessions), client attendance (50%), session consumption (40%), no-show rate (50%), revenue (aggregation + zeros), trainer personal analytics
+
+#### Test Results
+
+- 210 tests passing (20 test files)
+- TypeScript type-check clean
+
+---
+
+### Phase 13 — Settings & Configuration (All 4 tasks)
+
+- **Completed:** 2026-03-20
+- **Agent:** Multi-agent (backend, ui, qa)
+
+#### S7-F13-01: Settings service
+
+- `src/services/settings.service.ts`
+- `getSettings(branchId)` — returns existing settings or creates defaults if none exist
+- `updateSettings(branchId, input, actorId)` — updates only provided fields, skips if empty, audit logs old→new values
+- Auto-creates BranchSettings record on first access (no migration needed)
+
+#### S7-F13-02: Settings API routes
+
+- `GET /api/admin/settings` — returns branch settings
+- `PUT /api/admin/settings` — updates settings, validates with `updateSettingsSchema`
+- Both admin-only (SUPER_ADMIN, BRANCH_ADMIN)
+
+#### S7-F13-03: Admin settings UI
+
+- `src/app/(dashboard)/admin/settings/page.tsx`
+- Cards for: Session Settings (duration, no-show threshold), Carry-Forward (limit), Cancellation Policy (toggle + window), Notifications (reminder timing), Kickboxing (class size limit)
+- Switch component for cancellation toggle, conditional window field
+- Save button with success feedback
+- Added shadcn Switch component
+
+#### S7-F13-04: Settings tests
+
+- `tests/unit/settings-service.test.ts` — 6 tests
+- getSettings: returns existing, creates defaults
+- updateSettings: single field with audit, multiple fields, empty input skips, auto-create on first update
+
+#### Test Results
+
+- 202 tests passing (19 test files)
+- TypeScript type-check clean
+
+---
+
+### Phase 12 — Carry-Forward & Month-End Processing (All 4 tasks)
+
+- **Completed:** 2026-03-20
+- **Agent:** Multi-agent (backend, devops, qa)
+
+#### S7-F12-01: Month-end processing service
+
+- `src/services/carryforward.service.ts`
+- `getConsumptionSummary(branchId, month)` — returns per-client usage breakdown: completed, no-show, cancelled, scheduled, used, unused, carry-forward received, eligible carry-forward
+- `processMonthEnd(branchId, month, actorId)` — calculates unused sessions per client, applies carry-forward limit from BranchSettings, creates carry-forward SessionInstance records for next month, marks remainder as expired
+- Carry-forward sessions created with `isCarryForward: true`, `carryForwardFromMonth` set, `scheduledTime: '00:00'` (admin reschedules), `status: SCHEDULED`
+- Prevents double-processing via existing carry-forward count check (throws ALREADY_PROCESSED)
+- Processes all active PtPackages per branch
+- Audit logs the full month-end result
+
+#### S7-F12-02: Carry-forward API routes
+
+- `GET /api/admin/carry-forward?month=YYYY-MM` — returns consumption summary per client
+- `POST /api/admin/carry-forward` (body: `{ month: "YYYY-MM" }`) — triggers month-end processing manually
+- Both admin-only (SUPER_ADMIN, BRANCH_ADMIN)
+
+#### S7-F12-03: Vercel Cron Job
+
+- `GET /api/cron/month-end` — automated endpoint for Vercel Cron
+- Secured via `CRON_SECRET` env var (Bearer token)
+- Only runs on the last day of the month (checks if tomorrow is a different month)
+- Processes ALL active branches in sequence
+- Each branch processes independently (errors don't block others)
+
+#### S7-F12-04: Carry-forward tests
+
+- `tests/unit/carryforward-service.test.ts` — 9 tests
+- getConsumptionSummary: basic calculation, cap at limit, default limit fallback
+- processMonthEnd: creates carry-forward sessions, handles 0 unused, rejects double processing, max limit boundary, multiple clients
+
+#### Test Results
+
+- 196 tests passing (18 test files)
+- TypeScript type-check clean
+
+---
+
+### Phase 11 — Kickboxing Module (All 4 tasks)
+
+- **Completed:** 2026-03-20
+- **Agent:** Multi-agent (backend, ui, qa)
+
+#### S7-F11-01: Kickboxing service
+
+- `src/services/kickboxing.service.ts` — full CRUD for classes and enrollments
+- Class: create, list, update (including activate/deactivate)
+- Enrollment: create (GYM_MEMBER or EXTERNAL_ONLY), list with filters, soft-delete
+- Capacity check: rejects enrollment when class is full
+- Duplicate check: prevents same gym member enrolling in same class twice
+- Validates EXTERNAL_ONLY requires externalName, GYM_MEMBER requires clientProfileId
+- All mutations write audit logs
+
+#### S7-F11-02: Kickboxing API routes
+
+- `POST/GET /api/admin/kickboxing/classes` — create & list classes
+- `PUT /api/admin/kickboxing/classes/[id]` — update class
+- `POST/GET /api/admin/kickboxing/enrollments` — create & list enrollments (with classId/clientType filters)
+- `DELETE /api/admin/kickboxing/enrollments/[id]` — remove enrollment
+- All routes admin-only (SUPER_ADMIN, BRANCH_ADMIN)
+
+#### S7-F11-03: Admin kickboxing UI
+
+- `src/app/(dashboard)/admin/kickboxing/page.tsx` — tabbed layout (Classes / Enrollments)
+- Classes tab: card grid with day/time, trainer name, enrollment count/capacity, active toggle
+- Enrollments tab: table with name, type badge (Member/External), class info, contact, remove button
+- Filters: class selector, client type selector
+- Dialogs: create/edit class (trainer, day, time, duration, capacity), enroll (class, type, client/external name)
+
+#### S7-F11-04: Kickboxing tests
+
+- `tests/unit/kickboxing-service.test.ts` — 12 tests
+- Class: create (with audit), trainer not found, list scoped to branch, update, update not found
+- Enrollment: external client, gym member, capacity full, duplicate member, filter by classId+clientType, soft-delete, delete not found
+
+#### Test Results
+
+- 187 tests passing (17 test files)
+- TypeScript type-check clean
+
+---
+
+### Phase 10 — Payment Status Toggle (Simplified)
+
+- **Completed:** 2026-03-20
+- **Agent:** Multi-agent (backend, ui, qa)
+- **Scope:** Simplified from full payments module — admin toggles client payment status (PAID/PENDING) only. No payment records, no cancellation service.
+
+#### Changes
+
+- **Schema:** Added `paymentStatus PaymentStatus @default(PENDING)` to `ClientProfile` model
+- **Service:** Added `updatePaymentStatus()` to `src/services/user.service.ts` — finds client by profile ID + branchId, updates status, writes audit log
+- **API:** `PUT /api/admin/users/[id]/payment-status` — admin-only route, validates `{ paymentStatus: 'PAID' | 'PENDING' }`
+- **Admin UI:** Added Payment column to `src/app/(dashboard)/admin/clients/page.tsx` with clickable toggle badge (green PAID / red PENDING)
+- **Trainer UI:** Added read-only "Pending" badge to `src/app/(dashboard)/trainer/clients/page.tsx` for clients with pending payment
+- **Tests:** `tests/unit/payment-status.test.ts` — 4 tests (toggle PENDING→PAID, PAID→PENDING, NOT_FOUND, branch scoping)
+
+#### Test Results
+
+- 175 tests passing (16 test files)
+- TypeScript type-check clean
+
+---
+
+### Phase 9 — Notifications (All 8 tasks)
+
+- **Completed:** 2026-03-20
+- **Agent:** Multi-agent (backend, ui, qa)
+
+#### S7-F9-01: Notification service
+
+- `src/lib/notifications.ts` — sendNotification, getNotifications, getUnreadCount, markAsRead, markAllAsRead
+- Send logic with fallback: WHATSAPP → attempt then fallback to IN_APP; BOTH → WhatsApp + IN_APP; IN_APP → direct
+- Every send attempt logged to NotificationLog with status (SENT/FAILED) and failReason
+- Pagination support for notification listing, unread count query
+
+#### S7-F9-02: WhatsApp Business API provider (stubbed)
+
+- `whatsAppProvider` in notifications.ts — checks WHATSAPP_API_KEY env var, returns failure if not configured
+- Ready for real integration: replace send() body with actual API call
+
+#### S7-F9-03: FCM provider (stubbed)
+
+- `fcmProvider` in notifications.ts — checks FCM_SERVER_KEY env var, returns failure if not configured
+- Ready for Firebase Admin SDK integration
+
+#### S7-F9-04: Wire notification triggers
+
+- `src/services/notification.service.ts` — notifySessionStarted, notifyNoShow, notifyLeaveApproved, notifyLeaveRejected, notifyReassignment, notifyUser
+- All trigger functions are fire-and-forget (errors logged, never thrown)
+- Wired into: session.service.ts (startSession, markNoShow), leave.service.ts (reviewLeave), reassignment.service.ts (reassignSession)
+- Added `id: true` to user selects in includes for recipient ID resolution
+
+#### S7-F9-05: Notification API routes
+
+- `src/app/api/notifications/route.ts` — GET (paginated list with unreadOnly filter + unreadCount)
+- `src/app/api/notifications/[id]/read/route.ts` — PUT (mark single as read)
+- `src/app/api/notifications/read-all/route.ts` — PUT (mark all as read)
+- All routes authenticated, branch-scoped
+
+#### S7-F9-06: Notification bell UI
+
+- `src/components/layout/NotificationBell.tsx` — dropdown with notification list, unread badge, mark read/mark all read
+- Replaced placeholder bell button in TopNav with real component
+- Relative time display (Just now, Xm ago, Xh ago, Xd ago)
+
+#### S7-F9-07: Real-time notification listener
+
+- Polling-based: 30-second interval fetching in NotificationBell component
+- Refreshes on dropdown open for immediate feedback
+
+#### S7-F9-08: Notification tests
+
+- `tests/unit/notification-service.test.ts` — 9 tests covering:
+  - sendNotification: IN_APP default, WhatsApp fallback, BOTH channel
+  - getNotifications: paginated results, unread filter
+  - getUnreadCount: count query
+  - markAsRead: not found, success
+  - markAllAsRead: batch update
+
+**Notes:**
+
+- Total: 171 tests passing, type-check clean
+- Schema updated: added `readAt DateTime?` to NotificationLog model
+- Updated session/leave/reassignment service tests with notification mocks and user.id in includes
+
+---
+
+### Phase 8 — Client Progress & Visualization (All 6 tasks)
+
+- **Completed:** 2026-03-19
+- **Agent:** Multi-agent (backend, ui, qa)
+
+#### S7-F8-01: Progress service
+
+- `src/services/progress.service.ts` — createProgressEntry, updateProgressEntry, listProgressEntries, getChartData
+- Create: validates client exists in branch, creates ProgressEntry, audit logs
+- Update: validates entry exists + branch scope, partial update, audit logs with old/new values
+- List: returns all entries for a client ordered by recordedAt desc
+- Chart data: supports weight, bodyFat, and exercise metrics; exercise metric queries WorkoutLog for max weight per session
+
+#### S7-F8-02: Progress API routes
+
+- `src/app/api/client/progress/route.ts` — GET (own entries, CLIENT role)
+- `src/app/api/client/progress/charts/route.ts` — GET (chart data by metric, CLIENT role)
+- `src/app/api/trainer/clients/[id]/progress/route.ts` — POST (create) + GET (list), TRAINER/KICKBOXING_TRAINER role
+- `src/app/api/trainer/progress/[id]/route.ts` — PUT (update entry), TRAINER/KICKBOXING_TRAINER role
+
+#### S7-F8-03: Recharts + chart components
+
+- `src/components/charts/ProgressLineChart.tsx` — Recharts LineChart wrapper with responsive container, themed styling, empty state
+- Accepts DataPoint[] with date/value, configurable color and yAxisLabel
+
+#### S7-F8-04: Client progress page
+
+- `src/app/(dashboard)/client/progress/page.tsx` — full progress view for clients
+- Summary cards: Weight, Body Fat, Muscle Mass, Waist with delta from previous entry
+- Tabs: Charts (weight + body fat line charts) and History (all entries with measurements grid)
+- Nav item "Progress" with TrendingUp icon already in constants.ts
+
+#### S7-F8-05: Trainer client progress view with edit
+
+- `src/app/(dashboard)/trainer/clients/[id]/progress/page.tsx` — trainer progress management
+- Charts tab with weight + body fat trends
+- History tab with edit button per entry
+- Create/Edit dialog with all measurement fields (weight, body fat, muscle mass, chest, waist, hips, biceps L/R, thighs L/R, notes)
+- "View Progress" button added to trainer clients page cards
+
+#### S7-F8-06: Progress tests
+
+- `tests/unit/progress-service.test.ts` — 12 tests covering:
+  - createProgressEntry: client not found, success + audit
+  - updateProgressEntry: not found, wrong branch, success + audit with old/new values
+  - listProgressEntries: client not found, returns ordered entries
+  - getChartData: client not found, weight data, body fat data, exercise without ID, exercise weight progression
+
+**Notes:**
+
+- Total: 162 tests passing, type-check clean
+- Chart data for exercise metric uses WorkoutLog → Sets → max weightKg per session date
+
+---
+
+### Phase 7 — Trainer Reassignment (All 4 tasks)
+
+- **Completed:** 2026-03-19
+- **Agent:** Multi-agent (backend, ui, qa)
+
+#### S7-F7-01: Reassignment service
+
+- `src/services/reassignment.service.ts` — getVacantTrainers, reassignSession, bulkReassignSessions, listReassignments
+- Vacant trainer lookup excludes: booked trainers (time overlap), trainers on leave (approved/pending), outside working hours/days
+- Single reassign: validates session exists (SCHEDULED), not already reassigned, not same trainer; creates TrainerReassignment + updates session trainerProfileId in $transaction
+- Bulk reassign: loops single reassign, collects results/errors
+- Helper functions: getBusyTrainerIds (time slot overlap detection), getOnLeaveTrainerIds (date range with UTC timezone window)
+- Audit logging on session reassignment
+
+#### S7-F7-02: Reassignment API routes
+
+- `src/app/api/admin/reassignments/route.ts` — POST (create single) + GET (list with date/trainer filters)
+- `src/app/api/admin/reassignments/bulk/route.ts` — POST (bulk reassign multiple sessions)
+- `src/app/api/admin/trainers/vacant/route.ts` — GET (vacant trainers by date/time slot)
+- SUPER_ADMIN/BRANCH_ADMIN only
+
+#### S7-F7-03: Admin reassignment page
+
+- `src/app/(dashboard)/admin/reassignments/page.tsx` — full reassignment management interface
+- Vacant trainer lookup: date + time slot inputs, shows available trainers
+- Single reassignment dialog: select session → select replacement trainer → optional reason
+- Bulk reassignment dialog: multi-session select → single replacement trainer
+- Reassignment history list with original/replacement trainer details
+- Added nav item "Reassignment" with ArrowLeftRight icon in constants.ts
+
+#### S7-F7-04: Reassignment tests
+
+- `tests/unit/reassignment-service.test.ts` — 8 tests covering:
+  - getVacantTrainers: excludes booked, excludes on-leave, excludes outside working hours, excludes non-working days
+  - reassignSession: not found, already reassigned, same trainer, success + transaction + audit
+  - listReassignments: returns history
+
+**Notes:**
+
+- Total: 150 tests passing, type-check clean
+- Time overlap detection uses HH:MM string comparison for slot conflicts
+- UTC timezone window ±1 day for leave date matching (IST offset handling)
+
+---
+
+### Phase 6 — Leave Management (All 8 tasks)
+
+- **Completed:** 2026-03-19
+- **Agent:** Multi-agent (backend, ui, qa)
+
+#### S7-F6-01: Leave service
+
+- `src/services/leave.service.ts` — applyLeave, reviewLeave, getLeaveById, listLeaves, getTrainerLeaves
+- Apply: validates dates, checks overlapping approved/pending leaves, identifies affected sessions + clients
+- Review: approve or reject with notes, validates leave is PENDING
+- Affected sessions: expanded date window ±1 day to handle IST-stored-as-UTC timezone offset
+- Branch scoping + audit logging on apply, approve, reject
+
+#### S7-F6-02: Leave API routes
+
+- `src/app/api/trainer/leaves/route.ts` — POST (apply) + GET (own leaves)
+- `src/app/api/admin/leaves/route.ts` — GET (list with status/trainer filters + pagination)
+- `src/app/api/admin/leaves/[id]/route.ts` — GET (detail with affected sessions/clients)
+- `src/app/api/admin/leaves/[id]/approve/route.ts` — PUT (approve with notes)
+- `src/app/api/admin/leaves/[id]/reject/route.ts` — PUT (reject with notes)
+- TRAINER/KICKBOXING_TRAINER for trainer routes, SUPER_ADMIN/BRANCH_ADMIN for admin routes
+
+#### S7-F6-03: Client unavailability service
+
+- `src/services/clientUnavailability.service.ts` — markUnavailable (skipDuplicates), listByMonth, removeUnavailability
+- Audit logging on mark and remove
+
+#### S7-F6-04: Client unavailability API routes
+
+- `src/app/api/client/unavailability/route.ts` — POST (mark dates) + GET (list by month)
+- `src/app/api/client/unavailability/[id]/route.ts` — DELETE (remove)
+- CLIENT role only
+
+#### S7-F6-05: Trainer leave application page
+
+- `src/app/(dashboard)/trainer/leaves/page.tsx` — leave application and history
+- Apply leave dialog: date pickers, reason, submit
+- Success view: shows affected sessions and clients
+- Inline error messages (replaced alert() with styled error banner)
+- Leave history list with status badges
+
+#### S7-F6-06: Admin leave management page
+
+- `src/app/(dashboard)/admin/leaves/page.tsx` — leave request management
+- Status filter (All/Pending/Approved/Rejected)
+- Detail dialog: leave dates, reason, affected sessions list, affected clients
+- Approve/reject buttons with notes textarea
+
+#### S7-F6-07: Client unavailability page
+
+- `src/app/(dashboard)/client/unavailability/page.tsx` — date unavailability management
+- Multi-date input, month filter, remove dates
+- Calendar-style date selection
+
+#### S7-F6-08: Leave tests
+
+- `tests/unit/leave-service.test.ts` — 11 tests covering:
+  - applyLeave: success + audit, overlapping dates rejection, affected sessions/clients identification
+  - reviewLeave: not found, already reviewed, approve + audit, reject + audit
+  - getLeaveById: not found, success with affected sessions
+  - listLeaves: paginated results, status filter
+  - getTrainerLeaves: returns own leaves
+- `tests/unit/client-unavailability-service.test.ts` — 5 tests covering:
+  - markUnavailable: success + audit, skipDuplicates
+  - listByMonth: date range filter
+  - removeUnavailability: not found, success + audit
+
+**Notes:**
+
+- Total: 142 tests passing (before Phase 7 additions), type-check clean
+- Fixed grammar error: "Cannot rejected" → ternary for action word
+- Fixed DialogTrigger: `asChild` → `render={<Button />}` (base-ui compatibility)
+- Fixed badge possibly undefined with fallback `?? { variant: 'secondary' as const, label: leave.status }`
+- Timezone fix: getAffectedSessions expands query window ±1 day for IST dates stored as UTC
+
+---
+
+### Phase 5 — Workout Logging & Exercise Library (All 8 tasks)
+
+- **Completed:** 2026-03-19
+- **Agent:** Multi-agent (backend, ui, qa)
+
+#### S7-F5-01: Exercise library service
+
+- `src/services/exercise.service.ts` — createExercise, updateExercise, getExerciseById, listExercises, deleteExercise (soft-delete), bulkImportExercises
+- Global exercise library (not branch-scoped, per schema design)
+- Search by name/muscle group/equipment, filter by category/muscle group
+- Paginated list with total count
+- Audit logging on create, update, delete, bulk import
+
+#### S7-F5-02: Exercise API routes
+
+- `src/app/api/admin/exercises/route.ts` — GET (list + search) + POST (create)
+- `src/app/api/admin/exercises/[id]/route.ts` — GET, PUT, DELETE
+- `src/app/api/admin/exercises/bulk-import/route.ts` — POST (bulk import JSON array)
+- `src/app/api/exercises/route.ts` — GET (public search, all authenticated users — used by trainers during workout logging)
+- SUPER_ADMIN/BRANCH_ADMIN only for admin routes
+
+#### S7-F5-03: Workout logging service
+
+- `src/services/workout.service.ts` — createWorkoutLogs, updateWorkoutLog, deleteWorkoutLog, getSessionWorkouts, getClientWorkouts
+- Validates session exists and is IN_PROGRESS or COMPLETED
+- Validates all exercises exist and are active
+- Creates workout logs with sets in a Prisma transaction
+- Update replaces sets (delete + recreate)
+- Client workout history with date range, exercise, and muscle group filters
+- Branch scoping + trainer ownership checks on mutations
+- Audit logging on create, update, delete
+
+#### S7-F5-04: Workout API routes for trainer + client
+
+- `src/app/api/trainer/workouts/route.ts` — POST (create workout logs for session)
+- `src/app/api/trainer/workouts/[id]/route.ts` — PUT (update sets), DELETE
+- `src/app/api/client/workouts/route.ts` — GET (workout history with filters)
+- TRAINER/KICKBOXING_TRAINER only for trainer routes, CLIENT only for client route
+
+#### S7-F5-05: Admin exercise library page
+
+- `src/app/(dashboard)/admin/exercises/page.tsx` — full CRUD interface
+- Searchable table with category/muscle group filters
+- Create/Edit dialog with all exercise fields
+- Bulk import via JSON paste dialog
+- Pagination, delete with confirmation
+- Category-based badge colors
+
+#### S7-F5-06: Workout logging UI within active session
+
+- `src/components/workout/WorkoutLogger.tsx` — reusable workout logging component
+- Exercise search from library (debounced, 300ms)
+- Add/remove exercises, add/remove sets per exercise
+- Set data: reps, weight (kg), RPE
+- Save workout button with saved/unsaved state tracking
+- Loads existing workout logs when resuming a session
+- Integrated into trainer dashboard active session card
+
+#### S7-F5-07: Client workout history page
+
+- `src/app/(dashboard)/client/workouts/page.tsx` — date-wise workout history
+- Grouped by session date with trainer name
+- Per-exercise: sets table (set number, reps, weight, RPE)
+- Filters: muscle group, date range
+
+#### S7-F5-08: Workout logging tests
+
+- `tests/unit/exercise-service.test.ts` — 9 tests covering:
+  - createExercise: success + audit
+  - updateExercise: not found, success + audit
+  - getExerciseById: not found, success
+  - listExercises: paginated results, search filter
+  - deleteExercise: not found, soft-delete + audit
+- `tests/unit/workout-service.test.ts` — 10 tests covering:
+  - createWorkoutLogs: session not found, invalid status, exercises not found, success + transaction + audit
+  - updateWorkoutLog: not found, wrong branch, wrong trainer, success + set replacement + audit
+  - getSessionWorkouts: session not found, success
+
+**Notes:**
+
+- Total: 126 tests passing, build clean
+- Exercise library is global (not branch-scoped) per schema design
+- WorkoutLogger supports both fresh logging and resuming with existing logs
+- Select onValueChange null coalescing pattern (base-ui compatibility)
+
+---
+
 ### Phase 4 — Attendance & Session Management (All 8 tasks)
 
 - **Completed:** 2026-03-19

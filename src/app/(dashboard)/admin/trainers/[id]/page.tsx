@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
+import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +33,7 @@ interface TrainerData {
 }
 
 export default function TrainerProfilePage() {
+  const { confirm, ConfirmDialog } = useConfirm();
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -123,7 +125,13 @@ export default function TrainerProfilePage() {
   }
 
   async function handleDelete() {
-    if (!confirm('Are you sure you want to deactivate this trainer?')) return;
+    const ok = await confirm({
+      title: 'Deactivate Trainer',
+      description: 'Are you sure you want to deactivate this trainer?',
+      confirmText: 'Deactivate',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
       if (res.ok) router.push('/admin/trainers');
@@ -292,6 +300,8 @@ export default function TrainerProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      {ConfirmDialog}
     </div>
   );
 }

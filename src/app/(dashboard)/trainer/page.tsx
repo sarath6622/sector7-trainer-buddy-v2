@@ -3,10 +3,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Play, Square, UserX, Clock } from 'lucide-react';
+import { toast } from 'sonner';
+import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { SessionTimer } from '@/components/timer/SessionTimer';
+import { WorkoutLogger } from '@/components/workout/WorkoutLogger';
 
 interface SessionData {
   id: string;
@@ -22,9 +25,24 @@ interface SessionData {
   trainer: {
     user: { firstName: string; lastName: string };
   };
+  workoutLogs?: {
+    id: string;
+    exerciseId: string;
+    orderIndex: number;
+    exercise: { id: string; name: string; targetMuscleGroup: string; category: string };
+    sets: {
+      setNumber: number;
+      reps: number | null;
+      weightKg: number | null;
+      durationSec: number | null;
+      rpe: number | null;
+      notes: string | null;
+    }[];
+  }[];
 }
 
 export default function TrainerDashboard() {
+  const { confirm, ConfirmDialog } = useConfirm();
   const router = useRouter();
   const [todaySessions, setTodaySessions] = useState<SessionData[]>([]);
   const [activeSession, setActiveSession] = useState<SessionData | null>(null);
@@ -39,7 +57,16 @@ export default function TrainerDashboard() {
         const { data } = await res.json();
         setTodaySessions(data);
         const active = data.find((s: SessionData) => s.status === 'IN_PROGRESS');
-        if (active) setActiveSession(active);
+        if (active) {
+          // Fetch full session details with workout logs
+          const detailRes = await fetch(`/api/trainer/sessions/${active.id}`);
+          if (detailRes.ok) {
+            const { data: detail } = await detailRes.json();
+            setActiveSession(detail);
+          } else {
+            setActiveSession(active);
+          }
+        }
       }
     } finally {
       setLoading(false);
@@ -60,7 +87,7 @@ export default function TrainerDashboard() {
         fetchTodaySessions();
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to start session');
+        toast.error(err.error || 'Failed to start session');
       }
     } finally {
       setActionLoading(null);
@@ -68,7 +95,13 @@ export default function TrainerDashboard() {
   }
 
   async function handleEndSession(sessionId: string) {
-    if (!confirm('Are you sure you want to end this session?')) return;
+    const ok = await confirm({
+      title: 'End Session',
+      description: 'Are you sure you want to end this session?',
+      confirmText: 'End Session',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     setActionLoading(sessionId);
     try {
       const res = await fetch(`/api/trainer/sessions/${sessionId}/end`, { method: 'POST' });
@@ -77,7 +110,7 @@ export default function TrainerDashboard() {
         fetchTodaySessions();
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to end session');
+        toast.error(err.error || 'Failed to end session');
       }
     } finally {
       setActionLoading(null);
@@ -85,7 +118,13 @@ export default function TrainerDashboard() {
   }
 
   async function handleNoShow(sessionId: string) {
-    if (!confirm('Mark this client as no-show? This counts as a used session.')) return;
+    const ok = await confirm({
+      title: 'Mark No-Show',
+      description: 'Mark this client as no-show? This counts as a used session.',
+      confirmText: 'Mark No-Show',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     setActionLoading(sessionId);
     try {
       const res = await fetch(`/api/trainer/sessions/${sessionId}/no-show`, { method: 'POST' });
@@ -93,7 +132,7 @@ export default function TrainerDashboard() {
         fetchTodaySessions();
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to mark no-show');
+        toast.error(err.error || 'Failed to mark no-show');
       }
     } finally {
       setActionLoading(null);
@@ -145,6 +184,12 @@ export default function TrainerDashboard() {
                 size="lg"
               />
             </div>
+            {/* Workout Logger */}
+            <WorkoutLogger
+              sessionInstanceId={activeSession.id}
+              existingLogs={activeSession.workoutLogs}
+            />
+
             <Button
               variant="destructive"
               className="w-full"
@@ -194,6 +239,7 @@ export default function TrainerDashboard() {
                           size="sm"
                           onClick={() => handleStartSession(session.id)}
                           disabled={!!activeSession || actionLoading === session.id}
+                          className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
                         >
                           <Play className="mr-1 h-3 w-3" />
                           {actionLoading === session.id ? '...' : 'Start'}
@@ -225,6 +271,8 @@ export default function TrainerDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {ConfirmDialog}
     </div>
   );
 }

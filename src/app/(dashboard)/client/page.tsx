@@ -1,9 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, Dumbbell, TrendingUp, User } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { useSession } from 'next-auth/react';
+import {
+  AlertCircle,
+  ArrowRight,
+  Calendar,
+  Clock,
+  Dumbbell,
+  Flame,
+  RefreshCw,
+  Target,
+  User,
+  Zap,
+} from 'lucide-react';
 import { SessionTimer } from '@/components/timer/SessionTimer';
 
 interface DashboardData {
@@ -42,6 +52,7 @@ interface DashboardData {
 }
 
 export default function ClientDashboard() {
+  const { data: session } = useSession();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -66,10 +77,23 @@ export default function ClientDashboard() {
     return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
   }
 
+  function formatTime(timeStr: string) {
+    const [h = '0', m = '00'] = timeStr.split(':');
+    const hour = parseInt(h, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const h12 = hour % 12 || 12;
+    return `${h12}:${m} ${ampm}`;
+  }
+
+  const firstName = session?.user?.firstName ?? 'there';
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
+        </div>
       </div>
     );
   }
@@ -77,166 +101,262 @@ export default function ClientDashboard() {
   if (!data) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <p className="text-muted-foreground">Could not load dashboard.</p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <AlertCircle className="h-8 w-8 text-muted-foreground" />
+          <p className="text-muted-foreground">Could not load dashboard.</p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              fetchDashboard();
+            }}
+            className="flex items-center gap-2 text-sm text-primary hover:underline"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
 
+  const usedPct =
+    data.sessionCount.total > 0
+      ? Math.round((data.sessionCount.used / data.sessionCount.total) * 100)
+      : 0;
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">My Dashboard</h1>
+    <div className="mx-auto max-w-2xl space-y-6 pb-8">
+      {/* Greeting */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Hey, {firstName}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your fitness overview</p>
+      </div>
 
-      {/* Active session with live timer */}
+      {/* Active session — hero banner */}
       {data.activeSession && (
-        <Card className="border-primary/50">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Session In Progress</CardTitle>
-              <Badge variant="default" className="bg-green-600">
-                LIVE
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center space-y-3">
-            <p className="text-muted-foreground">
-              with {data.activeSession.trainer.user.firstName}{' '}
-              {data.activeSession.trainer.user.lastName}
-            </p>
-            <SessionTimer
-              startedAt={data.activeSession.startedAt}
-              expectedDurationMin={data.activeSession.durationMin}
-              size="lg"
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Session count cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/15 p-2">
-                <Dumbbell className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{data.sessionCount.used}</p>
-                <p className="text-xs text-muted-foreground">Used</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/15 p-2">
-                <Calendar className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{data.sessionCount.remaining}</p>
-                <p className="text-xs text-muted-foreground">Remaining</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-muted p-2">
-                <TrendingUp className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{data.sessionCount.total}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-muted p-2">
-                <TrendingUp className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{data.sessionCount.carryForward}</p>
-                <p className="text-xs text-muted-foreground">Carry Fwd</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Next session and trainer info */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Next Session */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Next Session
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.nextSession ? (
-              <div className="space-y-1">
-                <p className="text-lg font-semibold">
-                  {formatDate(data.nextSession.scheduledDate)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {data.nextSession.scheduledTime} &middot; {data.nextSession.durationMin} min
-                </p>
-                <p className="text-sm">
-                  with {data.nextSession.trainer.user.firstName}{' '}
-                  {data.nextSession.trainer.user.lastName}
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No upcoming sessions scheduled.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Trainer Info */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Your Trainer
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.trainer ? (
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15">
-                  <User className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold">{data.trainer.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {data.trainer.sessionsPerMonth} sessions/month
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No trainer assigned yet.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Session breakdown */}
-      {data.sessionCount.noShow > 0 && (
-        <Card>
-          <CardContent className="py-4">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 p-5 text-white shadow-lg">
+          <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10" />
+          <div className="absolute -right-2 -bottom-8 h-32 w-32 rounded-full bg-white/5" />
+          <div className="relative">
             <div className="flex items-center gap-2">
-              <Badge variant="destructive">{data.sessionCount.noShow}</Badge>
-              <span className="text-sm text-muted-foreground">
-                no-show session{data.sessionCount.noShow > 1 ? 's' : ''} this month (counted as
-                used)
+              <div className="flex h-2 w-2 animate-pulse rounded-full bg-white" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-white/90">
+                Session in progress
               </span>
             </div>
-          </CardContent>
-        </Card>
+            <p className="mt-3 text-sm text-white/80">
+              Training with{' '}
+              <span className="font-semibold text-white">
+                {data.activeSession.trainer.user.firstName}{' '}
+                {data.activeSession.trainer.user.lastName}
+              </span>
+            </p>
+            <div className="mt-4 flex justify-center">
+              <SessionTimer
+                startedAt={data.activeSession.startedAt}
+                expectedDurationMin={data.activeSession.durationMin}
+                size="lg"
+              />
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* Session progress ring + stats */}
+      <div className="rounded-2xl bg-card p-5 ring-1 ring-border/50">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Sessions
+          </h2>
+          <span className="text-xs text-muted-foreground">This month</span>
+        </div>
+
+        <div className="mt-4 flex items-center gap-6">
+          {/* Progress ring */}
+          <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
+            <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
+              <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="8"
+                className="text-muted/50"
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={`${usedPct * 2.64} ${264 - usedPct * 2.64}`}
+                className="text-primary transition-all duration-700"
+              />
+            </svg>
+            <div className="absolute flex flex-col items-center">
+              <span className="text-2xl font-bold">{data.sessionCount.used}</span>
+              <span className="text-[10px] text-muted-foreground">
+                of {data.sessionCount.total}
+              </span>
+            </div>
+          </div>
+
+          {/* Stats grid */}
+          <div className="grid flex-1 grid-cols-2 gap-3">
+            <StatPill
+              icon={<Dumbbell className="h-3.5 w-3.5" />}
+              label="Used"
+              value={data.sessionCount.used}
+              color="text-primary"
+              bgColor="bg-primary/10"
+            />
+            <StatPill
+              icon={<Calendar className="h-3.5 w-3.5" />}
+              label="Remaining"
+              value={data.sessionCount.remaining}
+              color="text-emerald-500"
+              bgColor="bg-emerald-500/10"
+            />
+            <StatPill
+              icon={<Target className="h-3.5 w-3.5" />}
+              label="Total"
+              value={data.sessionCount.total}
+              color="text-blue-500"
+              bgColor="bg-blue-500/10"
+            />
+            <StatPill
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
+              label="Carry Fwd"
+              value={data.sessionCount.carryForward}
+              color="text-amber-500"
+              bgColor="bg-amber-500/10"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Next session card */}
+      <div className="rounded-2xl bg-card p-5 ring-1 ring-border/50">
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Next Session
+          </h2>
+        </div>
+
+        {data.nextSession ? (
+          <div className="mt-4 flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10">
+              <span className="text-lg font-bold text-primary leading-none">
+                {new Date(data.nextSession.scheduledDate).getDate()}
+              </span>
+              <span className="text-[10px] font-medium uppercase text-primary/70">
+                {new Date(data.nextSession.scheduledDate).toLocaleDateString('en-IN', {
+                  month: 'short',
+                })}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{formatDate(data.nextSession.scheduledDate)}</p>
+              <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {formatTime(data.nextSession.scheduledTime)}
+                </span>
+                <span>{data.nextSession.durationMin} min</span>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                with{' '}
+                <span className="text-foreground">
+                  {data.nextSession.trainer.user.firstName} {data.nextSession.trainer.user.lastName}
+                </span>
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-col items-center gap-2 py-4 text-center">
+            <Calendar className="h-8 w-8 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">No upcoming sessions scheduled</p>
+          </div>
+        )}
+      </div>
+
+      {/* Trainer card */}
+      <div className="rounded-2xl bg-card p-5 ring-1 ring-border/50">
+        <div className="flex items-center gap-2">
+          <Flame className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Your Trainer
+          </h2>
+        </div>
+
+        {data.trainer ? (
+          <div className="mt-4 flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/5 ring-2 ring-primary/20">
+              <User className="h-5 w-5 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{data.trainer.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {data.trainer.sessionsPerMonth} sessions/month
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-col items-center gap-2 py-4 text-center">
+            <User className="h-8 w-8 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">No trainer assigned yet</p>
+          </div>
+        )}
+      </div>
+
+      {/* No-show warning */}
+      {data.sessionCount.noShow > 0 && (
+        <div className="flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15">
+            <AlertCircle className="h-4 w-4 text-red-500" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">
+              {data.sessionCount.noShow} no-show session
+              {data.sessionCount.noShow > 1 ? 's' : ''}
+            </p>
+            <p className="text-xs text-muted-foreground">Counted as used this month</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatPill({
+  icon,
+  label,
+  value,
+  color,
+  bgColor,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  color: string;
+  bgColor: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2.5">
+      <div
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${bgColor} ${color}`}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-lg font-bold leading-none">{value}</p>
+        <p className="mt-0.5 text-[10px] text-muted-foreground">{label}</p>
+      </div>
     </div>
   );
 }
