@@ -1,8 +1,13 @@
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
-import { notifyLeaveApproved, notifyLeaveRejected } from '@/services/notification.service';
-import type { LeaveStatus } from '@prisma/client';
+import {
+  notifyLeaveApproved,
+  notifyLeaveRejected,
+  notifyAdminsLeaveRequested,
+  notifyClientsTrainerOnLeave,
+} from '@/services/notification.service';
+import type { LeaveStatus, LeaveType } from '@prisma/client';
 
 // ─── Input Interfaces ───────────────────────────────
 
@@ -10,6 +15,9 @@ interface ApplyLeaveInput {
   trainerProfileId: string;
   startDate: string;
   endDate: string;
+  leaveType: LeaveType;
+  startTime?: string; // HH:MM — for partial leaves
+  endTime?: string; // HH:MM — for partial leaves
   reason?: string;
   actorId: string;
   branchId: string;
@@ -43,16 +51,23 @@ interface GetTrainerLeavesInput {
 
 // ─── Helpers ────────────────────────────────────────
 
+function timeToMin(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h! * 60 + m!;
+}
+
 /**
  * Find sessions affected by a trainer leave within the date range.
- * Returns sessions that are SCHEDULED (not yet completed/cancelled).
- * Uses a wide UTC window to handle timezone offsets (e.g. IST stored as previous-day UTC).
+ * For partial leaves (startTime/endTime provided), only sessions that overlap
+ * the time window are returned.
  */
 async function getAffectedSessions(
   trainerProfileId: string,
   branchId: string,
   startDate: Date,
   endDate: Date,
+  startTime?: string | null,
+  endTime?: string | null,
 ) {
   // Expand window by 1 day on each side to capture timezone-shifted dates
   const windowStart = new Date(startDate);
@@ -61,7 +76,7 @@ async function getAffectedSessions(
   windowEnd.setDate(windowEnd.getDate() + 1);
   windowEnd.setHours(23, 59, 59, 999);
 
-  return prisma.sessionInstance.findMany({
+  const sessions = await prisma.sessionInstance.findMany({
     where: {
       branchId,
       trainerProfileId,
@@ -75,6 +90,19 @@ async function getAffectedSessions(
     },
     orderBy: { scheduledDate: 'asc' },
   });
+
+  // For partial leave, filter sessions whose time window overlaps the leave time window
+  if (startTime && endTime) {
+    const leaveStart = timeToMin(startTime);
+    const leaveEnd = timeToMin(endTime);
+    return sessions.filter((s) => {
+      const sessStart = timeToMin(s.scheduledTime);
+      const sessEnd = sessStart + s.durationMin;
+      return Math.min(sessEnd, leaveEnd) - Math.max(sessStart, leaveStart) > 0;
+    });
+  }
+
+  return sessions;
 }
 
 // ─── Service Functions ──────────────────────────────
@@ -86,6 +114,9 @@ export async function applyLeave({
   trainerProfileId,
   startDate,
   endDate,
+  leaveType,
+  startTime,
+  endTime,
   reason,
   actorId,
   branchId,
@@ -97,7 +128,7 @@ export async function applyLeave({
     throw new AppError('INVALID_DATES', 'End date must be on or after start date', 400);
   }
 
-  // Check for overlapping approved/pending leaves
+  // Check for overlapping approved/pending leaves on the same dates
   const overlapping = await prisma.leaveRequest.findFirst({
     where: {
       branchId,
@@ -116,8 +147,15 @@ export async function applyLeave({
     );
   }
 
-  // Find affected sessions
-  const affectedSessions = await getAffectedSessions(trainerProfileId, branchId, start, end);
+  // Find affected sessions (time-filtered for partial leaves)
+  const affectedSessions = await getAffectedSessions(
+    trainerProfileId,
+    branchId,
+    start,
+    end,
+    startTime,
+    endTime,
+  );
   const affectedClients = [
     ...new Map(
       affectedSessions.map((s) => [
@@ -137,6 +175,9 @@ export async function applyLeave({
       trainerProfileId,
       startDate: start,
       endDate: end,
+      leaveType,
+      startTime: leaveType !== 'FULL_DAY' ? (startTime ?? null) : null,
+      endTime: leaveType !== 'FULL_DAY' ? (endTime ?? null) : null,
       reason: reason ?? null,
     },
     include: {
@@ -155,11 +196,30 @@ export async function applyLeave({
     newValue: {
       startDate,
       endDate,
+      leaveType,
+      startTime: startTime ?? null,
+      endTime: endTime ?? null,
       reason: reason ?? null,
       affectedSessionCount: affectedSessions.length,
       affectedClientCount: affectedClients.length,
     },
     metadata: { trainerProfileId },
+  });
+
+  // Notify branch admins (fire-and-forget)
+  const trainerName = `${leave.trainer.user.firstName} ${leave.trainer.user.lastName}`;
+  const adminUsers = await prisma.user.findMany({
+    where: { branchId, role: { in: ['SUPER_ADMIN', 'BRANCH_ADMIN'] }, isActive: true },
+    select: { id: true },
+  });
+  notifyAdminsLeaveRequested({
+    branchId,
+    adminUserIds: adminUsers.map((u) => u.id),
+    trainerName,
+    startDate,
+    endDate,
+    leaveId: leave.id,
+    leaveType,
   });
 
   return {
@@ -168,6 +228,7 @@ export async function applyLeave({
       id: s.id,
       scheduledDate: s.scheduledDate,
       scheduledTime: s.scheduledTime,
+      durationMin: s.durationMin,
       clientName: `${s.client.user.firstName} ${s.client.user.lastName}`,
     })),
     affectedClients,
@@ -242,6 +303,18 @@ export async function reviewLeave({ leaveId, status, notes, actorId, branchId }:
       startDate,
       endDate,
     });
+
+    // Also notify all affected clients
+    const clientUserIds = [...new Set(affectedSessions.map((s) => s.client.user.id))];
+    if (clientUserIds.length > 0) {
+      notifyClientsTrainerOnLeave({
+        branchId,
+        clientUserIds,
+        trainerName: `${updated.trainer.user.firstName} ${updated.trainer.user.lastName}`,
+        startDate,
+        endDate,
+      });
+    }
   } else {
     notifyLeaveRejected({
       branchId,
@@ -258,6 +331,7 @@ export async function reviewLeave({ leaveId, status, notes, actorId, branchId }:
       id: s.id,
       scheduledDate: s.scheduledDate,
       scheduledTime: s.scheduledTime,
+      durationMin: s.durationMin,
       clientName: `${s.client.user.firstName} ${s.client.user.lastName}`,
     })),
   };
@@ -306,6 +380,7 @@ export async function getLeaveById({ leaveId, branchId }: GetLeaveInput) {
       id: s.id,
       scheduledDate: s.scheduledDate,
       scheduledTime: s.scheduledTime,
+      durationMin: s.durationMin,
       clientName: `${s.client.user.firstName} ${s.client.user.lastName}`,
     })),
     affectedClients,

@@ -87,8 +87,19 @@ export async function createWorkoutLogs({
     throw new AppError('EXERCISE_NOT_FOUND', `Exercises not found: ${missingIds.join(', ')}`, 404);
   }
 
-  // Create workout logs with sets in an interactive transaction
+  // Replace workout logs atomically: delete all existing for this session, then re-create
   const workoutLogs = await prisma.$transaction(async (tx) => {
+    // Must delete child sets before parent logs (FK constraint)
+    const existingLogs = await tx.workoutLog.findMany({
+      where: { sessionInstanceId },
+      select: { id: true },
+    });
+    const logIds = existingLogs.map((l) => l.id);
+    if (logIds.length > 0) {
+      await tx.workoutSet.deleteMany({ where: { workoutLogId: { in: logIds } } });
+      await tx.workoutLog.deleteMany({ where: { id: { in: logIds } } });
+    }
+
     const results = [];
     for (const entry of exercises) {
       const log = await tx.workoutLog.create({
@@ -109,7 +120,13 @@ export async function createWorkoutLogs({
         },
         include: {
           exercise: {
-            select: { id: true, name: true, targetMuscleGroup: true, category: true },
+            select: {
+              id: true,
+              name: true,
+              targetMuscleGroup: true,
+              category: true,
+              exerciseType: true,
+            },
           },
           sets: { orderBy: { setNumber: 'asc' } },
         },
@@ -185,7 +202,13 @@ export async function updateWorkoutLog({
     where: { id: workoutLogId },
     include: {
       exercise: {
-        select: { id: true, name: true, targetMuscleGroup: true, category: true },
+        select: {
+          id: true,
+          name: true,
+          targetMuscleGroup: true,
+          category: true,
+          exerciseType: true,
+        },
       },
       sets: { orderBy: { setNumber: 'asc' } },
     },
@@ -267,6 +290,7 @@ export async function getSessionWorkouts({ sessionInstanceId, branchId }: GetSes
           name: true,
           targetMuscleGroup: true,
           category: true,
+          exerciseType: true,
           equipmentRequired: true,
         },
       },
@@ -319,6 +343,7 @@ export async function getClientWorkouts({
           name: true,
           targetMuscleGroup: true,
           category: true,
+          exerciseType: true,
           equipmentRequired: true,
         },
       },

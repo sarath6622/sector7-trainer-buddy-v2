@@ -4,6 +4,173 @@
 
 ---
 
+## Bug Fixes, Progress Redesign & Client Self-Log (2026-03-29)
+
+### S7-BUG-01: Chart Y-axis Labels Invisible on Dark Background
+
+- **Agent:** @ui
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/components/workout/WorkoutLogger.tsx` — `ExerciseProgressModal`: replaced `hsl(var(--muted-foreground))` with `#888` for axis tick fill (CSS variables don't resolve inside SVG). Added `userSelect: 'none'` to prevent blue selection boxes on labels. `CartesianGrid` stroke changed from `hsl(var(--border) / 0.4)` → `rgba(255,255,255,0.08)`.
+  - `src/app/(dashboard)/client/session/[id]/page.tsx` — `ClientExerciseProgressModal`: same SVG tick fill and CartesianGrid fixes applied.
+
+### S7-BUG-02: Scheduling Day View Shows No Sessions (Timezone Bug)
+
+- **Agent:** @ui
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/app/(dashboard)/admin/scheduling/page.tsx` — `handleDatesSet` function: `info.start.toISOString().split('T')[0]` converts to UTC, which in IST (UTC+5:30) shifts Sunday midnight local to Saturday 18:30 UTC → wrong date sent to API. Fixed by adding `localYMD()` helper using `getFullYear()`/`getMonth()`/`getDate()` (local time only).
+
+### S7-BUG-03: Weight Metric Tile Showing "—" Despite Data Logged
+
+- **Agent:** @ui
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/app/(dashboard)/trainer/clients/[id]/progress/page.tsx` — root cause: each `+ Log` tap creates a sparse entry (only the logged field is set). `latest = entries[0]` had only the most recent metric (e.g., bodyFat), so weight showed `—`. Fixed by adding `latestOf(key)`, `previousOf(key)`, `oldestOf(key)` helpers that scan all entries for the most recent non-null value per metric.
+
+### S7-UX-27: Trainer Client Progress Page — Full UI Overhaul
+
+- **Agent:** @ui
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/app/(dashboard)/trainer/clients/[id]/progress/page.tsx` — full redesign:
+    - Removed the orange "+ Log" header button (each metric chip has its own log button)
+    - Expanded from 4-metric (2×2) grid to all 8 metrics in a horizontal scroll strip of compact `MetricChip` components (128px wide; shows icon/label/value/delta)
+    - "Tap + Log to start" empty state instead of "No change" when metric has no data
+    - Distinct icons per metric: Scale(Weight), Flame(BodyFat), Dumbbell(Muscle), Ruler(Waist), Heart(Chest), MoveHorizontal(Hips), Zap(Bicep), MoveVertical(Thigh)
+    - `ChartCard` uses `latestOf`/`oldestOf` helpers (fixes sparse-entry display)
+    - Tab focus ring removed with `focus-visible:ring-0`
+
+### S7-UX-28: ProgressLineChart Improvements
+
+- **Agent:** @ui
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/components/charts/ProgressLineChart.tsx`:
+    - Y-axis clip fix: `width` 40→52px, left margin 0→4
+    - CSS variable fix: tick fill `hsl(var(--muted-foreground))` → `#888`, CartesianGrid stroke `hsl(var(--border)/0.5)` → `rgba(255,255,255,0.08)`
+    - Trend badge hidden when `|trend| < 0.05` (suppresses spurious 0.0 display)
+    - Removed duplicate "Start: X" from trend row
+    - Single data point: shows value + "Log more measurements to see your trend chart" instead of mostly-empty chart
+
+### S7-UX-29: Client Progress Page — Full Rebuild with Self-Log
+
+- **Agent:** @ui + @backend
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/app/(dashboard)/client/progress/page.tsx` — full rebuild mirroring trainer page, adds client self-log capability:
+    - All 8 metric chips in horizontal scroll strip
+    - `+ Log` button on each chip → `POST /api/client/progress`
+    - Pencil edit button on history cards → full edit dialog → `PUT /api/client/progress/[id]`
+    - `latestOf`/`previousOf`/`oldestOf` per-metric helpers
+    - Same chart improvements, tab ring fix, distinct icons, "Tap + Log to start" empty state
+  - `src/app/api/client/progress/route.ts` — added `POST` handler: CLIENT role creates their own progress entry using `createProgressSchema` + `progressService.createProgressEntry`
+  - `src/app/api/client/progress/[id]/route.ts` — **new file**: `PUT` handler. CLIENT role updates own entry (ownership verified). Uses `updateProgressSchema` + `progressService.updateProgressEntry`
+
+### S7-UX-30: Client Session Page — Exercise Progress Indicator
+
+- **Agent:** @ui
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/app/(dashboard)/client/session/[id]/page.tsx` — added `TrendingUp` button on each exercise card. Added inline `ClientExerciseProgressModal` using `GET /api/client/progress/charts?metric=exercise&exerciseId=xxx`. Dark-themed AreaChart with custom tooltip, pre-formatted dates, stat pills (Latest/Best/Change), trend banner.
+
+### S7-NOTIF-01: Notifications on PT Package Creation
+
+- **Agent:** @backend
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/services/pt-package.service.ts` — WhatsApp + in-app notifications sent to both trainer and client when a PT package is created.
+
+### S7-NOTIF-02: Notifications on Session Events
+
+- **Agent:** @backend
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/services/session-generation.service.ts` — notification sent per client-trainer pair summary after session generation.
+  - `src/app/api/admin/sessions/bulk/route.ts` — notification sent on bulk session create.
+  - `src/app/api/admin/sessions/[id]/route.ts` — notifications sent on session update (with change summary) and session cancellation.
+
+### S7-MOB-01: Admin Scheduling Page Mobile Fix
+
+- **Agent:** @ui
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/app/(dashboard)/admin/scheduling/page.tsx` — mobile-responsive layout: flex-col stacking on small screens. Also includes the `localYMD()` timezone fix (see S7-BUG-02).
+
+### S7-MOB-02: Trainer Profile Page Mobile Fix
+
+- **Agent:** @ui
+- **Completed:** 2026-03-29
+- **Files Changed:**
+  - `src/app/(dashboard)/admin/trainers/[id]/page.tsx` — mobile-friendly compact header, sticky footer buttons.
+
+---
+
+## Session UX, Workout Logging & Progress Redesign (2026-03-28)
+
+### S7-UX-20: Dedicated Active Session Page (Trainer)
+
+- **Agent:** @ui + @backend
+- **Completed:** 2026-03-28
+- **Files Changed:**
+  - `src/app/(dashboard)/trainer/session/[id]/page.tsx` — **new file**: full-screen fixed layout. Sticky header with client avatar (initials), name, date/time, live `InlineTimer` pill. Meta chips row (duration · exercises · IN PROGRESS). Client tab bar for concurrent sessions. `WorkoutLogger` in scrollable area. Sticky "End Session" ghost-red footer. Auto-starts session if SCHEDULED. See ADR-014.
+  - `src/app/(dashboard)/trainer/page.tsx` — rewritten mobile-first: `handleStartSession` now calls API then `router.push`. Active session shown as compact emerald banner. Today's sessions use full-width stacked action buttons (Start + No Show below client name) instead of side-by-side. Upcoming section header simplified. Removed `max-w-3xl` → `max-w-2xl`.
+- **Notes:** Removed shadcn `Button`/`Badge` imports from dashboard in favour of plain Tailwind buttons matching dark theme.
+
+### S7-UX-21: WorkoutLogger Redesign + Bug Fixes
+
+- **Agent:** @ui + @backend
+- **Completed:** 2026-03-28
+- **Files Changed:**
+  - `src/components/workout/WorkoutLogger.tsx` — major redesign: type-coloured left accent border, `TYPE_CONFIG`/`TYPE_COLS` maps, collapse/expand per card, column headers + `h-10` inputs, sticky save bar only when `hasUnsaved`. Added `clientProfileId` optional prop. Added `TrendingUp` progress button per exercise card (trainer only). Inline `ExerciseProgressModal` bottom-sheet with AreaChart + stat pills. Recharts imported directly (no wrapper). Score-based dedup on `existingLogs` load (ADR-016).
+  - `src/services/workout.service.ts` — delete-then-recreate pattern inside transaction (ADR-015). Fixed FK constraint order: `workoutSet.deleteMany` before `workoutLog.deleteMany`.
+  - `src/services/session.service.ts` — added `exerciseType: true` to exercise select in `getSessionById` (was missing, caused TypeError at runtime). Added secondary `orderBy: [{ orderIndex: 'asc' }, { id: 'asc' }]` so newest logs appear last (dedup favours newer data).
+
+### S7-UX-22: Client Live Session View + Session History Navigation
+
+- **Agent:** @ui + @backend
+- **Completed:** 2026-03-28
+- **Files Changed:**
+  - `src/app/api/client/sessions/[id]/route.ts` — **new file**: client-scoped session detail API. Includes `exerciseType` in exercise select. Scoped by `clientProfileId`.
+  - `src/app/(dashboard)/client/session/[id]/page.tsx` — **new file**: read-only live workout view. Polls every 10s while `IN_PROGRESS`. Type-coloured cards, set table, same dedup logic. Auto-stops polling when session ends.
+  - `src/app/(dashboard)/client/sessions/page.tsx` — added "View workout" button (Eye icon) for `COMPLETED`/`IN_PROGRESS` sessions → navigates to `/client/session/[id]`.
+  - `src/app/(dashboard)/client/workouts/page.tsx` — rewrote session cards as tappable `<button>` rows (date block + exercise count + muscle tags + arrow) navigating to `/client/session/[id]`. Removed expand/collapse dropdown.
+
+### S7-UX-23: Trainer Session View Page (Completed Sessions)
+
+- **Agent:** @ui
+- **Completed:** 2026-03-28
+- **Files Changed:**
+  - `src/app/(dashboard)/trainer/sessions/[id]/page.tsx` — **new file**: read-only completed session view at `/trainer/sessions/[id]` (plural). Fixed 404 that occurred when clicking "View" on a completed session from the trainer dashboard. Header shows client avatar + name + "Completed" badge. Meta chips. Same exercise card layout as client view. Fetches from existing `/api/trainer/sessions/[id]`.
+- **Notes:** Route is `/trainer/sessions/[id]` (plural = completed view) vs `/trainer/session/[id]` (singular = active session).
+
+### S7-UX-24: Client Dashboard Fitness Journey Section
+
+- **Agent:** @ui + @backend
+- **Completed:** 2026-03-28
+- **Files Changed:**
+  - `src/app/api/client/dashboard/route.ts` — extended to return `latestProgress`, `prevProgress` (latest 2 progress entries via `prisma.progressEntry.findMany` — note: `ProgressEntry` has no `branchId`, scoped by `clientProfileId` only), and `prs` (top 4 exercises by max weight via `workoutSet.groupBy` → exercise name join → dedup by exercise name).
+  - `src/app/(dashboard)/client/page.tsx` — added "Fitness Journey" section: 2-col grid with Weight card (Scale, blue) + Body Fat card (Activity, amber), Personal Records card (gold/silver/bronze ranking circles), `Delta` component with `TrendingUp`/`TrendingDown`. All metric values use `.toFixed(1)`.
+- **Notes:** `ProgressEntry` does not have a `branchId` column — the dashboard API was fixed to remove `branchId` from that query.
+
+### S7-UX-25: Client Progress Page Redesign
+
+- **Agent:** @ui
+- **Completed:** 2026-03-28
+- **Files Changed:**
+  - `src/app/(dashboard)/client/progress/page.tsx` — full rewrite: mobile-first `max-w-2xl`, 2×2 stat tiles with `fmt()` (`.toFixed(1)`) on all values, full-width tabs (`flex-1`), chart cards as `rounded-2xl bg-card` (no shadcn Card wrapper), inline `ChartHeader` with current value + since-start delta pill, `HistoryCard` with date block + 3-col metric grid + LATEST badge, `EmptyState`.
+- **Notes:** Removed all shadcn `Card`/`Badge` imports. `fmt()` helper used everywhere. Recharts chart height reduced to 180 on mobile.
+
+### S7-UX-26: Trainer Client Progress Page Redesign
+
+- **Agent:** @ui
+- **Completed:** 2026-03-28
+- **Files Changed:**
+  - `src/app/(dashboard)/trainer/clients/[id]/progress/page.tsx` — full rewrite matching client progress redesign. 2×2 `StatTile` grid with `fmt()` + `DeltaChip` + inline "+ Log" button. Full-width 3-tab layout (Body Metrics / Workouts / History). `ChartCard` with current value + since-start delta. `MiniMetricCard` for circumference measurements. `HistoryCard` with edit (Pencil) button. All trainer features preserved: quick-log dialog, full edit dialog, `WorkoutProgressionPanel`. Removed `Table` tab (redundant with History).
+  - `src/app/api/trainer/clients/[id]/exercise-progress/route.ts` — **new file**: `GET ?exerciseId=xxx`. Verifies client belongs to trainer's branch, calls `getChartData(metric='exercise', exerciseId)`.
+
+---
+
 ## Post-Launch UI Modernization Phase 2 (2026-03-21)
 
 ### S7-UX-07: Admin Sessions Page

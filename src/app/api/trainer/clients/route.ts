@@ -19,8 +19,12 @@ export async function GET() {
     }
 
     const branchId = session.user.branchId;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Get all active PT packages for this trainer to find assigned clients
+    // ── 1. Primary clients via PT package ──────────────────────
     const packages = await prisma.ptPackage.findMany({
       where: { branchId, trainerProfileId, isActive: true },
       include: {
@@ -40,14 +44,10 @@ export async function GET() {
       },
     });
 
-    // For each client, get session counts for current month and next session
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const primaryClientIds = new Set(packages.map((p) => p.clientProfileId));
 
     const clientsWithStats = await Promise.all(
       packages.map(async (pkg) => {
-        // Session counts for this month
         const sessions = await prisma.sessionInstance.findMany({
           where: {
             branchId,
@@ -61,16 +61,14 @@ export async function GET() {
         const completed = sessions.filter((s) => s.status === 'COMPLETED').length;
         const noShow = sessions.filter((s) => s.status === 'NO_SHOW').length;
         const scheduled = sessions.filter((s) => s.status === 'SCHEDULED').length;
-        const used = completed + noShow;
 
-        // Next upcoming session
         const nextSession = await prisma.sessionInstance.findFirst({
           where: {
             branchId,
             clientProfileId: pkg.clientProfileId,
             trainerProfileId,
             status: 'SCHEDULED',
-            scheduledDate: { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) },
+            scheduledDate: { gte: today },
           },
           orderBy: [{ scheduledDate: 'asc' }, { scheduledTime: 'asc' }],
           select: { id: true, scheduledDate: true, scheduledTime: true },
@@ -88,15 +86,99 @@ export async function GET() {
             completed,
             noShow,
             scheduled,
-            used,
+            used: completed + noShow,
             remaining: scheduled,
           },
           nextSession,
+          isReassigned: false,
         };
       }),
     );
 
-    return NextResponse.json({ data: clientsWithStats });
+    // ── 2. Temporarily reassigned clients ──────────────────────
+    // Clients who have upcoming SCHEDULED sessions assigned to this trainer
+    // via a TrainerReassignment (i.e. they are NOT in this trainer's PT package)
+    const reassignedSessions = await prisma.sessionInstance.findMany({
+      where: {
+        branchId,
+        trainerProfileId,
+        status: 'SCHEDULED',
+        scheduledDate: { gte: today },
+        trainerReassignment: { isNot: null }, // only sessions that came via reassignment
+        clientProfileId: { notIn: [...primaryClientIds] }, // exclude already-listed clients
+      },
+      include: {
+        client: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                profileImageUrl: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ scheduledDate: 'asc' }, { scheduledTime: 'asc' }],
+    });
+
+    // Deduplicate by client — one card per client even if multiple sessions
+    const reassignedClientMap = new Map<string, (typeof reassignedSessions)[0]>();
+    for (const s of reassignedSessions) {
+      if (!reassignedClientMap.has(s.clientProfileId)) {
+        reassignedClientMap.set(s.clientProfileId, s);
+      }
+    }
+
+    const reassignedClients = await Promise.all(
+      [...reassignedClientMap.values()].map(async (s) => {
+        // Fetch this client's PT package to get context (may belong to another trainer)
+        const pkg = await prisma.ptPackage.findFirst({
+          where: { branchId, clientProfileId: s.clientProfileId, isActive: true },
+          select: { id: true, sessionsPerMonth: true, sessionChargeAmount: true },
+        });
+
+        // All upcoming reassigned sessions for this client with this trainer
+        const upcomingSessions = reassignedSessions.filter(
+          (r) => r.clientProfileId === s.clientProfileId,
+        );
+
+        const nextSession = upcomingSessions[0];
+
+        return {
+          clientProfile: s.client,
+          package: pkg
+            ? {
+                id: pkg.id,
+                sessionsPerMonth: pkg.sessionsPerMonth,
+                sessionChargeAmount: pkg.sessionChargeAmount,
+              }
+            : null,
+          stats: {
+            totalThisMonth: upcomingSessions.length,
+            completed: 0,
+            noShow: 0,
+            scheduled: upcomingSessions.length,
+            used: 0,
+            remaining: upcomingSessions.length,
+          },
+          nextSession: nextSession
+            ? {
+                id: nextSession.id,
+                scheduledDate: nextSession.scheduledDate,
+                scheduledTime: nextSession.scheduledTime,
+              }
+            : undefined,
+          isReassigned: true,
+          reassignedSessionCount: upcomingSessions.length,
+        };
+      }),
+    );
+
+    return NextResponse.json({ data: [...clientsWithStats, ...reassignedClients] });
   } catch (error) {
     console.error('[GET /api/trainer/clients] Error:', error);
     const { error: msg, code, status } = toErrorResponse(error);

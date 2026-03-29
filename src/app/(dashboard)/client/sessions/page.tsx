@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   Calendar,
@@ -11,6 +12,7 @@ import {
   Dumbbell,
   PlayCircle,
   XCircle,
+  Eye,
 } from 'lucide-react';
 
 type SessionStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'NO_SHOW' | 'CANCELLED';
@@ -63,6 +65,7 @@ const STATUS_CONFIG: Record<
 };
 
 export default function ClientSessionsPage() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -201,7 +204,13 @@ export default function ClientSessionsPage() {
           </h2>
           <div className="space-y-2">
             {upcoming.map((s) => (
-              <SessionCard key={s.id} session={s} formatDate={formatDate} formatTime={formatTime} />
+              <SessionCard
+                key={s.id}
+                session={s}
+                formatDate={formatDate}
+                formatTime={formatTime}
+                onView={() => router.push(`/client/session/${s.id}`)}
+              />
             ))}
           </div>
         </div>
@@ -215,7 +224,13 @@ export default function ClientSessionsPage() {
           </h2>
           <div className="space-y-2">
             {past.map((s) => (
-              <SessionCard key={s.id} session={s} formatDate={formatDate} formatTime={formatTime} />
+              <SessionCard
+                key={s.id}
+                session={s}
+                formatDate={formatDate}
+                formatTime={formatTime}
+                onView={() => router.push(`/client/session/${s.id}`)}
+              />
             ))}
           </div>
         </div>
@@ -227,10 +242,12 @@ export default function ClientSessionsPage() {
 function SessionCard({
   session,
   formatTime,
+  onView,
 }: {
   session: Session;
   formatDate: (d: string) => string;
   formatTime: (t: string) => string;
+  onView: () => void;
 }) {
   const config = STATUS_CONFIG[session.status];
   const StatusIcon = config.icon;
@@ -238,9 +255,10 @@ function SessionCard({
   const monthShort = new Date(session.scheduledDate).toLocaleDateString('en-IN', {
     month: 'short',
   });
+  const canView = session.status === 'COMPLETED' || session.status === 'IN_PROGRESS';
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl bg-card p-4 ring-1 ring-border/50 transition-colors hover:ring-border">
+    <div className="flex items-center gap-3 rounded-2xl bg-card p-4 ring-1 ring-border/50 transition-colors hover:ring-border">
       {/* Date block */}
       <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10">
         <span className="text-base font-bold leading-none text-primary">{day}</span>
@@ -268,12 +286,21 @@ function SessionCard({
         </div>
       </div>
 
-      {/* Status badge */}
-      <div
-        className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 ${config.bgColor}`}
-      >
-        <StatusIcon className={`h-3 w-3 ${config.color}`} />
-        <span className={`text-[10px] font-medium ${config.color}`}>{config.label}</span>
+      {/* Right side: View button (if applicable) + status badge */}
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${config.bgColor}`}>
+          <StatusIcon className={`h-3 w-3 ${config.color}`} />
+          <span className={`text-[10px] font-medium ${config.color}`}>{config.label}</span>
+        </div>
+        {canView && (
+          <button
+            onClick={onView}
+            className="flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium text-muted-foreground ring-1 ring-border/50 transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Eye className="h-3 w-3" />
+            View workout
+          </button>
+        )}
       </div>
     </div>
   );

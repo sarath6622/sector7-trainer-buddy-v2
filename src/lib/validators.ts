@@ -10,7 +10,7 @@ const dateSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
   message: 'Must be a valid date string (YYYY-MM-DD or ISO 8601)',
 });
 const pageSchema = z.coerce.number().int().min(1).default(1);
-const pageSizeSchema = z.coerce.number().int().min(1).max(100).default(20);
+const pageSizeSchema = z.coerce.number().int().min(1).max(500).default(20);
 
 // ─── ENUMS ───────────────────────────────────────────
 
@@ -49,6 +49,8 @@ export const dayOfWeekSchema = z.enum([
 export const kickboxingClientTypeSchema = z.enum(['GYM_MEMBER', 'EXTERNAL_ONLY']);
 
 export const difficultyLevelSchema = z.enum(['EASY', 'MEDIUM', 'HARD']);
+
+export const exerciseTypeSchema = z.enum(['WEIGHTED', 'BODYWEIGHT', 'DURATION', 'CARDIO']);
 
 export const exerciseCategorySchema = z.enum([
   'HYPERTROPHY',
@@ -139,12 +141,23 @@ export const updateScheduleSchema = createScheduleSchema.partial();
 export const generateSessionsSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, 'Must be YYYY-MM format'),
   scheduleIds: z.array(cuidSchema).optional(),
+  dryRun: z.boolean().optional(),
 });
 
 // ─── ADMIN: SESSION INSTANCES ────────────────────────
 
+export const bulkCreateSessionsSchema = z.object({
+  clientProfileId: cuidSchema,
+  trainerProfileId: cuidSchema,
+  dates: z.array(dateSchema).min(1).max(31),
+  startTime: timeSchema,
+  durationMin: z.number().int().positive(),
+});
+
 export const listSessionsSchema = paginationSchema.extend({
   date: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
   trainerId: cuidSchema.optional(),
   clientId: cuidSchema.optional(),
   status: sessionStatusSchema.optional(),
@@ -169,6 +182,38 @@ export const vacantTrainersSchema = z.object({
   date: z.string(),
   startTime: timeSchema,
   endTime: timeSchema,
+});
+
+// ─── ADMIN: TRAINER AVAILABILITY OVERRIDES ──────────
+
+export const createAvailabilityOverrideSchema = z.object({
+  trainerProfileId: cuidSchema,
+  date: dateSchema,
+  isAvailable: z.boolean(),
+  startTime: timeSchema.optional(),
+  endTime: timeSchema.optional(),
+  reason: z.string().optional(),
+});
+
+export const bulkCreateAvailabilityOverrideSchema = z.object({
+  trainerProfileId: cuidSchema,
+  overrides: z
+    .array(
+      z.object({
+        date: dateSchema,
+        isAvailable: z.boolean(),
+        startTime: timeSchema.optional(),
+        endTime: timeSchema.optional(),
+        reason: z.string().optional(),
+      }),
+    )
+    .min(1),
+});
+
+export const listAvailabilityOverridesSchema = z.object({
+  trainerProfileId: cuidSchema.optional(),
+  dateFrom: dateSchema.optional(),
+  dateTo: dateSchema.optional(),
 });
 
 // ─── ADMIN: LEAVES ───────────────────────────────────
@@ -254,6 +299,7 @@ export const createExerciseSchema = z.object({
   equipmentRequired: z.string().optional(),
   difficulty: difficultyLevelSchema.optional(),
   category: exerciseCategorySchema,
+  exerciseType: exerciseTypeSchema.default('WEIGHTED'),
   instructions: z.string().optional(),
   demoVideoUrl: z.string().url().optional(),
   demoGifUrl: z.string().url().optional(),
@@ -353,11 +399,27 @@ export const syncWorkoutsSchema = z.object({
 
 // ─── TRAINER: LEAVES ─────────────────────────────────
 
-export const applyLeaveSchema = z.object({
-  startDate: dateSchema,
-  endDate: dateSchema,
-  reason: z.string().optional(),
-});
+const timeHHMM = z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:MM format');
+
+export const applyLeaveSchema = z
+  .object({
+    startDate: dateSchema,
+    endDate: dateSchema,
+    leaveType: z.enum(['FULL_DAY', 'HALF_DAY_AM', 'HALF_DAY_PM', 'CUSTOM']).default('FULL_DAY'),
+    startTime: timeHHMM.optional(), // required when leaveType !== FULL_DAY
+    endTime: timeHHMM.optional(),
+    reason: z.string().optional(),
+  })
+  .refine((d) => d.leaveType === 'FULL_DAY' || (!!d.startTime && !!d.endTime), {
+    message: 'startTime and endTime are required for partial leaves',
+  })
+  .refine(
+    (d) => {
+      if (d.leaveType === 'FULL_DAY' || !d.startTime || !d.endTime) return true;
+      return d.startTime < d.endTime;
+    },
+    { message: 'startTime must be before endTime' },
+  );
 
 // ─── TRAINER: PROGRESS ───────────────────────────────
 
@@ -387,7 +449,7 @@ export const createUnavailabilitySchema = z.object({
 // ─── CLIENT: PROGRESS CHARTS ────────────────────────
 
 export const progressChartSchema = z.object({
-  metric: z.enum(['weight', 'bodyFat', 'exercise']),
+  metric: z.enum(['weight', 'bodyFat', 'muscleMass', 'exercise']),
   exerciseId: cuidSchema.optional(),
 });
 
@@ -417,6 +479,7 @@ export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
 export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
 export type GenerateSessionsInput = z.infer<typeof generateSessionsSchema>;
 export type UpdateSessionInput = z.infer<typeof updateSessionSchema>;
+export type BulkCreateSessionsInput = z.infer<typeof bulkCreateSessionsSchema>;
 export type CreateReassignmentInput = z.infer<typeof createReassignmentSchema>;
 export type BulkReassignmentInput = z.infer<typeof bulkReassignmentSchema>;
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
@@ -432,3 +495,7 @@ export type ApplyLeaveInput = z.infer<typeof applyLeaveSchema>;
 export type CreateProgressInput = z.infer<typeof createProgressSchema>;
 export type UpdateProgressInput = z.infer<typeof updateProgressSchema>;
 export type CreateUnavailabilityInput = z.infer<typeof createUnavailabilitySchema>;
+export type CreateAvailabilityOverrideInput = z.infer<typeof createAvailabilityOverrideSchema>;
+export type BulkCreateAvailabilityOverrideInput = z.infer<
+  typeof bulkCreateAvailabilityOverrideSchema
+>;

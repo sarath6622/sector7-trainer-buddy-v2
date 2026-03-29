@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
+import { sendNotification } from '@/lib/notifications';
 import { AppError } from '@/lib/errors';
 
 interface CreatePtPackageInput {
@@ -71,9 +72,41 @@ export async function createPtPackage(input: CreatePtPackageInput) {
       startDate: new Date(input.startDate),
     },
     include: {
-      client: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
-      trainer: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+      client: {
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+      },
+      trainer: {
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+      },
     },
+  });
+
+  const trainerName = `${ptPackage.trainer.user.firstName} ${ptPackage.trainer.user.lastName}`;
+  const clientName = `${ptPackage.client.user.firstName} ${ptPackage.client.user.lastName}`;
+  const startFormatted = new Date(input.startDate).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  // Notify trainer
+  await sendNotification({
+    branchId: input.branchId,
+    recipientId: ptPackage.trainer.user.id,
+    title: 'New Client Assigned',
+    body: `${clientName} has been assigned to you for personal training — ${input.sessionsPerMonth} sessions/month starting ${startFormatted}.`,
+    channel: 'BOTH',
+    metadata: { ptPackageId: ptPackage.id, clientProfileId: input.clientProfileId },
+  });
+
+  // Notify client
+  await sendNotification({
+    branchId: input.branchId,
+    recipientId: ptPackage.client.user.id,
+    title: 'Trainer Assigned',
+    body: `${trainerName} has been assigned as your personal trainer — ${input.sessionsPerMonth} sessions/month starting ${startFormatted}.`,
+    channel: 'BOTH',
+    metadata: { ptPackageId: ptPackage.id, trainerProfileId: input.trainerProfileId },
   });
 
   await auditLog({

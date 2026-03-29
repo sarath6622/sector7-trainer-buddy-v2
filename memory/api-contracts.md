@@ -1,6 +1,6 @@
 # API Contracts — Sector 7
 
-> Last updated: Pre-development (March 2026)
+> Last updated: 2026-03-29
 > Base path: `/api`
 > Auth: All routes require authentication via NextAuth session (except `/api/auth/*`)
 > Branch scoping: Middleware injects `branchId` from session into request context
@@ -172,6 +172,11 @@ GET    /api/trainer/clients/[id]/progress → {} → ProgressEntry[]
 POST   /api/trainer/clients/[id]/progress → { weightKg?, bodyFatPercent?, ...measurements, photoUrls? } → ProgressEntry
 PUT    /api/trainer/progress/[id]        → { ...updatedFields } → ProgressEntry
 
+GET    /api/trainer/clients/[id]/exercise-progress → ?exerciseId=xxx → ChartPoint[]
+       Returns max-weight (or duration/reps) per session for a specific exercise for this client.
+       Trainer-scoped: verifies client belongs to same branch. Calls getChartData(metric='exercise').
+       Added: 2026-03-28
+
 POST   /api/trainer/leaves               → { startDate, endDate, reason? } → LeaveRequest (with affected clients)
 GET    /api/trainer/leaves               → {} → LeaveRequest[] (own leaves)
 
@@ -200,12 +205,25 @@ interface WorkoutEntry {
 ## Client Routes
 
 ```
-GET    /api/client/dashboard             → {} → { sessionCount, nextSession, recentWorkouts, progress }
+GET    /api/client/dashboard             → {} → { sessionCount, nextSession, activeSession, trainer,
+                                                   latestProgress, prevProgress, prs }
+       latestProgress/prevProgress: { weightKg, bodyFatPercent, muscleMass, recordedAt } (latest 2 entries)
+       prs: [{ exerciseName, muscle, maxWeightKg }] top 4 by max weight across all workout sets
+       Updated: 2026-03-28 (added latestProgress, prevProgress, prs)
+
 GET    /api/client/sessions              → ?month → SessionInstance[] (own sessions)
-GET    /api/client/sessions/[id]         → {} → SessionInstance (with workout details)
+GET    /api/client/sessions/[id]         → {} → SessionInstance (with workout details, exerciseType included)
 GET    /api/client/attendance             → ?month → AttendanceRecord[]
 GET    /api/client/workouts              → ?dateFrom&dateTo&exerciseId&muscleGroup → WorkoutLog[]
 GET    /api/client/progress              → {} → ProgressEntry[]
+POST   /api/client/progress             → { weightKg?, bodyFatPercent?, muscleMass?, chest?, waist?, hips?, bicepLeft?, bicepRight?, thighLeft?, thighRight?, notes? } → { data: ProgressEntry } 201
+       Role: CLIENT only. Creates a new progress entry owned by the authenticated client.
+       Validation: createProgressSchema (all fields optional numbers/string, at least one measurement expected)
+       Added: 2026-03-29
+PUT    /api/client/progress/[id]        → { weightKg?, bodyFatPercent?, muscleMass?, chest?, waist?, hips?, bicepLeft?, bicepRight?, thighLeft?, thighRight?, notes? } → { data: ProgressEntry } 200
+       Role: CLIENT only. Updates own progress entry (ownership verified by clientProfileId).
+       Validation: updateProgressSchema (same optional fields as POST)
+       Added: 2026-03-29
 GET    /api/client/progress/charts       → ?metric=weight|bodyFat|exercise&exerciseId? → ChartData
 
 POST   /api/client/unavailability        → { dates: string[] } → ClientUnavailability[]

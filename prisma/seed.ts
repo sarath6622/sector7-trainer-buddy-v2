@@ -1,4 +1,4 @@
-import { PrismaClient, type DayOfWeek } from '@prisma/client';
+import { PrismaClient, type DayOfWeek, type ExerciseType } from '@prisma/client';
 import { hash } from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -315,36 +315,52 @@ async function main() {
     const t = trainers[sc.trainer]!;
     const c = clients[sc.client]!;
 
-    const schedule = await prisma.sessionSchedule.create({
-      data: {
+    // Idempotent: reuse existing schedule with same trainer+client+day+time
+    const existingSchedule = await prisma.sessionSchedule.findFirst({
+      where: {
         branchId: branch.id,
-        clientProfileId: c.profileId,
         trainerProfileId: t.profileId,
+        clientProfileId: c.profileId,
         dayOfWeek: sc.day as DayOfWeek,
         startTime: sc.time,
-        durationMin: 60,
-        validFrom: new Date('2026-03-01'),
-        isActive: true,
       },
     });
+
+    const schedule =
+      existingSchedule ??
+      (await prisma.sessionSchedule.create({
+        data: {
+          branchId: branch.id,
+          clientProfileId: c.profileId,
+          trainerProfileId: t.profileId,
+          dayOfWeek: sc.day as DayOfWeek,
+          startTime: sc.time,
+          durationMin: 60,
+          validFrom: new Date('2026-03-01'),
+          isActive: true,
+        },
+      }));
 
     // Generate session instances for March 2026
     const targetDay = dayMap[sc.day]!;
     const sessions: Date[] = [];
     for (let d = 1; d <= 31; d++) {
       const date = new Date(2026, 2, d); // March 2026
-      if (date.getMonth() !== 2) break; // Stop if we've gone past March
+      if (date.getMonth() !== 2) break;
       if (date.getDay() === targetDay) {
         sessions.push(date);
       }
     }
 
     for (const sessionDate of sessions) {
-      // Skip if session already exists
+      // Skip if a session already exists for this client+trainer+date (any schedule)
       const existing = await prisma.sessionInstance.findFirst({
         where: {
-          scheduleId: schedule.id,
+          branchId: branch.id,
+          clientProfileId: c.profileId,
+          trainerProfileId: t.profileId,
           scheduledDate: sessionDate,
+          scheduledTime: sc.time,
         },
       });
       if (existing) continue;
@@ -368,26 +384,73 @@ async function main() {
   );
 
   // ─── Exercises ─────────────────────────────────────
-  const exercises = [
+  const exercises: {
+    id: string;
+    name: string;
+    targetMuscleGroup: string;
+    secondaryMuscles: string[];
+    equipmentRequired: string;
+    difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+    category: 'HYPERTROPHY' | 'CARDIO' | 'FLEXIBILITY' | 'STRENGTH' | 'FUNCTIONAL';
+    exerciseType: ExerciseType;
+    instructions: string;
+  }[] = [
+    // ── WEIGHTED ──────────────────────────────────────────────────────────
     {
       id: 'ex-bench-press',
       name: 'Bench Press',
       targetMuscleGroup: 'Chest',
       secondaryMuscles: ['Triceps', 'Shoulders'],
       equipmentRequired: 'Barbell, Bench',
-      difficulty: 'MEDIUM' as const,
-      category: 'HYPERTROPHY' as const,
+      difficulty: 'MEDIUM',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
       instructions: 'Lie on bench, grip barbell shoulder-width, lower to chest, press up.',
     },
     {
+      id: 'ex-incline-db-press',
+      name: 'Incline Dumbbell Press',
+      targetMuscleGroup: 'Chest',
+      secondaryMuscles: ['Triceps', 'Shoulders'],
+      equipmentRequired: 'Dumbbells, Incline Bench',
+      difficulty: 'MEDIUM',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
+      instructions: 'Set bench to 30–45°, press dumbbells from chest to full extension.',
+    },
+    {
+      id: 'ex-cable-fly',
+      name: 'Cable Fly',
+      targetMuscleGroup: 'Chest',
+      secondaryMuscles: ['Shoulders'],
+      equipmentRequired: 'Cable Machine',
+      difficulty: 'EASY',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
+      instructions: 'Set cables at chest height, sweep arms together in a wide arc.',
+    },
+    {
       id: 'ex-squat',
-      name: 'Squat',
+      name: 'Barbell Squat',
       targetMuscleGroup: 'Quadriceps',
       secondaryMuscles: ['Glutes', 'Hamstrings', 'Core'],
       equipmentRequired: 'Barbell, Squat Rack',
-      difficulty: 'MEDIUM' as const,
-      category: 'STRENGTH' as const,
+      difficulty: 'MEDIUM',
+      category: 'STRENGTH',
+      exerciseType: 'WEIGHTED',
       instructions: 'Stand with barbell on upper back, squat down to parallel, drive up.',
+    },
+    {
+      id: 'ex-leg-press',
+      name: 'Leg Press',
+      targetMuscleGroup: 'Quadriceps',
+      secondaryMuscles: ['Glutes', 'Hamstrings'],
+      equipmentRequired: 'Leg Press Machine',
+      difficulty: 'MEDIUM',
+      category: 'STRENGTH',
+      exerciseType: 'WEIGHTED',
+      instructions:
+        'Sit in machine, press platform away until legs are nearly straight, lower with control.',
     },
     {
       id: 'ex-deadlift',
@@ -395,29 +458,22 @@ async function main() {
       targetMuscleGroup: 'Back',
       secondaryMuscles: ['Hamstrings', 'Glutes', 'Core'],
       equipmentRequired: 'Barbell',
-      difficulty: 'HARD' as const,
-      category: 'STRENGTH' as const,
+      difficulty: 'HARD',
+      category: 'STRENGTH',
+      exerciseType: 'WEIGHTED',
       instructions: 'Hinge at hips, grip bar, drive through floor to stand.',
     },
     {
-      id: 'ex-pullup',
-      name: 'Pull-up',
-      targetMuscleGroup: 'Back',
-      secondaryMuscles: ['Biceps', 'Core'],
-      equipmentRequired: 'Pull-up Bar',
-      difficulty: 'HARD' as const,
-      category: 'HYPERTROPHY' as const,
-      instructions: 'Hang from bar, pull chin above bar, lower with control.',
-    },
-    {
-      id: 'ex-plank',
-      name: 'Plank',
-      targetMuscleGroup: 'Core',
-      secondaryMuscles: ['Shoulders', 'Glutes'],
-      equipmentRequired: 'None',
-      difficulty: 'EASY' as const,
-      category: 'FUNCTIONAL' as const,
-      instructions: 'Hold push-up position on forearms, keep body straight.',
+      id: 'ex-rdl',
+      name: 'Romanian Deadlift',
+      targetMuscleGroup: 'Hamstrings',
+      secondaryMuscles: ['Glutes', 'Lower Back'],
+      equipmentRequired: 'Barbell',
+      difficulty: 'MEDIUM',
+      category: 'STRENGTH',
+      exerciseType: 'WEIGHTED',
+      instructions:
+        'Hold bar at hips, hinge forward keeping back flat until hamstrings stretch, return.',
     },
     {
       id: 'ex-ohp',
@@ -425,9 +481,21 @@ async function main() {
       targetMuscleGroup: 'Shoulders',
       secondaryMuscles: ['Triceps', 'Core'],
       equipmentRequired: 'Barbell',
-      difficulty: 'MEDIUM' as const,
-      category: 'STRENGTH' as const,
+      difficulty: 'MEDIUM',
+      category: 'STRENGTH',
+      exerciseType: 'WEIGHTED',
       instructions: 'Press barbell from shoulders to overhead, lock out arms.',
+    },
+    {
+      id: 'ex-db-shoulder-press',
+      name: 'Dumbbell Shoulder Press',
+      targetMuscleGroup: 'Shoulders',
+      secondaryMuscles: ['Triceps'],
+      equipmentRequired: 'Dumbbells',
+      difficulty: 'MEDIUM',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
+      instructions: 'Press dumbbells from ear height to full extension overhead.',
     },
     {
       id: 'ex-row',
@@ -435,19 +503,32 @@ async function main() {
       targetMuscleGroup: 'Back',
       secondaryMuscles: ['Biceps', 'Core'],
       equipmentRequired: 'Barbell',
-      difficulty: 'MEDIUM' as const,
-      category: 'HYPERTROPHY' as const,
+      difficulty: 'MEDIUM',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
       instructions: 'Bend over, pull barbell to lower chest, squeeze shoulder blades.',
     },
     {
-      id: 'ex-lunge',
-      name: 'Walking Lunge',
-      targetMuscleGroup: 'Quadriceps',
-      secondaryMuscles: ['Glutes', 'Hamstrings'],
-      equipmentRequired: 'Dumbbells',
-      difficulty: 'EASY' as const,
-      category: 'FUNCTIONAL' as const,
-      instructions: 'Step forward, lower back knee toward floor, alternate legs.',
+      id: 'ex-lat-pulldown',
+      name: 'Lat Pulldown',
+      targetMuscleGroup: 'Back',
+      secondaryMuscles: ['Biceps'],
+      equipmentRequired: 'Cable Machine',
+      difficulty: 'MEDIUM',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
+      instructions: 'Grip wide bar, pull down to upper chest, return with control.',
+    },
+    {
+      id: 'ex-seated-cable-row',
+      name: 'Seated Cable Row',
+      targetMuscleGroup: 'Back',
+      secondaryMuscles: ['Biceps', 'Rear Deltoid'],
+      equipmentRequired: 'Cable Machine',
+      difficulty: 'EASY',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
+      instructions: 'Sit upright, row handle to lower abdomen, squeeze back, return.',
     },
     {
       id: 'ex-curl',
@@ -455,30 +536,196 @@ async function main() {
       targetMuscleGroup: 'Biceps',
       secondaryMuscles: ['Forearms'],
       equipmentRequired: 'Dumbbells',
-      difficulty: 'EASY' as const,
-      category: 'HYPERTROPHY' as const,
+      difficulty: 'EASY',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
       instructions: 'Curl dumbbells from sides to shoulders, lower with control.',
     },
+    {
+      id: 'ex-hammer-curl',
+      name: 'Hammer Curl',
+      targetMuscleGroup: 'Biceps',
+      secondaryMuscles: ['Forearms', 'Brachialis'],
+      equipmentRequired: 'Dumbbells',
+      difficulty: 'EASY',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
+      instructions: 'Neutral grip, curl dumbbells keeping elbows tucked, lower slowly.',
+    },
+    {
+      id: 'ex-tricep-pushdown',
+      name: 'Tricep Pushdown',
+      targetMuscleGroup: 'Triceps',
+      secondaryMuscles: [],
+      equipmentRequired: 'Cable Machine',
+      difficulty: 'EASY',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
+      instructions: 'Grip bar at chest, push down until arms fully extend, return.',
+    },
+    {
+      id: 'ex-leg-curl',
+      name: 'Leg Curl',
+      targetMuscleGroup: 'Hamstrings',
+      secondaryMuscles: ['Calves'],
+      equipmentRequired: 'Leg Curl Machine',
+      difficulty: 'EASY',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
+      instructions: 'Lie face down, curl heels toward glutes, lower with control.',
+    },
+    {
+      id: 'ex-calf-raise',
+      name: 'Standing Calf Raise',
+      targetMuscleGroup: 'Calves',
+      secondaryMuscles: [],
+      equipmentRequired: 'Barbell or Smith Machine',
+      difficulty: 'EASY',
+      category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
+      instructions: 'Stand on edge of step, rise onto toes fully, lower heel below step.',
+    },
+    // ── BODYWEIGHT ────────────────────────────────────────────────────────
+    {
+      id: 'ex-pullup',
+      name: 'Pull-up',
+      targetMuscleGroup: 'Back',
+      secondaryMuscles: ['Biceps', 'Core'],
+      equipmentRequired: 'Pull-up Bar',
+      difficulty: 'HARD',
+      category: 'HYPERTROPHY',
+      exerciseType: 'BODYWEIGHT',
+      instructions: 'Hang from bar, pull chin above bar, lower with control.',
+    },
+    {
+      id: 'ex-pushup',
+      name: 'Push-up',
+      targetMuscleGroup: 'Chest',
+      secondaryMuscles: ['Triceps', 'Shoulders', 'Core'],
+      equipmentRequired: 'None',
+      difficulty: 'EASY',
+      category: 'FUNCTIONAL',
+      exerciseType: 'BODYWEIGHT',
+      instructions: 'Hands shoulder-width, lower chest to floor, push back up. Keep body straight.',
+    },
+    {
+      id: 'ex-dip',
+      name: 'Dip',
+      targetMuscleGroup: 'Triceps',
+      secondaryMuscles: ['Chest', 'Shoulders'],
+      equipmentRequired: 'Parallel Bars',
+      difficulty: 'MEDIUM',
+      category: 'HYPERTROPHY',
+      exerciseType: 'BODYWEIGHT',
+      instructions: 'Support on parallel bars, lower until elbows at 90°, push back up.',
+    },
+    {
+      id: 'ex-lunge',
+      name: 'Walking Lunge',
+      targetMuscleGroup: 'Quadriceps',
+      secondaryMuscles: ['Glutes', 'Hamstrings'],
+      equipmentRequired: 'None',
+      difficulty: 'EASY',
+      category: 'FUNCTIONAL',
+      exerciseType: 'BODYWEIGHT',
+      instructions: 'Step forward, lower back knee toward floor, alternate legs.',
+    },
+    {
+      id: 'ex-bw-squat',
+      name: 'Bodyweight Squat',
+      targetMuscleGroup: 'Quadriceps',
+      secondaryMuscles: ['Glutes', 'Core'],
+      equipmentRequired: 'None',
+      difficulty: 'EASY',
+      category: 'FUNCTIONAL',
+      exerciseType: 'BODYWEIGHT',
+      instructions: 'Feet shoulder-width, squat until thighs parallel, drive back up.',
+    },
+    // ── DURATION ──────────────────────────────────────────────────────────
+    {
+      id: 'ex-plank',
+      name: 'Plank',
+      targetMuscleGroup: 'Core',
+      secondaryMuscles: ['Shoulders', 'Glutes'],
+      equipmentRequired: 'None',
+      difficulty: 'EASY',
+      category: 'FUNCTIONAL',
+      exerciseType: 'DURATION',
+      instructions: 'Hold push-up position on forearms, keep body straight.',
+    },
+    {
+      id: 'ex-side-plank',
+      name: 'Side Plank',
+      targetMuscleGroup: 'Core',
+      secondaryMuscles: ['Shoulders', 'Obliques'],
+      equipmentRequired: 'None',
+      difficulty: 'MEDIUM',
+      category: 'FUNCTIONAL',
+      exerciseType: 'DURATION',
+      instructions: 'Support on one forearm, stack feet, keep hips elevated for the set time.',
+    },
+    {
+      id: 'ex-wall-sit',
+      name: 'Wall Sit',
+      targetMuscleGroup: 'Quadriceps',
+      secondaryMuscles: ['Glutes', 'Calves'],
+      equipmentRequired: 'None',
+      difficulty: 'MEDIUM',
+      category: 'FUNCTIONAL',
+      exerciseType: 'DURATION',
+      instructions: 'Slide back down wall until thighs are parallel to floor, hold.',
+    },
+    // ── CARDIO ────────────────────────────────────────────────────────────
     {
       id: 'ex-treadmill',
       name: 'Treadmill Run',
       targetMuscleGroup: 'Full Body',
       secondaryMuscles: ['Calves', 'Core'],
       equipmentRequired: 'Treadmill',
-      difficulty: 'EASY' as const,
-      category: 'CARDIO' as const,
+      difficulty: 'EASY',
+      category: 'CARDIO',
+      exerciseType: 'CARDIO',
       instructions: 'Set pace and incline, maintain steady running form.',
     },
+    {
+      id: 'ex-cycling',
+      name: 'Stationary Cycling',
+      targetMuscleGroup: 'Full Body',
+      secondaryMuscles: ['Quadriceps', 'Calves', 'Core'],
+      equipmentRequired: 'Stationary Bike',
+      difficulty: 'EASY',
+      category: 'CARDIO',
+      exerciseType: 'CARDIO',
+      instructions: 'Adjust seat height, pedal at steady cadence, vary resistance.',
+    },
+    {
+      id: 'ex-rowing',
+      name: 'Rowing Machine',
+      targetMuscleGroup: 'Full Body',
+      secondaryMuscles: ['Back', 'Core', 'Arms'],
+      equipmentRequired: 'Rowing Ergometer',
+      difficulty: 'MEDIUM',
+      category: 'CARDIO',
+      exerciseType: 'CARDIO',
+      instructions:
+        'Drive with legs first, lean back, then pull handle to lower chest. Reverse to return.',
+    },
   ];
+
+  // Build a lookup map for set generation
+  const exerciseTypeMap: Record<string, ExerciseType> = {};
+  for (const ex of exercises) {
+    exerciseTypeMap[ex.id] = ex.exerciseType;
+  }
 
   for (const ex of exercises) {
     await prisma.exercise.upsert({
       where: { id: ex.id },
-      update: {},
+      update: { exerciseType: ex.exerciseType },
       create: ex,
     });
   }
-  console.log(`Exercises: ${exercises.length} created`);
+  console.log(`Exercises: ${exercises.length} seeded`);
 
   // ─── Mark past sessions as COMPLETED with attendance & workout logs ──
   const today = new Date(2026, 2, 20); // March 20, 2026
@@ -526,6 +773,7 @@ async function main() {
       const shuffled = [...exerciseIds].sort(() => Math.random() - 0.5);
       for (let i = 0; i < numExercises; i++) {
         const exId = shuffled[i % shuffled.length]!;
+        const exType = exerciseTypeMap[exId] ?? 'WEIGHTED';
         const numSets = 3 + Math.floor(Math.random() * 2);
         const log = await prisma.workoutLog.create({
           data: {
@@ -535,15 +783,46 @@ async function main() {
           },
         });
         for (let s = 1; s <= numSets; s++) {
-          await prisma.workoutSet.create({
-            data: {
-              workoutLogId: log.id,
-              setNumber: s,
-              reps: 8 + Math.floor(Math.random() * 8),
-              weightKg: 20 + Math.floor(Math.random() * 60),
-              rpe: 6 + Math.floor(Math.random() * 4),
-            },
-          });
+          if (exType === 'WEIGHTED') {
+            await prisma.workoutSet.create({
+              data: {
+                workoutLogId: log.id,
+                setNumber: s,
+                reps: 6 + Math.floor(Math.random() * 10),
+                weightKg: 20 + Math.floor(Math.random() * 80),
+                rpe: 6 + Math.floor(Math.random() * 4),
+              },
+            });
+          } else if (exType === 'BODYWEIGHT') {
+            await prisma.workoutSet.create({
+              data: {
+                workoutLogId: log.id,
+                setNumber: s,
+                reps: 8 + Math.floor(Math.random() * 12),
+                rpe: 5 + Math.floor(Math.random() * 5),
+              },
+            });
+          } else if (exType === 'DURATION') {
+            await prisma.workoutSet.create({
+              data: {
+                workoutLogId: log.id,
+                setNumber: s,
+                durationSec: 20 + Math.floor(Math.random() * 100),
+                rpe: 5 + Math.floor(Math.random() * 5),
+              },
+            });
+          } else {
+            // CARDIO — durationSec + distance in notes
+            const distanceKm = (1 + Math.random() * 4).toFixed(1);
+            await prisma.workoutSet.create({
+              data: {
+                workoutLogId: log.id,
+                setNumber: s,
+                durationSec: 600 + Math.floor(Math.random() * 1200),
+                notes: distanceKm,
+              },
+            });
+          }
         }
       }
       completedCount++;

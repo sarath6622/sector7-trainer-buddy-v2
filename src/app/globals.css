@@ -126,6 +126,16 @@
   html {
     @apply font-sans;
   }
+
+  /* Native date/time/month input — make calendar/clock icon visible in dark mode */
+  .dark input[type='date']::-webkit-calendar-picker-indicator,
+  .dark input[type='time']::-webkit-calendar-picker-indicator,
+  .dark input[type='month']::-webkit-calendar-picker-indicator,
+  .dark input[type='datetime-local']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.7;
+    cursor: pointer;
+  }
 }
 
 /* ── FullCalendar Theme Overrides ── */

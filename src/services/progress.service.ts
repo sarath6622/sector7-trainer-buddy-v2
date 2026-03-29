@@ -48,7 +48,7 @@ interface ListProgressInput {
 interface ChartDataInput {
   clientProfileId: string;
   branchId: string;
-  metric: 'weight' | 'bodyFat' | 'exercise';
+  metric: 'weight' | 'bodyFat' | 'muscleMass' | 'exercise';
   exerciseId?: string;
 }
 
@@ -231,35 +231,190 @@ export async function getChartData({
     }));
   }
 
+  if (metric === 'muscleMass') {
+    const entries = await prisma.progressEntry.findMany({
+      where: { clientProfileId, muscleMass: { not: null } },
+      select: { recordedAt: true, muscleMass: true },
+      orderBy: { recordedAt: 'asc' },
+    });
+    return entries.map((e) => ({
+      date: e.recordedAt.toISOString(),
+      value: e.muscleMass,
+      label: 'Muscle Mass (kg)',
+    }));
+  }
+
   // metric === 'exercise' — weight progression for a specific exercise
   if (!exerciseId) {
     throw new AppError('MISSING_EXERCISE_ID', 'exerciseId is required for exercise metric', 400);
   }
 
-  // Get workout logs for this exercise, with the heaviest weight per session date
+  // Determine exercise type to know which field to chart
+  const exercise = await prisma.exercise.findUnique({
+    where: { id: exerciseId },
+    select: { exerciseType: true, name: true },
+  });
+  if (!exercise) throw new AppError('EXERCISE_NOT_FOUND', 'Exercise not found', 404);
+
+  const type = exercise.exerciseType;
+
   const workoutLogs = await prisma.workoutLog.findMany({
-    where: {
-      exerciseId,
-      sessionInstance: { clientProfileId },
-    },
+    where: { exerciseId, sessionInstance: { clientProfileId } },
     include: {
-      sets: {
-        where: { weightKg: { not: null } },
-        orderBy: { weightKg: 'desc' },
-        take: 1,
-      },
-      sessionInstance: {
-        select: { scheduledDate: true },
-      },
+      sets: true,
+      sessionInstance: { select: { scheduledDate: true } },
     },
     orderBy: { sessionInstance: { scheduledDate: 'asc' } },
   });
 
+  if (type === 'WEIGHTED') {
+    return workoutLogs
+      .map((log) => {
+        const maxW = Math.max(...log.sets.map((s) => s.weightKg ?? 0));
+        return maxW > 0
+          ? {
+              date: log.sessionInstance.scheduledDate.toISOString(),
+              value: maxW,
+              label: 'Max Weight (kg)',
+            }
+          : null;
+      })
+      .filter(Boolean) as { date: string; value: number; label: string }[];
+  }
+
+  if (type === 'BODYWEIGHT') {
+    return workoutLogs
+      .map((log) => {
+        const maxR = Math.max(...log.sets.map((s) => s.reps ?? 0));
+        return maxR > 0
+          ? {
+              date: log.sessionInstance.scheduledDate.toISOString(),
+              value: maxR,
+              label: 'Max Reps',
+            }
+          : null;
+      })
+      .filter(Boolean) as { date: string; value: number; label: string }[];
+  }
+
+  // DURATION or CARDIO — max duration per session
   return workoutLogs
-    .filter((log) => log.sets.length > 0)
-    .map((log) => ({
-      date: log.sessionInstance.scheduledDate.toISOString(),
-      value: log.sets[0]!.weightKg,
-      label: 'Max Weight (kg)',
-    }));
+    .map((log) => {
+      const maxD = Math.max(...log.sets.map((s) => s.durationSec ?? 0));
+      return maxD > 0
+        ? {
+            date: log.sessionInstance.scheduledDate.toISOString(),
+            value: maxD,
+            label: 'Duration (sec)',
+          }
+        : null;
+    })
+    .filter(Boolean) as { date: string; value: number; label: string }[];
+}
+
+/**
+ * List exercises a client has weight-based workout data for, with summary stats.
+ * Only returns exercises with ≥2 data points (enough to draw a trend).
+ */
+export async function listExercisesWithProgressData({
+  clientProfileId,
+  branchId,
+}: {
+  clientProfileId: string;
+  branchId: string;
+}) {
+  const client = await prisma.clientProfile.findFirst({
+    where: { id: clientProfileId, branchId },
+  });
+  if (!client) throw new AppError('CLIENT_NOT_FOUND', 'Client not found', 404);
+
+  const rows = await prisma.workoutLog.findMany({
+    where: {
+      sessionInstance: { clientProfileId, branchId },
+      // At least one set with some meaningful data
+      sets: {
+        some: {
+          OR: [
+            { weightKg: { not: null } },
+            { reps: { not: null } },
+            { durationSec: { not: null } },
+          ],
+        },
+      },
+    },
+    select: {
+      exerciseId: true,
+      exercise: {
+        select: { name: true, targetMuscleGroup: true, exerciseType: true },
+      },
+      sets: {
+        select: { weightKg: true, reps: true, durationSec: true },
+      },
+      sessionInstance: { select: { scheduledDate: true } },
+    },
+    orderBy: { sessionInstance: { scheduledDate: 'asc' } },
+  });
+
+  const UNIT_MAP: Record<string, string> = {
+    WEIGHTED: 'kg',
+    BODYWEIGHT: 'reps',
+    DURATION: 'sec',
+    CARDIO: 'sec',
+  };
+
+  const map = new Map<
+    string,
+    {
+      name: string;
+      muscle: string;
+      exerciseType: string;
+      unit: string;
+      values: number[];
+    }
+  >();
+
+  for (const row of rows) {
+    const type = row.exercise.exerciseType;
+    let maxVal: number | null = null;
+
+    if (type === 'WEIGHTED') {
+      const vals = row.sets.map((s) => s.weightKg ?? 0).filter((v) => v > 0);
+      maxVal = vals.length > 0 ? Math.max(...vals) : null;
+    } else if (type === 'BODYWEIGHT') {
+      const vals = row.sets.map((s) => s.reps ?? 0).filter((v) => v > 0);
+      maxVal = vals.length > 0 ? Math.max(...vals) : null;
+    } else {
+      // DURATION or CARDIO
+      const vals = row.sets.map((s) => s.durationSec ?? 0).filter((v) => v > 0);
+      maxVal = vals.length > 0 ? Math.max(...vals) : null;
+    }
+
+    if (maxVal == null) continue;
+
+    if (!map.has(row.exerciseId)) {
+      map.set(row.exerciseId, {
+        name: row.exercise.name,
+        muscle: row.exercise.targetMuscleGroup,
+        exerciseType: type,
+        unit: UNIT_MAP[type] ?? 'kg',
+        values: [],
+      });
+    }
+    map.get(row.exerciseId)!.values.push(maxVal);
+  }
+
+  return Array.from(map.entries())
+    .filter(([, v]) => v.values.length >= 2)
+    .map(([id, v]) => ({
+      id,
+      name: v.name,
+      targetMuscleGroup: v.muscle,
+      exerciseType: v.exerciseType,
+      unit: v.unit,
+      sessionCount: v.values.length,
+      currentMax: v.values[v.values.length - 1]!,
+      startMax: v.values[0]!,
+      improvement: +(v.values[v.values.length - 1]! - v.values[0]!).toFixed(1),
+    }))
+    .sort((a, b) => b.sessionCount - a.sessionCount);
 }

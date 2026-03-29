@@ -19,14 +19,31 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const month = searchParams.get('month'); // optional YYYY-MM filter
+    const date = searchParams.get('date'); // YYYY-MM-DD  — single day
+    const month = searchParams.get('month'); // YYYY-MM     — full month
+    const dateFrom = searchParams.get('dateFrom'); // YYYY-MM-DD  — range start
+    const dateTo = searchParams.get('dateTo'); // YYYY-MM-DD  — range end
 
     const where: Record<string, unknown> = {
       branchId: session.user.branchId,
       trainerProfileId,
     };
 
-    if (month) {
+    if (date) {
+      const d = new Date(date);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+      where.scheduledDate = { gte: d, lte: dayEnd };
+    } else if (dateFrom || dateTo) {
+      const range: Record<string, Date> = {};
+      if (dateFrom) range.gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        range.lte = end;
+      }
+      where.scheduledDate = range;
+    } else if (month) {
       const [yearStr, monthStr] = month.split('-');
       const year = parseInt(yearStr!, 10);
       const m = parseInt(monthStr!, 10);

@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { auditLog } from '@/lib/audit';
-import type { ExerciseCategory, DifficultyLevel } from '@prisma/client';
+import type { ExerciseCategory, DifficultyLevel, ExerciseType } from '@prisma/client';
 
 interface CreateExerciseInput {
   name: string;
@@ -10,6 +10,7 @@ interface CreateExerciseInput {
   equipmentRequired?: string;
   difficulty?: DifficultyLevel;
   category: ExerciseCategory;
+  exerciseType?: ExerciseType;
   instructions?: string;
   demoVideoUrl?: string;
   demoGifUrl?: string;
@@ -25,6 +26,7 @@ interface UpdateExerciseInput {
   equipmentRequired?: string;
   difficulty?: DifficultyLevel;
   category?: ExerciseCategory;
+  exerciseType?: ExerciseType;
   instructions?: string;
   demoVideoUrl?: string;
   demoGifUrl?: string;
@@ -49,6 +51,7 @@ interface BulkImportInput {
     equipmentRequired?: string;
     difficulty?: DifficultyLevel;
     category: ExerciseCategory;
+    exerciseType?: ExerciseType;
     instructions?: string;
     demoVideoUrl?: string;
     demoGifUrl?: string;
@@ -69,6 +72,7 @@ export async function createExercise({ actorId, branchId, ...data }: CreateExerc
       equipmentRequired: data.equipmentRequired,
       difficulty: data.difficulty,
       category: data.category,
+      exerciseType: data.exerciseType ?? 'WEIGHTED',
       instructions: data.instructions,
       demoVideoUrl: data.demoVideoUrl,
       demoGifUrl: data.demoGifUrl,
@@ -108,6 +112,7 @@ export async function updateExercise({
   if (data.equipmentRequired !== undefined) updateData.equipmentRequired = data.equipmentRequired;
   if (data.difficulty !== undefined) updateData.difficulty = data.difficulty;
   if (data.category !== undefined) updateData.category = data.category;
+  if (data.exerciseType !== undefined) updateData.exerciseType = data.exerciseType;
   if (data.instructions !== undefined) updateData.instructions = data.instructions;
   if (data.demoVideoUrl !== undefined) updateData.demoVideoUrl = data.demoVideoUrl;
   if (data.demoGifUrl !== undefined) updateData.demoGifUrl = data.demoGifUrl;
@@ -236,6 +241,7 @@ export async function bulkImportExercises({ exercises, actorId, branchId }: Bulk
           equipmentRequired: ex.equipmentRequired,
           difficulty: ex.difficulty,
           category: ex.category,
+          exerciseType: ex.exerciseType ?? 'WEIGHTED',
           instructions: ex.instructions,
           demoVideoUrl: ex.demoVideoUrl,
           demoGifUrl: ex.demoGifUrl,

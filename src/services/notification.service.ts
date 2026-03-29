@@ -60,6 +60,75 @@ export async function notifyNoShow({
 
 // ─── Leave Notifications ────────────────────────────
 
+export async function notifyAdminsLeaveRequested({
+  branchId,
+  adminUserIds,
+  trainerName,
+  startDate,
+  endDate,
+  leaveId,
+  leaveType,
+}: {
+  branchId: string;
+  adminUserIds: string[];
+  trainerName: string;
+  startDate: string;
+  endDate: string;
+  leaveId: string;
+  leaveType: string;
+}) {
+  const typeLabel =
+    leaveType === 'HALF_DAY_AM'
+      ? 'Half Day AM'
+      : leaveType === 'HALF_DAY_PM'
+        ? 'Half Day PM'
+        : leaveType === 'CUSTOM'
+          ? 'Custom Hours'
+          : 'Full Day';
+
+  const dateRange = startDate === endDate ? startDate : `${startDate} to ${endDate}`;
+
+  await Promise.allSettled(
+    adminUserIds.map((recipientId) =>
+      sendNotification({
+        branchId,
+        recipientId,
+        title: 'New Leave Request',
+        body: `${trainerName} requested ${typeLabel} leave on ${dateRange}.`,
+        channel: 'IN_APP',
+        metadata: { type: 'LEAVE_REQUESTED', leaveId },
+      }),
+    ),
+  );
+}
+
+export async function notifyClientsTrainerOnLeave({
+  branchId,
+  clientUserIds,
+  trainerName,
+  startDate,
+  endDate,
+}: {
+  branchId: string;
+  clientUserIds: string[];
+  trainerName: string;
+  startDate: string;
+  endDate: string;
+}) {
+  await Promise.allSettled(
+    clientUserIds.map((recipientId) =>
+      sendNotification({
+        branchId,
+        recipientId,
+        title: 'Trainer Leave Notice',
+        body: `Your trainer ${trainerName} is on approved leave from ${startDate} to ${endDate}. The admin will arrange a replacement.`,
+        channel: 'BOTH',
+        metadata: { type: 'TRAINER_ON_LEAVE' },
+      }),
+    ),
+  );
+}
+
 export async function notifyLeaveApproved({
   branchId,
   trainerUserId,
@@ -140,6 +209,33 @@ export async function notifyReassignment({
     });
   } catch (error) {
     console.error('[Notification] Failed to send reassignment:', error);
+  }
+}
+
+export async function notifyTrainerNewAssignment({
+  branchId,
+  trainerUserId,
+  clientName,
+  date,
+  time,
+}: {
+  branchId: string;
+  trainerUserId: string;
+  clientName: string;
+  date: string;
+  time: string;
+}) {
+  try {
+    await sendNotification({
+      branchId,
+      recipientId: trainerUserId,
+      title: 'New Session Assigned',
+      body: `You have been assigned a session with ${clientName} on ${date} at ${time}.`,
+      channel: 'BOTH',
+      metadata: { type: 'SESSION_ASSIGNED' },
+    });
+  } catch (error) {
+    console.error('[Notification] Failed to send trainer assignment:', error);
   }
 }
 

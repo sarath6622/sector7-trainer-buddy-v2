@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
+import { sendNotification } from '@/lib/notifications';
 import type { DayOfWeek } from '@prisma/client';
 
 interface GenerateSessionsInput {
@@ -7,6 +8,7 @@ interface GenerateSessionsInput {
   month: string; // "YYYY-MM"
   scheduleIds?: string[];
   actorId: string;
+  dryRun?: boolean;
 }
 
 interface Conflict {
@@ -51,8 +53,9 @@ function getDatesForDay(year: number, month: number, dayOfWeek: DayOfWeek): Date
 /**
  * Check if two time slots overlap.
  * Times are in "HH:MM" format, durations in minutes.
+ * Returns the number of overlapping minutes (0 = no overlap).
  */
-function timeSlotsOverlap(
+export function timeSlotsOverlap(
   startA: string,
   durationA: number,
   startB: string,
@@ -92,8 +95,8 @@ export async function generateSessions(input: GenerateSessionsInput) {
   const schedules = await prisma.sessionSchedule.findMany({
     where: whereSchedule,
     include: {
-      client: { include: { user: { select: { firstName: true, lastName: true } } } },
-      trainer: { include: { user: { select: { firstName: true, lastName: true } } } },
+      client: { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
+      trainer: { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
     },
   });
 
@@ -120,6 +123,52 @@ export async function generateSessions(input: GenerateSessionsInput) {
     ),
   );
 
+  // Fetch all non-cancelled instances for client-level overlap detection
+  const existingActiveInstances = await prisma.sessionInstance.findMany({
+    where: {
+      branchId: input.branchId,
+      scheduledDate: { gte: monthStart, lte: monthEnd },
+      status: { not: 'CANCELLED' },
+    },
+    select: {
+      clientProfileId: true,
+      trainerProfileId: true,
+      scheduledDate: true,
+      scheduledTime: true,
+      durationMin: true,
+    },
+  });
+
+  // Group existing instances by client+date and trainer+date for overlap checks
+  const existingByClientDate = new Map<string, typeof existingActiveInstances>();
+  const existingByTrainerDate = new Map<string, typeof existingActiveInstances>();
+  for (const inst of existingActiveInstances) {
+    const dateStr = inst.scheduledDate.toISOString().split('T')[0];
+    const clientKey = `${inst.clientProfileId}|${dateStr}`;
+    const trainerKey = `${inst.trainerProfileId}|${dateStr}`;
+
+    if (!existingByClientDate.has(clientKey)) existingByClientDate.set(clientKey, []);
+    existingByClientDate.get(clientKey)!.push(inst);
+
+    if (!existingByTrainerDate.has(trainerKey)) existingByTrainerDate.set(trainerKey, []);
+    existingByTrainerDate.get(trainerKey)!.push(inst);
+  }
+
+  // Fetch all trainer availability overrides for this month
+  const allOverrides = await prisma.trainerAvailabilityOverride.findMany({
+    where: {
+      branchId: input.branchId,
+      date: { gte: monthStart, lte: monthEnd },
+    },
+  });
+
+  // Build a map: trainerProfileId|YYYY-MM-DD → override
+  const overrideMap = new Map<string, (typeof allOverrides)[number]>();
+  for (const o of allOverrides) {
+    const key = `${o.trainerProfileId}|${o.date.toISOString().split('T')[0]}`;
+    overrideMap.set(key, o);
+  }
+
   // Generate instances
   const instancesToCreate: {
     branchId: string;
@@ -130,6 +179,9 @@ export async function generateSessions(input: GenerateSessionsInput) {
     scheduledTime: string;
     durationMin: number;
   }[] = [];
+
+  const skippedDueToOverride: { scheduleId: string; date: string; reason: string }[] = [];
+  const skippedDueToConflict: { scheduleId: string; date: string; reason: string }[] = [];
 
   for (const schedule of schedules) {
     // Skip if validUntil is before the month starts
@@ -146,7 +198,67 @@ export async function generateSessions(input: GenerateSessionsInput) {
       const dateKey = `${schedule.id}|${date.toISOString().split('T')[0]}`;
       if (existingKeys.has(dateKey)) continue; // already generated
 
-      instancesToCreate.push({
+      // Check if trainer has an availability override making them unavailable
+      const dateStr = date.toISOString().split('T')[0];
+      const overrideKey = `${schedule.trainerProfileId}|${dateStr}`;
+      const override = overrideMap.get(overrideKey);
+
+      if (override && !override.isAvailable) {
+        skippedDueToOverride.push({
+          scheduleId: schedule.id,
+          date: dateStr!,
+          reason: override.reason ?? 'Trainer marked unavailable',
+        });
+        continue;
+      }
+
+      // Check for client double-booking (existing DB instances + already-queued instances in this batch)
+      const clientDateKey = `${schedule.clientProfileId}|${dateStr}`;
+      const clientExisting = existingByClientDate.get(clientDateKey) ?? [];
+      let clientConflict = false;
+      for (const ex of clientExisting) {
+        if (
+          timeSlotsOverlap(
+            schedule.startTime,
+            schedule.durationMin,
+            ex.scheduledTime,
+            ex.durationMin,
+          ) > 0
+        ) {
+          clientConflict = true;
+          break;
+        }
+      }
+
+      // Check for trainer double-booking against existing instances
+      const trainerDateKey = `${schedule.trainerProfileId}|${dateStr}`;
+      const trainerExisting = existingByTrainerDate.get(trainerDateKey) ?? [];
+      let trainerConflict = false;
+      for (const ex of trainerExisting) {
+        if (
+          timeSlotsOverlap(
+            schedule.startTime,
+            schedule.durationMin,
+            ex.scheduledTime,
+            ex.durationMin,
+          ) > 0
+        ) {
+          trainerConflict = true;
+          break;
+        }
+      }
+
+      if (clientConflict || trainerConflict) {
+        const who = clientConflict ? 'client' : 'trainer';
+        skippedDueToConflict.push({
+          scheduleId: schedule.id,
+          date: dateStr!,
+          reason: `Skipped: ${who} already has an overlapping session at this time`,
+        });
+        continue;
+      }
+
+      const newInstance = {
         branchId: input.branchId,
         scheduleId: schedule.id,
         clientProfileId: schedule.clientProfileId,
@@ -154,8 +266,75 @@ export async function generateSessions(input: GenerateSessionsInput) {
         scheduledDate: date,
         scheduledTime: schedule.startTime,
         durationMin: schedule.durationMin,
-      });
+      };
+      instancesToCreate.push(newInstance);
+
+      // Track this new instance for intra-batch conflict detection
+      if (!existingByClientDate.has(clientDateKey)) existingByClientDate.set(clientDateKey, []);
+      existingByClientDate.get(clientDateKey)!.push(newInstance);
+      if (!existingByTrainerDate.has(trainerDateKey)) existingByTrainerDate.set(trainerDateKey, []);
+      existingByTrainerDate.get(trainerDateKey)!.push(newInstance);
     }
+  }
+
+  // Dry-run: return preview without creating anything
+  if (input.dryRun) {
+    // Build a summary grouped by trainer → client (with schedule metadata)
+    const previewByTrainer = new Map<
+      string,
+      {
+        scheduleId: string;
+        clientName: string;
+        dayOfWeek: string;
+        startTime: string;
+        durationMin: number;
+        dates: string[];
+      }[]
+    >();
+    for (const inst of instancesToCreate) {
+      const schedule = schedules.find((s) => s.id === inst.scheduleId)!;
+      const trainerName = `${schedule.trainer.user.firstName} ${schedule.trainer.user.lastName}`;
+      const clientName = `${schedule.client.user.firstName} ${schedule.client.user.lastName}`;
+      const dateStr = inst.scheduledDate.toISOString().split('T')[0]!;
+
+      if (!previewByTrainer.has(trainerName)) previewByTrainer.set(trainerName, []);
+      const trainerGroup = previewByTrainer.get(trainerName)!;
+      let clientEntry = trainerGroup.find((e) => e.scheduleId === inst.scheduleId);
+      if (!clientEntry) {
+        clientEntry = {
+          scheduleId: inst.scheduleId,
+          clientName,
+          dayOfWeek: schedule.dayOfWeek,
+          startTime: schedule.startTime,
+          durationMin: schedule.durationMin,
+          dates: [],
+        };
+        trainerGroup.push(clientEntry);
+      }
+      clientEntry.dates.push(dateStr);
+    }
+
+    // Collect unique dates across all instances
+    const allDates = new Set(
+      instancesToCreate.map((i) => i.scheduledDate.toISOString().split('T')[0]!),
+    );
+
+    const preview = Array.from(previewByTrainer.entries()).map(([trainerName, clients]) => ({
+      trainerName,
+      clients,
+    }));
+
+    return {
+      dryRun: true,
+      willCreate: instancesToCreate.length,
+      daysAffected: allDates.size,
+      skippedDueToOverride,
+      skippedDueToConflict,
+      preview,
+      // Not applicable in dry run
+      created: 0,
+      conflicts: [],
+    };
   }
 
   // Batch create
@@ -235,11 +414,68 @@ export async function generateSessions(input: GenerateSessionsInput) {
       month: input.month,
       created,
       conflictsFound: conflicts.length,
+      skippedDueToOverride: skippedDueToOverride.length,
+      skippedDueToConflict: skippedDueToConflict.length,
       scheduleIds: input.scheduleIds ?? 'all',
     },
   });
 
-  return { created, conflicts };
+  // Send summary notifications (one per unique client-trainer pair)
+  if (created > 0) {
+    const [monthName, yearNum] = (() => {
+      const d = new Date(`${input.month}-01`);
+      return [d.toLocaleString('en-IN', { month: 'long' }), d.getFullYear()];
+    })();
+
+    // Count sessions per client-trainer pair from the instancesToCreate list
+    const pairCounts = new Map<
+      string,
+      {
+        clientUserId: string;
+        trainerUserId: string;
+        clientName: string;
+        trainerName: string;
+        count: number;
+      }
+    >();
+    for (const inst of instancesToCreate) {
+      const schedule = schedules.find((s) => s.id === inst.scheduleId)!;
+      const key = `${inst.clientProfileId}|${inst.trainerProfileId}`;
+      if (!pairCounts.has(key)) {
+        pairCounts.set(key, {
+          clientUserId: schedule.client.user.id,
+          trainerUserId: schedule.trainer.user.id,
+          clientName: `${schedule.client.user.firstName} ${schedule.client.user.lastName}`,
+          trainerName: `${schedule.trainer.user.firstName} ${schedule.trainer.user.lastName}`,
+          count: 0,
+        });
+      }
+      pairCounts.get(key)!.count++;
+    }
+
+    await Promise.all(
+      Array.from(pairCounts.values()).flatMap(
+        ({ clientUserId, trainerUserId, clientName, trainerName, count }) => [
+          sendNotification({
+            branchId: input.branchId,
+            recipientId: clientUserId,
+            title: 'Sessions Scheduled',
+            body: `${count} session${count !== 1 ? 's' : ''} scheduled with ${trainerName} for ${monthName} ${yearNum}.`,
+            channel: 'BOTH',
+          }),
+          sendNotification({
+            branchId: input.branchId,
+            recipientId: trainerUserId,
+            title: 'Sessions Scheduled',
+            body: `${count} session${count !== 1 ? 's' : ''} with ${clientName} scheduled for ${monthName} ${yearNum}.`,
+            channel: 'BOTH',
+          }),
+        ],
+      ),
+    );
+  }
+
+  return { created, conflicts, skippedDueToOverride, skippedDueToConflict };
 }
 
 /**

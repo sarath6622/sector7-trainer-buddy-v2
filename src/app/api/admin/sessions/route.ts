@@ -15,6 +15,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const parsed = listSessionsSchema.safeParse({
       date: searchParams.get('date') ?? undefined,
+      dateFrom: searchParams.get('dateFrom') ?? undefined,
+      dateTo: searchParams.get('dateTo') ?? undefined,
       trainerId: searchParams.get('trainerId') ?? undefined,
       clientId: searchParams.get('clientId') ?? undefined,
       status: searchParams.get('status') ?? undefined,
@@ -29,7 +31,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const { date, trainerId, clientId, status, page, pageSize } = parsed.data;
+    const { date, dateFrom, dateTo, trainerId, clientId, status, page, pageSize } = parsed.data;
 
     const where: Prisma.SessionInstanceWhereInput = {
       branchId: session.user.branchId,
@@ -39,6 +41,14 @@ export async function GET(req: Request) {
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
       where.scheduledDate = { gte: d, lte: dayEnd };
+    } else if (dateFrom || dateTo) {
+      where.scheduledDate = {};
+      if (dateFrom) (where.scheduledDate as Record<string, Date>).gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        (where.scheduledDate as Record<string, Date>).lte = end;
+      }
     }
     if (trainerId) where.trainerProfileId = trainerId;
     if (clientId) where.clientProfileId = clientId;

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   ArrowRight,
@@ -13,8 +14,27 @@ import {
   Target,
   User,
   Zap,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+  Scale,
+  Activity,
+  ChevronRight,
 } from 'lucide-react';
 import { SessionTimer } from '@/components/timer/SessionTimer';
+
+interface ProgressSnapshot {
+  weightKg: number | null;
+  bodyFatPercent: number | null;
+  muscleMass: number | null;
+  recordedAt: string;
+}
+
+interface PR {
+  exerciseName: string;
+  muscle: string;
+  maxWeightKg: number;
+}
 
 interface DashboardData {
   sessionCount: {
@@ -33,26 +53,67 @@ interface DashboardData {
     scheduledDate: string;
     scheduledTime: string;
     durationMin: number;
-    trainer: {
-      user: { firstName: string; lastName: string };
-    };
+    trainer: { user: { firstName: string; lastName: string } };
   };
   activeSession?: {
     id: string;
     startedAt: string;
     durationMin: number;
-    trainer: {
-      user: { firstName: string; lastName: string };
-    };
+    trainer: { user: { firstName: string; lastName: string } };
   };
-  trainer?: {
-    name: string;
-    sessionsPerMonth: number;
-  };
+  trainer?: { name: string; sessionsPerMonth: number };
+  latestProgress: ProgressSnapshot | null;
+  prevProgress: ProgressSnapshot | null;
+  prs: PR[];
+}
+
+function formatTime(timeStr: string) {
+  const [h = '0', m = '00'] = timeStr.split(':');
+  const hour = parseInt(h, 10);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  return `${hour % 12 || 12}:${m} ${ampm}`;
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+function Delta({
+  current,
+  prev,
+  unit,
+  lowerIsBetter = false,
+}: {
+  current: number | null;
+  prev: number | null;
+  unit: string;
+  lowerIsBetter?: boolean;
+}) {
+  if (current == null || prev == null) return null;
+  const diff = current - prev;
+  if (Math.abs(diff) < 0.01)
+    return <span className="text-xs text-muted-foreground">No change</span>;
+  const positive = lowerIsBetter ? diff < 0 : diff > 0;
+  const Icon = diff > 0 ? TrendingUp : TrendingDown;
+  return (
+    <span
+      className={`flex items-center gap-0.5 text-xs font-semibold ${positive ? 'text-emerald-500' : 'text-red-400'}`}
+    >
+      <Icon className="h-3 w-3" />
+      {diff > 0 ? '+' : ''}
+      {diff.toFixed(1)}
+      {unit}
+    </span>
+  );
 }
 
 export default function ClientDashboard() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -71,19 +132,6 @@ export default function ClientDashboard() {
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
-
-  function formatDate(dateStr: string) {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-  }
-
-  function formatTime(timeStr: string) {
-    const [h = '0', m = '00'] = timeStr.split(':');
-    const hour = parseInt(h, 10);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const h12 = hour % 12 || 12;
-    return `${h12}:${m} ${ampm}`;
-  }
 
   const firstName = session?.user?.firstName ?? 'there';
 
@@ -111,8 +159,7 @@ export default function ClientDashboard() {
             }}
             className="flex items-center gap-2 text-sm text-primary hover:underline"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Try again
+            <RefreshCw className="h-3.5 w-3.5" /> Try again
           </button>
         </div>
       </div>
@@ -124,8 +171,13 @@ export default function ClientDashboard() {
       ? Math.round((data.sessionCount.used / data.sessionCount.total) * 100)
       : 0;
 
+  const hasBodyMetrics =
+    data.latestProgress?.weightKg != null || data.latestProgress?.bodyFatPercent != null;
+  const hasPRs = data.prs.length > 0;
+  const showFitnessJourney = hasBodyMetrics || hasPRs;
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-8">
+    <div className="mx-auto max-w-2xl space-y-5 pb-8">
       {/* Greeting */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Hey, {firstName}</h1>
@@ -134,35 +186,176 @@ export default function ClientDashboard() {
 
       {/* Active session — hero banner */}
       {data.activeSession && (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 p-5 text-white shadow-lg">
-          <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10" />
-          <div className="absolute -right-2 -bottom-8 h-32 w-32 rounded-full bg-white/5" />
-          <div className="relative">
-            <div className="flex items-center gap-2">
-              <div className="flex h-2 w-2 animate-pulse rounded-full bg-white" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-white/90">
-                Session in progress
-              </span>
-            </div>
-            <p className="mt-3 text-sm text-white/80">
-              Training with{' '}
-              <span className="font-semibold text-white">
-                {data.activeSession.trainer.user.firstName}{' '}
-                {data.activeSession.trainer.user.lastName}
-              </span>
-            </p>
-            <div className="mt-4 flex justify-center">
-              <SessionTimer
-                startedAt={data.activeSession.startedAt}
-                expectedDurationMin={data.activeSession.durationMin}
-                size="lg"
-              />
+        <button
+          onClick={() => router.push(`/client/session/${data.activeSession!.id}`)}
+          className="w-full text-left"
+        >
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 p-5 text-white shadow-lg transition-opacity active:opacity-90">
+            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10" />
+            <div className="absolute -right-2 -bottom-8 h-32 w-32 rounded-full bg-white/5" />
+            <div className="relative">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-2 w-2 animate-pulse rounded-full bg-white" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-white/90">
+                    Session in progress
+                  </span>
+                </div>
+                <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-medium">
+                  View workout →
+                </span>
+              </div>
+              <p className="mt-3 text-sm text-white/80">
+                Training with{' '}
+                <span className="font-semibold text-white">
+                  {data.activeSession.trainer.user.firstName}{' '}
+                  {data.activeSession.trainer.user.lastName}
+                </span>
+              </p>
+              <div className="mt-4 flex justify-center">
+                <SessionTimer
+                  startedAt={data.activeSession.startedAt}
+                  expectedDurationMin={data.activeSession.durationMin}
+                  size="lg"
+                />
+              </div>
             </div>
           </div>
+        </button>
+      )}
+
+      {/* ── Fitness Journey ── */}
+      {showFitnessJourney && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Fitness Journey
+            </h2>
+            <button
+              onClick={() => router.push('/client/progress')}
+              className="flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              Full history <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+
+          {/* Body metrics row */}
+          {hasBodyMetrics && (
+            <div className="grid grid-cols-2 gap-3">
+              {/* Weight */}
+              {data.latestProgress?.weightKg != null && (
+                <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/10">
+                      <Scale className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">Weight</span>
+                  </div>
+                  <p className="mt-3 text-2xl font-bold">
+                    {data.latestProgress.weightKg.toFixed(1)}
+                    <span className="ml-1 text-sm font-normal text-muted-foreground">kg</span>
+                  </p>
+                  <div className="mt-1">
+                    <Delta
+                      current={data.latestProgress.weightKg}
+                      prev={data.prevProgress?.weightKg ?? null}
+                      unit="kg"
+                      lowerIsBetter
+                    />
+                    {!data.prevProgress?.weightKg && (
+                      <span className="text-xs text-muted-foreground">First entry</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Body Fat */}
+              {data.latestProgress?.bodyFatPercent != null && (
+                <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10">
+                      <Activity className="h-4 w-4 text-amber-500" />
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">Body Fat</span>
+                  </div>
+                  <p className="mt-3 text-2xl font-bold">
+                    {data.latestProgress.bodyFatPercent.toFixed(1)}
+                    <span className="ml-1 text-sm font-normal text-muted-foreground">%</span>
+                  </p>
+                  <div className="mt-1">
+                    <Delta
+                      current={data.latestProgress.bodyFatPercent}
+                      prev={data.prevProgress?.bodyFatPercent ?? null}
+                      unit="%"
+                      lowerIsBetter
+                    />
+                    {!data.prevProgress?.bodyFatPercent && (
+                      <span className="text-xs text-muted-foreground">First entry</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Muscle mass — full width if weight missing */}
+              {data.latestProgress?.muscleMass != null && data.latestProgress.weightKg == null && (
+                <div className="col-span-2 rounded-2xl bg-card p-4 ring-1 ring-border/50">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10">
+                      <Dumbbell className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">Muscle Mass</span>
+                  </div>
+                  <p className="mt-3 text-2xl font-bold">
+                    {data.latestProgress.muscleMass.toFixed(1)}
+                    <span className="ml-1 text-sm font-normal text-muted-foreground">kg</span>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* PR records */}
+          {hasPRs && (
+            <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10">
+                  <Trophy className="h-3.5 w-3.5 text-amber-500" />
+                </div>
+                <span className="text-sm font-semibold">Personal Records</span>
+              </div>
+              <div className="space-y-2">
+                {data.prs.map((pr, i) => (
+                  <div key={pr.exerciseName} className="flex items-center gap-3">
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                        i === 0
+                          ? 'bg-amber-400/20 text-amber-400'
+                          : i === 1
+                            ? 'bg-zinc-400/20 text-zinc-400'
+                            : i === 2
+                              ? 'bg-orange-700/20 text-orange-700'
+                              : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{pr.exerciseName}</p>
+                      <p className="text-[10px] text-muted-foreground">{pr.muscle}</p>
+                    </div>
+                    <div className="flex items-center gap-1 rounded-lg bg-muted/60 px-2.5 py-1">
+                      <span className="text-sm font-bold">{pr.maxWeightKg}</span>
+                      <span className="text-[10px] text-muted-foreground">kg</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Session progress ring + stats */}
+      {/* Sessions ring + stats */}
       <div className="rounded-2xl bg-card p-5 ring-1 ring-border/50">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -170,7 +363,6 @@ export default function ClientDashboard() {
           </h2>
           <span className="text-xs text-muted-foreground">This month</span>
         </div>
-
         <div className="mt-4 flex items-center gap-6">
           {/* Progress ring */}
           <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
@@ -203,7 +395,6 @@ export default function ClientDashboard() {
               </span>
             </div>
           </div>
-
           {/* Stats grid */}
           <div className="grid flex-1 grid-cols-2 gap-3">
             <StatPill
@@ -238,7 +429,7 @@ export default function ClientDashboard() {
         </div>
       </div>
 
-      {/* Next session card */}
+      {/* Next session */}
       <div className="rounded-2xl bg-card p-5 ring-1 ring-border/50">
         <div className="flex items-center gap-2">
           <Zap className="h-4 w-4 text-primary" />
@@ -246,7 +437,6 @@ export default function ClientDashboard() {
             Next Session
           </h2>
         </div>
-
         {data.nextSession ? (
           <div className="mt-4 flex items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10">
@@ -293,7 +483,6 @@ export default function ClientDashboard() {
             Your Trainer
           </h2>
         </div>
-
         {data.trainer ? (
           <div className="mt-4 flex items-center gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/5 ring-2 ring-primary/20">
@@ -322,8 +511,7 @@ export default function ClientDashboard() {
           </div>
           <div>
             <p className="text-sm font-medium">
-              {data.sessionCount.noShow} no-show session
-              {data.sessionCount.noShow > 1 ? 's' : ''}
+              {data.sessionCount.noShow} no-show session{data.sessionCount.noShow > 1 ? 's' : ''}
             </p>
             <p className="text-xs text-muted-foreground">Counted as used this month</p>
           </div>

@@ -8,10 +8,11 @@ import type { NavItem } from '@/lib/constants';
 
 interface SidebarProps {
   navItems: NavItem[];
+  navBadges?: Record<string, number>; // href → badge count
   className?: string;
 }
 
-export function Sidebar({ navItems, className }: SidebarProps) {
+export function Sidebar({ navItems, navBadges, className }: SidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -32,6 +33,7 @@ export function Sidebar({ navItems, className }: SidebarProps) {
             ? pathname === item.href
             : pathname === item.href || pathname.startsWith(item.href + '/');
           const Icon = item.icon;
+          const badge = navBadges?.[item.href];
 
           return (
             <Link
@@ -44,8 +46,13 @@ export function Sidebar({ navItems, className }: SidebarProps) {
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
-              <Icon className="h-4 w-4" />
-              {item.label}
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="flex-1">{item.label}</span>
+              {badge != null && badge > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {badge > 99 ? '99+' : badge}
+                </span>
+              )}
             </Link>
           );
         })}

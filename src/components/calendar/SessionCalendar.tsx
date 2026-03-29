@@ -5,7 +5,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import type { EventInput, EventClickArg, DateSelectArg } from '@fullcalendar/core';
+import type { EventInput, EventClickArg, DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 
 // Pastel backgrounds with strong accent border
 const STATUS_STYLES: Record<string, { bg: string; accent: string; label: string }> = {
@@ -41,6 +41,7 @@ interface SessionCalendarProps {
   showLegend?: boolean;
   /** Optional React node rendered on the left side of the legend row */
   filterSlot?: React.ReactNode;
+  onDatesSet?: (info: DatesSetArg) => void;
 }
 
 export function SessionCalendar({
@@ -52,6 +53,7 @@ export function SessionCalendar({
   height = 'auto',
   showLegend = true,
   filterSlot,
+  onDatesSet,
 }: SessionCalendarProps) {
   const calendarRef = useRef<FullCalendar>(null);
 
@@ -129,6 +131,7 @@ export function SessionCalendar({
         eventClick={onEventClick}
         selectable={selectable}
         select={onDateSelect}
+        datesSet={onDatesSet}
         height={height}
         slotMinTime="05:00:00"
         slotMaxTime="22:00:00"

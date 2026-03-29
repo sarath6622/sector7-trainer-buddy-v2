@@ -292,10 +292,18 @@ export async function getSessionById({ sessionId, branchId, trainerProfileId }: 
       },
       workoutLogs: {
         include: {
-          exercise: { select: { id: true, name: true, targetMuscleGroup: true, category: true } },
+          exercise: {
+            select: {
+              id: true,
+              name: true,
+              targetMuscleGroup: true,
+              category: true,
+              exerciseType: true,
+            },
+          },
           sets: { orderBy: { setNumber: 'asc' } },
         },
-        orderBy: { orderIndex: 'asc' },
+        orderBy: [{ orderIndex: 'asc' }, { id: 'asc' }],
       },
     },
   });
@@ -434,10 +442,18 @@ export async function getActiveSession(trainerProfileId: string, branchId: strin
       },
       workoutLogs: {
         include: {
-          exercise: { select: { id: true, name: true, targetMuscleGroup: true, category: true } },
+          exercise: {
+            select: {
+              id: true,
+              name: true,
+              targetMuscleGroup: true,
+              category: true,
+              exerciseType: true,
+            },
+          },
           sets: { orderBy: { setNumber: 'asc' } },
         },
-        orderBy: { orderIndex: 'asc' },
+        orderBy: [{ orderIndex: 'asc' }, { id: 'asc' }],
       },
     },
   });

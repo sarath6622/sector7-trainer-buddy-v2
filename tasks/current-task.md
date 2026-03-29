@@ -1,3 +1,3 @@
 # Current Task
 
-No active task. Post-launch UI modernization complete (S7-UX-01 through S7-UX-06).
+No active task. Session UX, workout logging & progress redesign complete (S7-UX-20 through S7-UX-26).

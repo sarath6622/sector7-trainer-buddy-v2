@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CalendarDays, Eye } from 'lucide-react';
+import { CalendarDays, Eye, UserCheck, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,18 +30,27 @@ interface LeaveRequest {
   };
 }
 
+interface AffectedSession {
+  id: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  durationMin: number;
+  clientName: string;
+}
+
 interface LeaveDetail extends LeaveRequest {
-  affectedSessions: {
-    id: string;
-    scheduledDate: string;
-    scheduledTime: string;
-    clientName: string;
-  }[];
+  affectedSessions: AffectedSession[];
   affectedClients: {
     clientProfileId: string;
     firstName: string;
     lastName: string;
   }[];
+}
+
+interface TrainerOption {
+  id: string;
+  firstName: string;
+  lastName: string;
 }
 
 const STATUS_BADGE: Record<
@@ -53,6 +62,27 @@ const STATUS_BADGE: Record<
   REJECTED: { variant: 'destructive', label: 'Rejected' },
 };
 
+function addMinutes(time: string, minutes: number): string {
+  const [h = '0', m = '0'] = time.split(':');
+  const total = parseInt(h, 10) * 60 + parseInt(m, 10) + minutes;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatTime12(t: string) {
+  const [h = '0', m = '00'] = t.split(':');
+  const hour = parseInt(h, 10);
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+
 export default function AdminLeavesPage() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +92,18 @@ export default function AdminLeavesPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Reassignment state
+  // Map of sessionId → selected replacement trainerProfileId
+  const [reassignSelections, setReassignSelections] = useState<Record<string, string>>({});
+  // Map of slotKey (date:startTime:endTime) → TrainerOption[]
+  const [vacantTrainersCache, setVacantTrainersCache] = useState<Record<string, TrainerOption[]>>(
+    {},
+  );
+  // Set of sessionIds that have been successfully reassigned
+  const [reassignedSessions, setReassignedSessions] = useState<Set<string>>(new Set());
+  // Per-session reassignment loading
+  const [reassignLoading, setReassignLoading] = useState<Record<string, boolean>>({});
 
   const fetchLeaves = useCallback(async () => {
     setLoading(true);
@@ -86,14 +128,84 @@ export default function AdminLeavesPage() {
     setDetailOpen(true);
     setDetailLoading(true);
     setReviewNotes('');
+    setReassignSelections({});
+    setReassignedSessions(new Set());
+    setVacantTrainersCache({});
     try {
       const res = await fetch(`/api/admin/leaves/${leaveId}`);
       if (res.ok) {
         const { data } = await res.json();
         setSelectedLeave(data);
+        // Pre-fetch vacant trainers for all unique slots
+        if (data.status === 'PENDING' && data.affectedSessions.length > 0) {
+          prefetchVacantTrainers(data.affectedSessions);
+        }
       }
     } finally {
       setDetailLoading(false);
+    }
+  }
+
+  async function prefetchVacantTrainers(sessions: AffectedSession[]) {
+    // Deduplicate by (date, startTime, endTime)
+    const seen = new Set<string>();
+    const uniqueSlots = sessions
+      .map((s) => {
+        const date = new Date(s.scheduledDate).toISOString().slice(0, 10);
+        const endTime = addMinutes(s.scheduledTime, s.durationMin);
+        return { date, startTime: s.scheduledTime, endTime };
+      })
+      .filter(({ date, startTime, endTime }) => {
+        const key = `${date}:${startTime}:${endTime}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+    await Promise.allSettled(
+      uniqueSlots.map(async ({ date, startTime, endTime }) => {
+        const key = `${date}:${startTime}:${endTime}`;
+        const params = new URLSearchParams({ date, startTime, endTime });
+        const res = await fetch(`/api/admin/reassignments/vacant-trainers?${params}`);
+        if (res.ok) {
+          const { data } = await res.json();
+          setVacantTrainersCache((prev) => ({ ...prev, [key]: data }));
+        }
+      }),
+    );
+  }
+
+  function getVacantTrainersForSession(session: AffectedSession): TrainerOption[] {
+    const date = new Date(session.scheduledDate).toISOString().slice(0, 10);
+    const endTime = addMinutes(session.scheduledTime, session.durationMin);
+    const key = `${date}:${session.scheduledTime}:${endTime}`;
+    return vacantTrainersCache[key] ?? [];
+  }
+
+  async function handleReassignSession(session: AffectedSession) {
+    const trainerId = reassignSelections[session.id];
+    if (!trainerId) return;
+
+    setReassignLoading((prev) => ({ ...prev, [session.id]: true }));
+    try {
+      const res = await fetch('/api/admin/reassignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionInstanceId: session.id,
+          replacementTrainerProfileId: trainerId,
+          reason: `Leave cover — ${selectedLeave?.trainer.user.firstName} ${selectedLeave?.trainer.user.lastName}`,
+        }),
+      });
+      if (res.ok) {
+        setReassignedSessions((prev) => new Set([...prev, session.id]));
+        toast.success(`Session reassigned for ${session.clientName}`);
+      } else {
+        const json = await res.json();
+        toast.error(json.error || 'Reassignment failed');
+      }
+    } finally {
+      setReassignLoading((prev) => ({ ...prev, [session.id]: false }));
     }
   }
 
@@ -119,15 +231,8 @@ export default function AdminLeavesPage() {
     }
   }
 
-  function formatDate(dateStr: string) {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-IN', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  }
+  const unreassignedCount =
+    selectedLeave?.affectedSessions.filter((s) => !reassignedSessions.has(s.id)).length ?? 0;
 
   if (loading) {
     return (
@@ -208,7 +313,7 @@ export default function AdminLeavesPage() {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Leave Request Details</DialogTitle>
           </DialogHeader>
@@ -216,7 +321,8 @@ export default function AdminLeavesPage() {
           {detailLoading ? (
             <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>
           ) : selectedLeave ? (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Header info */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-muted-foreground text-xs">Trainer</p>
@@ -247,47 +353,134 @@ export default function AdminLeavesPage() {
                 </div>
               )}
 
-              {/* Affected Sessions */}
+              {/* ── Reassignment Panel ── */}
               {selectedLeave.affectedSessions.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2">
-                    Affected Sessions ({selectedLeave.affectedSessions.length})
-                  </p>
-                  <div className="max-h-32 overflow-y-auto space-y-1 rounded-md border border-border/50 p-2">
-                    {selectedLeave.affectedSessions.map((s) => (
-                      <div
-                        key={s.id}
-                        className="flex justify-between text-xs text-muted-foreground border-b border-border/30 py-1 last:border-0"
-                      >
-                        <span>
-                          {formatDate(s.scheduledDate)} at {s.scheduledTime}
-                        </span>
-                        <span>{s.clientName}</span>
-                      </div>
-                    ))}
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="h-4 w-4 text-primary" />
+                      <p className="text-sm font-semibold">
+                        Reassign Sessions ({selectedLeave.affectedSessions.length})
+                      </p>
+                    </div>
+                    {selectedLeave.status === 'PENDING' && unreassignedCount > 0 && (
+                      <span className="flex items-center gap-1 text-[10px] text-amber-500">
+                        <AlertCircle className="h-3 w-3" />
+                        {unreassignedCount} unassigned
+                      </span>
+                    )}
+                    {selectedLeave.status === 'PENDING' && unreassignedCount === 0 && (
+                      <span className="flex items-center gap-1 text-[10px] text-emerald-500">
+                        <CheckCircle2 className="h-3 w-3" />
+                        All reassigned
+                      </span>
+                    )}
                   </div>
-                </div>
-              )}
 
-              {/* Affected Clients */}
-              {selectedLeave.affectedClients.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-1">Affected Clients</p>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedLeave.affectedClients.map((c) => (
-                      <Badge key={c.clientProfileId} variant="outline" className="text-[10px]">
-                        {c.firstName} {c.lastName}
-                      </Badge>
-                    ))}
+                  <div className="space-y-2">
+                    {selectedLeave.affectedSessions.map((session) => {
+                      const isReassigned = reassignedSessions.has(session.id);
+                      const isLoading = reassignLoading[session.id];
+                      const vacantTrainers = getVacantTrainersForSession(session);
+                      const selectedTrainerId = reassignSelections[session.id] ?? '';
+
+                      return (
+                        <div
+                          key={session.id}
+                          className={`rounded-lg p-3 text-xs space-y-2 ${
+                            isReassigned
+                              ? 'bg-emerald-500/10 ring-1 ring-emerald-500/30'
+                              : 'bg-card ring-1 ring-border/50'
+                          }`}
+                        >
+                          {/* Session info row */}
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <p className="font-medium">{session.clientName}</p>
+                              <p className="text-muted-foreground">
+                                {formatDate(session.scheduledDate)} ·{' '}
+                                {formatTime12(session.scheduledTime)} ({session.durationMin} min)
+                              </p>
+                            </div>
+                            {isReassigned && (
+                              <span className="flex items-center gap-1 text-emerald-500 font-medium">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Reassigned
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Trainer select + button (only for pending + not yet reassigned) */}
+                          {selectedLeave.status === 'PENDING' && !isReassigned && (
+                            <div className="flex gap-2 items-center">
+                              <Select
+                                value={selectedTrainerId}
+                                onValueChange={(v) =>
+                                  v &&
+                                  setReassignSelections((prev) => ({ ...prev, [session.id]: v }))
+                                }
+                              >
+                                <SelectTrigger className="h-7 flex-1 text-xs">
+                                  <SelectValue>
+                                    {selectedTrainerId
+                                      ? (() => {
+                                          const t = vacantTrainers.find(
+                                            (x) => x.id === selectedTrainerId,
+                                          );
+                                          return t
+                                            ? `${t.firstName} ${t.lastName}`
+                                            : selectedTrainerId;
+                                        })()
+                                      : vacantTrainers.length === 0
+                                        ? 'No trainers available'
+                                        : 'Select trainer…'}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {vacantTrainers.length === 0 ? (
+                                    <SelectItem value="_none" disabled>
+                                      No available trainers
+                                    </SelectItem>
+                                  ) : (
+                                    vacantTrainers.map((t) => (
+                                      <SelectItem key={t.id} value={t.id}>
+                                        {t.firstName} {t.lastName}
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                className="h-7 px-3 text-xs"
+                                disabled={!selectedTrainerId || isLoading}
+                                onClick={() => handleReassignSession(session)}
+                              >
+                                {isLoading ? '…' : 'Assign'}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               {/* Approve/Reject Actions */}
               {selectedLeave.status === 'PENDING' && (
-                <div className="space-y-3 pt-2 border-t border-border/50">
-                  <div className="space-y-1">
-                    <Label htmlFor="reviewNotes">Review Notes (optional)</Label>
+                <div className="space-y-3 pt-1 border-t border-border/50">
+                  {unreassignedCount > 0 && selectedLeave.affectedSessions.length > 0 && (
+                    <p className="text-[11px] text-amber-500 flex items-center gap-1.5">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      {unreassignedCount} session{unreassignedCount !== 1 ? 's' : ''} not yet
+                      reassigned. You can still approve — the admin can reassign later.
+                    </p>
+                  )}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reviewNotes" className="text-xs">
+                      Review Notes (optional)
+                    </Label>
                     <Textarea
                       id="reviewNotes"
                       value={reviewNotes}

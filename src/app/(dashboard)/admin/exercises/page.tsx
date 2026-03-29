@@ -1,7 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Plus, Search, Upload, Pencil, Trash2, Dumbbell } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Plus,
+  Search,
+  Upload,
+  Pencil,
+  Trash2,
+  Dumbbell,
+  Timer,
+  Activity,
+  User,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
@@ -27,6 +38,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 
+type ExerciseType = 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+
 interface Exercise {
   id: string;
   name: string;
@@ -35,6 +48,7 @@ interface Exercise {
   equipmentRequired: string | null;
   difficulty: string | null;
   category: string;
+  exerciseType: ExerciseType;
   instructions: string | null;
   isActive: boolean;
 }
@@ -47,6 +61,42 @@ interface PaginationInfo {
 }
 
 const CATEGORIES = ['HYPERTROPHY', 'CARDIO', 'FLEXIBILITY', 'STRENGTH', 'FUNCTIONAL'];
+const EXERCISE_TYPES: {
+  value: ExerciseType;
+  label: string;
+  hint: string;
+  icon: React.ElementType;
+  iconClass: string;
+}[] = [
+  {
+    value: 'WEIGHTED',
+    label: 'Weighted',
+    hint: 'Reps + weight (kg)',
+    icon: Dumbbell,
+    iconClass: 'text-blue-400',
+  },
+  {
+    value: 'BODYWEIGHT',
+    label: 'Bodyweight',
+    hint: 'Reps only, no load',
+    icon: User,
+    iconClass: 'text-emerald-400',
+  },
+  {
+    value: 'DURATION',
+    label: 'Duration',
+    hint: 'Hold time in seconds',
+    icon: Timer,
+    iconClass: 'text-violet-400',
+  },
+  {
+    value: 'CARDIO',
+    label: 'Cardio',
+    hint: 'Duration + distance (km)',
+    icon: Activity,
+    iconClass: 'text-orange-400',
+  },
+];
 const DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD'];
 const MUSCLE_GROUPS = [
   'Chest',
@@ -95,6 +145,7 @@ export default function ExerciseLibraryPage() {
     equipmentRequired: '',
     difficulty: '',
     category: 'HYPERTROPHY',
+    exerciseType: 'WEIGHTED' as ExerciseType,
     instructions: '',
   });
 
@@ -133,6 +184,7 @@ export default function ExerciseLibraryPage() {
       equipmentRequired: '',
       difficulty: '',
       category: 'HYPERTROPHY',
+      exerciseType: 'WEIGHTED',
       instructions: '',
     });
     setDialogOpen(true);
@@ -147,6 +199,7 @@ export default function ExerciseLibraryPage() {
       equipmentRequired: ex.equipmentRequired ?? '',
       difficulty: ex.difficulty ?? '',
       category: ex.category,
+      exerciseType: ex.exerciseType,
       instructions: ex.instructions ?? '',
     });
     setDialogOpen(true);
@@ -167,6 +220,7 @@ export default function ExerciseLibraryPage() {
         equipmentRequired: form.equipmentRequired || undefined,
         difficulty: form.difficulty || undefined,
         category: form.category,
+        exerciseType: form.exerciseType,
         instructions: form.instructions || undefined,
       };
 
@@ -330,6 +384,7 @@ export default function ExerciseLibraryPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Target Muscle</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Difficulty</TableHead>
                 <TableHead>Equipment</TableHead>
@@ -341,6 +396,21 @@ export default function ExerciseLibraryPage() {
                 <TableRow key={ex.id}>
                   <TableCell className="font-medium">{ex.name}</TableCell>
                   <TableCell>{ex.targetMuscleGroup}</TableCell>
+                  <TableCell>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                        ex.exerciseType === 'WEIGHTED'
+                          ? 'bg-blue-500/15 text-blue-400'
+                          : ex.exerciseType === 'BODYWEIGHT'
+                            ? 'bg-emerald-500/15 text-emerald-400'
+                            : ex.exerciseType === 'DURATION'
+                              ? 'bg-violet-500/15 text-violet-400'
+                              : 'bg-orange-500/15 text-orange-400'
+                      }`}
+                    >
+                      {ex.exerciseType}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <Badge variant={categoryBadgeColor(ex.category)}>{ex.category}</Badge>
                   </TableCell>
@@ -394,27 +464,56 @@ export default function ExerciseLibraryPage() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingExercise ? 'Edit Exercise' : 'Add Exercise'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Name *</Label>
+        <DialogContent className="max-w-lg overflow-hidden p-0 gap-0">
+          {/* Branded header */}
+          <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 px-6 py-5 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 ring-1 ring-primary/30">
+                <Dumbbell className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-white">
+                  {editingExercise ? 'Edit Exercise' : 'New Exercise'}
+                </DialogTitle>
+                <p className="text-xs text-white/50 mt-0.5">
+                  {editingExercise ? 'Update exercise details' : 'Add to your exercise library'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setDialogOpen(false)}
+              className="absolute right-4 top-4 rounded-lg p-1.5 text-white/40 hover:bg-white/10 hover:text-white/80 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Scrollable body */}
+          <div className="max-h-[62vh] overflow-y-auto px-6 py-5 space-y-5">
+            {/* Name */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Exercise Name <span className="text-primary">*</span>
+              </Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g. Bench Press"
+                className="h-11 text-sm"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Target Muscle *</Label>
+
+            {/* Row 2: Target Muscle + Category */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Target Muscle <span className="text-primary">*</span>
+                </Label>
                 <Select
                   value={form.targetMuscleGroup}
                   onValueChange={(v) => setForm({ ...form, targetMuscleGroup: v ?? '' })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-10 text-sm">
                     <SelectValue placeholder="Select muscle" />
                   </SelectTrigger>
                   <SelectContent>
@@ -426,13 +525,15 @@ export default function ExerciseLibraryPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Category *</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Category <span className="text-primary">*</span>
+                </Label>
                 <Select
                   value={form.category}
                   onValueChange={(v) => setForm({ ...form, category: v ?? 'HYPERTROPHY' })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-10 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -445,14 +546,47 @@ export default function ExerciseLibraryPage() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Difficulty</Label>
+
+            {/* Row 3: Exercise Type + Difficulty */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Exercise Type <span className="text-primary">*</span>
+                </Label>
+                <Select
+                  value={form.exerciseType}
+                  onValueChange={(v) =>
+                    setForm({ ...form, exerciseType: (v ?? 'WEIGHTED') as ExerciseType })
+                  }
+                >
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXERCISE_TYPES.map((t) => {
+                      const Icon = t.icon;
+                      return (
+                        <SelectItem key={t.value} value={t.value}>
+                          <div className="flex items-center gap-2">
+                            <Icon className={`h-3.5 w-3.5 ${t.iconClass}`} />
+                            <span className="font-medium">{t.label}</span>
+                            <span className="text-xs text-muted-foreground">— {t.hint}</span>
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Difficulty
+                </Label>
                 <Select
                   value={form.difficulty}
                   onValueChange={(v) => setForm({ ...form, difficulty: v ?? '' })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-10 text-sm">
                     <SelectValue placeholder="Optional" />
                   </SelectTrigger>
                   <SelectContent>
@@ -464,38 +598,63 @@ export default function ExerciseLibraryPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Equipment</Label>
-                <Input
-                  value={form.equipmentRequired}
-                  onChange={(e) => setForm({ ...form, equipmentRequired: e.target.value })}
-                  placeholder="e.g. Barbell"
-                />
-              </div>
             </div>
-            <div>
-              <Label>Secondary Muscles (comma-separated)</Label>
+
+            {/* Row 4: Equipment (full width) */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Equipment
+              </Label>
+              <Input
+                value={form.equipmentRequired}
+                onChange={(e) => setForm({ ...form, equipmentRequired: e.target.value })}
+                placeholder="e.g. Barbell, Bench"
+                className="h-10 text-sm"
+              />
+            </div>
+
+            {/* Secondary Muscles */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Secondary Muscles
+                <span className="ml-1.5 font-normal normal-case tracking-normal text-muted-foreground/60">
+                  (comma-separated)
+                </span>
+              </Label>
               <Input
                 value={form.secondaryMuscles}
                 onChange={(e) => setForm({ ...form, secondaryMuscles: e.target.value })}
                 placeholder="e.g. Triceps, Shoulders"
+                className="h-10 text-sm"
               />
             </div>
-            <div>
-              <Label>Instructions</Label>
+
+            {/* Instructions */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Instructions
+              </Label>
               <Textarea
                 value={form.instructions}
                 onChange={(e) => setForm({ ...form, instructions: e.target.value })}
-                placeholder="Exercise instructions..."
+                placeholder="Step-by-step exercise cues..."
                 rows={3}
+                className="resize-none text-sm"
               />
             </div>
+          </div>
+
+          {/* Sticky footer */}
+          <div className="flex gap-2.5 border-t border-border/60 bg-muted/20 px-6 py-4">
+            <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
             <Button
-              className="w-full"
+              className="flex-1 bg-primary hover:bg-primary/90"
               onClick={handleSave}
               disabled={saving || !form.name || !form.targetMuscleGroup}
             >
-              {saving ? 'Saving...' : editingExercise ? 'Update Exercise' : 'Create Exercise'}
+              {saving ? 'Saving…' : editingExercise ? 'Update Exercise' : 'Create Exercise'}
             </Button>
           </div>
         </DialogContent>

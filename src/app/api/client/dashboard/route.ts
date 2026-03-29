@@ -68,6 +68,63 @@ export async function GET() {
       },
     });
 
+    // Latest 2 progress entries for weight/BF% trend
+    const progressEntries = await prisma.progressEntry.findMany({
+      where: { clientProfileId },
+      orderBy: { recordedAt: 'desc' },
+      take: 2,
+      select: { weightKg: true, bodyFatPercent: true, muscleMass: true, recordedAt: true },
+    });
+
+    const latestProgress = progressEntries[0] ?? null;
+    const prevProgress = progressEntries[1] ?? null;
+
+    // Top PRs: max weight per exercise from all workout sets
+    const prData = await prisma.workoutSet.groupBy({
+      by: ['workoutLogId'],
+      _max: { weightKg: true },
+      where: {
+        workoutLog: {
+          sessionInstance: { clientProfileId, branchId },
+        },
+        weightKg: { not: null },
+      },
+    });
+
+    // Get exercise names for each workout log
+    const prLogIds = prData.map((p) => p.workoutLogId);
+    const prLogs =
+      prLogIds.length > 0
+        ? await prisma.workoutLog.findMany({
+            where: { id: { in: prLogIds } },
+            select: { id: true, exercise: { select: { name: true, targetMuscleGroup: true } } },
+          })
+        : [];
+
+    const logExerciseMap = new Map(prLogs.map((l) => [l.id, l.exercise]));
+
+    // Group by exercise name, keep highest weight
+    const exercisePrMap = new Map<
+      string,
+      { exerciseName: string; muscle: string; maxWeightKg: number }
+    >();
+    for (const p of prData) {
+      const exercise = logExerciseMap.get(p.workoutLogId);
+      if (!exercise || !p._max.weightKg) continue;
+      const existing = exercisePrMap.get(exercise.name);
+      if (!existing || p._max.weightKg > existing.maxWeightKg) {
+        exercisePrMap.set(exercise.name, {
+          exerciseName: exercise.name,
+          muscle: exercise.targetMuscleGroup,
+          maxWeightKg: p._max.weightKg,
+        });
+      }
+    }
+
+    const prs = [...exercisePrMap.values()]
+      .sort((a, b) => b.maxWeightKg - a.maxWeightKg)
+      .slice(0, 4);
+
     return NextResponse.json({
       data: {
         sessionCount,
@@ -79,6 +136,9 @@ export async function GET() {
               sessionsPerMonth: activePkg.sessionsPerMonth,
             }
           : null,
+        latestProgress,
+        prevProgress,
+        prs,
       },
     });
   } catch (error) {

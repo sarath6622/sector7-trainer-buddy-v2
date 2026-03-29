@@ -31,6 +31,13 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum LeaveType {
+  FULL_DAY
+  HALF_DAY_AM
+  HALF_DAY_PM
+  CUSTOM
+}
+
 enum PaymentStatus {
   PAID
   PENDING
@@ -92,6 +99,13 @@ enum ExerciseCategory {
   FUNCTIONAL
 }
 
+enum ExerciseType {
+  WEIGHTED      // Sets × Reps × Weight kg  (Bench Press, Squat, Deadlift…)
+  BODYWEIGHT    // Sets × Reps, no load     (Pull-ups, Push-ups, Lunges…)
+  DURATION      // Sets × Time in seconds   (Plank, Wall Sit…)
+  CARDIO        // Duration + distance      (Treadmill, Cycling, Rowing…)
+}
+
 // ─── BRANCH ──────────────────────────────────────────
 
 model Branch {
@@ -112,8 +126,9 @@ model Branch {
   sessionSchedules     SessionSchedule[]
   sessionInstances     SessionInstance[]
   leaveRequests        LeaveRequest[]
-  clientUnavailability ClientUnavailability[]
-  trainerReassignments TrainerReassignment[]
+  clientUnavailability         ClientUnavailability[]
+  trainerReassignments         TrainerReassignment[]
+  trainerAvailabilityOverrides TrainerAvailabilityOverride[]
   kickboxingClasses    KickboxingClass[]
   kickboxingEnrollments KickboxingEnrollment[]
   paymentRecords       PaymentRecord[]
@@ -200,10 +215,38 @@ model TrainerProfile {
   leaveRequests        LeaveRequest[]
   reassignmentsFrom    TrainerReassignment[] @relation("OriginalTrainer")
   reassignmentsTo      TrainerReassignment[] @relation("ReplacementTrainer")
+  availabilityOverrides TrainerAvailabilityOverride[]
   kickboxingClasses    KickboxingClass[]
 
   @@index([branchId])
   @@map("trainer_profiles")
+}
+
+// ─── TRAINER AVAILABILITY OVERRIDE ───────────────────
+
+/// Date-specific overrides to a trainer's default working schedule.
+/// Use `isAvailable: true` to add availability on a normally off day (e.g., work this Sunday).
+/// Use `isAvailable: false` to remove availability on a normally working day (e.g., off this Monday).
+model TrainerAvailabilityOverride {
+  id               String   @id @default(cuid())
+  branchId         String
+  trainerProfileId String
+  date             DateTime
+  isAvailable      Boolean
+  startTime        String?  // Override working hours start (HH:MM), null = use profile default
+  endTime          String?  // Override working hours end (HH:MM), null = use profile default
+  reason           String?
+  createdByUserId  String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  branch  Branch         @relation(fields: [branchId], references: [id])
+  trainer TrainerProfile @relation(fields: [trainerProfileId], references: [id])
+
+  @@unique([trainerProfileId, date])
+  @@index([branchId, date])
+  @@index([trainerProfileId, date])
+  @@map("trainer_availability_overrides")
 }
 
 // ─── CLIENT PROFILE ──────────────────────────────────
@@ -381,6 +424,7 @@ model Exercise {
   equipmentRequired   String?
   difficulty          DifficultyLevel?
   category            ExerciseCategory
+  exerciseType        ExerciseType     @default(WEIGHTED)
   instructions        String?
   demoVideoUrl        String?
   demoGifUrl          String?
@@ -431,6 +475,9 @@ model LeaveRequest {
   trainerProfileId String
   startDate        DateTime
   endDate          DateTime
+  leaveType        LeaveType   @default(FULL_DAY)
+  startTime        String?     // HH:MM — null for FULL_DAY
+  endTime          String?     // HH:MM — null for FULL_DAY
   reason           String?
   status           LeaveStatus @default(PENDING)
   reviewedByUserId String?

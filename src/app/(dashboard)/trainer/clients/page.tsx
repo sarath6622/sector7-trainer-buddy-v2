@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   AlertCircle,
+  ArrowLeftRight,
   Calendar,
   ChevronRight,
   Clock,
@@ -84,7 +85,7 @@ interface ClientData {
     id: string;
     sessionsPerMonth: number;
     sessionChargeAmount?: number;
-  };
+  } | null;
   stats: {
     totalThisMonth: number;
     completed: number;
@@ -98,6 +99,8 @@ interface ClientData {
     scheduledDate: string;
     scheduledTime: string;
   };
+  isReassigned?: boolean;
+  reassignedSessionCount?: number;
 }
 
 export default function TrainerClientsPage() {
@@ -175,6 +178,8 @@ export default function TrainerClientsPage() {
   }
 
   const totalNoShows = clients.reduce((s, c) => s + c.stats.noShow, 0);
+  const primaryCount = clients.filter((c) => !c.isReassigned).length;
+  const reassignedCount = clients.filter((c) => c.isReassigned).length;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-8">
@@ -182,7 +187,10 @@ export default function TrainerClientsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">My Clients</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {clients.length} client{clients.length !== 1 ? 's' : ''} assigned
+          {primaryCount} client{primaryCount !== 1 ? 's' : ''} assigned
+          {reassignedCount > 0 && (
+            <span className="text-blue-500"> &middot; {reassignedCount} temporary cover</span>
+          )}
           {totalNoShows > 0 && (
             <span className="text-amber-600 dark:text-amber-400">
               {' '}
@@ -215,7 +223,11 @@ export default function TrainerClientsPage() {
               <Link
                 key={item.clientProfile.id}
                 href={`/trainer/clients/${item.clientProfile.id}/progress`}
-                className="group rounded-2xl bg-card p-5 ring-1 ring-border/50 transition-all hover:ring-primary/40 hover:shadow-sm"
+                className={`group rounded-2xl bg-card p-5 ring-1 transition-all hover:shadow-sm ${
+                  item.isReassigned
+                    ? 'ring-blue-500/30 hover:ring-blue-500/60'
+                    : 'ring-border/50 hover:ring-primary/40'
+                }`}
               >
                 {/* Avatar + Name + Payment */}
                 <div className="flex items-start gap-3">
@@ -225,14 +237,21 @@ export default function TrainerClientsPage() {
                     <span className={`text-sm font-bold ${color.text}`}>{initials}</span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="truncate font-semibold group-hover:text-primary transition-colors">
                         {fullName}
                       </p>
-                      {item.clientProfile.paymentStatus === 'PENDING' && (
-                        <Badge variant="destructive" className="shrink-0 text-[10px] px-1.5 py-0">
-                          Unpaid
-                        </Badge>
+                      {item.isReassigned ? (
+                        <span className="flex items-center gap-1 shrink-0 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-500">
+                          <ArrowLeftRight className="h-2.5 w-2.5" />
+                          Cover ({item.reassignedSessionCount})
+                        </span>
+                      ) : (
+                        item.clientProfile.paymentStatus === 'PENDING' && (
+                          <Badge variant="destructive" className="shrink-0 text-[10px] px-1.5 py-0">
+                            Unpaid
+                          </Badge>
+                        )
                       )}
                     </div>
                     {item.clientProfile.fitnessGoals && (
@@ -247,17 +266,21 @@ export default function TrainerClientsPage() {
                 {/* Session progress bar + stats */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
-                    <span>Sessions used</span>
+                    <span>{item.isReassigned ? 'Upcoming cover sessions' : 'Sessions used'}</span>
                     <span className="font-medium text-foreground">
-                      {item.stats.used}/{item.stats.totalThisMonth}
+                      {item.isReassigned
+                        ? `${item.stats.scheduled} session${item.stats.scheduled !== 1 ? 's' : ''}`
+                        : `${item.stats.used}/${item.stats.totalThisMonth}`}
                     </span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/60">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all duration-500"
-                      style={{ width: `${Math.min(usedPct, 100)}%` }}
-                    />
-                  </div>
+                  {!item.isReassigned && (
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted/60">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-500"
+                        style={{ width: `${Math.min(usedPct, 100)}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Stats row */}

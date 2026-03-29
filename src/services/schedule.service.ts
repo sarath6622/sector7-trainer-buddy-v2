@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
+import { timeSlotsOverlap } from '@/services/session-generation.service';
 import type { DayOfWeek } from '@prisma/client';
 
 interface CreateScheduleInput {
@@ -54,6 +55,86 @@ export async function createSchedule(input: CreateScheduleInput) {
   });
   if (!trainer) {
     throw new AppError('TRAINER_NOT_FOUND', 'Trainer profile not found', 404);
+  }
+
+  // Validate: warn if the day conflicts with trainer's default working days
+  if (trainer.workingDays.length > 0 && !trainer.workingDays.includes(input.dayOfWeek as never)) {
+    throw new AppError(
+      'DAY_OUTSIDE_WORKING_DAYS',
+      `${input.dayOfWeek} is not in this trainer's default working days. Add an availability override for specific dates, or update the trainer's working days first.`,
+      400,
+    );
+  }
+
+  // Validate: warn if the start time is outside trainer's working hours
+  if (trainer.workingHoursStart && trainer.workingHoursEnd) {
+    if (input.startTime < trainer.workingHoursStart || input.startTime >= trainer.workingHoursEnd) {
+      throw new AppError(
+        'TIME_OUTSIDE_WORKING_HOURS',
+        `Start time ${input.startTime} is outside this trainer's working hours (${trainer.workingHoursStart}–${trainer.workingHoursEnd}).`,
+        400,
+      );
+    }
+  }
+
+  // Check for trainer time conflict on the same day
+  const trainerSchedules = await prisma.sessionSchedule.findMany({
+    where: {
+      branchId: input.branchId,
+      trainerProfileId: input.trainerProfileId,
+      dayOfWeek: input.dayOfWeek,
+      isActive: true,
+    },
+    include: {
+      client: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+
+  for (const existing of trainerSchedules) {
+    const overlap = timeSlotsOverlap(
+      input.startTime,
+      input.durationMin,
+      existing.startTime,
+      existing.durationMin,
+    );
+    if (overlap > 0) {
+      const clientName = `${existing.client.user.firstName} ${existing.client.user.lastName}`;
+      throw new AppError(
+        'TRAINER_SCHEDULE_CONFLICT',
+        `This trainer already has a session with ${clientName} on ${input.dayOfWeek} at ${existing.startTime} (${existing.durationMin}min). The new schedule overlaps by ${overlap} minutes.`,
+        409,
+      );
+    }
+  }
+
+  // Check for client time conflict on the same day (with any trainer)
+  const clientSchedules = await prisma.sessionSchedule.findMany({
+    where: {
+      branchId: input.branchId,
+      clientProfileId: input.clientProfileId,
+      dayOfWeek: input.dayOfWeek,
+      isActive: true,
+    },
+    include: {
+      trainer: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+
+  for (const existing of clientSchedules) {
+    const overlap = timeSlotsOverlap(
+      input.startTime,
+      input.durationMin,
+      existing.startTime,
+      existing.durationMin,
+    );
+    if (overlap > 0) {
+      const trainerName = `${existing.trainer.user.firstName} ${existing.trainer.user.lastName}`;
+      throw new AppError(
+        'CLIENT_SCHEDULE_CONFLICT',
+        `This client already has a session with trainer ${trainerName} on ${input.dayOfWeek} at ${existing.startTime} (${existing.durationMin}min). The new schedule overlaps by ${overlap} minutes.`,
+        409,
+      );
+    }
   }
 
   const schedule = await prisma.sessionSchedule.create({

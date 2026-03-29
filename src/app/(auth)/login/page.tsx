@@ -17,6 +17,22 @@ const ROLE_REDIRECT: Record<string, string> = {
   CLIENT: '/client',
 };
 
+const DEV_ACCOUNTS = [
+  { label: 'Admin', email: 'admin@sector7.com', group: 'admin' },
+  { label: 'Ravi', email: 'ravi@sector7.com', group: 'trainer' },
+  { label: 'Arjun', email: 'arjun@sector7.com', group: 'trainer' },
+  { label: 'Priya', email: 'priya@sector7.com', group: 'trainer' },
+  { label: 'Karthik', email: 'karthik@gmail.com', group: 'client' },
+  { label: 'Meera', email: 'meera@gmail.com', group: 'client' },
+  { label: 'Ananya', email: 'ananya@gmail.com', group: 'client' },
+] as const;
+
+const GROUP_COLORS: Record<string, string> = {
+  admin: 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10',
+  trainer: 'border-blue-500/30 text-blue-400 hover:bg-blue-500/10',
+  client: 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10',
+};
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -174,8 +190,38 @@ function LoginForm() {
             </form>
           </div>
 
+          {/* Dev quick-login */}
+          <div className="mt-4 rounded-2xl border border-white/[0.06] bg-zinc-900/60 p-4 space-y-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 text-center">
+              Dev quick-login
+            </p>
+            {(['admin', 'trainer', 'client'] as const).map((group) => (
+              <div key={group} className="space-y-1">
+                <p className="text-[9px] uppercase tracking-widest text-zinc-700 pl-0.5">{group}</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {DEV_ACCOUNTS.filter((a) => a.group === group).map(({ label, email }) => (
+                    <button
+                      key={email}
+                      type="button"
+                      onClick={() => {
+                        setEmail(email);
+                        setPassword('password123');
+                      }}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors bg-white/[0.02] ${GROUP_COLORS[group]}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-[10px] text-zinc-700 text-center pt-0.5">
+              Fills credentials — still press Sign in
+            </p>
+          </div>
+
           {/* Footer */}
-          <p className="mt-6 text-center text-xs text-zinc-700">
+          <p className="mt-4 text-center text-xs text-zinc-700">
             Sector 7 Fitness &middot; Gym & CrossFit
           </p>
         </div>

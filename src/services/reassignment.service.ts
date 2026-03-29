@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
-import { notifyReassignment } from '@/services/notification.service';
+import { notifyReassignment, notifyTrainerNewAssignment } from '@/services/notification.service';
 
 // ─── Input Interfaces ───────────────────────────────
 
@@ -38,7 +38,8 @@ interface ListReassignmentsInput {
 
 /**
  * Find trainers who are available for a given date/time slot.
- * Excludes trainers who are: booked in an overlapping session, or on approved leave.
+ * Excludes trainers who are: booked in an overlapping session, on approved leave,
+ * or unavailable per their schedule (static working days + date-specific overrides).
  */
 export async function getVacantTrainers({
   date,
@@ -65,31 +66,49 @@ export async function getVacantTrainers({
   // Get trainers on approved leave that day
   const onLeaveTrainerIds = await getOnLeaveTrainerIds(branchId, targetDate);
 
+  // Get date-specific availability overrides for all trainers on this date
+  const overrides = await prisma.trainerAvailabilityOverride.findMany({
+    where: {
+      branchId,
+      date: new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()),
+    },
+  });
+  const overrideMap = new Map(overrides.map((o) => [o.trainerProfileId, o]));
+
   // Filter to vacant trainers
   const excludeIds = new Set([...busyTrainerIds, ...onLeaveTrainerIds]);
+
+  const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+  const dayOfWeek = dayNames[targetDate.getDay()];
 
   return allTrainers.filter((t) => {
     if (excludeIds.has(t.id)) return false;
 
-    // Check working hours if defined
+    const override = overrideMap.get(t.id);
+
+    // If there's a date-specific override, it takes precedence over static schedule
+    if (override) {
+      if (!override.isAvailable) return false;
+
+      // Check override-specific hours if defined
+      const effectiveStart = override.startTime ?? t.workingHoursStart;
+      const effectiveEnd = override.endTime ?? t.workingHoursEnd;
+      if (effectiveStart && effectiveEnd) {
+        if (startTime < effectiveStart || endTime > effectiveEnd) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // No override — fall back to static working days/hours
     if (t.workingHoursStart && t.workingHoursEnd) {
       if (startTime < t.workingHoursStart || endTime > t.workingHoursEnd) {
         return false;
       }
     }
 
-    // Check working days if defined
     if (t.workingDays && t.workingDays.length > 0) {
-      const dayNames = [
-        'SUNDAY',
-        'MONDAY',
-        'TUESDAY',
-        'WEDNESDAY',
-        'THURSDAY',
-        'FRIDAY',
-        'SATURDAY',
-      ];
-      const dayOfWeek = dayNames[targetDate.getDay()];
       if (!t.workingDays.includes(dayOfWeek as never)) {
         return false;
       }
@@ -190,13 +209,24 @@ export async function reassignSession({
     },
   });
 
+  const sessionDate = session.scheduledDate.toISOString().slice(0, 10);
+
   // Notify client (fire-and-forget)
   notifyReassignment({
     branchId,
     clientUserId: session.client.user.id,
     originalTrainerName: `${session.trainer.user.firstName} ${session.trainer.user.lastName}`,
     newTrainerName: `${replacementTrainer.user.firstName} ${replacementTrainer.user.lastName}`,
-    date: session.scheduledDate.toISOString().slice(0, 10),
+    date: sessionDate,
+    time: session.scheduledTime,
+  });
+
+  // Notify replacement trainer (fire-and-forget)
+  notifyTrainerNewAssignment({
+    branchId,
+    trainerUserId: replacementTrainer.user.id,
+    clientName: `${session.client.user.firstName} ${session.client.user.lastName}`,
+    date: sessionDate,
     time: session.scheduledTime,
   });
 
