@@ -245,6 +245,14 @@ export default function TrainerProfilePage() {
       {/* Form sections */}
       <div className="flex-1 space-y-3 px-4 pt-2">
         <Section title="Personal Information">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Email</Label>
+            <Input
+              value={trainer.email}
+              readOnly
+              className="bg-muted text-muted-foreground cursor-default"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="firstName" className="text-xs">
