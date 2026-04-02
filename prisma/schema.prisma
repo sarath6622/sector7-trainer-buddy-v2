@@ -38,6 +38,11 @@ enum LeaveType {
   CUSTOM
 }
 
+enum LeaveCategory {
+  REGULAR
+  EMERGENCY
+}
+
 enum PaymentStatus {
   PAID
   PENDING
@@ -151,6 +156,8 @@ model BranchSettings {
   reminderTimingMin         Int     @default(60)
   noShowThresholdMin        Int     @default(15)
   kickboxingClassSizeLimit  Int     @default(20)
+  monthlyRegularLeaveQuota  Int     @default(4)
+  monthlyEmergencyLeaveQuota Int    @default(1)
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
@@ -475,9 +482,10 @@ model LeaveRequest {
   trainerProfileId String
   startDate        DateTime
   endDate          DateTime
-  leaveType        LeaveType   @default(FULL_DAY)
-  startTime        String?     // HH:MM — null for FULL_DAY
-  endTime          String?     // HH:MM — null for FULL_DAY
+  leaveType        LeaveType      @default(FULL_DAY)
+  leaveCategory    LeaveCategory  @default(REGULAR)
+  startTime        String?        // HH:MM — null for FULL_DAY
+  endTime          String?        // HH:MM — null for FULL_DAY
   reason           String?
   status           LeaveStatus @default(PENDING)
   reviewedByUserId String?

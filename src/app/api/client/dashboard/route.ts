@@ -68,16 +68,73 @@ export async function GET() {
       },
     });
 
-    // Latest 2 progress entries for weight/BF% trend
-    const progressEntries = await prisma.progressEntry.findMany({
+    // All progress entries — needed to extract per-metric latest (sparse entries)
+    const allProgressEntries = await prisma.progressEntry.findMany({
       where: { clientProfileId },
       orderBy: { recordedAt: 'desc' },
-      take: 2,
       select: { weightKg: true, bodyFatPercent: true, muscleMass: true, recordedAt: true },
     });
 
-    const latestProgress = progressEntries[0] ?? null;
-    const prevProgress = progressEntries[1] ?? null;
+    type ProgressKey = 'weightKg' | 'bodyFatPercent' | 'muscleMass';
+    function latestOf(key: ProgressKey) {
+      return allProgressEntries.find((e) => e[key] != null)?.[key] ?? null;
+    }
+    function previousOf(key: ProgressKey) {
+      const first = allProgressEntries.findIndex((e) => e[key] != null);
+      if (first < 0) return null;
+      return allProgressEntries.slice(first + 1).find((e) => e[key] != null)?.[key] ?? null;
+    }
+
+    const latestProgress = {
+      weightKg: latestOf('weightKg'),
+      bodyFatPercent: latestOf('bodyFatPercent'),
+      muscleMass: latestOf('muscleMass'),
+    };
+    const prevProgress = {
+      weightKg: previousOf('weightKg'),
+      bodyFatPercent: previousOf('bodyFatPercent'),
+      muscleMass: previousOf('muscleMass'),
+    };
+
+    // ── Engagement stats ─────────────────────────────────────────────────────
+
+    // All-time completed sessions
+    const allTimeCompleted = await prisma.sessionInstance.count({
+      where: { branchId, clientProfileId, status: 'COMPLETED' },
+    });
+
+    // Last completed session date → days since last session
+    const lastCompleted = await prisma.sessionInstance.findFirst({
+      where: { branchId, clientProfileId, status: 'COMPLETED' },
+      orderBy: { scheduledDate: 'desc' },
+      select: { scheduledDate: true },
+    });
+    // Use local date parts to avoid UTC-vs-local offset (IST = UTC+5:30)
+    function localDaysSince(date: Date) {
+      const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      return Math.round((today.getTime() - d.getTime()) / 86_400_000);
+    }
+    const daysSinceLastSession = lastCompleted ? localDaysSince(lastCompleted.scheduledDate) : null;
+
+    // Attendance rate this month
+    const monthAttendance =
+      sessionCount.completed + sessionCount.noShow > 0
+        ? Math.round(
+            (sessionCount.completed / (sessionCount.completed + sessionCount.noShow)) * 100,
+          )
+        : null;
+
+    // Consecutive session streak (walk backwards through completed sessions)
+    const completedSessions = await prisma.sessionInstance.findMany({
+      where: { branchId, clientProfileId, status: { in: ['COMPLETED', 'NO_SHOW'] } },
+      orderBy: { scheduledDate: 'desc' },
+      select: { scheduledDate: true, status: true },
+    });
+    let streak = 0;
+    for (const s of completedSessions) {
+      if (s.status === 'COMPLETED') streak++;
+      else break; // streak broken by a no-show
+    }
 
     // Top PRs: max weight per exercise from all workout sets
     const prData = await prisma.workoutSet.groupBy({
@@ -139,6 +196,12 @@ export async function GET() {
         latestProgress,
         prevProgress,
         prs,
+        engagementStats: {
+          streak,
+          allTimeCompleted,
+          daysSinceLastSession,
+          monthAttendanceRate: monthAttendance,
+        },
       },
     });
   } catch (error) {

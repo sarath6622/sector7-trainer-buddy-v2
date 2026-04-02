@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -16,11 +17,18 @@ import {
 
 type LeaveType = 'FULL_DAY' | 'HALF_DAY_AM' | 'HALF_DAY_PM' | 'CUSTOM';
 
+interface LeaveBalance {
+  month: string;
+  regular: { quota: number; used: number; remaining: number };
+  emergency: { quota: number; used: number; remaining: number };
+}
+
 interface LeaveRequest {
   id: string;
   startDate: string;
   endDate: string;
   leaveType: LeaveType;
+  leaveCategory: 'REGULAR' | 'EMERGENCY';
   startTime: string | null;
   endTime: string | null;
   reason: string | null;
@@ -32,11 +40,6 @@ interface LeaveRequest {
     scheduledDate: string;
     scheduledTime: string;
     clientName: string;
-  }[];
-  affectedClients?: {
-    clientProfileId: string;
-    firstName: string;
-    lastName: string;
   }[];
 }
 
@@ -93,8 +96,93 @@ function formatTime12(t: string) {
   return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
 }
 
+// ─── Leave Balance Strip ────────────────────────────────────────────────────
+
+function BalanceStrip({ balance }: { balance: LeaveBalance | null }) {
+  if (!balance) {
+    return (
+      <div className="rounded-2xl bg-card ring-1 ring-border/50 p-4">
+        <Skeleton className="h-20 rounded-xl" />
+      </div>
+    );
+  }
+
+  const monthLabel = new Date(balance.month + '-01').toLocaleDateString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return (
+    <div className="rounded-2xl bg-card ring-1 ring-border/50 p-4 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Leave Balance · {monthLabel}
+      </p>
+      <QuotaTile
+        label="Regular Leave"
+        used={balance.regular.used}
+        quota={balance.regular.quota}
+        color="blue"
+      />
+      <p className="text-[10px] text-muted-foreground">
+        Quota resets on the 1st of each month · Unused leaves do not carry forward
+      </p>
+    </div>
+  );
+}
+
+function QuotaTile({
+  label,
+  used,
+  quota,
+  color,
+}: {
+  label: string;
+  used: number;
+  quota: number;
+  color: 'blue' | 'orange';
+}) {
+  const remaining = Math.max(0, quota - used);
+  const full = remaining === 0;
+  const colorMap = {
+    blue: {
+      bar: full ? 'bg-red-500' : 'bg-blue-500',
+      text: full ? 'text-red-500' : 'text-blue-500',
+      bg: full ? 'bg-red-500/10' : 'bg-blue-500/10',
+    },
+    orange: {
+      bar: full ? 'bg-red-500' : 'bg-amber-500',
+      text: full ? 'text-red-500' : 'text-amber-500',
+      bg: full ? 'bg-red-500/10' : 'bg-amber-500/10',
+    },
+  };
+  const c = colorMap[color];
+  const pct = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
+
+  return (
+    <div className={`rounded-xl px-3 py-2.5 ${c.bg}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-xs font-medium">{label}</p>
+        {full && <span className="text-[10px] font-semibold text-red-500">Full</span>}
+      </div>
+      <p className={`text-xl font-bold leading-none ${c.text}`}>{remaining}</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5">
+        {used} used · {quota} total
+      </p>
+      <div className="mt-2 h-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${c.bar}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ───────────────────────────────────────────────────────────────────
+
 export default function TrainerLeavesPage() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [balance, setBalance] = useState<LeaveBalance | null>(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -109,13 +197,20 @@ export default function TrainerLeavesPage() {
   const [submitResult, setSubmitResult] = useState<LeaveRequest | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const fetchLeaves = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/trainer/leaves');
-      if (res.ok) {
-        const { data } = await res.json();
+      const [leavesRes, balanceRes] = await Promise.all([
+        fetch('/api/trainer/leaves'),
+        fetch('/api/trainer/leaves/balance'),
+      ]);
+      if (leavesRes.ok) {
+        const { data } = await leavesRes.json();
         setLeaves(data);
+      }
+      if (balanceRes.ok) {
+        const { data } = await balanceRes.json();
+        setBalance(data);
       }
     } finally {
       setLoading(false);
@@ -123,8 +218,8 @@ export default function TrainerLeavesPage() {
   }, []);
 
   useEffect(() => {
-    fetchLeaves();
-  }, [fetchLeaves]);
+    fetchAll();
+  }, [fetchAll]);
 
   function handleLeaveTypeChange(type: LeaveType) {
     setLeaveType(type);
@@ -165,7 +260,7 @@ export default function TrainerLeavesPage() {
         setStartTime('');
         setEndTime('');
         setReason('');
-        fetchLeaves();
+        fetchAll();
       } else {
         setErrorMsg(json.error || 'Failed to apply leave');
       }
@@ -177,24 +272,28 @@ export default function TrainerLeavesPage() {
   const isFormValid =
     !!startDate && !!endDate && (leaveType === 'FULL_DAY' || (!!startTime && !!endTime));
 
+  const regularFull = balance !== null && balance.regular.remaining === 0;
+
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl space-y-4 pb-8">
-        <div className="h-8 w-40 animate-pulse rounded-lg bg-muted" />
+        <Skeleton className="h-8 w-40 rounded-lg" />
+        <Skeleton className="h-28 rounded-2xl" />
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted" />
+          <Skeleton key={i} className="h-24 rounded-2xl" />
         ))}
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-8">
+    <div className="mx-auto max-w-2xl space-y-5 pb-8">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">My Leaves</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Apply for full-day or partial-day leaves
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {balance ? balance.regular.quota : 4} regular leaves per month
           </p>
         </div>
 
@@ -219,7 +318,7 @@ export default function TrainerLeavesPage() {
               </Button>
             }
           />
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <CalendarDays className="h-4 w-4" />
@@ -301,7 +400,7 @@ export default function TrainerLeavesPage() {
                     onClick={() => {
                       const next = !multiDay;
                       setMultiDay(next);
-                      if (!next) setEndDate(startDate); // collapse back to single day
+                      if (!next) setEndDate(startDate);
                     }}
                     className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
@@ -331,7 +430,7 @@ export default function TrainerLeavesPage() {
 
                 {/* Leave type */}
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium text-muted-foreground">Leave Type</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">Duration</Label>
                   <div className="grid grid-cols-2 gap-1.5">
                     {LEAVE_TYPE_OPTIONS.map((opt) => (
                       <button
@@ -405,7 +504,7 @@ export default function TrainerLeavesPage() {
 
                 <Button
                   type="submit"
-                  disabled={submitting || !isFormValid}
+                  disabled={submitting || !isFormValid || regularFull}
                   className="w-full gap-1.5 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
                 >
                   {submitting ? 'Submitting...' : 'Submit Leave Request'}
@@ -416,6 +515,9 @@ export default function TrainerLeavesPage() {
         </Dialog>
       </div>
 
+      {/* Balance strip */}
+      <BalanceStrip balance={balance} />
+
       {/* Leave list */}
       {leaves.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl bg-card py-12 text-center ring-1 ring-border/50">
@@ -425,19 +527,28 @@ export default function TrainerLeavesPage() {
           <p className="text-sm text-muted-foreground">No leave requests yet.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="rounded-2xl bg-card ring-1 ring-border/50 overflow-hidden divide-y divide-border/40">
           {leaves.map((leave) => (
-            <div key={leave.id} className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+            <div key={leave.id} className="px-4 py-3.5">
               <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <p className="text-sm font-semibold">
                     {formatDate(leave.startDate)}
                     {leave.startDate.slice(0, 10) !== leave.endDate.slice(0, 10) &&
                       ` — ${formatDate(leave.endDate)}`}
                   </p>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                       {LEAVE_TYPE_LABEL[leave.leaveType] ?? leave.leaveType}
+                    </span>
+                    <span
+                      className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${
+                        leave.leaveCategory === 'EMERGENCY'
+                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                      }`}
+                    >
+                      {leave.leaveCategory === 'EMERGENCY' ? 'Emergency' : 'Regular'}
                     </span>
                     {leave.startTime && leave.endTime && (
                       <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -452,9 +563,6 @@ export default function TrainerLeavesPage() {
                       Admin: {leave.reviewNotes}
                     </p>
                   )}
-                  <p className="text-[10px] text-muted-foreground">
-                    Applied {formatDate(leave.createdAt)}
-                  </p>
                 </div>
                 <span
                   className={`shrink-0 rounded-md px-2.5 py-1 text-[10px] font-semibold ${STATUS_STYLES[leave.status] ?? ''}`}

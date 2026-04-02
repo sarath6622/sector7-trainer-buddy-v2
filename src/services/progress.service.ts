@@ -404,7 +404,7 @@ export async function listExercisesWithProgressData({
   }
 
   return Array.from(map.entries())
-    .filter(([, v]) => v.values.length >= 2)
+    .filter(([, v]) => v.values.length >= 1)
     .map(([id, v]) => ({
       id,
       name: v.name,

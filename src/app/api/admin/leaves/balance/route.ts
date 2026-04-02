@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getServerSession, hasRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
-import { listLeavesSchema } from '@/lib/validators';
 import * as leaveService from '@/services/leave.service';
 
 /**
- * GET /api/admin/leaves — List leave requests with filters
+ * GET /api/admin/leaves/balance?trainerProfileId=&month=YYYY-MM
+ * Returns leave balance for a specific trainer (admin view).
  */
 export async function GET(req: Request) {
   try {
@@ -15,23 +15,27 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const input = listLeavesSchema.parse({
-      status: searchParams.get('status') || undefined,
-      trainerId: searchParams.get('trainerId') || undefined,
-      leaveCategory: searchParams.get('leaveCategory') || undefined,
-      month: searchParams.get('month') || undefined,
-      page: searchParams.get('page') || undefined,
-      pageSize: searchParams.get('pageSize') || undefined,
-    });
+    const trainerProfileId = searchParams.get('trainerProfileId');
+    if (!trainerProfileId) {
+      return NextResponse.json(
+        { error: 'trainerProfileId is required', code: 'VALIDATION' },
+        { status: 400 },
+      );
+    }
 
-    const result = await leaveService.listLeaves({
+    const now = new Date();
+    const month =
+      searchParams.get('month') ??
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    const balance = await leaveService.getLeaveBalance({
+      trainerProfileId,
       branchId: session.user.branchId,
-      ...input,
+      month,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({ data: balance });
   } catch (error) {
-    console.error('[GET /api/admin/leaves] Error:', error);
     const { error: msg, code, status } = toErrorResponse(error);
     return NextResponse.json({ error: msg, code }, { status });
   }

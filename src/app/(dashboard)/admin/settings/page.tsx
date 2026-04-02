@@ -1,7 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Bell, Check, Clock, Loader2, RefreshCw, Shield, Users, XCircle } from 'lucide-react';
+import {
+  Bell,
+  CalendarDays,
+  Check,
+  Clock,
+  Loader2,
+  RefreshCw,
+  Shield,
+  Users,
+  XCircle,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +26,8 @@ interface BranchSettings {
   reminderTimingMin: number;
   noShowThresholdMin: number;
   kickboxingClassSizeLimit: number;
+  monthlyRegularLeaveQuota: number;
+  monthlyEmergencyLeaveQuota: number;
 }
 
 function SettingField({
@@ -340,6 +352,49 @@ export default function SettingsPage() {
             <span className="text-sm text-muted-foreground">members</span>
           </div>
         </SettingField>
+      </SectionCard>
+
+      {/* Leave Quotas */}
+      <SectionCard
+        icon={CalendarDays}
+        iconColor="bg-blue-500/10 text-blue-500"
+        title="Trainer Leave Quotas"
+        description="Monthly leave allowances per trainer — resets on the 1st, no carry-forward"
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <SettingField
+            label="Regular Leave"
+            description="Days a trainer can take as planned leave each month"
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={31}
+                value={settings.monthlyRegularLeaveQuota}
+                onChange={(e) => updateField('monthlyRegularLeaveQuota', Number(e.target.value))}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">days / month</span>
+            </div>
+          </SettingField>
+          <SettingField
+            label="Emergency Leave"
+            description="Single-day emergency leaves allowed per month"
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={5}
+                value={settings.monthlyEmergencyLeaveQuota}
+                onChange={(e) => updateField('monthlyEmergencyLeaveQuota', Number(e.target.value))}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">days / month</span>
+            </div>
+          </SettingField>
+        </div>
       </SectionCard>
     </div>
   );

@@ -55,6 +55,14 @@ interface NoShowRate {
   noShowPercent: number;
 }
 
+interface TrainerLeaveBalance {
+  trainerProfileId: string;
+  trainerName: string;
+  month: string;
+  regular: { quota: number; used: number; remaining: number };
+  emergency: { quota: number; used: number; remaining: number };
+}
+
 interface RevenueOverview {
   totalRevenue: number;
   paidCount: number;
@@ -70,6 +78,7 @@ const TABS = [
   { key: 'attendance', label: 'Attendance' },
   { key: 'consumption', label: 'Consumption' },
   { key: 'noshow', label: 'No-Shows' },
+  { key: 'leaves', label: 'Leaves' },
   { key: 'revenue', label: 'Revenue' },
 ] as const;
 
@@ -121,23 +130,26 @@ export default function AnalyticsPage() {
   const [attendance, setAttendance] = useState<ClientAttendance[]>([]);
   const [consumption, setConsumption] = useState<SessionConsumption[]>([]);
   const [noShow, setNoShow] = useState<NoShowRate[]>([]);
+  const [leaveQuota, setLeaveQuota] = useState<TrainerLeaveBalance[]>([]);
   const [revenue, setRevenue] = useState<RevenueOverview | null>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
       const base = `/api/admin/analytics?month=${month}`;
-      const [u, a, c, n, r] = await Promise.all([
+      const [u, a, c, n, l, r] = await Promise.all([
         fetch(`${base}&report=trainer-utilization`).then((r) => r.json()),
         fetch(`${base}&report=client-attendance`).then((r) => r.json()),
         fetch(`${base}&report=session-consumption`).then((r) => r.json()),
         fetch(`${base}&report=no-show-rate`).then((r) => r.json()),
+        fetch(`${base}&report=leave-quota`).then((r) => r.json()),
         fetch(`${base}&report=revenue`).then((r) => r.json()),
       ]);
       setUtilization(u.data ?? []);
       setAttendance(a.data ?? []);
       setConsumption(c.data ?? []);
       setNoShow(n.data ?? []);
+      setLeaveQuota(l.data ?? []);
       setRevenue(r.data ?? null);
     } finally {
       setLoading(false);
@@ -313,6 +325,7 @@ export default function AnalyticsPage() {
               attendance: 'client-attendance',
               consumption: 'session-consumption',
               noshow: 'no-show-rate',
+              leaves: 'leave-quota',
               revenue: 'revenue',
             };
             handleExport(reportMap[activeTab]!);
@@ -604,6 +617,97 @@ export default function AnalyticsPage() {
             </>
           ) : (
             <EmptyState />
+          )}
+        </div>
+      )}
+
+      {activeTab === 'leaves' && (
+        <div className="space-y-3">
+          {leaveQuota.length > 0 ? (
+            <>
+              <div className="rounded-2xl bg-card ring-1 ring-border/50 overflow-hidden divide-y divide-border/40">
+                {leaveQuota.map((t) => {
+                  const regularPct =
+                    t.regular.quota > 0 ? (t.regular.used / t.regular.quota) * 100 : 0;
+                  const emergencyPct =
+                    t.emergency.quota > 0 ? (t.emergency.used / t.emergency.quota) * 100 : 0;
+                  const regularFull = t.regular.remaining === 0;
+                  const emergencyFull = t.emergency.remaining === 0;
+                  return (
+                    <div key={t.trainerProfileId} className="px-4 py-3.5">
+                      <div className="flex items-center gap-3">
+                        {/* Avatar */}
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                          {t.trainerName
+                            .split(' ')
+                            .map((n) => n[0])
+                            .join('')
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{t.trainerName}</p>
+                          {/* Regular leave bar */}
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <span className="text-[10px] text-blue-500 w-16 shrink-0">Regular</span>
+                            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${regularFull ? 'bg-red-500' : 'bg-blue-500'}`}
+                                style={{ width: `${Math.min(regularPct, 100)}%` }}
+                              />
+                            </div>
+                            <span
+                              className={`text-[10px] tabular-nums font-medium w-12 text-right shrink-0 ${regularFull ? 'text-red-500' : 'text-muted-foreground'}`}
+                            >
+                              {t.regular.used}/{t.regular.quota}d
+                            </span>
+                          </div>
+                          {/* Emergency leave bar */}
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-[10px] text-amber-500 w-16 shrink-0">
+                              Emergency
+                            </span>
+                            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${emergencyFull ? 'bg-red-500' : 'bg-amber-500'}`}
+                                style={{ width: `${Math.min(emergencyPct, 100)}%` }}
+                              />
+                            </div>
+                            <span
+                              className={`text-[10px] tabular-nums font-medium w-12 text-right shrink-0 ${emergencyFull ? 'text-red-500' : 'text-muted-foreground'}`}
+                            >
+                              {t.emergency.used}/{t.emergency.quota}d
+                            </span>
+                          </div>
+                        </div>
+                        {/* Status chips */}
+                        <div className="shrink-0 flex flex-col gap-1 items-end">
+                          <span
+                            className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${regularFull ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}
+                          >
+                            {t.regular.remaining}d left
+                          </span>
+                          {t.emergency.used > 0 && (
+                            <span
+                              className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${emergencyFull ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}
+                            >
+                              EM used
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Quota: {leaveQuota[0]?.regular.quota ?? 5} regular +{' '}
+                {leaveQuota[0]?.emergency.quota ?? 1} emergency day(s) per month · Configure in
+                Settings
+              </p>
+            </>
+          ) : (
+            <EmptyState message="No trainers found" />
           )}
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   Play,
   Square,
@@ -13,6 +14,9 @@ import {
   TrendingUp,
   ExternalLink,
   Eye,
+  CalendarCheck,
+  UmbrellaOff,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -34,6 +38,8 @@ interface SessionData {
   };
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function toLocalDateStr(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-CA');
 }
@@ -42,8 +48,7 @@ function formatTime12(t: string) {
   const [h = '0', m = '00'] = t.split(':');
   const hour = parseInt(h, 10);
   const ampm = hour >= 12 ? 'PM' : 'AM';
-  const h12 = hour % 12 || 12;
-  return `${h12}:${m} ${ampm}`;
+  return `${hour % 12 || 12}:${m} ${ampm}`;
 }
 
 function formatDisplayDate(dateStr: string) {
@@ -54,6 +59,17 @@ function formatDisplayDate(dateStr: string) {
   });
 }
 
+function initials(first: string, last: string) {
+  return `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   SCHEDULED: { bg: 'bg-blue-500/10', text: 'text-blue-500', label: 'Scheduled' },
   IN_PROGRESS: { bg: 'bg-emerald-500/10', text: 'text-emerald-500', label: 'In Progress' },
@@ -62,9 +78,13 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
   CANCELLED: { bg: 'bg-zinc-500/10', text: 'text-zinc-400', label: 'Cancelled' },
 };
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function TrainerDashboard() {
   const { confirm, ConfirmDialog } = useConfirm();
   const router = useRouter();
+  const { data: authSession } = useSession();
+  const firstName = authSession?.user?.firstName ?? 'Trainer';
 
   const [todaySessions, setTodaySessions] = useState<SessionData[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<SessionData[]>([]);
@@ -155,14 +175,13 @@ export default function TrainerDashboard() {
   }
 
   // Derived stats
-  const totalMonth = monthSessions.length;
   const completedMonth = monthSessions.filter((s) => s.status === 'COMPLETED').length;
   const noShowMonth = monthSessions.filter((s) => s.status === 'NO_SHOW').length;
   const scheduledMonth = monthSessions.filter((s) => s.status === 'SCHEDULED').length;
   const completionRate =
     completedMonth + noShowMonth > 0
       ? Math.round((completedMonth / (completedMonth + noShowMonth)) * 100)
-      : 0;
+      : null;
 
   const upcomingByDate = upcomingSessions.reduce<Record<string, SessionData[]>>((acc, s) => {
     const d = toLocalDateStr(s.scheduledDate);
@@ -175,77 +194,71 @@ export default function TrainerDashboard() {
     return (
       <div className="mx-auto max-w-2xl space-y-5 pb-8">
         <div className="h-8 w-52 animate-pulse rounded-lg bg-muted" />
-        <div className="grid grid-cols-2 gap-3">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted" />
-          ))}
-        </div>
+        <div className="h-16 animate-pulse rounded-2xl bg-muted" />
         <div className="h-48 animate-pulse rounded-2xl bg-muted" />
+        <div className="h-32 animate-pulse rounded-2xl bg-muted" />
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 pb-8">
-      {/* Header */}
+      {/* ── Header ── */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Trainer Dashboard</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          {new Date().toLocaleDateString('en-IN', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          })}
-        </p>
+        <p className="text-sm text-muted-foreground">{greeting()}</p>
+        <h1 className="text-2xl font-bold tracking-tight">{firstName}</h1>
       </div>
 
-      {/* Stats 2×2 */}
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard
-          icon={<CalendarDays className="h-4 w-4 text-blue-500" />}
-          iconBg="bg-blue-500/10"
-          value={totalMonth}
-          label="Sessions this month"
+      {/* ── Compact stats strip ── */}
+      <div className="grid grid-cols-4 gap-2">
+        <MiniStat
+          icon={<CalendarDays className="h-3.5 w-3.5" />}
+          value={monthSessions.length}
+          label="Total"
+          color="text-blue-500"
+          bg="bg-blue-500/10"
         />
-        <StatCard
-          icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-          iconBg="bg-emerald-500/10"
+        <MiniStat
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
           value={completedMonth}
-          label="Completed"
+          label="Done"
+          color="text-emerald-500"
+          bg="bg-emerald-500/10"
         />
-        <StatCard
-          icon={<XCircle className="h-4 w-4 text-red-500" />}
-          iconBg="bg-red-500/10"
+        <MiniStat
+          icon={<XCircle className="h-3.5 w-3.5" />}
           value={noShowMonth}
-          label="No-shows"
+          label="No-show"
+          color="text-red-500"
+          bg="bg-red-500/10"
         />
-        <StatCard
-          icon={<TrendingUp className="h-4 w-4 text-amber-500" />}
-          iconBg="bg-amber-500/10"
-          value={`${completionRate}%`}
-          label="Completion rate"
+        <MiniStat
+          icon={<TrendingUp className="h-3.5 w-3.5" />}
+          value={completionRate != null ? `${completionRate}%` : '—'}
+          label="Rate"
+          color="text-amber-500"
+          bg="bg-amber-500/10"
         />
       </div>
 
-      {/* Active session banner */}
+      {/* ── Active session banner ── */}
       {activeSession && activeSession.startedAt && (
         <button
           onClick={() => router.push(`/trainer/session/${activeSession.id}`)}
-          className="w-full rounded-2xl bg-emerald-500/10 p-4 text-left ring-2 ring-emerald-500/40 transition-colors hover:bg-emerald-500/15"
+          className="w-full rounded-2xl bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 p-4 text-left ring-1 ring-emerald-500/30 transition-colors hover:ring-emerald-500/50"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <div>
-                <p className="text-sm font-semibold text-emerald-500">Session in progress</p>
+                <p className="text-sm font-semibold text-emerald-400">Session in progress</p>
                 <p className="text-xs text-muted-foreground">
                   {activeSession.client.user.firstName} {activeSession.client.user.lastName}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-lg font-bold tabular-nums text-emerald-500">
+              <span className="font-mono text-lg font-bold tabular-nums text-emerald-400">
                 <InlineTimer
                   startedAt={activeSession.startedAt}
                   expectedDurationMin={activeSession.durationMin}
@@ -257,12 +270,19 @@ export default function TrainerDashboard() {
         </button>
       )}
 
-      {/* Today's Sessions */}
-      <div className="rounded-2xl bg-card ring-1 ring-border/50">
-        {/* Card header */}
+      {/* ── Today's Sessions ── */}
+      <div className="rounded-2xl bg-card ring-1 ring-border/50 overflow-hidden">
         <div className="flex items-center gap-2 px-4 pt-4 pb-3">
           <Clock className="h-4 w-4 text-muted-foreground" />
-          <h2 className="font-semibold">Today&apos;s Sessions</h2>
+          <h2 className="font-semibold">Today</h2>
+          <span className="text-xs text-muted-foreground">
+            ·{' '}
+            {new Date().toLocaleDateString('en-IN', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'short',
+            })}
+          </span>
           {todaySessions.length > 0 && (
             <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
               {todaySessions.length}
@@ -272,68 +292,83 @@ export default function TrainerDashboard() {
 
         {todaySessions.length === 0 ? (
           <p className="px-4 pb-5 text-center text-sm text-muted-foreground">
-            No sessions scheduled for today.
+            No sessions today — enjoy your rest day.
           </p>
         ) : (
           <div className="divide-y divide-border/40">
             {todaySessions.map((session) => {
               const st = STATUS_STYLE[session.status] ?? STATUS_STYLE.SCHEDULED!;
               const isLoading = actionLoading === session.id;
+              const isCancelled = session.status === 'CANCELLED';
+              const clientFirst = session.client.user.firstName;
+              const clientLast = session.client.user.lastName;
+
               return (
-                <div key={session.id} className="px-4 py-3">
-                  {/* Top row: name + status */}
-                  <div className="flex items-center gap-2">
-                    <p className="flex-1 truncate font-medium text-sm">
-                      {session.client.user.firstName} {session.client.user.lastName}
-                    </p>
+                <div key={session.id} className={`px-4 py-3 ${isCancelled ? 'opacity-50' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    {/* Client avatar */}
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground">
+                      {initials(clientFirst, clientLast)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {clientFirst} {clientLast}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatTime12(session.scheduledTime)} · {session.durationMin} min
+                      </p>
+                    </div>
                     <span
                       className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold ${st.bg} ${st.text}`}
                     >
                       {st.label}
                     </span>
                   </div>
-                  {/* Time */}
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {formatTime12(session.scheduledTime)} &middot; {session.durationMin} min
-                  </p>
-                  {/* Action buttons — full width row below */}
+
+                  {/* Action buttons */}
                   {session.status === 'SCHEDULED' && (
-                    <div className="mt-2.5 flex gap-2">
+                    <div className="mt-2.5 flex gap-2 pl-12">
                       <button
                         onClick={() => handleStartSession(session.id)}
                         disabled={isLoading}
                         className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
                       >
                         <Play className="h-3 w-3" />
-                        {isLoading ? 'Starting…' : 'Start Session'}
+                        {isLoading ? 'Starting…' : 'Start'}
                       </button>
                       <button
                         onClick={() => handleNoShow(session.id)}
                         disabled={isLoading}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-500/10 py-2 text-xs font-semibold text-red-500 ring-1 ring-red-500/30 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                        className="flex items-center justify-center gap-1.5 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 ring-1 ring-red-500/30 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                       >
                         <UserX className="h-3 w-3" />
                         No Show
                       </button>
                     </div>
                   )}
+
                   {session.status === 'IN_PROGRESS' && (
-                    <button
-                      onClick={() => router.push(`/trainer/session/${session.id}`)}
-                      className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
-                    >
-                      <Square className="h-3 w-3" />
-                      Resume Session
-                    </button>
+                    <div className="mt-2.5 pl-12">
+                      <button
+                        onClick={() => router.push(`/trainer/session/${session.id}`)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+                      >
+                        <Square className="h-3 w-3" />
+                        Resume Session
+                      </button>
+                    </div>
                   )}
+
                   {session.status === 'COMPLETED' && (
-                    <button
-                      onClick={() => router.push(`/trainer/sessions/${session.id}`)}
-                      className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-muted py-2 text-xs font-semibold text-foreground ring-1 ring-border/50 transition-colors hover:bg-muted/80"
-                    >
-                      <Eye className="h-3 w-3" />
-                      View Workout
-                    </button>
+                    <div className="mt-2 pl-12">
+                      <button
+                        onClick={() => router.push(`/trainer/sessions/${session.id}`)}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Eye className="h-3 w-3" />
+                        View workout
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -342,9 +377,8 @@ export default function TrainerDashboard() {
         )}
       </div>
 
-      {/* Upcoming Sessions */}
-      <div className="rounded-2xl bg-card ring-1 ring-border/50">
-        {/* Card header */}
+      {/* ── Upcoming Sessions ── */}
+      <div className="rounded-2xl bg-card ring-1 ring-border/50 overflow-hidden">
         <div className="flex items-center gap-2 px-4 pt-4 pb-3">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
           <h2 className="font-semibold">Upcoming</h2>
@@ -367,26 +401,23 @@ export default function TrainerDashboard() {
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {formatDisplayDate(date)}
                 </p>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {sessions.map((session) => (
                     <div
                       key={session.id}
-                      className="flex items-center gap-3 rounded-xl bg-muted/20 px-3 py-2.5 ring-1 ring-border/30"
+                      className="flex items-center gap-3 rounded-xl bg-muted/20 px-3 py-2.5"
                     >
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
-                        <Clock className="h-3.5 w-3.5 text-blue-500" />
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-foreground">
+                        {initials(session.client.user.firstName, session.client.user.lastName)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
                           {session.client.user.firstName} {session.client.user.lastName}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatTime12(session.scheduledTime)} &middot; {session.durationMin} min
+                          {formatTime12(session.scheduledTime)} · {session.durationMin} min
                         </p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-medium text-blue-500">
-                        Scheduled
-                      </span>
                     </div>
                   ))}
                 </div>
@@ -396,27 +427,63 @@ export default function TrainerDashboard() {
         )}
       </div>
 
+      {/* ── Quick links ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => router.push('/trainer/sessions')}
+          className="flex items-center gap-3 rounded-2xl bg-card p-4 ring-1 ring-border/50 text-left transition-colors hover:bg-muted/30"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
+            <CalendarCheck className="h-4 w-4 text-blue-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Schedule</p>
+            <p className="text-xs text-muted-foreground">View all sessions</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
+        </button>
+        <button
+          onClick={() => router.push('/trainer/leaves')}
+          className="flex items-center gap-3 rounded-2xl bg-card p-4 ring-1 ring-border/50 text-left transition-colors hover:bg-muted/30"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10">
+            <UmbrellaOff className="h-4 w-4 text-amber-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Leaves</p>
+            <p className="text-xs text-muted-foreground">Manage time off</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
+        </button>
+      </div>
+
       {ConfirmDialog}
     </div>
   );
 }
 
-function StatCard({
+// ─── MiniStat ─────────────────────────────────────────────────────────────────
+
+function MiniStat({
   icon,
-  iconBg,
   value,
   label,
+  color,
+  bg,
 }: {
   icon: React.ReactNode;
-  iconBg: string;
   value: string | number;
   label: string;
+  color: string;
+  bg: string;
 }) {
   return (
-    <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
-      <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${iconBg}`}>{icon}</div>
-      <p className="mt-3 text-2xl font-bold">{value}</p>
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div className="rounded-2xl bg-card p-3 ring-1 ring-border/50">
+      <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${bg} ${color}`}>
+        {icon}
+      </div>
+      <p className="mt-2.5 text-xl font-bold leading-none">{value}</p>
+      <p className="mt-0.5 text-[10px] text-muted-foreground">{label}</p>
     </div>
   );
 }

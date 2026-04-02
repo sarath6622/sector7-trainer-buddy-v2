@@ -221,10 +221,16 @@ export const listAvailabilityOverridesSchema = z.object({
 export const listLeavesSchema = paginationSchema.extend({
   status: leaveStatusSchema.optional(),
   trainerId: cuidSchema.optional(),
+  leaveCategory: z.enum(['REGULAR', 'EMERGENCY']).optional(),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(), // YYYY-MM
 });
 
 export const reviewLeaveSchema = z.object({
   notes: z.string().optional(),
+  leaveCategory: z.enum(['REGULAR', 'EMERGENCY']).optional(),
 });
 
 // ─── ADMIN: REASSIGNMENT ────────────────────────────
@@ -344,6 +350,8 @@ export const updateSettingsSchema = z.object({
   reminderTimingMin: z.number().int().positive().optional(),
   noShowThresholdMin: z.number().int().positive().optional(),
   kickboxingClassSizeLimit: z.number().int().positive().optional(),
+  monthlyRegularLeaveQuota: z.number().int().min(0).max(31).optional(),
+  monthlyEmergencyLeaveQuota: z.number().int().min(0).max(5).optional(),
 });
 
 // ─── ADMIN: AUDIT LOGS ──────────────────────────────
@@ -401,11 +409,14 @@ export const syncWorkoutsSchema = z.object({
 
 const timeHHMM = z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:MM format');
 
+export const leaveCategorySchema = z.enum(['REGULAR', 'EMERGENCY']);
+
 export const applyLeaveSchema = z
   .object({
     startDate: dateSchema,
     endDate: dateSchema,
     leaveType: z.enum(['FULL_DAY', 'HALF_DAY_AM', 'HALF_DAY_PM', 'CUSTOM']).default('FULL_DAY'),
+    leaveCategory: leaveCategorySchema.default('REGULAR'),
     startTime: timeHHMM.optional(), // required when leaveType !== FULL_DAY
     endTime: timeHHMM.optional(),
     reason: z.string().optional(),

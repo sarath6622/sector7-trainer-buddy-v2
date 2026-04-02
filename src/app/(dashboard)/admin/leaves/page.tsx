@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { CalendarDays, Eye, UserCheck, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -16,13 +15,19 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+
+// ─── Types ─────────────────────────────────────────────────────────────────
 
 interface LeaveRequest {
   id: string;
+  trainerProfileId: string;
   startDate: string;
   endDate: string;
   reason: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  leaveCategory: 'REGULAR' | 'EMERGENCY';
+  leaveType: string;
   reviewNotes: string | null;
   createdAt: string;
   trainer: {
@@ -40,37 +45,62 @@ interface AffectedSession {
 
 interface LeaveDetail extends LeaveRequest {
   affectedSessions: AffectedSession[];
-  affectedClients: {
-    clientProfileId: string;
-    firstName: string;
-    lastName: string;
-  }[];
 }
 
-interface TrainerOption {
+interface Trainer {
   id: string;
-  firstName: string;
-  lastName: string;
+  name: string;
 }
 
-const STATUS_BADGE: Record<
-  string,
-  { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }
-> = {
-  PENDING: { variant: 'secondary', label: 'Pending' },
-  APPROVED: { variant: 'default', label: 'Approved' },
-  REJECTED: { variant: 'destructive', label: 'Rejected' },
-};
+interface EmergencyBalance {
+  quota: number;
+  used: number;
+  remaining: number;
+}
 
-function addMinutes(time: string, minutes: number): string {
-  const [h = '0', m = '0'] = time.split(':');
-  const total = parseInt(h, 10) * 60 + parseInt(m, 10) + minutes;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  PENDING: { label: 'Pending', className: 'bg-amber-500/15 text-amber-500 border-amber-500/25' },
+  APPROVED: {
+    label: 'Approved',
+    className: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/25',
+  },
+  REJECTED: { label: 'Rejected', className: 'bg-red-500/15 text-red-500 border-red-500/25' },
+} as const;
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function currentMonthStr() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function shiftMonth(m: string, delta: -1 | 1) {
+  const [y, mo] = m.split('-').map(Number);
+  const d = new Date(y!, mo! - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthLabel(m: string) {
+  const [y, mo] = m.split('-').map(Number);
+  return new Date(y!, mo! - 1).toLocaleDateString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-IN', {
     weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatDateShort(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -83,129 +113,207 @@ function formatTime12(t: string) {
   return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
 }
 
+function daysBetween(start: string, end: string) {
+  return Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000) + 1;
+}
+
+function isSameDay(a: string, b: string) {
+  return a.slice(0, 10) === b.slice(0, 10);
+}
+
+function initials(first: string, last: string) {
+  return `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
+}
+
+// ─── Sub-components ─────────────────────────────────────────────────────────
+
+function StatTile({
+  label,
+  value,
+  active,
+  colorClass,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  colorClass: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 rounded-xl px-3 py-3 text-center transition-all ring-1 ${
+        active ? `${colorClass} ring-current/30` : 'bg-card ring-border/50 hover:bg-muted/30'
+      }`}
+    >
+      <p className={`text-2xl font-bold tabular-nums ${active ? '' : 'text-foreground'}`}>
+        {value}
+      </p>
+      <p className={`text-[11px] mt-0.5 ${active ? 'opacity-80' : 'text-muted-foreground'}`}>
+        {label}
+      </p>
+    </button>
+  );
+}
+
+function CategoryChip({
+  label,
+  active,
+  onClick,
+  colorClass,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  colorClass: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+        active ? colorClass : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ─── Page ───────────────────────────────────────────────────────────────────
+
 export default function AdminLeavesPage() {
-  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [allLeaves, setAllLeaves] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [month, setMonth] = useState(currentMonthStr());
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [trainerFilter, setTrainerFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
+
   const [selectedLeave, setSelectedLeave] = useState<LeaveDetail | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
+  const [reviewCategory, setReviewCategory] = useState<'REGULAR' | 'EMERGENCY'>('REGULAR');
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Reassignment state
-  // Map of sessionId → selected replacement trainerProfileId
-  const [reassignSelections, setReassignSelections] = useState<Record<string, string>>({});
-  // Map of slotKey (date:startTime:endTime) → TrainerOption[]
-  const [vacantTrainersCache, setVacantTrainersCache] = useState<Record<string, TrainerOption[]>>(
-    {},
-  );
-  // Set of sessionIds that have been successfully reassigned
-  const [reassignedSessions, setReassignedSessions] = useState<Set<string>>(new Set());
-  // Per-session reassignment loading
-  const [reassignLoading, setReassignLoading] = useState<Record<string, boolean>>({});
+  // ── Emergency leave dialog state ──────────────────────────────────────────
+  const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const [trainerList, setTrainerList] = useState<Trainer[]>([]);
+  const [emgTrainerId, setEmgTrainerId] = useState('');
+  const [emgDate, setEmgDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [emgNotes, setEmgNotes] = useState('');
+  const [emgBalance, setEmgBalance] = useState<EmergencyBalance | null>(null);
+  const [emgBalanceLoading, setEmgBalanceLoading] = useState(false);
+  const [emgSubmitting, setEmgSubmitting] = useState(false);
 
   const fetchLeaves = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
-      const res = await fetch(`/api/admin/leaves?${params}`);
+      const res = await fetch(`/api/admin/leaves?month=${month}&pageSize=200`);
       if (res.ok) {
         const json = await res.json();
-        setLeaves(json.data);
+        setAllLeaves(json.data ?? []);
       }
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [month]);
 
   useEffect(() => {
     fetchLeaves();
   }, [fetchLeaves]);
 
+  // Reset filters when month changes
+  useEffect(() => {
+    setStatusFilter('all');
+    setCategoryFilter('all');
+    setTrainerFilter('all');
+    setSearch('');
+  }, [month]);
+
+  // Fetch trainer list once (for emergency dialog)
+  useEffect(() => {
+    fetch('/api/admin/trainers')
+      .then((r) => r.json())
+      .then(({ data }) => setTrainerList(data ?? []))
+      .catch(() => {});
+  }, []);
+
+  // Fetch emergency balance when trainer or date changes
+  useEffect(() => {
+    if (!emgTrainerId || !emgDate) {
+      setEmgBalance(null);
+      return;
+    }
+    const month = emgDate.slice(0, 7);
+    setEmgBalanceLoading(true);
+    fetch(`/api/admin/leaves/balance?trainerProfileId=${emgTrainerId}&month=${month}`)
+      .then((r) => r.json())
+      .then(({ data }) => setEmgBalance(data?.emergency ?? null))
+      .catch(() => setEmgBalance(null))
+      .finally(() => setEmgBalanceLoading(false));
+  }, [emgTrainerId, emgDate]);
+
+  // ── Stats (from full month data, ignoring client filters) ──────────────────
+  const stats = useMemo(
+    () => ({
+      total: allLeaves.length,
+      pending: allLeaves.filter((l) => l.status === 'PENDING').length,
+      approved: allLeaves.filter((l) => l.status === 'APPROVED').length,
+      rejected: allLeaves.filter((l) => l.status === 'REJECTED').length,
+    }),
+    [allLeaves],
+  );
+
+  // ── Unique trainers from data ──────────────────────────────────────────────
+  const trainers = useMemo(() => {
+    const map = new Map<string, string>();
+    allLeaves.forEach((l) => {
+      map.set(l.trainerProfileId, `${l.trainer.user.firstName} ${l.trainer.user.lastName}`);
+    });
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [allLeaves]);
+
+  // ── Client-side filtered list ──────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return allLeaves.filter((l) => {
+      if (statusFilter !== 'all' && l.status !== statusFilter) return false;
+      if (categoryFilter !== 'all' && l.leaveCategory !== categoryFilter) return false;
+      if (trainerFilter !== 'all' && l.trainerProfileId !== trainerFilter) return false;
+      if (q) {
+        const name = `${l.trainer.user.firstName} ${l.trainer.user.lastName}`.toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [allLeaves, statusFilter, categoryFilter, trainerFilter, search]);
+
+  const activeFilterCount = [
+    statusFilter !== 'all',
+    categoryFilter !== 'all',
+    trainerFilter !== 'all',
+    search !== '',
+  ].filter(Boolean).length;
+
+  // ── Detail dialog ──────────────────────────────────────────────────────────
   async function openDetail(leaveId: string) {
     setDetailOpen(true);
     setDetailLoading(true);
     setReviewNotes('');
-    setReassignSelections({});
-    setReassignedSessions(new Set());
-    setVacantTrainersCache({});
+    setReviewCategory('REGULAR');
     try {
       const res = await fetch(`/api/admin/leaves/${leaveId}`);
       if (res.ok) {
         const { data } = await res.json();
         setSelectedLeave(data);
-        // Pre-fetch vacant trainers for all unique slots
-        if (data.status === 'PENDING' && data.affectedSessions.length > 0) {
-          prefetchVacantTrainers(data.affectedSessions);
-        }
       }
     } finally {
       setDetailLoading(false);
-    }
-  }
-
-  async function prefetchVacantTrainers(sessions: AffectedSession[]) {
-    // Deduplicate by (date, startTime, endTime)
-    const seen = new Set<string>();
-    const uniqueSlots = sessions
-      .map((s) => {
-        const date = new Date(s.scheduledDate).toISOString().slice(0, 10);
-        const endTime = addMinutes(s.scheduledTime, s.durationMin);
-        return { date, startTime: s.scheduledTime, endTime };
-      })
-      .filter(({ date, startTime, endTime }) => {
-        const key = `${date}:${startTime}:${endTime}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-    await Promise.allSettled(
-      uniqueSlots.map(async ({ date, startTime, endTime }) => {
-        const key = `${date}:${startTime}:${endTime}`;
-        const params = new URLSearchParams({ date, startTime, endTime });
-        const res = await fetch(`/api/admin/reassignments/vacant-trainers?${params}`);
-        if (res.ok) {
-          const { data } = await res.json();
-          setVacantTrainersCache((prev) => ({ ...prev, [key]: data }));
-        }
-      }),
-    );
-  }
-
-  function getVacantTrainersForSession(session: AffectedSession): TrainerOption[] {
-    const date = new Date(session.scheduledDate).toISOString().slice(0, 10);
-    const endTime = addMinutes(session.scheduledTime, session.durationMin);
-    const key = `${date}:${session.scheduledTime}:${endTime}`;
-    return vacantTrainersCache[key] ?? [];
-  }
-
-  async function handleReassignSession(session: AffectedSession) {
-    const trainerId = reassignSelections[session.id];
-    if (!trainerId) return;
-
-    setReassignLoading((prev) => ({ ...prev, [session.id]: true }));
-    try {
-      const res = await fetch('/api/admin/reassignments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionInstanceId: session.id,
-          replacementTrainerProfileId: trainerId,
-          reason: `Leave cover — ${selectedLeave?.trainer.user.firstName} ${selectedLeave?.trainer.user.lastName}`,
-        }),
-      });
-      if (res.ok) {
-        setReassignedSessions((prev) => new Set([...prev, session.id]));
-        toast.success(`Session reassigned for ${session.clientName}`);
-      } else {
-        const json = await res.json();
-        toast.error(json.error || 'Reassignment failed');
-      }
-    } finally {
-      setReassignLoading((prev) => ({ ...prev, [session.id]: false }));
     }
   }
 
@@ -216,9 +324,13 @@ export default function AdminLeavesPage() {
       const res = await fetch(`/api/admin/leaves/${selectedLeave.id}/${action}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: reviewNotes || undefined }),
+        body: JSON.stringify({
+          notes: reviewNotes || undefined,
+          ...(action === 'approve' ? { leaveCategory: reviewCategory } : {}),
+        }),
       });
       if (res.ok) {
+        toast.success(`Leave ${action === 'approve' ? 'approved' : 'rejected'}`);
         setDetailOpen(false);
         setSelectedLeave(null);
         fetchLeaves();
@@ -231,252 +343,475 @@ export default function AdminLeavesPage() {
     }
   }
 
-  const unreassignedCount =
-    selectedLeave?.affectedSessions.filter((s) => !reassignedSessions.has(s.id)).length ?? 0;
-
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    );
+  async function handleEmergencySubmit() {
+    if (!emgTrainerId || !emgDate) return;
+    setEmgSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/leaves/emergency', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trainerProfileId: emgTrainerId,
+          date: emgDate,
+          notes: emgNotes || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        toast.success(`Emergency leave marked for ${json.data.trainerName}`);
+        setEmergencyOpen(false);
+        setEmgTrainerId('');
+        setEmgDate(new Date().toISOString().slice(0, 10));
+        setEmgNotes('');
+        setEmgBalance(null);
+        fetchLeaves();
+      } else {
+        toast.error(json.error || 'Failed to mark emergency leave');
+      }
+    } finally {
+      setEmgSubmitting(false);
+    }
   }
 
+  function clearFilters() {
+    setStatusFilter('all');
+    setCategoryFilter('all');
+    setTrainerFilter('all');
+    setSearch('');
+  }
+
+  const isCurrentMonth = month === currentMonthStr();
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-2xl space-y-4 pb-8">
+      {/* ── Header ── */}
       <div className="flex items-center gap-2">
-        <CalendarDays className="h-6 w-6" />
-        <h1 className="text-2xl font-bold">Leave Management</h1>
+        <CalendarDays className="h-5 w-5 text-muted-foreground" />
+        <h1 className="text-2xl font-bold tracking-tight">Leave Requests</h1>
+        {!loading && stats.pending > 0 && (
+          <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-500">
+            {stats.pending} pending
+          </span>
+        )}
+        <Button
+          size="sm"
+          onClick={() => setEmergencyOpen(true)}
+          className="ml-auto gap-1.5 bg-amber-500 text-white hover:bg-amber-600"
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Emergency Leave
+        </Button>
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-3">
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? '')}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="PENDING">Pending</SelectItem>
-            <SelectItem value="APPROVED">Approved</SelectItem>
-            <SelectItem value="REJECTED">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* ── Month navigator ── */}
+      <div className="flex items-center justify-between rounded-xl bg-card ring-1 ring-border/50 px-3 py-2.5">
+        <button
+          onClick={() => setMonth((m) => shiftMonth(m, -1))}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="text-center">
+          <p className="text-sm font-semibold">{formatMonthLabel(month)}</p>
+          {!isCurrentMonth && (
+            <button
+              onClick={() => setMonth(currentMonthStr())}
+              className="text-[10px] text-muted-foreground/60 hover:text-primary transition-colors"
+            >
+              Back to current month
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => setMonth((m) => shiftMonth(m, 1))}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          disabled={isCurrentMonth}
+        >
+          <ChevronRight className={`h-4 w-4 ${isCurrentMonth ? 'opacity-25' : ''}`} />
+        </button>
       </div>
 
-      {/* Leave List */}
-      {leaves.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">No leave requests found.</p>
-          </CardContent>
-        </Card>
+      {/* ── Stats tiles ── */}
+      {loading ? (
+        <div className="flex gap-2">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="flex-1 h-16 rounded-xl" />
+          ))}
+        </div>
       ) : (
-        <div className="space-y-3">
-          {leaves.map((leave) => {
-            const badge = STATUS_BADGE[leave.status] ?? {
-              variant: 'secondary' as const,
-              label: leave.status,
-            };
-            const trainerName = `${leave.trainer.user.firstName} ${leave.trainer.user.lastName}`;
+        <div className="flex gap-2">
+          <StatTile
+            label="Total"
+            value={stats.total}
+            active={
+              statusFilter === 'all' &&
+              categoryFilter === 'all' &&
+              trainerFilter === 'all' &&
+              !search
+            }
+            colorClass="bg-card text-foreground ring-border"
+            onClick={clearFilters}
+          />
+          <StatTile
+            label="Pending"
+            value={stats.pending}
+            active={statusFilter === 'PENDING'}
+            colorClass="bg-amber-500/10 text-amber-500"
+            onClick={() => setStatusFilter((s) => (s === 'PENDING' ? 'all' : 'PENDING'))}
+          />
+          <StatTile
+            label="Approved"
+            value={stats.approved}
+            active={statusFilter === 'APPROVED'}
+            colorClass="bg-emerald-500/10 text-emerald-500"
+            onClick={() => setStatusFilter((s) => (s === 'APPROVED' ? 'all' : 'APPROVED'))}
+          />
+          <StatTile
+            label="Rejected"
+            value={stats.rejected}
+            active={statusFilter === 'REJECTED'}
+            colorClass="bg-red-500/10 text-red-500"
+            onClick={() => setStatusFilter((s) => (s === 'REJECTED' ? 'all' : 'REJECTED'))}
+          />
+        </div>
+      )}
+
+      {/* ── Filters ── */}
+      <div className="space-y-2.5">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search trainer..."
+            className="pl-8 h-9 text-sm"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Category + Trainer row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Category chips */}
+          <div className="flex items-center gap-1.5">
+            <CategoryChip
+              label="All"
+              active={categoryFilter === 'all'}
+              onClick={() => setCategoryFilter('all')}
+              colorClass="bg-muted text-foreground"
+            />
+            <CategoryChip
+              label="Regular"
+              active={categoryFilter === 'REGULAR'}
+              onClick={() => setCategoryFilter((c) => (c === 'REGULAR' ? 'all' : 'REGULAR'))}
+              colorClass="bg-blue-500/15 text-blue-500"
+            />
+            <CategoryChip
+              label="Emergency"
+              active={categoryFilter === 'EMERGENCY'}
+              onClick={() => setCategoryFilter((c) => (c === 'EMERGENCY' ? 'all' : 'EMERGENCY'))}
+              colorClass="bg-amber-500/15 text-amber-500"
+            />
+          </div>
+
+          {/* Trainer dropdown */}
+          {trainers.length > 1 && (
+            <Select value={trainerFilter} onValueChange={(v) => setTrainerFilter(v ?? 'all')}>
+              <SelectTrigger className="h-7 text-xs w-auto min-w-[130px] ml-auto">
+                <SelectValue placeholder="All Trainers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Trainers</SelectItem>
+                {trainers.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Clear all */}
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors ml-auto"
+            >
+              <X className="h-3 w-3" /> Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Leave list ── */}
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-[72px] rounded-2xl" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl bg-card ring-1 ring-border/50 py-14 text-center">
+          <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/25 mb-2.5" />
+          <p className="text-sm font-medium text-muted-foreground">
+            {activeFilterCount > 0
+              ? 'No leaves match your filters'
+              : `No leave requests in ${formatMonthLabel(month)}`}
+          </p>
+          {activeFilterCount > 0 && (
+            <button onClick={clearFilters} className="mt-2 text-xs text-primary hover:underline">
+              Clear filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-2xl bg-card ring-1 ring-border/50 overflow-hidden divide-y divide-border/40">
+          {filtered.map((leave) => {
+            const cfg = STATUS_CONFIG[leave.status] ?? STATUS_CONFIG.PENDING;
+            const { firstName, lastName } = leave.trainer.user;
+            const singleDay = isSameDay(leave.startDate, leave.endDate);
+            const days = daysBetween(leave.startDate, leave.endDate);
+            const isEmergency = leave.leaveCategory === 'EMERGENCY';
+
             return (
-              <Card key={leave.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-sm">{trainerName}</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDate(leave.startDate)} — {formatDate(leave.endDate)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={badge.variant}>{badge.label}</Badge>
-                      <Button size="sm" variant="ghost" onClick={() => openDetail(leave.id)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
+              <button
+                key={leave.id}
+                className="w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/30 active:bg-muted/50"
+                onClick={() => openDetail(leave.id)}
+              >
+                {/* Avatar */}
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                  {initials(firstName, lastName)}
+                </div>
+
+                {/* Info */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium truncate">
+                      {firstName} {lastName}
+                    </p>
+                    <span
+                      className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wide ${
+                        isEmergency
+                          ? 'bg-amber-500/10 text-amber-500'
+                          : 'bg-blue-500/10 text-blue-500'
+                      }`}
+                    >
+                      {isEmergency ? 'Emerg' : 'Regular'}
+                    </span>
                   </div>
-                </CardHeader>
-                <CardContent>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {singleDay
+                      ? formatDate(leave.startDate)
+                      : `${formatDateShort(leave.startDate)} — ${formatDateShort(leave.endDate)}`}
+                    {!singleDay && <span className="ml-1.5 text-muted-foreground/50">{days}d</span>}
+                  </p>
                   {leave.reason && (
-                    <p className="text-xs text-muted-foreground">Reason: {leave.reason}</p>
+                    <p className="text-xs text-muted-foreground/50 mt-0.5 truncate">
+                      {leave.reason}
+                    </p>
                   )}
-                  {leave.reviewNotes && (
-                    <p className="text-xs text-muted-foreground mt-1">Notes: {leave.reviewNotes}</p>
-                  )}
-                </CardContent>
-              </Card>
+                </div>
+
+                {/* Status */}
+                <span
+                  className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.className}`}
+                >
+                  {cfg.label}
+                </span>
+              </button>
             );
           })}
         </div>
       )}
 
-      {/* Detail Dialog */}
+      {/* ── Result count ── */}
+      {!loading && filtered.length > 0 && activeFilterCount > 0 && (
+        <p className="text-center text-xs text-muted-foreground/60">
+          Showing {filtered.length} of {allLeaves.length} requests
+        </p>
+      )}
+
+      {/* ── Detail Dialog ── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Leave Request Details</DialogTitle>
+            <DialogTitle>Leave Request</DialogTitle>
           </DialogHeader>
 
           {detailLoading ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>
+            <div className="space-y-3 py-2">
+              <Skeleton className="h-12 rounded-xl" />
+              <Skeleton className="h-20 rounded-xl" />
+              <Skeleton className="h-28 rounded-xl" />
+            </div>
           ) : selectedLeave ? (
             <div className="space-y-5">
-              {/* Header info */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs">Trainer</p>
-                  <p className="font-medium">
-                    {selectedLeave.trainer.user.firstName} {selectedLeave.trainer.user.lastName}
+              {/* Trainer header */}
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
+                  {initials(
+                    selectedLeave.trainer.user.firstName,
+                    selectedLeave.trainer.user.lastName,
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold">
+                      {selectedLeave.trainer.user.firstName} {selectedLeave.trainer.user.lastName}
+                    </p>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
+                        selectedLeave.leaveCategory === 'EMERGENCY'
+                          ? 'bg-amber-500/10 text-amber-500'
+                          : 'bg-blue-500/10 text-blue-500'
+                      }`}
+                    >
+                      {selectedLeave.leaveCategory === 'EMERGENCY' ? 'Emergency' : 'Regular'}
+                    </span>
+                    {(() => {
+                      const scfg = STATUS_CONFIG[selectedLeave.status] ?? STATUS_CONFIG.PENDING;
+                      return (
+                        <span
+                          className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${scfg.className}`}
+                        >
+                          {scfg.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {isSameDay(selectedLeave.startDate, selectedLeave.endDate)
+                      ? formatDate(selectedLeave.startDate)
+                      : `${formatDateShort(selectedLeave.startDate)} — ${formatDateShort(selectedLeave.endDate)} · ${daysBetween(selectedLeave.startDate, selectedLeave.endDate)} days`}
                   </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Status</p>
-                  <Badge variant={STATUS_BADGE[selectedLeave.status]?.variant ?? 'secondary'}>
-                    {STATUS_BADGE[selectedLeave.status]?.label ?? selectedLeave.status}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">From</p>
-                  <p>{formatDate(selectedLeave.startDate)}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">To</p>
-                  <p>{formatDate(selectedLeave.endDate)}</p>
                 </div>
               </div>
 
+              {/* Leave type */}
+              <div className="flex gap-3">
+                <div className="rounded-xl bg-muted/30 px-3.5 py-2.5 flex-1 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
+                    Type
+                  </p>
+                  <p className="text-sm font-medium capitalize">
+                    {selectedLeave.leaveType.replace(/_/g, ' ').toLowerCase()}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-muted/30 px-3.5 py-2.5 flex-1 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
+                    Duration
+                  </p>
+                  <p className="text-sm font-medium">
+                    {daysBetween(selectedLeave.startDate, selectedLeave.endDate)} day
+                    {daysBetween(selectedLeave.startDate, selectedLeave.endDate) !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-muted/30 px-3.5 py-2.5 flex-1 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
+                    Applied
+                  </p>
+                  <p className="text-sm font-medium">
+                    {new Date(selectedLeave.createdAt).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Reason */}
               {selectedLeave.reason && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Reason</p>
+                <div className="rounded-xl bg-muted/30 px-3.5 py-3">
+                  <p className="text-xs text-muted-foreground mb-1">Reason</p>
                   <p className="text-sm">{selectedLeave.reason}</p>
                 </div>
               )}
 
-              {/* ── Reassignment Panel ── */}
+              {/* Review notes (already reviewed) */}
+              {selectedLeave.reviewNotes && selectedLeave.status !== 'PENDING' && (
+                <div className="rounded-xl bg-muted/30 px-3.5 py-3">
+                  <p className="text-xs text-muted-foreground mb-1">Review Notes</p>
+                  <p className="text-sm">{selectedLeave.reviewNotes}</p>
+                </div>
+              )}
+
+              {/* Affected sessions */}
               {selectedLeave.affectedSessions.length > 0 && (
-                <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-3">
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <UserCheck className="h-4 w-4 text-primary" />
-                      <p className="text-sm font-semibold">
-                        Reassign Sessions ({selectedLeave.affectedSessions.length})
-                      </p>
-                    </div>
-                    {selectedLeave.status === 'PENDING' && unreassignedCount > 0 && (
-                      <span className="flex items-center gap-1 text-[10px] text-amber-500">
-                        <AlertCircle className="h-3 w-3" />
-                        {unreassignedCount} unassigned
-                      </span>
-                    )}
-                    {selectedLeave.status === 'PENDING' && unreassignedCount === 0 && (
-                      <span className="flex items-center gap-1 text-[10px] text-emerald-500">
-                        <CheckCircle2 className="h-3 w-3" />
-                        All reassigned
-                      </span>
-                    )}
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Affected Sessions
+                    </p>
+                    <span className="text-xs text-muted-foreground">
+                      {selectedLeave.affectedSessions.length} session
+                      {selectedLeave.affectedSessions.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-
-                  <div className="space-y-2">
-                    {selectedLeave.affectedSessions.map((session) => {
-                      const isReassigned = reassignedSessions.has(session.id);
-                      const isLoading = reassignLoading[session.id];
-                      const vacantTrainers = getVacantTrainersForSession(session);
-                      const selectedTrainerId = reassignSelections[session.id] ?? '';
-
-                      return (
-                        <div
-                          key={session.id}
-                          className={`rounded-lg p-3 text-xs space-y-2 ${
-                            isReassigned
-                              ? 'bg-emerald-500/10 ring-1 ring-emerald-500/30'
-                              : 'bg-card ring-1 ring-border/50'
-                          }`}
-                        >
-                          {/* Session info row */}
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <p className="font-medium">{session.clientName}</p>
-                              <p className="text-muted-foreground">
-                                {formatDate(session.scheduledDate)} ·{' '}
-                                {formatTime12(session.scheduledTime)} ({session.durationMin} min)
-                              </p>
-                            </div>
-                            {isReassigned && (
-                              <span className="flex items-center gap-1 text-emerald-500 font-medium">
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Reassigned
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Trainer select + button (only for pending + not yet reassigned) */}
-                          {selectedLeave.status === 'PENDING' && !isReassigned && (
-                            <div className="flex gap-2 items-center">
-                              <Select
-                                value={selectedTrainerId}
-                                onValueChange={(v) =>
-                                  v &&
-                                  setReassignSelections((prev) => ({ ...prev, [session.id]: v }))
-                                }
-                              >
-                                <SelectTrigger className="h-7 flex-1 text-xs">
-                                  <SelectValue>
-                                    {selectedTrainerId
-                                      ? (() => {
-                                          const t = vacantTrainers.find(
-                                            (x) => x.id === selectedTrainerId,
-                                          );
-                                          return t
-                                            ? `${t.firstName} ${t.lastName}`
-                                            : selectedTrainerId;
-                                        })()
-                                      : vacantTrainers.length === 0
-                                        ? 'No trainers available'
-                                        : 'Select trainer…'}
-                                  </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {vacantTrainers.length === 0 ? (
-                                    <SelectItem value="_none" disabled>
-                                      No available trainers
-                                    </SelectItem>
-                                  ) : (
-                                    vacantTrainers.map((t) => (
-                                      <SelectItem key={t.id} value={t.id}>
-                                        {t.firstName} {t.lastName}
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                size="sm"
-                                className="h-7 px-3 text-xs"
-                                disabled={!selectedTrainerId || isLoading}
-                                onClick={() => handleReassignSession(session)}
-                              >
-                                {isLoading ? '…' : 'Assign'}
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <p className="text-xs text-muted-foreground">
+                    Clients will do an independent cardio session during this period.
+                  </p>
+                  <div className="space-y-1.5 pt-1">
+                    {selectedLeave.affectedSessions.map((session) => (
+                      <div
+                        key={session.id}
+                        className="flex items-center justify-between rounded-lg bg-card px-3 py-2 text-xs ring-1 ring-border/50"
+                      >
+                        <span className="font-medium">{session.clientName}</span>
+                        <span className="text-muted-foreground">
+                          {formatDate(session.scheduledDate)} ·{' '}
+                          {formatTime12(session.scheduledTime)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
-              {/* Approve/Reject Actions */}
+              {/* Approve / Reject */}
               {selectedLeave.status === 'PENDING' && (
                 <div className="space-y-3 pt-1 border-t border-border/50">
-                  {unreassignedCount > 0 && selectedLeave.affectedSessions.length > 0 && (
-                    <p className="text-[11px] text-amber-500 flex items-center gap-1.5">
-                      <AlertCircle className="h-3 w-3 shrink-0" />
-                      {unreassignedCount} session{unreassignedCount !== 1 ? 's' : ''} not yet
-                      reassigned. You can still approve — the admin can reassign later.
-                    </p>
-                  )}
+                  {/* Category override */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Leave Category</Label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setReviewCategory('REGULAR')}
+                        className={`rounded-xl px-3 py-2.5 text-left transition-colors ring-1 ${
+                          reviewCategory === 'REGULAR'
+                            ? 'bg-blue-500/10 text-blue-500 ring-blue-500/30'
+                            : 'bg-muted/30 text-muted-foreground ring-border/40 hover:bg-muted/60'
+                        }`}
+                      >
+                        <p className="text-xs font-semibold">Regular</p>
+                        <p className="mt-0.5 text-[10px] opacity-70">
+                          Counts against monthly quota
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReviewCategory('EMERGENCY')}
+                        className={`rounded-xl px-3 py-2.5 text-left transition-colors ring-1 ${
+                          reviewCategory === 'EMERGENCY'
+                            ? 'bg-amber-500/10 text-amber-500 ring-amber-500/30'
+                            : 'bg-muted/30 text-muted-foreground ring-border/40 hover:bg-muted/60'
+                        }`}
+                      >
+                        <p className="text-xs font-semibold">Emergency</p>
+                        <p className="mt-0.5 text-[10px] opacity-70">Admin-granted override</p>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="space-y-1.5">
                     <Label htmlFor="reviewNotes" className="text-xs">
                       Review Notes (optional)
@@ -493,7 +828,7 @@ export default function AdminLeavesPage() {
                     <Button
                       onClick={() => handleAction('approve')}
                       disabled={actionLoading}
-                      className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                      className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
                     >
                       {actionLoading ? 'Processing...' : 'Approve'}
                     </Button>
@@ -510,6 +845,135 @@ export default function AdminLeavesPage() {
               )}
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Emergency Leave Dialog ── */}
+      <Dialog
+        open={emergencyOpen}
+        onOpenChange={(open) => {
+          setEmergencyOpen(open);
+          if (!open) {
+            setEmgTrainerId('');
+            setEmgNotes('');
+            setEmgBalance(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              Mark Emergency Leave
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            <p className="text-xs text-muted-foreground">
+              Use this when a trainer calls in and reports they can&apos;t come. The leave is marked
+              as approved immediately.
+            </p>
+
+            {/* Trainer */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Trainer</Label>
+              <Select
+                value={emgTrainerId}
+                onValueChange={(v) => {
+                  setEmgTrainerId(v ?? '');
+                  setEmgBalance(null);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select trainer…">
+                    {emgTrainerId
+                      ? (trainerList.find((t) => t.id === emgTrainerId)?.name ?? 'Select trainer…')
+                      : 'Select trainer…'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {trainerList.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Date */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Date</Label>
+              <Input type="date" value={emgDate} onChange={(e) => setEmgDate(e.target.value)} />
+            </div>
+
+            {/* Emergency quota display */}
+            {emgTrainerId && (
+              <div
+                className={`rounded-xl px-4 py-3 ${
+                  emgBalanceLoading
+                    ? 'bg-muted/40'
+                    : emgBalance && emgBalance.remaining > 0
+                      ? 'bg-amber-500/10'
+                      : 'bg-red-500/10'
+                }`}
+              >
+                {emgBalanceLoading ? (
+                  <p className="text-xs text-muted-foreground">Loading quota…</p>
+                ) : emgBalance ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                        Emergency Leave Quota
+                      </p>
+                      <span
+                        className={`text-xs font-bold ${emgBalance.remaining > 0 ? 'text-amber-500' : 'text-red-500'}`}
+                      >
+                        {emgBalance.remaining} / {emgBalance.quota} remaining
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${emgBalance.remaining > 0 ? 'bg-amber-500' : 'bg-red-500'}`}
+                        style={{
+                          width: `${emgBalance.quota > 0 ? Math.min(100, (emgBalance.used / emgBalance.quota) * 100) : 100}%`,
+                        }}
+                      />
+                    </div>
+                    {emgBalance.remaining <= 0 && (
+                      <p className="mt-1.5 text-[11px] text-red-500 font-medium">
+                        Emergency quota exhausted for this month.
+                      </p>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            )}
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes (optional)</Label>
+              <Textarea
+                value={emgNotes}
+                onChange={(e) => setEmgNotes(e.target.value)}
+                rows={2}
+                placeholder="e.g. Called in sick at 6 AM"
+              />
+            </div>
+
+            <Button
+              onClick={handleEmergencySubmit}
+              disabled={
+                emgSubmitting ||
+                !emgTrainerId ||
+                !emgDate ||
+                (emgBalance !== null && emgBalance.remaining <= 0)
+              }
+              className="w-full bg-amber-500 text-white hover:bg-amber-600"
+            >
+              {emgSubmitting ? 'Marking…' : 'Mark as Emergency Leave'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

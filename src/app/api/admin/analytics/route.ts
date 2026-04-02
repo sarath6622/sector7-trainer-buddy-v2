@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession, hasRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import * as analyticsService from '@/services/analytics.service';
+import { getLeaveBalanceAllTrainers } from '@/services/leave.service';
 
 /**
  * GET /api/admin/analytics?report=<type>&month=YYYY-MM&trainerId=&clientId=
@@ -54,6 +55,10 @@ export async function GET(req: Request) {
       }
       case 'revenue': {
         const data = await analyticsService.getRevenueOverview(branchId, month);
+        return NextResponse.json({ data });
+      }
+      case 'leave-quota': {
+        const data = await getLeaveBalanceAllTrainers({ branchId, month });
         return NextResponse.json({ data });
       }
       default:

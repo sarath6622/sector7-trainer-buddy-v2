@@ -30,6 +30,7 @@ export async function POST(req: Request) {
       startDate: input.startDate,
       endDate: input.endDate,
       leaveType: input.leaveType,
+      leaveCategory: 'REGULAR', // trainers always apply as regular; admin can upgrade to emergency on review
       startTime: input.startTime,
       endTime: input.endTime,
       reason: input.reason,

@@ -250,78 +250,52 @@ function PRTable({
         <Trophy className="h-3.5 w-3.5 text-primary" />
         <p className="text-xs font-semibold uppercase tracking-wide">All Exercise PRs</p>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border/40">
-              {[
-                'Exercise',
-                'Type',
-                'Muscle Group',
-                'Start',
-                'Current Best',
-                'Improvement',
-                'Sessions',
-              ].map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground first:pl-4"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {exercises.map((ex) => {
-              const improved = ex.improvement > 0;
-              return (
-                <tr
-                  key={ex.id}
-                  onClick={() => onSelect(ex)}
-                  className={`border-b border-border/30 cursor-pointer transition-colors hover:bg-muted/30 ${
-                    selectedId === ex.id ? 'bg-primary/5 ring-inset ring-1 ring-primary/20' : ''
-                  }`}
-                >
-                  <td className="pl-4 pr-3 py-3 font-medium">{ex.name}</td>
-                  <td className="px-3 py-3">
-                    <span
-                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${
-                        ex.exerciseType === 'WEIGHTED'
-                          ? 'bg-blue-500/15 text-blue-400'
-                          : ex.exerciseType === 'BODYWEIGHT'
-                            ? 'bg-emerald-500/15 text-emerald-400'
-                            : ex.exerciseType === 'DURATION'
-                              ? 'bg-violet-500/15 text-violet-400'
-                              : 'bg-orange-500/15 text-orange-400'
-                      }`}
-                    >
-                      {ex.exerciseType}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-muted-foreground text-xs">
-                    {ex.targetMuscleGroup}
-                  </td>
-                  <td className="px-3 py-3 text-muted-foreground">
-                    {ex.startMax} {ex.unit}
-                  </td>
-                  <td className="px-3 py-3 font-semibold">
+      <div className="divide-y divide-border/30">
+        {exercises.map((ex) => {
+          const improved = ex.improvement > 0;
+          const neutral = ex.improvement === 0;
+          return (
+            <button
+              key={ex.id}
+              type="button"
+              onClick={() => onSelect(ex)}
+              className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30 ${
+                selectedId === ex.id ? 'bg-primary/5' : ''
+              }`}
+            >
+              {/* Left: name + muscle */}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{ex.name}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{ex.targetMuscleGroup}</p>
+              </div>
+
+              {/* Right: best + improvement */}
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Best</p>
+                  <p className="text-sm font-semibold">
                     {ex.currentMax} {ex.unit}
-                  </td>
-                  <td className="px-3 py-3">
-                    <span
-                      className={`font-semibold ${improved ? 'text-emerald-500' : 'text-red-400'}`}
-                    >
-                      {improved ? '+' : ''}
-                      {ex.improvement} {ex.unit}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-muted-foreground">{ex.sessionCount}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  </p>
+                </div>
+                <div className="text-right w-16">
+                  <p className="text-xs text-muted-foreground">Change</p>
+                  <p
+                    className={`text-sm font-semibold ${
+                      neutral
+                        ? 'text-muted-foreground'
+                        : improved
+                          ? 'text-emerald-500'
+                          : 'text-red-400'
+                    }`}
+                  >
+                    {improved ? '+' : ''}
+                    {ex.improvement} {ex.unit}
+                  </p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
