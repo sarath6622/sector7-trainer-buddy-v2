@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowLeft, KeyRound, Plus, Save, Trash2, X } from 'lucide-react';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +67,12 @@ export default function ClientProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Reset password state
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetSaving, setResetSaving] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   // PT Packages state
   const [packages, setPackages] = useState<PtPackage[]>([]);
@@ -199,6 +205,31 @@ export default function ClientProfilePage() {
       setError('Failed to save changes');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleResetPassword() {
+    setResetSaving(true);
+    setResetError('');
+    setResetSuccess(false);
+    try {
+      const res = await fetch(`/api/admin/users/${id}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: resetPassword }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setResetError(data.error ?? 'Failed to reset password');
+      } else {
+        setResetPassword('');
+        setResetSuccess(true);
+        setTimeout(() => setResetSuccess(false), 3000);
+      }
+    } catch {
+      setResetError('Failed to reset password');
+    } finally {
+      setResetSaving(false);
     }
   }
 
@@ -449,6 +480,35 @@ export default function ClientProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Reset Password */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Reset Password</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-3">
+            <Input
+              type="password"
+              placeholder="New password (min 6 characters)"
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              className="max-w-xs"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleResetPassword}
+              disabled={resetSaving || resetPassword.length < 6}
+            >
+              <KeyRound className="mr-1 h-4 w-4" />
+              {resetSaving ? 'Resetting...' : 'Reset Password'}
+            </Button>
+          </div>
+          {resetError && <p className="text-sm text-destructive">{resetError}</p>}
+          {resetSuccess && <p className="text-sm text-emerald-600">Password reset successfully.</p>}
+        </CardContent>
+      </Card>
 
       {/* Trainer Mapping / PT Packages */}
       <Card>
