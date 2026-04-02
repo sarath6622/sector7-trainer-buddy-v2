@@ -53,7 +53,13 @@ export function TopNav({
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border/50 bg-background px-4">
+    <header
+      className="flex items-center justify-between border-b border-border/50 bg-background px-4"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        minHeight: 'calc(3.5rem + env(safe-area-inset-top))',
+      }}
+    >
       {/* Left side — logo */}
       <Link href="/" className="lg:hidden">
         <Logo className="h-8" />
