@@ -398,10 +398,14 @@ export function WorkoutLogger({
         </div>
         <button
           onClick={() => setShowSearch((v) => !v)}
-          className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
+            showSearch
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-primary/10 text-primary hover:bg-primary/15'
+          }`}
         >
-          <Plus className="h-3.5 w-3.5" />
-          Add Exercise
+          {showSearch ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+          {showSearch ? 'Cancel' : 'Add Exercise'}
         </button>
       </div>
 
@@ -423,16 +427,14 @@ export function WorkoutLogger({
                 }
               }}
             />
-            <button
-              onClick={() => {
-                setShowSearch(false);
-                setSearchQuery('');
-                setSearchResults([]);
-              }}
-              className="rounded-md p-1 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="rounded-md p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
           {searchResults.length > 0 ? (
@@ -444,10 +446,10 @@ export function WorkoutLogger({
                   <button
                     key={ex.id}
                     onClick={() => addExercise(ex)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-muted/60"
                   >
                     <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cfg.bg}`}
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
                     >
                       <Icon className={`h-4 w-4 ${cfg.text}`} />
                     </div>
@@ -468,11 +470,11 @@ export function WorkoutLogger({
               })}
             </div>
           ) : searchQuery.trim() ? (
-            <p className="px-4 py-5 text-center text-sm text-muted-foreground">
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
               No exercises found
             </p>
           ) : (
-            <p className="px-4 py-5 text-center text-sm text-muted-foreground">
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
               Start typing to search…
             </p>
           )}
@@ -481,19 +483,19 @@ export function WorkoutLogger({
 
       {/* ── Empty state ── */}
       {exercises.length === 0 && !showSearch && (
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border/50 py-16 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-            <Dumbbell className="h-7 w-7 text-muted-foreground" />
+        <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+            <Dumbbell className="h-6 w-6 text-muted-foreground" />
           </div>
-          <div>
-            <p className="font-medium">No exercises yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Add exercises to start logging this session
+          <div className="space-y-1">
+            <p className="text-base font-semibold">No exercises yet</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Tap &ldquo;Add Exercise&rdquo; above to start logging
             </p>
           </div>
           <button
             onClick={() => setShowSearch(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
           >
             <Plus className="h-4 w-4" /> Add First Exercise
           </button>
@@ -509,26 +511,37 @@ export function WorkoutLogger({
         return (
           <div
             key={entry.tempId}
-            className="overflow-hidden rounded-2xl border bg-card shadow-sm"
-            style={{ borderLeftWidth: 3, borderLeftColor: cfg.accent }}
+            className="overflow-hidden rounded-2xl bg-card shadow-sm"
+            style={{
+              border: '1px solid rgba(255,255,255,0.06)',
+              borderLeftWidth: 3,
+              borderLeftColor: cfg.accent,
+            }}
           >
             {/* Card header */}
             <div className="flex items-center gap-3 px-4 py-3">
               <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cfg.bg}`}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
               >
                 <Icon className={`h-4 w-4 ${cfg.text}`} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{entry.exerciseName}</p>
-                <p className="text-xs text-muted-foreground">{entry.targetMuscle}</p>
+                <p className="truncate text-sm font-semibold leading-tight">{entry.exerciseName}</p>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">{entry.targetMuscle}</span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
+                  >
+                    {entry.sets.length}×
+                  </span>
+                  {!entry.saved && (
+                    <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
+                      unsaved
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
-                >
-                  {entry.sets.length} set{entry.sets.length !== 1 ? 's' : ''}
-                </span>
+              <div className="flex shrink-0 items-center gap-0.5">
                 {clientProfileId && (
                   <button
                     onClick={() => {
@@ -546,7 +559,7 @@ export function WorkoutLogger({
                         unit,
                       });
                     }}
-                    className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                    className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition-colors active:bg-primary/10 active:text-primary"
                     title="View progress"
                   >
                     <TrendingUp className="h-4 w-4" />
@@ -554,7 +567,7 @@ export function WorkoutLogger({
                 )}
                 <button
                   onClick={() => toggleCollapse(entry.tempId)}
-                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition-colors active:bg-muted"
                 >
                   {entry.collapsed ? (
                     <ChevronDown className="h-4 w-4" />
@@ -564,7 +577,7 @@ export function WorkoutLogger({
                 </button>
                 <button
                   onClick={() => removeExercise(entry.tempId)}
-                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground/60 transition-colors active:bg-destructive/10 active:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -573,11 +586,11 @@ export function WorkoutLogger({
 
             {/* Set table (collapsible) */}
             {!entry.collapsed && (
-              <div className="border-t px-4 pb-3 pt-2">
+              <div className="border-t border-border/40 px-4 pb-4 pt-3">
                 {/* Column header row */}
                 <div className={`mb-2 grid items-center gap-2 ${getGridClass(cols.length)}`}>
                   <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Set
+                    #
                   </span>
                   {cols.map((col) => (
                     <span
@@ -591,7 +604,7 @@ export function WorkoutLogger({
                 </div>
 
                 {/* Set rows */}
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {entry.sets.map((set, setIdx) => (
                     <div
                       key={setIdx}
@@ -617,7 +630,7 @@ export function WorkoutLogger({
                           step={col.step}
                           min={col.min}
                           max={col.max}
-                          className="h-10 rounded-xl text-center text-sm font-medium tabular-nums"
+                          className="h-11 rounded-xl text-center text-sm font-semibold tabular-nums"
                           value={
                             col.key === 'notes'
                               ? set.notes
@@ -631,7 +644,7 @@ export function WorkoutLogger({
                       <button
                         onClick={() => removeSet(exIdx, setIdx)}
                         disabled={entry.sets.length <= 1}
-                        className="flex items-center justify-center rounded-xl p-2 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+                        className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground/40 transition-colors active:bg-destructive/10 active:text-destructive disabled:pointer-events-none disabled:opacity-20"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -642,7 +655,7 @@ export function WorkoutLogger({
                 {/* Add Set */}
                 <button
                   onClick={() => addSet(exIdx)}
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/60 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add Set
@@ -655,10 +668,17 @@ export function WorkoutLogger({
 
       {/* ── Bottom save bar (when unsaved changes) ── */}
       {hasUnsaved && exercises.length > 0 && (
-        <div className="sticky bottom-0 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur">
-          <Button className="w-full gap-2" onClick={saveWorkout} disabled={saving}>
+        <div className="sticky bottom-0 -mx-4 border-t border-border/50 bg-background/95 px-4 py-3 backdrop-blur">
+          <Button
+            className="w-full gap-2 rounded-xl py-3 text-sm font-semibold"
+            onClick={saveWorkout}
+            disabled={saving}
+          >
             {saving ? (
-              'Saving…'
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                Saving…
+              </>
             ) : (
               <>
                 <Check className="h-4 w-4" /> Save Workout
