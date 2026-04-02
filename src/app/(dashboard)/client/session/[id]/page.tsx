@@ -181,7 +181,7 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
 
   if (loading) {
     return (
-      <div className="fixed inset-0 flex flex-col bg-background">
+      <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
         <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
           <div className="flex h-12 items-center gap-3 px-4">
             <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
@@ -244,7 +244,7 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
   const totalSets = groupedLogs.reduce((acc, log) => acc + log.sets.length, 0);
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-background">
+    <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         <div className="flex h-12 items-center gap-3 px-4">

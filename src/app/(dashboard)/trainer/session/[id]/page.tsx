@@ -153,7 +153,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   // ── Loading / starting ──────────────────────────────────────────────────────
   if (loading || starting) {
     return (
-      <div className="fixed inset-0 flex flex-col bg-background">
+      <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
         <div className="flex h-14 items-center gap-3 border-b px-4">
           <div className="h-8 w-8 animate-pulse rounded-xl bg-muted" />
           <div className="h-4 w-36 animate-pulse rounded-lg bg-muted" />
@@ -182,7 +182,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   });
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-background">
+    <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         {/* Top bar */}
