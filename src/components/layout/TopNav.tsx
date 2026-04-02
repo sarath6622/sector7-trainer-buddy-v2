@@ -216,7 +216,7 @@ export function TopNav({
             <SheetContent
               side="right"
               showCloseButton={false}
-              className="w-full max-w-none border-none sm:max-w-none bg-gradient-to-b from-[#1a1a1a] to-[#111] p-0"
+              className="w-full max-w-none border-none sm:max-w-none bg-gradient-to-b from-[#1a1a1a] to-[#111] p-0 flex flex-col overflow-hidden"
             >
               {/* Header — logo + close */}
               <div className="flex items-center justify-between px-6 pt-6 pb-4">
@@ -228,7 +228,7 @@ export function TopNav({
               </div>
 
               {/* Nav items — numbered, large, uppercase */}
-              <nav className="mt-4 flex flex-col px-6">
+              <nav className="mt-4 flex-1 overflow-y-auto flex flex-col px-6">
                 {navItems.map((item, index) => {
                   const isDashboard =
                     item.href === '/admin' || item.href === '/trainer' || item.href === '/client';
@@ -260,7 +260,7 @@ export function TopNav({
               </nav>
 
               {/* Bottom section — theme toggle + user */}
-              <div className="mt-auto px-6 pb-8">
+              <div className="shrink-0 px-6 pb-8">
                 <div className="border-t border-white/10 pt-6">
                   {/* Theme toggle in hamburger */}
                   <button
