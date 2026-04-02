@@ -55,7 +55,9 @@ interface ChartDataInput {
 // ─── Service Functions ──────────────────────────────
 
 /**
- * Create a new progress entry for a client.
+ * Create or overwrite today's progress entry for a client.
+ * Only one entry per calendar day is allowed — logging again on the same day
+ * overwrites the existing values for the fields that are provided.
  */
 export async function createProgressEntry({
   clientProfileId,
@@ -72,6 +74,59 @@ export async function createProgressEntry({
     throw new AppError('CLIENT_NOT_FOUND', 'Client not found', 404);
   }
 
+  // Check for an existing entry recorded today (UTC calendar day)
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setUTCHours(23, 59, 59, 999);
+
+  const existing = await prisma.progressEntry.findFirst({
+    where: {
+      clientProfileId,
+      recordedAt: { gte: todayStart, lte: todayEnd },
+    },
+  });
+
+  if (existing) {
+    // Overwrite today's entry with the new values
+    const updated = await prisma.progressEntry.update({
+      where: { id: existing.id },
+      data: {
+        recordedByUserId,
+        ...(measurements.weightKg !== undefined && { weightKg: measurements.weightKg }),
+        ...(measurements.bodyFatPercent !== undefined && {
+          bodyFatPercent: measurements.bodyFatPercent,
+        }),
+        ...(measurements.muscleMass !== undefined && { muscleMass: measurements.muscleMass }),
+        ...(measurements.chest !== undefined && { chest: measurements.chest }),
+        ...(measurements.waist !== undefined && { waist: measurements.waist }),
+        ...(measurements.hips !== undefined && { hips: measurements.hips }),
+        ...(measurements.bicepLeft !== undefined && { bicepLeft: measurements.bicepLeft }),
+        ...(measurements.bicepRight !== undefined && { bicepRight: measurements.bicepRight }),
+        ...(measurements.thighLeft !== undefined && { thighLeft: measurements.thighLeft }),
+        ...(measurements.thighRight !== undefined && { thighRight: measurements.thighRight }),
+        ...(measurements.photoUrls !== undefined && { photoUrls: measurements.photoUrls }),
+        ...(measurements.notes !== undefined && { notes: measurements.notes }),
+      },
+    });
+
+    await auditLog({
+      action: 'PROGRESS_UPDATED',
+      actorId: recordedByUserId,
+      subjectType: 'ProgressEntry',
+      subjectId: existing.id,
+      branchId,
+      oldValue: { weightKg: existing.weightKg, bodyFatPercent: existing.bodyFatPercent },
+      newValue: {
+        weightKg: measurements.weightKg,
+        bodyFatPercent: measurements.bodyFatPercent,
+      },
+    });
+
+    return updated;
+  }
+
+  // No entry today — create a fresh one
   const entry = await prisma.progressEntry.create({
     data: {
       clientProfileId,
