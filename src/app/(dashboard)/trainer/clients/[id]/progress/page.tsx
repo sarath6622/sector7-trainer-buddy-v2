@@ -287,6 +287,7 @@ export default function TrainerClientProgressPage() {
   }
 
   const latest = entries[0];
+  const oldest = entries[entries.length - 1];
 
   // Per-metric latest/previous: each quick-log creates a sparse entry (only one field set),
   // so we must find the most recent entry that actually has a value for each metric.

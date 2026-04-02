@@ -825,13 +825,13 @@ function ExerciseProgressModal({
                   />
                   <XAxis
                     dataKey="date"
-                    tick={{ fill: '#888', fontSize: 10, userSelect: 'none' }}
+                    tick={{ fill: '#888', fontSize: 10 }}
                     tickLine={false}
                     axisLine={false}
                     interval="preserveStartEnd"
                   />
                   <YAxis
-                    tick={{ fill: '#888', fontSize: 10, userSelect: 'none' }}
+                    tick={{ fill: '#888', fontSize: 10 }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v: number) => `${v}${unit}`}

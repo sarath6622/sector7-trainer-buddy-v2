@@ -137,14 +137,14 @@ export default function ProgressLineChart({
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fill: '#888', fontSize: 11, userSelect: 'none' }}
+            tick={{ fill: '#888', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             interval="preserveStartEnd"
           />
           <YAxis
             domain={[domainMin, domainMax]}
-            tick={{ fill: '#888', fontSize: 11, userSelect: 'none' }}
+            tick={{ fill: '#888', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             tickFormatter={(v) => `${v}${unit ?? ''}`}
