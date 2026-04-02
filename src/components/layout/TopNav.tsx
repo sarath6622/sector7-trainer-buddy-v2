@@ -216,82 +216,87 @@ export function TopNav({
             <SheetContent
               side="right"
               showCloseButton={false}
-              className="w-full max-w-none border-none sm:max-w-none bg-gradient-to-b from-[#1a1a1a] to-[#111] p-0 flex flex-col h-full overflow-hidden"
+              className="w-full max-w-none border-none sm:max-w-none bg-gradient-to-b from-[#1a1a1a] to-[#111] p-0"
             >
-              {/* Header — logo + close */}
-              <div className="flex items-center justify-between px-6 pt-6 pb-4">
-                <Logo className="h-10" variant="dark" />
-                <SheetClose className="rounded-sm p-1 text-white/60 transition-colors hover:text-white">
-                  <X className="h-6 w-6" />
-                  <span className="sr-only">Close</span>
-                </SheetClose>
-              </div>
+              <div
+                className="flex h-dvh flex-col overflow-hidden"
+                style={{ paddingTop: 'env(safe-area-inset-top)' }}
+              >
+                {/* Header — logo + close */}
+                <div className="shrink-0 flex items-center justify-between px-6 pt-6 pb-4">
+                  <Logo className="h-10" variant="dark" />
+                  <SheetClose className="rounded-sm p-1 text-white/60 transition-colors hover:text-white">
+                    <X className="h-6 w-6" />
+                    <span className="sr-only">Close</span>
+                  </SheetClose>
+                </div>
 
-              {/* Nav items — numbered, large, uppercase */}
-              <nav className="mt-4 flex-1 min-h-0 overflow-y-auto flex flex-col px-6">
-                {navItems.map((item, index) => {
-                  const isDashboard =
-                    item.href === '/admin' || item.href === '/trainer' || item.href === '/client';
-                  const isActive = isDashboard
-                    ? pathname === item.href
-                    : pathname === item.href || pathname.startsWith(item.href + '/');
-                  const num = String(index + 1).padStart(2, '0');
+                {/* Nav items — numbered, large, uppercase */}
+                <nav className="mt-4 flex-1 min-h-0 overflow-y-auto flex flex-col px-6">
+                  {navItems.map((item, index) => {
+                    const isDashboard =
+                      item.href === '/admin' || item.href === '/trainer' || item.href === '/client';
+                    const isActive = isDashboard
+                      ? pathname === item.href
+                      : pathname === item.href || pathname.startsWith(item.href + '/');
+                    const num = String(index + 1).padStart(2, '0');
 
-                  return (
-                    <SheetClose
-                      key={item.href}
-                      nativeButton={false}
-                      render={<Link href={item.href} />}
-                    >
-                      <span
-                        className={cn(
-                          'flex items-baseline gap-4 border-b border-white/10 py-5 transition-colors',
-                          isActive ? 'text-[#E8652C]' : 'text-white/80 hover:text-white',
-                        )}
+                    return (
+                      <SheetClose
+                        key={item.href}
+                        nativeButton={false}
+                        render={<Link href={item.href} />}
                       >
-                        <span className="text-xs font-light text-white/30">{num}</span>
-                        <span className="text-xl font-bold uppercase tracking-[0.15em]">
-                          {item.label}
+                        <span
+                          className={cn(
+                            'flex items-baseline gap-4 border-b border-white/10 py-5 transition-colors',
+                            isActive ? 'text-[#E8652C]' : 'text-white/80 hover:text-white',
+                          )}
+                        >
+                          <span className="text-xs font-light text-white/30">{num}</span>
+                          <span className="text-xl font-bold uppercase tracking-[0.15em]">
+                            {item.label}
+                          </span>
                         </span>
-                      </span>
-                    </SheetClose>
-                  );
-                })}
-              </nav>
+                      </SheetClose>
+                    );
+                  })}
+                </nav>
 
-              {/* Bottom section — theme toggle + user */}
-              <div className="shrink-0 px-6 pb-8">
-                <div className="border-t border-white/10 pt-6">
-                  {/* Theme toggle in hamburger */}
-                  <button
-                    onClick={toggleTheme}
-                    className="mb-5 flex items-center gap-3 text-sm text-white/60 transition-colors hover:text-white"
-                  >
-                    <Sun className="h-4 w-4 dark:hidden" />
-                    <Moon className="hidden h-4 w-4 dark:block" />
-                    <span>Switch to {theme === 'dark' ? 'light' : 'dark'} mode</span>
-                  </button>
+                {/* Bottom section — theme toggle + user */}
+                <div className="shrink-0 px-6 pb-8">
+                  <div className="border-t border-white/10 pt-6">
+                    {/* Theme toggle in hamburger */}
+                    <button
+                      onClick={toggleTheme}
+                      className="mb-5 flex items-center gap-3 text-sm text-white/60 transition-colors hover:text-white"
+                    >
+                      <Sun className="h-4 w-4 dark:hidden" />
+                      <Moon className="hidden h-4 w-4 dark:block" />
+                      <span>Switch to {theme === 'dark' ? 'light' : 'dark'} mode</span>
+                    </button>
 
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 border border-white/20">
-                      <AvatarFallback className="bg-[#E8652C]/20 text-[#E8652C] text-sm font-semibold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        {user.firstName} {user.lastName}
-                      </p>
-                      <p className="text-xs text-white/40">{roleLabel}</p>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10 border border-white/20">
+                        <AvatarFallback className="bg-[#E8652C]/20 text-[#E8652C] text-sm font-semibold">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          {user.firstName} {user.lastName}
+                        </p>
+                        <p className="text-xs text-white/40">{roleLabel}</p>
+                      </div>
                     </div>
+                    <button
+                      onClick={onLogout}
+                      className="mt-4 flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-white"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Log out
+                    </button>
                   </div>
-                  <button
-                    onClick={onLogout}
-                    className="mt-4 flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-white"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Log out
-                  </button>
                 </div>
               </div>
             </SheetContent>
