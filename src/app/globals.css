@@ -127,6 +127,15 @@
     @apply font-sans;
   }
 
+  /* Prevent iOS Safari from zooming in when focusing inputs with font-size < 16px */
+  @media screen and (-webkit-min-device-pixel-ratio: 0) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
   /* Native date/time/month input — make calendar/clock icon visible in dark mode */
   .dark input[type='date']::-webkit-calendar-picker-indicator,
   .dark input[type='time']::-webkit-calendar-picker-indicator,
