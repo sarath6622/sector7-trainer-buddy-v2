@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { NotificationChannel, NotificationStatus, Prisma } from '@prisma/client';
+import { getFirebaseMessagingAdmin } from '@/lib/firebase-admin';
 
 // ─── Types ──────────────────────────────────────────
 
@@ -134,6 +135,46 @@ async function createInAppNotification({
       body,
       metadata: metadata ?? undefined,
       sentAt: new Date(),
+    },
+  });
+
+  // Send FCM push to all registered devices for this user
+  void sendFcmPush({ recipientId, title, body }).catch(() => {
+    // FCM failures are non-critical — silently ignore
+  });
+}
+
+async function sendFcmPush({
+  recipientId,
+  title,
+  body,
+}: {
+  recipientId: string;
+  title: string;
+  body: string;
+}) {
+  if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_PRIVATE_KEY) return;
+
+  const tokens = await prisma.fcmToken.findMany({
+    where: { userId: recipientId },
+    select: { token: true },
+  });
+
+  if (tokens.length === 0) return;
+
+  const messaging = getFirebaseMessagingAdmin();
+
+  await messaging.sendEachForMulticast({
+    tokens: tokens.map((t) => t.token),
+    notification: { title, body },
+    webpush: {
+      notification: {
+        title,
+        body,
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-72x72.png',
+      },
+      fcmOptions: { link: '/' },
     },
   });
 }

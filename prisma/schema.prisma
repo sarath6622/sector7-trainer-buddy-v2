@@ -192,6 +192,7 @@ model User {
   // Actions performed by this user
   auditLogsAsActor      AuditLog[]        @relation("AuditActor")
   notificationsReceived NotificationLog[] @relation("NotificationRecipient")
+  fcmTokens             FcmToken[]
 
   @@index([branchId, role])
   @@index([email])
@@ -607,6 +608,20 @@ model PaymentRecord {
   @@index([branchId, clientProfileId])
   @@index([branchId, status])
   @@map("payment_records")
+}
+
+// ─── FCM TOKENS ──────────────────────────────────────
+
+model FcmToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("fcm_tokens")
 }
 
 // ─── NOTIFICATIONS ───────────────────────────────────

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Bell, Check, CheckCheck } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -10,6 +11,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useFcmToken } from '@/hooks/useFcmToken';
 
 interface Notification {
   id: string;
@@ -20,21 +22,36 @@ interface Notification {
   metadata: Record<string, unknown> | null;
 }
 
-const POLL_INTERVAL = 30_000; // 30 seconds
+const POLL_INTERVAL = 10_000; // 10 seconds
 
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // -1 = not yet initialised (skip toast on first load)
+  const prevUnreadRef = useRef(-1);
+
+  useFcmToken();
 
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await fetch('/api/notifications?pageSize=10');
       if (res.ok) {
         const json = await res.json();
+        const newCount: number = json.unreadCount;
+
+        // Show toast when new notifications arrive (skip very first fetch)
+        if (prevUnreadRef.current >= 0 && newCount > prevUnreadRef.current) {
+          const newest: Notification = json.data[0];
+          if (newest && !newest.readAt) {
+            toast.message(newest.title, { description: newest.body });
+          }
+        }
+        prevUnreadRef.current = newCount;
+
         setNotifications(json.data);
-        setUnreadCount(json.unreadCount);
+        setUnreadCount(newCount);
       }
     } catch {
       // Silently fail — notifications are non-critical
