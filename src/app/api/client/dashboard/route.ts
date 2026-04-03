@@ -44,12 +44,13 @@ export async function GET() {
       orderBy: [{ scheduledDate: 'asc' }, { scheduledTime: 'asc' }],
     });
 
-    // Active session (IN_PROGRESS)
+    // Active session (IN_PROGRESS) — only today's, ignore stale sessions from past days
     const activeSession = await prisma.sessionInstance.findFirst({
       where: {
         branchId,
         clientProfileId,
         status: 'IN_PROGRESS',
+        scheduledDate: { gte: today },
       },
       include: {
         trainer: {

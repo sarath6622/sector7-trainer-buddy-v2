@@ -23,11 +23,16 @@ export async function GET(req: Request) {
     const month = searchParams.get('month'); // YYYY-MM     — full month
     const dateFrom = searchParams.get('dateFrom'); // YYYY-MM-DD  — range start
     const dateTo = searchParams.get('dateTo'); // YYYY-MM-DD  — range end
+    const status = searchParams.get('status'); // e.g. IN_PROGRESS — filter by status
 
     const where: Record<string, unknown> = {
       branchId: session.user.branchId,
       trainerProfileId,
     };
+
+    if (status) {
+      where.status = status;
+    }
 
     if (date) {
       const d = new Date(date);

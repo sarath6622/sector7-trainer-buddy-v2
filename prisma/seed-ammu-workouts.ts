@@ -896,7 +896,8 @@ async function main() {
       const startedAt = d(sess.date, sess.time);
       const endedAt = new Date(startedAt.getTime() + sess.durationMin * 60 * 1000);
 
-      const created = await prisma.sessionInstance.create({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const created = await (prisma.sessionInstance.create as any)({
         data: {
           clientProfileId: CLIENT_ID,
           trainerProfileId: TRAINER_ID,

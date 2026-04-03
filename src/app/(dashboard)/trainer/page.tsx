@@ -8,6 +8,7 @@ import {
   Square,
   UserX,
   Clock,
+  AlertTriangle,
   CheckCircle2,
   XCircle,
   CalendarDays,
@@ -87,6 +88,7 @@ export default function TrainerDashboard() {
   const firstName = authSession?.user?.firstName ?? 'Trainer';
 
   const [todaySessions, setTodaySessions] = useState<SessionData[]>([]);
+  const [staleSessions, setStaleSessions] = useState<SessionData[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<SessionData[]>([]);
   const [monthSessions, setMonthSessions] = useState<SessionData[]>([]);
   const [activeSession, setActiveSession] = useState<SessionData | null>(null);
@@ -105,18 +107,34 @@ export default function TrainerDashboard() {
     const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     try {
-      const [todayRes, upcomingRes, monthRes] = await Promise.all([
+      const [todayRes, upcomingRes, monthRes, staleRes] = await Promise.all([
         fetch(`/api/trainer/schedule?date=${today}`),
         fetch(`/api/trainer/schedule?dateFrom=${tomorrow}&dateTo=${future}`),
         fetch(`/api/trainer/schedule?month=${monthStr}`),
+        fetch(`/api/trainer/schedule?status=IN_PROGRESS`),
       ]);
+      let todayHasActive = false;
       if (todayRes.ok) {
         const { data } = await todayRes.json();
         setTodaySessions(data);
-        const active = data.find((s: SessionData) => s.status === 'IN_PROGRESS');
-        if (active) {
-          const detailRes = await fetch(`/api/trainer/sessions/${active.id}`);
-          setActiveSession(detailRes.ok ? (await detailRes.json()).data : active);
+        const todayActive = (data as SessionData[]).find((s) => s.status === 'IN_PROGRESS');
+        todayHasActive = !!todayActive;
+        if (todayActive) {
+          const detailRes = await fetch(`/api/trainer/sessions/${todayActive.id}`);
+          setActiveSession(detailRes.ok ? (await detailRes.json()).data : todayActive);
+        }
+      }
+      // Stale IN_PROGRESS sessions from past days — shown as a separate alert
+      if (staleRes.ok) {
+        const { data: staleData } = await staleRes.json();
+        const stale = (staleData as SessionData[]).filter(
+          (s) => toLocalDateStr(s.scheduledDate) !== today,
+        );
+        setStaleSessions(stale);
+        // If no active session today, use the oldest stale one for the banner
+        if (stale.length > 0 && !todayHasActive) {
+          const detailRes = await fetch(`/api/trainer/sessions/${stale[0]!.id}`);
+          setActiveSession(detailRes.ok ? (await detailRes.json()).data : stale[0]!);
         }
       }
       if (upcomingRes.ok) {
@@ -268,6 +286,62 @@ export default function TrainerDashboard() {
             </div>
           </div>
         </button>
+      )}
+
+      {/* ── Stale / Incomplete Sessions Alert ── */}
+      {staleSessions.length > 0 && (
+        <div className="rounded-2xl bg-amber-500/10 ring-1 ring-amber-500/30 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <h2 className="font-semibold text-amber-500">Incomplete Sessions</h2>
+            <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-semibold text-amber-500">
+              {staleSessions.length}
+            </span>
+          </div>
+          <p className="px-4 pb-2 text-xs text-amber-400/80">
+            These sessions were never ended. Tap to resume and end them.
+          </p>
+          <div className="divide-y divide-amber-500/10">
+            {staleSessions.map((session) => {
+              const clientFirst = session.client.user.firstName;
+              const clientLast = session.client.user.lastName;
+              const sessionDate = new Date(session.scheduledDate).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+              });
+              return (
+                <div key={session.id} className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-xs font-bold text-amber-500">
+                      {initials(clientFirst, clientLast)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {clientFirst} {clientLast}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {sessionDate} · {formatTime12(session.scheduledTime)} ·{' '}
+                        {session.durationMin} min
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-md bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-500">
+                      Still Active
+                    </span>
+                  </div>
+                  <div className="mt-2.5 pl-12">
+                    <button
+                      onClick={() => router.push(`/trainer/session/${session.id}`)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 py-2 text-xs font-semibold text-black transition-colors hover:bg-amber-400"
+                    >
+                      <Square className="h-3 w-3" />
+                      Resume &amp; End Session
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* ── Today's Sessions ── */}
