@@ -11,6 +11,7 @@ const ROLE_PATH_MAP: Record<string, string[]> = {
   BRANCH_ADMIN: ['/admin'],
   TRAINER: ['/trainer'],
   KICKBOXING_TRAINER: ['/trainer'],
+  CROSSFIT_TRAINER: ['/trainer'],
   CLIENT: ['/client'],
 };
 
@@ -20,6 +21,7 @@ const ROLE_DEFAULT_PATH: Record<string, string> = {
   BRANCH_ADMIN: '/admin',
   TRAINER: '/trainer',
   KICKBOXING_TRAINER: '/trainer',
+  CROSSFIT_TRAINER: '/trainer',
   CLIENT: '/client',
 };
 

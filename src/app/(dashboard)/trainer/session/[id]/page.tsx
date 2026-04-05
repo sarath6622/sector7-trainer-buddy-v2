@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { InlineTimer } from '@/components/timer/SessionTimer';
 import { WorkoutLogger } from '@/components/workout/WorkoutLogger';
+import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 
 interface SessionData {
   id: string;
@@ -69,6 +70,9 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [celebrationBadges, setCelebrationBadges] = useState<
+    { name: string; icon: string; description?: string }[]
+  >([]);
 
   const fetchSession = useCallback(async (sid: string) => {
     const res = await fetch(`/api/trainer/sessions/${sid}`);
@@ -133,6 +137,14 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
     try {
       const res = await fetch(`/api/trainer/sessions/${session.id}/end`, { method: 'POST' });
       if (res.ok) {
+        const body = await res.json();
+        const newBadges: { name: string; icon: string; description?: string }[] =
+          body?.data?.newBadges ?? [];
+        if (newBadges.length > 0) {
+          setCelebrationBadges(newBadges);
+          // Delay navigation so the celebration plays
+          await new Promise((r) => setTimeout(r, newBadges.length * 3500));
+        }
         toast.success('Session ended');
         router.push('/trainer');
       } else {
@@ -183,6 +195,11 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
+      {/* ── Badge celebration overlay ── */}
+      {celebrationBadges.length > 0 && (
+        <BadgeCelebration badges={celebrationBadges} onDone={() => setCelebrationBadges([])} />
+      )}
+
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         {/* Top bar */}

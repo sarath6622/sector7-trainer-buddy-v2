@@ -24,6 +24,8 @@ import {
   TimerReset,
 } from 'lucide-react';
 import { SessionTimer } from '@/components/timer/SessionTimer';
+import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
+import Link from 'next/link';
 
 interface ProgressSnapshot {
   weightKg: number | null;
@@ -148,6 +150,16 @@ export default function ClientDashboard() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [earnedBadges, setEarnedBadges] = useState<
+    {
+      id: string;
+      awardedAt: string;
+      badgeDefinition: { name: string; icon: string; imageUrl?: string | null };
+    }[]
+  >([]);
+  const [celebrationBadges, setCelebrationBadges] = useState<
+    { name: string; icon: string; description?: string; imageUrl?: string }[]
+  >([]);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -163,6 +175,36 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     fetchDashboard();
+    // Fetch earned badges for dashboard showcase
+    fetch('/api/client/badges')
+      .then((r) => r.json())
+      .then(({ data: bd }) => setEarnedBadges(bd?.earned ?? []))
+      .catch(() => {});
+    // Fetch unseen badges for celebration
+    fetch('/api/client/badges/unseen')
+      .then((r) => r.json())
+      .then(({ data: unseen }) => {
+        if (unseen?.length > 0) {
+          setCelebrationBadges(
+            unseen.map(
+              (b: {
+                badgeDefinition: {
+                  name: string;
+                  icon: string;
+                  description: string;
+                  imageUrl?: string;
+                };
+              }) => ({
+                name: b.badgeDefinition.name,
+                icon: b.badgeDefinition.icon,
+                description: b.badgeDefinition.description,
+                imageUrl: b.badgeDefinition.imageUrl,
+              }),
+            ),
+          );
+        }
+      })
+      .catch(() => {});
   }, [fetchDashboard]);
 
   const firstName = session?.user?.firstName ?? 'there';
@@ -219,8 +261,24 @@ export default function ClientDashboard() {
   const hasPRs = prs.length > 0;
   const showFitnessJourney = hasBodyMetrics || hasPRs;
 
+  function handleCelebrationDone() {
+    setCelebrationBadges([]);
+    // Mark all as seen so they don't replay next visit
+    fetch('/api/client/badges/mark-seen', { method: 'POST' }).catch(() => {});
+    // Refresh earned badges list
+    fetch('/api/client/badges')
+      .then((r) => r.json())
+      .then(({ data: bd }) => setEarnedBadges(bd?.earned ?? []))
+      .catch(() => {});
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-5 pb-8">
+      {/* ── Badge celebration overlay ── */}
+      {celebrationBadges.length > 0 && (
+        <BadgeCelebration badges={celebrationBadges} onDone={handleCelebrationDone} />
+      )}
+
       {/* Greeting */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Hey, {firstName}</h1>
@@ -395,6 +453,50 @@ export default function ClientDashboard() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Earned Badges ── */}
+      {earnedBadges.length > 0 && (
+        <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10">
+                <Award className="h-3.5 w-3.5 text-amber-500" />
+              </div>
+              <span className="text-sm font-semibold">Badges Earned</span>
+              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-500">
+                {earnedBadges.length}
+              </span>
+            </div>
+            <Link
+              href="/client/badges"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              View all <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {earnedBadges.slice(0, 6).map((b) => (
+              <div
+                key={b.id}
+                className="flex flex-col items-center gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 min-w-[80px]"
+              >
+                {b.badgeDefinition.imageUrl ? (
+                  <img
+                    src={b.badgeDefinition.imageUrl}
+                    alt={b.badgeDefinition.name}
+                    className="h-8 w-8 object-contain"
+                  />
+                ) : (
+                  <span className="text-2xl">{b.badgeDefinition.icon}</span>
+                )}
+                <span className="text-[10px] font-medium text-center leading-tight line-clamp-2">
+                  {b.badgeDefinition.name}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

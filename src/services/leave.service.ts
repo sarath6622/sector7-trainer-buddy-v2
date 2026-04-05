@@ -456,7 +456,7 @@ export async function applyLeave({
   // Notify branch admins (fire-and-forget)
   const trainerName = `${leave.trainer.user.firstName} ${leave.trainer.user.lastName}`;
   const adminUsers = await prisma.user.findMany({
-    where: { branchId, role: { in: ['SUPER_ADMIN', 'BRANCH_ADMIN'] }, isActive: true },
+    where: { branchId, roles: { hasSome: ['SUPER_ADMIN', 'BRANCH_ADMIN'] }, isActive: true },
     select: { id: true },
   });
   notifyAdminsLeaveRequested({

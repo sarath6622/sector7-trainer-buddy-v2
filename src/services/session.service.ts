@@ -2,6 +2,11 @@ import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { notifySessionStarted, notifyNoShow } from '@/services/notification.service';
+import {
+  evaluateStreakBadges,
+  evaluateSessionMilestoneBadges,
+  type NewBadge,
+} from '@/services/badge.service';
 import type { SessionStatus } from '@prisma/client';
 
 interface StartSessionInput {
@@ -200,9 +205,22 @@ export async function endSession({
     metadata: { clientProfileId: session.clientProfileId, trainerProfileId },
   });
 
+  // Evaluate badges after session completes (non-blocking — failures silently ignored)
+  const newBadges: NewBadge[] = [];
+  try {
+    const [streakBadges, milestoneBadges] = await Promise.all([
+      evaluateStreakBadges(session.clientProfileId, branchId, actorId),
+      evaluateSessionMilestoneBadges(session.clientProfileId, branchId, actorId),
+    ]);
+    newBadges.push(...streakBadges, ...milestoneBadges);
+  } catch {
+    // badge evaluation failure must never break session end
+  }
+
   return {
     session: updated,
     actualDurationMin,
+    newBadges,
   };
 }
 

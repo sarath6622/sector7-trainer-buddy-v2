@@ -34,6 +34,7 @@ import ProgressLineChart from '@/components/charts/ProgressLineChart';
 import WorkoutProgressionPanel, {
   type ExerciseSummary,
 } from '@/components/charts/WorkoutProgressionPanel';
+import { BadgeGrid, type EarnedBadge, type LockedBadge } from '@/components/badges/BadgeGrid';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,10 @@ export default function TrainerClientProgressPage() {
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
 
+  const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>([]);
+  const [lockedBadges, setLockedBadges] = useState<LockedBadge[]>([]);
+  const [badgesLoaded, setBadgesLoaded] = useState(false);
+
   const base = `/api/trainer/clients/${clientProfileId}`;
 
   const fetchData = useCallback(async () => {
@@ -209,6 +214,19 @@ export default function TrainerClientProgressPage() {
         .catch(() => setExercisesLoaded(true));
     }
   }, [activeTab, exercisesLoaded, base]);
+
+  useEffect(() => {
+    if (activeTab === 'badges' && !badgesLoaded) {
+      fetch(`${base}/badges`)
+        .then((r) => r.json())
+        .then(({ data }) => {
+          setEarnedBadges(data?.earned ?? []);
+          setLockedBadges(data?.locked ?? []);
+          setBadgesLoaded(true);
+        })
+        .catch(() => setBadgesLoaded(true));
+    }
+  }, [activeTab, badgesLoaded, base]);
 
   function openQuickLog(targetKey: string) {
     const target = QUICK_LOG_TARGETS[targetKey]!;
@@ -482,6 +500,12 @@ export default function TrainerClientProgressPage() {
           >
             History
           </TabsTrigger>
+          <TabsTrigger
+            value="badges"
+            className="flex-1 text-xs focus-visible:ring-0 focus-visible:outline-none"
+          >
+            Badges
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Body Metrics tab ── */}
@@ -595,6 +619,15 @@ export default function TrainerClientProgressPage() {
                 onEdit={() => openEdit(entry)}
               />
             ))
+          )}
+        </TabsContent>
+
+        {/* ── Badges tab ── */}
+        <TabsContent value="badges" className="mt-4">
+          {!badgesLoaded ? (
+            <div className="h-24 animate-pulse rounded-xl bg-muted" />
+          ) : (
+            <BadgeGrid earned={earnedBadges} locked={lockedBadges} />
           )}
         </TabsContent>
       </Tabs>

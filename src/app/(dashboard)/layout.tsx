@@ -5,13 +5,14 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
-import { NAV_BY_ROLE } from '@/lib/constants';
+import { NAV_BY_ROLE, type NavItem } from '@/lib/constants';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
 
   const role = session?.user?.role ?? '';
+  const roles = session?.user?.roles ?? [role];
   const isAdmin = role === 'SUPER_ADMIN' || role === 'BRANCH_ADMIN';
 
   const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
@@ -57,7 +58,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     role,
   };
 
-  const navItems = NAV_BY_ROLE[role] ?? [];
+  // Merge nav items from all roles (deduplicated by href), primary role items first
+  const navItems = roles.reduce<NavItem[]>(
+    (acc, r) => {
+      const items = NAV_BY_ROLE[r] ?? [];
+      for (const item of items) {
+        if (!acc.some((existing) => existing.href === item.href)) {
+          acc.push(item);
+        }
+      }
+      return acc;
+    },
+    [...(NAV_BY_ROLE[role] ?? [])],
+  );
   const navBadges: Record<string, number> =
     isAdmin && pendingLeaveCount > 0 ? { '/admin/leaves': pendingLeaveCount } : {};
 

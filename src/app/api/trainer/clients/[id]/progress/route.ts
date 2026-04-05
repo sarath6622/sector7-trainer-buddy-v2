@@ -18,14 +18,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const body = await req.json();
     const input = createProgressSchema.parse(body);
 
-    const entry = await progressService.createProgressEntry({
+    const { entry, newBadges } = await progressService.createProgressEntry({
       clientProfileId,
       recordedByUserId: session.user.id,
       branchId: session.user.branchId,
       ...input,
     });
 
-    return NextResponse.json({ data: entry }, { status: 201 });
+    return NextResponse.json({ data: entry, newBadges }, { status: 201 });
   } catch (error) {
     console.error('[POST /api/trainer/clients/[id]/progress] Error:', error);
     const { error: msg, code, status } = toErrorResponse(error);

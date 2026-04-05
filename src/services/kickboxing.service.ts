@@ -21,7 +21,7 @@ export async function createKickboxingClass(input: CreateClassInput) {
   // Verify trainer exists and is a kickboxing trainer
   const trainer = await prisma.trainerProfile.findFirst({
     where: { id: data.trainerProfileId, branchId },
-    include: { user: { select: { role: true } } },
+    include: { user: { select: { roles: true } } },
   });
 
   if (!trainer) {

@@ -7,6 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function NewClientPage() {
   const router = useRouter();
@@ -19,6 +26,7 @@ export default function NewClientPage() {
     email: '',
     phone: '',
     password: '',
+    gender: '',
     emergencyContactName: '',
     emergencyContactPhone: '',
     height: '',
@@ -51,6 +59,7 @@ export default function NewClientPage() {
           phone: form.phone || undefined,
           password: form.password,
           role: 'CLIENT',
+          gender: form.gender || undefined,
           emergencyContactName: form.emergencyContactName || undefined,
           emergencyContactPhone: form.emergencyContactPhone || undefined,
           height: form.height ? parseFloat(form.height) : undefined,
@@ -163,6 +172,22 @@ export default function NewClientPage() {
                 onChange={(e) => updateForm('phone', e.target.value)}
                 placeholder="+91-9000000000"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="gender">Gender</Label>
+              <Select
+                value={form.gender || 'unset'}
+                onValueChange={(v) => updateForm('gender', v === 'unset' ? '' : (v ?? ''))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Not set" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">Not set</SelectItem>
+                  <SelectItem value="MALE">Male</SelectItem>
+                  <SelectItem value="FEMALE">Female</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

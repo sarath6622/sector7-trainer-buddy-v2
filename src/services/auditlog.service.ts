@@ -35,7 +35,7 @@ export async function listAuditLogs(input: ListAuditLogsInput) {
     prisma.auditLog.findMany({
       where,
       include: {
-        actor: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+        actor: { select: { id: true, firstName: true, lastName: true, email: true, roles: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (input.page - 1) * input.pageSize,

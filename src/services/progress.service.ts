@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
+import { evaluateBodyCompositionBadges, type NewBadge } from '@/services/badge.service';
 
 // ─── Input Interfaces ───────────────────────────────
 
@@ -123,7 +124,20 @@ export async function createProgressEntry({
       },
     });
 
-    return updated;
+    // Evaluate body composition badges (non-blocking)
+    const newBadges: NewBadge[] = [];
+    try {
+      const badges = await evaluateBodyCompositionBadges(
+        clientProfileId,
+        branchId,
+        recordedByUserId,
+      );
+      newBadges.push(...badges);
+    } catch {
+      // badge evaluation failure must never break progress save
+    }
+
+    return { entry: updated, newBadges };
   }
 
   // No entry today — create a fresh one
@@ -159,7 +173,16 @@ export async function createProgressEntry({
     },
   });
 
-  return entry;
+  // Evaluate body composition badges (non-blocking)
+  const newBadges: NewBadge[] = [];
+  try {
+    const badges = await evaluateBodyCompositionBadges(clientProfileId, branchId, recordedByUserId);
+    newBadges.push(...badges);
+  } catch {
+    // badge evaluation failure must never break progress save
+  }
+
+  return { entry, newBadges };
 }
 
 /**

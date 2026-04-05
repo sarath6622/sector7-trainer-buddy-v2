@@ -12,6 +12,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { BadgeGrid, type EarnedBadge, type LockedBadge } from '@/components/badges/BadgeGrid';
 
 interface ClientData {
   id: string;
@@ -23,6 +31,7 @@ interface ClientData {
   role: string;
   clientProfile: {
     id: string;
+    gender: string | null;
     dateOfBirth: string | null;
     emergencyContactName: string | null;
     emergencyContactPhone: string | null;
@@ -74,6 +83,11 @@ export default function ClientProfilePage() {
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
 
+  // Badges state
+  const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>([]);
+  const [lockedBadges, setLockedBadges] = useState<LockedBadge[]>([]);
+  const [badgesLoading, setBadgesLoading] = useState(true);
+
   // PT Packages state
   const [packages, setPackages] = useState<PtPackage[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
@@ -93,6 +107,7 @@ export default function ClientProfilePage() {
     firstName: '',
     lastName: '',
     phone: '',
+    gender: '',
     emergencyContactName: '',
     emergencyContactPhone: '',
     height: '',
@@ -116,6 +131,7 @@ export default function ClientProfilePage() {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone ?? '',
+        gender: data.clientProfile?.gender ?? '',
         emergencyContactName: data.clientProfile?.emergencyContactName ?? '',
         emergencyContactPhone: data.clientProfile?.emergencyContactPhone ?? '',
         height: data.clientProfile?.height?.toString() ?? '',
@@ -170,6 +186,21 @@ export default function ClientProfilePage() {
     }
   }, [client?.clientProfile?.id, fetchPackages]);
 
+  useEffect(() => {
+    if (!id) return;
+    setBadgesLoading(true);
+    fetch(`/api/admin/users/${id}/badges`)
+      .then((r) => r.json())
+      .then(({ data }) => {
+        if (data) {
+          setEarnedBadges(data.earned ?? []);
+          setLockedBadges(data.locked ?? []);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setBadgesLoading(false));
+  }, [id]);
+
   async function handleSave() {
     setSaving(true);
     setError('');
@@ -181,6 +212,7 @@ export default function ClientProfilePage() {
           firstName: form.firstName,
           lastName: form.lastName,
           phone: form.phone || undefined,
+          gender: form.gender || undefined,
           emergencyContactName: form.emergencyContactName || undefined,
           emergencyContactPhone: form.emergencyContactPhone || undefined,
           height: form.height ? parseFloat(form.height) : undefined,
@@ -421,6 +453,22 @@ export default function ClientProfilePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="gender">Gender</Label>
+                <Select
+                  value={form.gender || 'unset'}
+                  onValueChange={(v) => updateForm('gender', v === 'unset' ? '' : (v ?? ''))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Not set" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unset">Not set</SelectItem>
+                    <SelectItem value="MALE">Male</SelectItem>
+                    <SelectItem value="FEMALE">Female</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="height">Height (cm)</Label>
                 <Input
@@ -666,6 +714,20 @@ export default function ClientProfilePage() {
                 </>
               )}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Badges */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Achievement Badges</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {badgesLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : (
+            <BadgeGrid earned={earnedBadges} locked={lockedBadges} />
           )}
         </CardContent>
       </Card>

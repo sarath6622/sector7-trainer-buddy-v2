@@ -10,6 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const ROLES = ['TRAINER', 'KICKBOXING_TRAINER', 'CROSSFIT_TRAINER'];
+const ROLE_LABELS: Record<string, string> = {
+  TRAINER: 'General Trainer',
+  KICKBOXING_TRAINER: 'Kickboxing Trainer',
+  CROSSFIT_TRAINER: 'CrossFit Trainer',
+};
 const DAY_LABELS: Record<string, string> = {
   MONDAY: 'Mon',
   TUESDAY: 'Tue',
@@ -31,6 +37,7 @@ export default function NewTrainerPage() {
     email: '',
     phone: '',
     password: '',
+    roles: ['TRAINER'] as string[],
     specialties: '',
     certifications: '',
     bio: '',
@@ -41,6 +48,15 @@ export default function NewTrainerPage() {
 
   function updateForm(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function toggleRole(role: string) {
+    setForm((prev) => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter((r) => r !== role)
+        : [...prev.roles, role],
+    }));
   }
 
   function toggleDay(day: string) {
@@ -57,6 +73,10 @@ export default function NewTrainerPage() {
       setError('First name, last name, email, and password are required');
       return;
     }
+    if (form.roles.length === 0) {
+      setError('At least one role must be selected');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -69,7 +89,7 @@ export default function NewTrainerPage() {
           email: form.email,
           phone: form.phone || undefined,
           password: form.password,
-          role: 'TRAINER',
+          roles: form.roles,
           specialties: form.specialties
             ? form.specialties
                 .split(',')
@@ -186,6 +206,26 @@ export default function NewTrainerPage() {
                 onChange={(e) => updateForm('phone', e.target.value)}
                 placeholder="+91-9000000000"
               />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Roles *</Label>
+              <div className="flex flex-wrap gap-2">
+                {ROLES.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => toggleRole(role)}
+                    className={cn(
+                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ring-1',
+                      form.roles.includes(role)
+                        ? 'bg-blue-600 text-white ring-blue-600'
+                        : 'bg-muted/40 text-muted-foreground ring-border/50 hover:text-foreground',
+                    )}
+                  >
+                    {ROLE_LABELS[role]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

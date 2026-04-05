@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import { ArrowLeft, KeyRound, Save, Trash2 } from 'lucide-react';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const ROLES = ['TRAINER', 'KICKBOXING_TRAINER', 'CROSSFIT_TRAINER'];
+const ROLE_LABELS: Record<string, string> = {
+  TRAINER: 'General Trainer',
+  KICKBOXING_TRAINER: 'Kickboxing Trainer',
+  CROSSFIT_TRAINER: 'CrossFit Trainer',
+};
 
 interface TrainerData {
   id: string;
@@ -18,6 +25,7 @@ interface TrainerData {
   lastName: string;
   email: string;
   phone: string | null;
+  roles: string[];
   isActive: boolean;
   trainerProfile: {
     id: string;
@@ -61,6 +69,7 @@ export default function TrainerProfilePage() {
     firstName: '',
     lastName: '',
     phone: '',
+    roles: [] as string[],
     specialties: '',
     certifications: '',
     bio: '',
@@ -82,6 +91,7 @@ export default function TrainerProfilePage() {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone ?? '',
+        roles: data.roles ?? [],
         specialties: data.trainerProfile?.specialties.join(', ') ?? '',
         certifications: data.trainerProfile?.certifications.join(', ') ?? '',
         bio: data.trainerProfile?.bio ?? '',
@@ -101,6 +111,10 @@ export default function TrainerProfilePage() {
   }, [fetchTrainer]);
 
   async function handleSave() {
+    if (form.roles.length === 0) {
+      setError('At least one role must be selected');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -111,6 +125,7 @@ export default function TrainerProfilePage() {
           firstName: form.firstName,
           lastName: form.lastName,
           phone: form.phone || undefined,
+          roles: form.roles,
           specialties: form.specialties
             .split(',')
             .map((s) => s.trim())
@@ -177,6 +192,15 @@ export default function TrainerProfilePage() {
     } catch {
       setError('Failed to delete trainer');
     }
+  }
+
+  function toggleRole(role: string) {
+    setForm((prev) => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter((r) => r !== role)
+        : [...prev.roles, role],
+    }));
   }
 
   function toggleDay(day: string) {
@@ -295,6 +319,31 @@ export default function TrainerProfilePage() {
               rows={3}
               onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))}
             />
+          </div>
+        </Section>
+
+        <Section title="Roles *">
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground mb-2">
+              Select one or more roles for this trainer
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {ROLES.map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => toggleRole(role)}
+                  className={cn(
+                    'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ring-1',
+                    form.roles.includes(role)
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                  )}
+                >
+                  {ROLE_LABELS[role]}
+                </button>
+              ))}
+            </div>
           </div>
         </Section>
 

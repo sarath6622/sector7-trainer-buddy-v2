@@ -25,6 +25,8 @@ const DEV_ACCOUNTS = [
   { label: 'Karthik', email: 'karthik@gmail.com', group: 'client' },
   { label: 'Meera', email: 'meera@gmail.com', group: 'client' },
   { label: 'Ananya', email: 'ananya@gmail.com', group: 'client' },
+  { label: 'Devanand', email: 'dev@gmail.com', group: 'trainer' },
+  { label: 'Ammu', email: 'ammu@gmail.com', group: 'client' },
 ] as const;
 
 const GROUP_COLORS: Record<string, string> = {
