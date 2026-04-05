@@ -1,3 +1,6 @@
 # Current Task
 
-No active task. Session UX, workout logging & progress redesign complete (S7-UX-20 through S7-UX-26).
+No active task. Phase 21 (Community Leaderboard) complete — S7-LB-01 through S7-LB-10.
+
+Next up: S7-LB-11 (tests for community/leaderboard) or next phase as assigned by operator.
+See `tasks/backlog.md` for ticket details.

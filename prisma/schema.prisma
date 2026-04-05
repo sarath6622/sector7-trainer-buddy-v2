@@ -15,6 +15,7 @@ enum UserRole {
   BRANCH_ADMIN
   TRAINER
   KICKBOXING_TRAINER
+  CROSSFIT_TRAINER
   CLIENT
 }
 
@@ -112,6 +113,37 @@ enum ExerciseType {
   CARDIO        // Duration + distance      (Treadmill, Cycling, Rowing…)
 }
 
+enum BadgeType {
+  STREAK             // Consecutive session attendance
+  PERSONAL_RECORD    // New max weight on an exercise
+  BODY_COMPOSITION   // Weight loss / body fat reduction milestones
+  SESSION_MILESTONE  // Total sessions completed
+  WEIGHT_LIFTED      // Absolute weight threshold on a specific exercise (kept for backward compat)
+  EXERCISE_MILESTONE // Threshold on exercise: weight (kg), reps, or duration (sec)
+}
+
+enum ThresholdUnit {
+  KG        // Weight in kilograms (weighted exercises)
+  REPS      // Repetitions (bodyweight exercises)
+  SECONDS   // Duration in seconds (duration exercises)
+}
+
+enum DurationCondition {
+  LONGER_IS_BETTER  // e.g. plank hold — longer = better
+  SHORTER_IS_BETTER // e.g. sprint — shorter = better
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum GenderFilter {
+  MALE
+  FEMALE
+  ALL
+}
+
 // ─── BRANCH ──────────────────────────────────────────
 
 model Branch {
@@ -137,10 +169,16 @@ model Branch {
   trainerAvailabilityOverrides TrainerAvailabilityOverride[]
   kickboxingClasses    KickboxingClass[]
   kickboxingEnrollments KickboxingEnrollment[]
+  crossfitClasses      CrossfitClass[]
+  crossfitEnrollments  CrossfitEnrollment[]
+  crossfitSessions     CrossfitSession[]
+  crossfitAttendances  CrossfitAttendance[]
   paymentRecords       PaymentRecord[]
   notificationLogs     NotificationLog[]
   auditLogs            AuditLog[]
   branchSettings       BranchSettings?
+  userBadges           UserBadge[]
+  communityPosts       CommunityPost[]
 
   @@map("branches")
 }
@@ -177,7 +215,7 @@ model User {
   passwordHash   String
   firstName      String
   lastName       String
-  role           UserRole
+  roles          UserRole[]
   profileImageUrl String?
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
@@ -194,7 +232,7 @@ model User {
   notificationsReceived NotificationLog[] @relation("NotificationRecipient")
   fcmTokens             FcmToken[]
 
-  @@index([branchId, role])
+  @@index([branchId])
   @@index([email])
   @@map("users")
 }
@@ -226,6 +264,7 @@ model TrainerProfile {
   reassignmentsTo      TrainerReassignment[] @relation("ReplacementTrainer")
   availabilityOverrides TrainerAvailabilityOverride[]
   kickboxingClasses    KickboxingClass[]
+  crossfitClasses      CrossfitClass[]
 
   @@index([branchId])
   @@map("trainer_profiles")
@@ -265,6 +304,7 @@ model ClientProfile {
   userId                 String    @unique
   branchId               String
   dateOfBirth            DateTime?
+  gender                 Gender?
   emergencyContactName   String?
   emergencyContactPhone  String?
   height                 Float?
@@ -288,6 +328,12 @@ model ClientProfile {
   progressEntries       ProgressEntry[]
   paymentRecords        PaymentRecord[]
   kickboxingEnrollments KickboxingEnrollment[]
+  crossfitEnrollments  CrossfitEnrollment[]
+  crossfitAttendances  CrossfitAttendance[]
+  userBadges           UserBadge[]
+  communityPosts       CommunityPost[]
+  communityReactions   CommunityReaction[]
+  communityComments    CommunityComment[]
 
   @@index([branchId])
   @@map("client_profiles")
@@ -441,7 +487,11 @@ model Exercise {
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
-  workoutLogs WorkoutLog[]
+  isCompound       Boolean          @default(false)
+
+  workoutLogs      WorkoutLog[]
+  badgeDefinitions BadgeDefinition[]
+  communityPosts   CommunityPost[]
 
   @@index([targetMuscleGroup])
   @@index([category])
@@ -585,6 +635,87 @@ model KickboxingEnrollment {
   @@map("kickboxing_enrollments")
 }
 
+// ─── CROSSFIT ────────────────────────────────────────
+
+model CrossfitClass {
+  id               String    @id @default(cuid())
+  branchId         String
+  trainerProfileId String
+  name             String    // e.g. "Monday 6AM WOD", "Foundations"
+  dayOfWeek        DayOfWeek
+  startTime        String    // "06:00"
+  durationMin      Int       @default(60)
+  maxCapacity      Int       @default(20)
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  branch      Branch         @relation(fields: [branchId], references: [id])
+  trainer     TrainerProfile @relation(fields: [trainerProfileId], references: [id])
+  enrollments CrossfitEnrollment[]
+  sessions    CrossfitSession[]
+
+  @@index([branchId])
+  @@map("crossfit_classes")
+}
+
+model CrossfitEnrollment {
+  id              String               @id @default(cuid())
+  branchId        String
+  classId         String
+  clientProfileId String?              // null for EXTERNAL_ONLY
+  clientType      KickboxingClientType // reuses GYM_MEMBER | EXTERNAL_ONLY
+  externalName    String?
+  externalPhone   String?
+  isActive        Boolean              @default(true)
+  enrolledAt      DateTime             @default(now())
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  branch  Branch             @relation(fields: [branchId], references: [id])
+  class   CrossfitClass      @relation(fields: [classId], references: [id])
+  client  ClientProfile?     @relation(fields: [clientProfileId], references: [id])
+
+  @@index([branchId, classId])
+  @@index([branchId, clientType])
+  @@map("crossfit_enrollments")
+}
+
+model CrossfitSession {
+  id        String   @id @default(cuid())
+  branchId  String
+  classId   String
+  date      DateTime // the specific date of this session occurrence
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch      Branch              @relation(fields: [branchId], references: [id])
+  class       CrossfitClass       @relation(fields: [classId], references: [id])
+  attendances CrossfitAttendance[]
+
+  @@unique([classId, date])
+  @@index([branchId, date])
+  @@map("crossfit_sessions")
+}
+
+model CrossfitAttendance {
+  id              String   @id @default(cuid())
+  branchId        String
+  sessionId       String
+  clientProfileId String?  // null for external/walk-in
+  externalName    String?  // for non-enrolled walk-ins
+  markedByUserId  String   // crossfit trainer's user id
+  markedAt        DateTime @default(now())
+
+  branch  Branch          @relation(fields: [branchId], references: [id])
+  session CrossfitSession @relation(fields: [sessionId], references: [id])
+  client  ClientProfile?  @relation(fields: [clientProfileId], references: [id])
+
+  @@unique([sessionId, clientProfileId])
+  @@index([branchId, sessionId])
+  @@map("crossfit_attendances")
+}
+
 // ─── PAYMENTS ────────────────────────────────────────
 
 model PaymentRecord {
@@ -646,6 +777,107 @@ model NotificationLog {
   @@index([branchId, recipientId])
   @@index([branchId, status])
   @@map("notification_logs")
+}
+
+// ─── BADGES ──────────────────────────────────────────
+
+model BadgeDefinition {
+  id             String       @id @default(cuid())
+  type           BadgeType
+  name           String
+  description    String
+  icon           String       // emoji fallback, e.g. "🔥" or "🏆"
+  imageUrl       String?      // custom PNG badge image URL
+  thresholdValue    Float?             // e.g. 30 (days streak), 100 (sessions), 5 (kg lost)
+  thresholdUnit     ThresholdUnit?     // KG, REPS, or SECONDS (for EXERCISE_MILESTONE)
+  durationCondition DurationCondition? // LONGER_IS_BETTER or SHORTER_IS_BETTER (when unit = SECONDS)
+  genderFilter      GenderFilter       @default(ALL)
+  exerciseId        String?            // FK to Exercise (for EXERCISE_MILESTONE / WEIGHT_LIFTED)
+  howToEarn      String?      // user-facing instructions for earning the badge
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  exercise   Exercise?  @relation(fields: [exerciseId], references: [id])
+  userBadges UserBadge[]
+
+  @@index([type, isActive])
+  @@map("badge_definitions")
+}
+
+model UserBadge {
+  id                String   @id @default(cuid())
+  branchId          String
+  clientProfileId   String
+  badgeDefinitionId String
+  context           String   @default("") // "" for non-contextual; exerciseId for PR badges
+  awardedAt         DateTime @default(now())
+  displayOnProfile  Boolean  @default(true)
+  seenByClient      Boolean  @default(false)
+  metadata          Json?    // e.g. { exerciseName, weightKg } for PR badges
+
+  branch          Branch          @relation(fields: [branchId], references: [id])
+  client          ClientProfile   @relation(fields: [clientProfileId], references: [id])
+  badgeDefinition BadgeDefinition @relation(fields: [badgeDefinitionId], references: [id])
+
+  @@unique([clientProfileId, badgeDefinitionId, context])
+  @@index([branchId, clientProfileId])
+  @@map("user_badges")
+}
+
+// ─── COMMUNITY ───────────────────────────────────────
+
+model CommunityPost {
+  id              String   @id @default(cuid())
+  branchId        String
+  clientProfileId String
+  content         String?  // optional caption / message
+  exerciseId      String?  // set for auto-generated PR posts
+  weightKg        Float?   // PR weight (auto-generated)
+  reps            Int?     // PR reps (auto-generated)
+  isAutoGenerated Boolean  @default(false)
+  isHidden        Boolean  @default(false) // soft-delete for trainer-removed auto-posts
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  branch    Branch            @relation(fields: [branchId], references: [id])
+  client    ClientProfile     @relation(fields: [clientProfileId], references: [id])
+  exercise  Exercise?         @relation(fields: [exerciseId], references: [id])
+  reactions CommunityReaction[]
+  comments  CommunityComment[]
+
+  @@index([branchId, createdAt])
+  @@index([branchId, clientProfileId])
+  @@map("community_posts")
+}
+
+model CommunityReaction {
+  id              String   @id @default(cuid())
+  postId          String
+  clientProfileId String
+  createdAt       DateTime @default(now())
+
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  client ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  @@unique([postId, clientProfileId])
+  @@index([postId])
+  @@map("community_reactions")
+}
+
+model CommunityComment {
+  id              String   @id @default(cuid())
+  postId          String
+  clientProfileId String
+  content         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  client ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  @@index([postId])
+  @@map("community_comments")
 }
 
 // ─── AUDIT LOG ───────────────────────────────────────

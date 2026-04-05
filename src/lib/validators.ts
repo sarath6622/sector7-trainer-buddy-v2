@@ -19,6 +19,7 @@ export const userRoleSchema = z.enum([
   'BRANCH_ADMIN',
   'TRAINER',
   'KICKBOXING_TRAINER',
+  'CROSSFIT_TRAINER',
   'CLIENT',
 ]);
 
@@ -60,6 +61,23 @@ export const exerciseCategorySchema = z.enum([
   'FUNCTIONAL',
 ]);
 
+export const badgeTypeSchema = z.enum([
+  'STREAK',
+  'PERSONAL_RECORD',
+  'BODY_COMPOSITION',
+  'SESSION_MILESTONE',
+  'WEIGHT_LIFTED',
+  'EXERCISE_MILESTONE',
+]);
+
+export const thresholdUnitSchema = z.enum(['KG', 'REPS', 'SECONDS']);
+
+export const durationConditionSchema = z.enum(['LONGER_IS_BETTER', 'SHORTER_IS_BETTER']);
+
+export const genderSchema = z.enum(['MALE', 'FEMALE']);
+
+export const genderFilterSchema = z.enum(['MALE', 'FEMALE', 'ALL']);
+
 // ─── PAGINATION ──────────────────────────────────────
 
 export const paginationSchema = z.object({
@@ -81,7 +99,7 @@ export const createUserSchema = z.object({
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
   phone: phoneSchema,
-  role: userRoleSchema,
+  roles: z.array(userRoleSchema).min(1, 'At least one role must be selected'),
   password: z.string().min(6),
   // Trainer-specific optional fields
   specialties: z.array(z.string()).optional(),
@@ -91,6 +109,7 @@ export const createUserSchema = z.object({
   workingHoursEnd: timeSchema.optional(),
   workingDays: z.array(dayOfWeekSchema).optional(),
   // Client-specific optional fields
+  gender: genderSchema.optional(),
   dateOfBirth: z.string().optional(),
   emergencyContactName: z.string().optional(),
   emergencyContactPhone: z.string().optional(),
@@ -306,6 +325,7 @@ export const createExerciseSchema = z.object({
   difficulty: difficultyLevelSchema.optional(),
   category: exerciseCategorySchema,
   exerciseType: exerciseTypeSchema.default('WEIGHTED'),
+  isCompound: z.boolean().default(false),
   instructions: z.string().optional(),
   demoVideoUrl: z.string().url().optional(),
   demoGifUrl: z.string().url().optional(),
@@ -451,6 +471,52 @@ export const createProgressSchema = z.object({
 
 export const updateProgressSchema = createProgressSchema.partial();
 
+// ─── ADMIN: CROSSFIT ─────────────────────────────────
+
+export const createCrossfitClassSchema = z.object({
+  trainerProfileId: cuidSchema,
+  name: z.string().min(1).max(100),
+  dayOfWeek: dayOfWeekSchema,
+  startTime: timeSchema,
+  durationMin: z.number().int().positive().default(60),
+  maxCapacity: z.number().int().positive().default(20),
+});
+
+export const updateCrossfitClassSchema = createCrossfitClassSchema
+  .omit({ trainerProfileId: true, name: true, dayOfWeek: true, startTime: true })
+  .extend({
+    trainerProfileId: cuidSchema.optional(),
+    name: z.string().min(1).max(100).optional(),
+    dayOfWeek: dayOfWeekSchema.optional(),
+    startTime: timeSchema.optional(),
+    isActive: z.boolean().optional(),
+  });
+
+export const createCrossfitEnrollmentSchema = z.object({
+  classId: cuidSchema,
+  clientProfileId: cuidSchema.optional(),
+  clientType: kickboxingClientTypeSchema,
+  externalName: z.string().optional(),
+  externalPhone: z.string().optional(),
+});
+
+export const listCrossfitEnrollmentsSchema = z.object({
+  classId: cuidSchema.optional(),
+  clientType: kickboxingClientTypeSchema.optional(),
+});
+
+// ─── CROSSFIT TRAINER ─────────────────────────────────
+
+export const openCrossfitSessionSchema = z.object({
+  classId: cuidSchema,
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+});
+
+export const markCrossfitAttendanceSchema = z.object({
+  clientProfileId: cuidSchema.optional(),
+  externalName: z.string().optional(),
+});
+
 // ─── CLIENT: UNAVAILABILITY ──────────────────────────
 
 export const createUnavailabilitySchema = z.object({
@@ -477,6 +543,75 @@ export const listClientWorkoutsSchema = z.object({
 
 export const listNotificationsSchema = paginationSchema.extend({
   unreadOnly: z.coerce.boolean().optional(),
+});
+
+// ─── BADGE DEFINITIONS ──────────────────────────────
+
+export const createBadgeDefinitionSchema = z
+  .object({
+    type: badgeTypeSchema,
+    name: z.string().min(1).max(100),
+    description: z.string().min(1).max(500),
+    howToEarn: z.string().max(500).optional(),
+    icon: z.string().min(1).max(10).default('🏆'),
+    imageUrl: z.string().url().optional().or(z.literal('')),
+    thresholdValue: z.number().positive().optional(),
+    thresholdUnit: thresholdUnitSchema.optional(),
+    durationCondition: durationConditionSchema.optional(),
+    exerciseId: cuidSchema.optional(),
+    genderFilter: genderFilterSchema.default('ALL'),
+    isActive: z.boolean().default(true),
+  })
+  .refine(
+    (data) => {
+      if (data.type === 'WEIGHT_LIFTED' || data.type === 'EXERCISE_MILESTONE') {
+        return data.thresholdValue != null && data.exerciseId != null;
+      }
+      return true;
+    },
+    { message: 'Exercise-based badges require both thresholdValue and exerciseId', path: ['type'] },
+  )
+  .refine(
+    (data) => {
+      if (data.type === 'EXERCISE_MILESTONE') {
+        return data.thresholdUnit != null;
+      }
+      return true;
+    },
+    { message: 'EXERCISE_MILESTONE badges require thresholdUnit', path: ['thresholdUnit'] },
+  )
+  .refine(
+    (data) => {
+      if (data.type === 'EXERCISE_MILESTONE' && data.thresholdUnit === 'SECONDS') {
+        return data.durationCondition != null;
+      }
+      return true;
+    },
+    {
+      message: 'Duration badges require durationCondition (longer or shorter is better)',
+      path: ['durationCondition'],
+    },
+  );
+
+export const updateBadgeDefinitionSchema = z.object({
+  type: badgeTypeSchema.optional(),
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().min(1).max(500).optional(),
+  howToEarn: z.string().max(500).optional().or(z.literal('')),
+  icon: z.string().min(1).max(10).optional(),
+  imageUrl: z.string().url().optional().or(z.literal('')),
+  thresholdValue: z.number().positive().optional().nullable(),
+  thresholdUnit: thresholdUnitSchema.optional().nullable(),
+  durationCondition: durationConditionSchema.optional().nullable(),
+  exerciseId: cuidSchema.optional().nullable(),
+  genderFilter: genderFilterSchema.optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const listBadgeDefinitionsSchema = paginationSchema.extend({
+  type: badgeTypeSchema.optional(),
+  search: z.string().optional(),
+  genderFilter: genderFilterSchema.optional(),
 });
 
 // ─── TYPE EXPORTS ────────────────────────────────────
@@ -510,3 +645,6 @@ export type CreateAvailabilityOverrideInput = z.infer<typeof createAvailabilityO
 export type BulkCreateAvailabilityOverrideInput = z.infer<
   typeof bulkCreateAvailabilityOverrideSchema
 >;
+export type CreateBadgeDefinitionInput = z.infer<typeof createBadgeDefinitionSchema>;
+export type UpdateBadgeDefinitionInput = z.infer<typeof updateBadgeDefinitionSchema>;
+export type ListBadgeDefinitionsInput = z.infer<typeof listBadgeDefinitionsSchema>;

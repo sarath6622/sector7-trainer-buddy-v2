@@ -13,6 +13,8 @@ import {
   Activity,
   BarChart3,
   ArrowLeftRight,
+  Trophy,
+  Flame,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -31,7 +33,9 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Leaves', href: '/admin/leaves', icon: CalendarDays },
   { label: 'Reassignment', href: '/admin/reassignments', icon: ArrowLeftRight },
   { label: 'Exercises', href: '/admin/exercises', icon: Dumbbell },
+  { label: 'Badges', href: '/admin/badges', icon: Trophy },
   { label: 'Kickboxing', href: '/admin/kickboxing', icon: Activity },
+  { label: 'CrossFit', href: '/admin/crossfit', icon: Dumbbell },
   { label: 'Payments', href: '/admin/payments', icon: CreditCard },
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { label: 'Audit Log', href: '/admin/audit-log', icon: FileText },
@@ -44,6 +48,7 @@ export const TRAINER_NAV_ITEMS: NavItem[] = [
   { label: 'Schedule', href: '/trainer/schedule', icon: Calendar },
   { label: 'Leaves', href: '/trainer/leaves', icon: CalendarDays },
   { label: 'Analytics', href: '/trainer/analytics', icon: BarChart3 },
+  { label: 'Community', href: '/community', icon: Flame },
 ];
 
 export const CLIENT_NAV_ITEMS: NavItem[] = [
@@ -51,7 +56,13 @@ export const CLIENT_NAV_ITEMS: NavItem[] = [
   { label: 'Sessions', href: '/client/sessions', icon: ClipboardList },
   { label: 'Workouts', href: '/client/workouts', icon: Dumbbell },
   { label: 'Progress', href: '/client/progress', icon: TrendingUp },
+  { label: 'Badges', href: '/client/badges', icon: Trophy },
+  { label: 'Community', href: '/community', icon: Flame },
   { label: 'Unavailability', href: '/client/unavailability', icon: CalendarDays },
+];
+
+export const CROSSFIT_TRAINER_NAV_ITEMS: NavItem[] = [
+  { label: 'Attendance', href: '/trainer/crossfit', icon: Dumbbell },
 ];
 
 export const NAV_BY_ROLE: Record<string, NavItem[]> = {
@@ -59,5 +70,6 @@ export const NAV_BY_ROLE: Record<string, NavItem[]> = {
   BRANCH_ADMIN: ADMIN_NAV_ITEMS,
   TRAINER: TRAINER_NAV_ITEMS,
   KICKBOXING_TRAINER: TRAINER_NAV_ITEMS,
+  CROSSFIT_TRAINER: CROSSFIT_TRAINER_NAV_ITEMS,
   CLIENT: CLIENT_NAV_ITEMS,
 };

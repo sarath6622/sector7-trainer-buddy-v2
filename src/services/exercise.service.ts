@@ -11,6 +11,7 @@ interface CreateExerciseInput {
   difficulty?: DifficultyLevel;
   category: ExerciseCategory;
   exerciseType?: ExerciseType;
+  isCompound?: boolean;
   instructions?: string;
   demoVideoUrl?: string;
   demoGifUrl?: string;
@@ -27,6 +28,7 @@ interface UpdateExerciseInput {
   difficulty?: DifficultyLevel;
   category?: ExerciseCategory;
   exerciseType?: ExerciseType;
+  isCompound?: boolean;
   instructions?: string;
   demoVideoUrl?: string;
   demoGifUrl?: string;
@@ -73,6 +75,7 @@ export async function createExercise({ actorId, branchId, ...data }: CreateExerc
       difficulty: data.difficulty,
       category: data.category,
       exerciseType: data.exerciseType ?? 'WEIGHTED',
+      isCompound: data.isCompound ?? false,
       instructions: data.instructions,
       demoVideoUrl: data.demoVideoUrl,
       demoGifUrl: data.demoGifUrl,
@@ -113,6 +116,7 @@ export async function updateExercise({
   if (data.difficulty !== undefined) updateData.difficulty = data.difficulty;
   if (data.category !== undefined) updateData.category = data.category;
   if (data.exerciseType !== undefined) updateData.exerciseType = data.exerciseType;
+  if (data.isCompound !== undefined) updateData.isCompound = data.isCompound;
   if (data.instructions !== undefined) updateData.instructions = data.instructions;
   if (data.demoVideoUrl !== undefined) updateData.demoVideoUrl = data.demoVideoUrl;
   if (data.demoGifUrl !== undefined) updateData.demoGifUrl = data.demoGifUrl;

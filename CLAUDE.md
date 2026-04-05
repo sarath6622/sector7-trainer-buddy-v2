@@ -51,7 +51,18 @@ Each Claude Code session operates as ONE agent. The operator assigns the role at
 
 ---
 
-## 7 Non-Negotiable Rules
+## 8 Non-Negotiable Rules
+
+### 0. Migrations Run on Local DB First
+
+**Never run `prisma migrate dev` or `prisma db push` against any remote/production database.**
+All schema changes must be applied to the local PostgreSQL instance first (defined in `.env.local`).
+Only after the migration succeeds locally and the code is verified working should the migration be committed and deployed.
+
+- Local DB: `postgresql://sector7:sector7pass@localhost:5432/sector7` (docker-compose)
+- Migration command: `npx prisma migrate dev --name <descriptive-name>`
+- After migration: run `npx prisma generate` to update the Prisma client
+- Commit both the migration folder and the updated `schema.prisma` in the same PR
 
 ### 1. Read Before You Write
 

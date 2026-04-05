@@ -42,6 +42,7 @@ type ExerciseType = 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
 
 interface Exercise {
   id: string;
+  isCompound: boolean;
   name: string;
   targetMuscleGroup: string;
   secondaryMuscles: string[];
@@ -146,6 +147,7 @@ export default function ExerciseLibraryPage() {
     difficulty: '',
     category: 'HYPERTROPHY',
     exerciseType: 'WEIGHTED' as ExerciseType,
+    isCompound: false,
     instructions: '',
   });
 
@@ -185,6 +187,7 @@ export default function ExerciseLibraryPage() {
       difficulty: '',
       category: 'HYPERTROPHY',
       exerciseType: 'WEIGHTED',
+      isCompound: false,
       instructions: '',
     });
     setDialogOpen(true);
@@ -200,6 +203,7 @@ export default function ExerciseLibraryPage() {
       difficulty: ex.difficulty ?? '',
       category: ex.category,
       exerciseType: ex.exerciseType,
+      isCompound: ex.isCompound ?? false,
       instructions: ex.instructions ?? '',
     });
     setDialogOpen(true);
@@ -221,6 +225,7 @@ export default function ExerciseLibraryPage() {
         difficulty: form.difficulty || undefined,
         category: form.category,
         exerciseType: form.exerciseType,
+        isCompound: form.isCompound,
         instructions: form.instructions || undefined,
       };
 
@@ -627,6 +632,31 @@ export default function ExerciseLibraryPage() {
                 placeholder="e.g. Triceps, Shoulders"
                 className="h-10 text-sm"
               />
+            </div>
+
+            {/* Is Compound */}
+            <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Compound Exercise</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Show on leaderboard (Squat, Bench, Deadlift, etc.)
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.isCompound}
+                onClick={() => setForm({ ...form, isCompound: !form.isCompound })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  form.isCompound ? 'bg-orange-500' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                    form.isCompound ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
             </div>
 
             {/* Instructions */}
