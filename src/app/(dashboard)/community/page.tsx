@@ -87,9 +87,10 @@ const PR_THEMES = [
 ];
 
 function getPRTheme(exerciseId: string | null) {
-  if (!exerciseId) return PR_THEMES[0];
-  const idx = exerciseId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % PR_THEMES.length;
-  return PR_THEMES[idx];
+  const idx = exerciseId
+    ? exerciseId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % PR_THEMES.length
+    : 0;
+  return PR_THEMES[idx]!;
 }
 
 // ─── Avatar ───────────────────────────────────────────
