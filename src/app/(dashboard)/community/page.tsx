@@ -1,10 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Heart, MessageCircle, Trophy, Trash2, Send, ChevronDown } from 'lucide-react';
+import {
+  Heart,
+  MessageCircle,
+  Trophy,
+  Trash2,
+  Send,
+  ChevronDown,
+  X,
+  Flame,
+  Dumbbell,
+  Zap,
+  Star,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
@@ -40,11 +51,61 @@ interface Post {
   _count: { reactions: number; comments: number };
 }
 
-// ─── Helpers ──────────────────────────────────────────
+// ─── PR achievement banner images (SVG gradients) ─────
 
-function Avatar({ name, imageUrl }: { name: string; imageUrl?: string | null }) {
+const PR_THEMES = [
+  {
+    bg: 'from-orange-600 via-orange-500 to-yellow-400',
+    icon: <Trophy className="h-12 w-12 text-white drop-shadow-lg" />,
+    label: 'PERSONAL RECORD',
+    pattern: 'radial-gradient(circle at 20% 50%, rgba(255,255,255,0.08) 0%, transparent 60%)',
+  },
+  {
+    bg: 'from-red-700 via-red-500 to-orange-400',
+    icon: <Flame className="h-12 w-12 text-white drop-shadow-lg" />,
+    label: 'NEW BEST',
+    pattern: 'radial-gradient(circle at 80% 30%, rgba(255,255,255,0.1) 0%, transparent 50%)',
+  },
+  {
+    bg: 'from-zinc-800 via-zinc-700 to-zinc-600',
+    icon: <Dumbbell className="h-12 w-12 text-orange-400 drop-shadow-lg" />,
+    label: 'CRUSHED IT',
+    pattern: 'radial-gradient(circle at 50% 80%, rgba(255,165,0,0.1) 0%, transparent 60%)',
+  },
+  {
+    bg: 'from-amber-700 via-yellow-600 to-yellow-400',
+    icon: <Zap className="h-12 w-12 text-white drop-shadow-lg" />,
+    label: 'POWER MOVE',
+    pattern: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.12) 0%, transparent 50%)',
+  },
+  {
+    bg: 'from-stone-800 via-orange-900 to-orange-700',
+    icon: <Star className="h-12 w-12 text-yellow-300 drop-shadow-lg" />,
+    label: 'MILESTONE',
+    pattern: 'radial-gradient(circle at 70% 60%, rgba(255,255,255,0.07) 0%, transparent 55%)',
+  },
+];
+
+function getPRTheme(exerciseId: string | null) {
+  if (!exerciseId) return PR_THEMES[0];
+  const idx = exerciseId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % PR_THEMES.length;
+  return PR_THEMES[idx];
+}
+
+// ─── Avatar ───────────────────────────────────────────
+
+function Avatar({
+  name,
+  imageUrl,
+  size = 'md',
+}: {
+  name: string;
+  imageUrl?: string | null;
+  size?: 'sm' | 'md';
+}) {
+  const sizeClass = size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm';
   if (imageUrl) {
-    return <img src={imageUrl} alt={name} className="w-9 h-9 rounded-full object-cover" />;
+    return <img src={imageUrl} alt={name} className={`${sizeClass} rounded-full object-cover`} />;
   }
   const initials = name
     .split(' ')
@@ -53,37 +114,41 @@ function Avatar({ name, imageUrl }: { name: string; imageUrl?: string | null }) 
     .slice(0, 2)
     .toUpperCase();
   return (
-    <div className="w-9 h-9 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 text-xs font-semibold flex-shrink-0">
+    <div
+      className={`${sizeClass} rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center text-white font-bold flex-shrink-0`}
+    >
       {initials}
     </div>
   );
 }
 
-// ─── Post Card ────────────────────────────────────────
+// ─── Comment Drawer ───────────────────────────────────
 
-function PostCard({
+function CommentDrawer({
   post,
   myClientProfileId,
-  onReact,
+  onClose,
   onComment,
-  onDelete,
   onDeleteComment,
 }: {
   post: Post;
   myClientProfileId: string | null | undefined;
-  onReact: (postId: string) => void;
+  onClose: () => void;
   onComment: (postId: string, content: string) => Promise<void>;
-  onDelete: (postId: string) => void;
   onDeleteComment: (postId: string, commentId: string) => void;
 }) {
-  const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
-  const isReacted = post.reactions.some((r) => r.clientProfileId === myClientProfileId);
-  const isOwner = post.client.id === myClientProfileId;
-
-  const fullName = `${post.client.user.firstName} ${post.client.user.lastName}`;
+  // Close on backdrop click
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
 
   async function handleComment() {
     if (!commentText.trim()) return;
@@ -97,62 +162,194 @@ function PostCard({
   }
 
   return (
-    <Card className="p-4 space-y-3">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <Avatar name={fullName} imageUrl={post.client.user.profileImageUrl} />
-          <div>
-            <p className="font-semibold text-sm">{fullName}</p>
-            <p className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-            </p>
-          </div>
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} />
+      {/* Drawer */}
+      <div
+        ref={drawerRef}
+        className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-2xl border-t border-white/10 flex flex-col max-h-[80vh]"
+        style={{ maxWidth: '100vw' }}
+      >
+        {/* Handle + header */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-3 border-b border-white/10 flex-shrink-0">
+          <div className="absolute left-1/2 -translate-x-1/2 top-2 w-10 h-1 rounded-full bg-white/20" />
+          <p className="font-semibold text-sm pt-2">
+            Comments
+            <span className="ml-2 text-muted-foreground font-normal">({post._count.comments})</span>
+          </p>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1">
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        {isOwner && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-            onClick={() => onDelete(post.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+
+        {/* Comments list */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+          {post.comments.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground text-sm">
+              No comments yet. Be the first!
+            </div>
+          ) : (
+            post.comments.map((c) => {
+              const cName = `${c.client.user.firstName} ${c.client.user.lastName}`;
+              return (
+                <div key={c.id} className="flex items-start gap-3 group">
+                  <Avatar name={cName} imageUrl={c.client.user.profileImageUrl} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="bg-white/5 rounded-2xl px-3 py-2">
+                      <p className="text-xs font-semibold text-foreground">{cName}</p>
+                      <p className="text-sm text-foreground/90 mt-0.5">{c.content}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 ml-3">
+                      {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                  {c.client.id === myClientProfileId && (
+                    <button
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive p-1"
+                      onClick={() => onDeleteComment(post.id, c.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Input */}
+        {myClientProfileId && (
+          <div className="px-4 py-3 border-t border-white/10 flex items-end gap-2 flex-shrink-0 bg-zinc-900">
+            <Textarea
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              placeholder="Add a comment…"
+              className="resize-none text-sm min-h-[40px] max-h-[100px] bg-white/5 border-white/10 rounded-2xl"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleComment();
+                }
+              }}
+            />
+            <Button
+              size="icon"
+              className="rounded-full bg-orange-500 hover:bg-orange-600 flex-shrink-0"
+              onClick={handleComment}
+              disabled={submitting || !commentText.trim()}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         )}
       </div>
+    </>
+  );
+}
 
-      {/* PR Achievement */}
+// ─── Post Card ────────────────────────────────────────
+
+function PostCard({
+  post,
+  myClientProfileId,
+  onReact,
+  onOpenComments,
+  onDelete,
+}: {
+  post: Post;
+  myClientProfileId: string | null | undefined;
+  onReact: (postId: string) => void;
+  onOpenComments: (post: Post) => void;
+  onDelete: (postId: string) => void;
+}) {
+  const isReacted = post.reactions.some((r) => r.clientProfileId === myClientProfileId);
+  const isOwner = post.client.id === myClientProfileId;
+  const fullName = `${post.client.user.firstName} ${post.client.user.lastName}`;
+  const theme = getPRTheme(post.exerciseId);
+
+  return (
+    <article className="bg-card border border-border/60 rounded-2xl overflow-hidden">
+      {/* PR achievement banner */}
       {post.isAutoGenerated && post.exercise && (
-        <div className="flex items-center gap-2 bg-orange-500/10 rounded-lg px-3 py-2">
-          <Trophy className="h-4 w-4 text-orange-400 flex-shrink-0" />
-          <p className="text-sm font-medium text-orange-300">
-            New PR on {post.exercise.name}
-            {post.weightKg != null && <span className="ml-1 font-bold">{post.weightKg} kg</span>}
+        <div
+          className={`relative bg-gradient-to-br ${theme.bg} px-6 py-8 flex flex-col items-center justify-center gap-3 overflow-hidden`}
+          style={{
+            background: `${theme.pattern}, linear-gradient(135deg, var(--tw-gradient-stops))`,
+          }}
+        >
+          {/* Decorative ring */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full border-4 border-white" />
+            <div className="absolute -bottom-12 -left-6 w-32 h-32 rounded-full border-2 border-white" />
+          </div>
+
+          {/* Icon + label */}
+          <div className="relative z-10 flex flex-col items-center gap-2">
+            {theme.icon}
+            <span className="text-xs font-black tracking-widest text-white/70 uppercase">
+              {theme.label}
+            </span>
+          </div>
+
+          {/* Exercise + weight */}
+          <div className="relative z-10 text-center">
+            <p className="text-white/80 text-sm font-medium">{post.exercise.name}</p>
+            <p className="text-white font-black text-4xl tracking-tight leading-none mt-1">
+              {post.weightKg} <span className="text-2xl">kg</span>
+            </p>
             {post.reps != null && (
-              <span className="ml-1 text-orange-400/80">× {post.reps} reps</span>
+              <p className="text-white/70 text-sm mt-1 font-medium">× {post.reps} reps</p>
             )}
-          </p>
+          </div>
         </div>
       )}
 
-      {/* Caption */}
-      {post.content && <p className="text-sm text-foreground">{post.content}</p>}
+      {/* Post body */}
+      <div className="px-4 pt-3 pb-1">
+        {/* Author row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar name={fullName} imageUrl={post.client.user.profileImageUrl} />
+            <div>
+              <p className="font-semibold text-sm">{fullName}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+              </p>
+            </div>
+          </div>
+          {isOwner && (
+            <button
+              className="text-muted-foreground hover:text-destructive p-1 transition-colors"
+              onClick={() => onDelete(post.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
 
-      {/* Reaction & comment counts */}
+        {/* Caption */}
+        {post.content && (
+          <p className="text-sm text-foreground mt-3 leading-relaxed">{post.content}</p>
+        )}
+      </div>
+
+      {/* Counts row */}
       {(post._count.reactions > 0 || post._count.comments > 0) && (
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-4 px-4 py-2 text-xs text-muted-foreground">
           {post._count.reactions > 0 && (
-            <span className="flex items-center gap-1">
-              <Heart className="h-3 w-3 fill-red-400 text-red-400" />
+            <span className="flex items-center gap-1.5">
+              <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                <Heart className="h-2.5 w-2.5 fill-white text-white" />
+              </span>
               {post._count.reactions}
             </span>
           )}
           {post._count.comments > 0 && (
             <button
-              className="flex items-center gap-1 hover:text-foreground transition-colors"
-              onClick={() => setShowComments((s) => !s)}
+              className="ml-auto hover:text-foreground transition-colors"
+              onClick={() => onOpenComments(post)}
             >
-              <MessageCircle className="h-3 w-3" />
               {post._count.comments} comment{post._count.comments !== 1 ? 's' : ''}
             </button>
           )}
@@ -160,90 +357,27 @@ function PostCard({
       )}
 
       {/* Action bar */}
-      <div className="flex items-center gap-2 border-t pt-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className={`flex-1 gap-2 ${isReacted ? 'text-red-400' : 'text-muted-foreground'}`}
+      <div className="flex items-center border-t border-border/50 mx-0">
+        <button
+          className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors ${
+            isReacted ? 'text-red-400' : 'text-muted-foreground hover:text-foreground'
+          }`}
           onClick={() => onReact(post.id)}
           disabled={!myClientProfileId}
         >
-          <Heart className={`h-4 w-4 ${isReacted ? 'fill-red-400' : ''}`} />
-          Praise
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="flex-1 gap-2 text-muted-foreground"
-          onClick={() => setShowComments((s) => !s)}
+          <Heart className={`h-4.5 w-4.5 ${isReacted ? 'fill-red-400 text-red-400' : ''}`} />
+          {isReacted ? 'Praised' : 'Praise'}
+        </button>
+        <div className="w-px h-6 bg-border/50" />
+        <button
+          className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => onOpenComments(post)}
         >
           <MessageCircle className="h-4 w-4" />
           Comment
-          {showComments && <ChevronDown className="h-3 w-3" />}
-        </Button>
+        </button>
       </div>
-
-      {/* Comments section */}
-      {showComments && (
-        <div className="space-y-3 border-t pt-3">
-          {post.comments.map((c) => (
-            <div key={c.id} className="flex items-start gap-2 group">
-              <Avatar
-                name={`${c.client.user.firstName} ${c.client.user.lastName}`}
-                imageUrl={c.client.user.profileImageUrl}
-              />
-              <div className="flex-1 min-w-0">
-                <div className="bg-muted rounded-xl px-3 py-2">
-                  <p className="text-xs font-semibold">
-                    {c.client.user.firstName} {c.client.user.lastName}
-                  </p>
-                  <p className="text-sm">{c.content}</p>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 ml-3">
-                  {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
-                </p>
-              </div>
-              {c.client.id === myClientProfileId && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                  onClick={() => onDeleteComment(post.id, c.id)}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
-          ))}
-
-          {/* Add comment input */}
-          {myClientProfileId && (
-            <div className="flex items-end gap-2">
-              <Textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Write a comment…"
-                className="resize-none text-sm min-h-[60px]"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleComment();
-                  }
-                }}
-              />
-              <Button
-                size="icon"
-                className="mb-0.5 bg-blue-600 hover:bg-blue-700"
-                onClick={handleComment}
-                disabled={submitting || !commentText.trim()}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
+    </article>
   );
 }
 
@@ -255,6 +389,7 @@ export default function CommunityFeedPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [drawerPost, setDrawerPost] = useState<Post | null>(null);
   const myClientProfileId = session?.user?.clientProfileId;
 
   const fetchFeed = useCallback(async (cursor?: string) => {
@@ -295,7 +430,6 @@ export default function CommunityFeedPage() {
       toast.error('Could not react');
       return;
     }
-
     const { reacted } = json.data;
     setPosts((prev) =>
       prev.map((p) => {
@@ -326,7 +460,6 @@ export default function CommunityFeedPage() {
       toast.error('Failed to post comment');
       return;
     }
-
     const comment = json.data as Comment;
     setPosts((prev) =>
       prev.map((p) =>
@@ -338,6 +471,16 @@ export default function CommunityFeedPage() {
             }
           : p,
       ),
+    );
+    // Update drawer post too
+    setDrawerPost((prev) =>
+      prev?.id === postId
+        ? {
+            ...prev,
+            comments: [...prev.comments, comment],
+            _count: { ...prev._count, comments: prev._count.comments + 1 },
+          }
+        : prev,
     );
   }
 
@@ -355,83 +498,107 @@ export default function CommunityFeedPage() {
     fetch(`/api/community/posts/${postId}/comments/${commentId}`, { method: 'DELETE' })
       .then((res) => {
         if (!res.ok) throw new Error();
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === postId
-              ? {
-                  ...p,
-                  comments: p.comments.filter((c) => c.id !== commentId),
-                  _count: { ...p._count, comments: p._count.comments - 1 },
-                }
-              : p,
-          ),
-        );
+        const updater = (p: Post) =>
+          p.id === postId
+            ? {
+                ...p,
+                comments: p.comments.filter((c) => c.id !== commentId),
+                _count: { ...p._count, comments: p._count.comments - 1 },
+              }
+            : p;
+        setPosts((prev) => prev.map(updater));
+        setDrawerPost((prev) => (prev?.id === postId ? updater(prev) : prev));
       })
       .catch(() => toast.error('Failed to delete comment'));
   }
 
   if (loading) {
     return (
-      <div className="max-w-xl mx-auto p-4 space-y-4">
-        <Skeleton className="h-8 w-48" />
-        {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-40 w-full rounded-xl" />
+      <div className="max-w-lg mx-auto p-4 space-y-4">
+        <Skeleton className="h-8 w-40" />
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-2xl overflow-hidden border border-border/60 space-y-0">
+            <Skeleton className="h-52 w-full rounded-none" />
+            <div className="p-4 space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          </div>
         ))}
       </div>
     );
   }
 
   return (
-    <div className="max-w-xl mx-auto p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Community</h1>
-          <p className="text-sm text-muted-foreground">PRs, achievements & gym energy</p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => (window.location.href = '/community/leaderboard')}
-        >
-          <Trophy className="h-4 w-4" />
-          Leaderboard
-        </Button>
-      </div>
-
-      {/* Feed */}
-      {posts.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Trophy className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">No posts yet</p>
-          <p className="text-sm mt-1">Hit a PR to get the community going!</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {posts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              myClientProfileId={myClientProfileId}
-              onReact={handleReact}
-              onComment={handleComment}
-              onDelete={handleDelete}
-              onDeleteComment={handleDeleteComment}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Load more */}
-      {nextCursor && (
-        <div className="flex justify-center pt-2">
-          <Button variant="outline" onClick={loadMore} disabled={loadingMore} className="gap-2">
-            {loadingMore ? 'Loading…' : 'Load more'}
-            <ChevronDown className="h-4 w-4" />
+    <>
+      <div className="max-w-lg mx-auto p-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Community</h1>
+            <p className="text-sm text-muted-foreground">PRs, achievements & gym energy</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 rounded-xl"
+            onClick={() => (window.location.href = '/community/leaderboard')}
+          >
+            <Trophy className="h-4 w-4" />
+            Leaderboard
           </Button>
         </div>
+
+        {/* Feed */}
+        {posts.length === 0 ? (
+          <div className="text-center py-20 text-muted-foreground space-y-3">
+            <div className="w-20 h-20 rounded-full bg-orange-500/10 flex items-center justify-center mx-auto">
+              <Trophy className="h-10 w-10 text-orange-500/40" />
+            </div>
+            <p className="font-semibold">No posts yet</p>
+            <p className="text-sm">Hit a PR to get the community going!</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {posts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                myClientProfileId={myClientProfileId}
+                onReact={handleReact}
+                onOpenComments={setDrawerPost}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Load more */}
+        {nextCursor && (
+          <div className="flex justify-center pt-2">
+            <Button
+              variant="outline"
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="gap-2 rounded-xl"
+            >
+              {loadingMore ? 'Loading…' : 'Load more'}
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Comment drawer */}
+      {drawerPost && (
+        <CommentDrawer
+          post={drawerPost}
+          myClientProfileId={myClientProfileId}
+          onClose={() => setDrawerPost(null)}
+          onComment={handleComment}
+          onDeleteComment={handleDeleteComment}
+        />
       )}
-    </div>
+    </>
   );
 }
