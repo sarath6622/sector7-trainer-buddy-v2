@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, use } from 'react';
+import { useState, useEffect, useCallback, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -16,6 +16,10 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  Pause,
+  Play,
+  X,
+  BedDouble,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -142,6 +146,215 @@ function formatVal(val: number | string | null | undefined, fallback = '—') {
   return String(val);
 }
 
+// ─── Rest Timer ───────────────────────────────────────────────────────────────
+
+const REST_PRESETS = [
+  { label: '1 min', seconds: 60 },
+  { label: '2 min', seconds: 120 },
+  { label: '3 min', seconds: 180 },
+  { label: '5 min', seconds: 300 },
+];
+
+function RestTimerSheet({ onClose }: { onClose: () => void }) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const [custom, setCustom] = useState('');
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const done = remaining === 0;
+
+  function startTimer(seconds: number) {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setRemaining(seconds);
+    setPaused(false);
+  }
+
+  // Tick
+  useEffect(() => {
+    if (remaining === null || remaining <= 0 || paused) return;
+    intervalRef.current = setInterval(() => {
+      setRemaining((r) => (r !== null && r > 0 ? r - 1 : 0));
+    }, 1000);
+    return () => clearInterval(intervalRef.current!);
+  }, [remaining, paused]);
+
+  function handleStop() {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setRemaining(null);
+    setPaused(false);
+    setSelected(null);
+    setCustom('');
+  }
+
+  function handleCustomStart() {
+    const secs = parseInt(custom, 10);
+    if (!secs || secs <= 0) return;
+    startTimer(secs);
+  }
+
+  const mins = remaining !== null ? Math.floor(remaining / 60) : 0;
+  const secs = remaining !== null ? remaining % 60 : 0;
+  const totalForPreset = selected ?? (parseInt(custom, 10) || 0);
+  const progress = totalForPreset > 0 && remaining !== null ? remaining / totalForPreset : 1;
+  const circumference = 2 * Math.PI * 54;
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-3xl border-t border-white/10 pb-safe">
+        {/* Handle */}
+        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mt-3 mb-1" />
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <BedDouble className="h-4 w-4 text-blue-400" />
+            <p className="font-bold text-sm">Rest Timer</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-5 space-y-5">
+          {/* Countdown ring */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative w-36 h-36">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+                {/* Track */}
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="54"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.08)"
+                  strokeWidth="8"
+                />
+                {/* Progress */}
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="54"
+                  fill="none"
+                  stroke={done ? '#22c55e' : '#3b82f6'}
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={circumference * (1 - progress)}
+                  className="transition-all duration-1000"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                {done ? (
+                  <p className="text-lg font-bold text-emerald-400">Done!</p>
+                ) : remaining !== null ? (
+                  <>
+                    <p className="text-3xl font-black tabular-nums text-white">
+                      {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+                    </p>
+                    <p className="text-[10px] text-white/40 mt-0.5">
+                      {paused ? 'paused' : 'remaining'}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-white/30">pick a time</p>
+                )}
+              </div>
+            </div>
+
+            {/* Pause / Stop controls */}
+            {remaining !== null && !done && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setPaused((p) => !p)}
+                  className="flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-semibold transition-colors"
+                >
+                  {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                  {paused ? 'Resume' : 'Pause'}
+                </button>
+                <button
+                  onClick={handleStop}
+                  className="flex items-center gap-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 px-4 py-2 text-sm font-semibold transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Stop
+                </button>
+              </div>
+            )}
+
+            {/* Restart after done */}
+            {done && (
+              <button
+                onClick={handleStop}
+                className="rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 px-5 py-2 text-sm font-semibold transition-colors"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+
+          {/* Quick presets */}
+          <div>
+            <p className="text-xs text-white/40 font-semibold uppercase tracking-wide mb-2">
+              Quick select
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              {REST_PRESETS.map((p) => (
+                <button
+                  key={p.seconds}
+                  onClick={() => {
+                    setSelected(p.seconds);
+                    setCustom('');
+                    startTimer(p.seconds);
+                  }}
+                  className={`rounded-2xl py-3 text-sm font-bold transition-colors ${
+                    selected === p.seconds && remaining !== null
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white/8 text-white/70 hover:bg-white/15'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom input */}
+          <div>
+            <p className="text-xs text-white/40 font-semibold uppercase tracking-wide mb-2">
+              Custom (seconds)
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min={1}
+                value={custom}
+                onChange={(e) => {
+                  setCustom(e.target.value);
+                  setSelected(null);
+                }}
+                placeholder="e.g. 90"
+                className="flex-1 rounded-xl bg-white/8 border border-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={handleCustomStart}
+                disabled={!custom || parseInt(custom, 10) <= 0}
+                className="rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-colors"
+              >
+                Start
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ClientSessionPage({ params }: { params: Promise<{ id: string }> }) {
@@ -156,6 +369,7 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
     exerciseName: string;
     unit: string;
   } | null>(null);
+  const [restTimerOpen, setRestTimerOpen] = useState(false);
 
   const fetchSession = useCallback(async () => {
     const res = await fetch(`/api/client/sessions/${id}`);
@@ -324,14 +538,25 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
                 <span className="font-semibold text-foreground">{totalSets}</span> sets logged
               </span>
             </div>
-            {lastRefreshed && isActive && (
-              <button
-                onClick={() => void fetchSession()}
-                className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Refresh
-              </button>
+            {isActive && (
+              <div className="ml-auto flex items-center gap-3">
+                <button
+                  onClick={() => setRestTimerOpen(true)}
+                  className="flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  <BedDouble className="h-3.5 w-3.5" />
+                  Rest
+                </button>
+                {lastRefreshed && (
+                  <button
+                    onClick={() => void fetchSession()}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Refresh
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -478,6 +703,9 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
           )}
         </div>
       </div>
+
+      {/* Rest timer sheet */}
+      {restTimerOpen && <RestTimerSheet onClose={() => setRestTimerOpen(false)} />}
 
       {/* Exercise progress modal */}
       {progressModal && (
