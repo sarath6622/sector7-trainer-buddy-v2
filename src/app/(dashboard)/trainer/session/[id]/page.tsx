@@ -34,21 +34,23 @@ function RestTimerPill({
   const mins = remaining !== null ? Math.floor(remaining / 60) : 0;
   const secs = remaining !== null ? remaining % 60 : 0;
   return (
-    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full bg-zinc-900 border border-white/15 shadow-2xl px-4 py-2.5">
-      <BedDouble className={`h-4 w-4 ${isDone ? 'text-emerald-400' : 'text-blue-400'}`} />
+    <div
+      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 mb-2 border ${isDone ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}
+    >
+      <BedDouble className={`h-4 w-4 shrink-0 ${isDone ? 'text-emerald-400' : 'text-blue-400'}`} />
       {isDone ? (
-        <span className="text-sm font-bold text-emerald-400">Rest done!</span>
+        <span className="flex-1 text-sm font-bold text-emerald-400">Rest done!</span>
       ) : (
-        <span className="text-sm font-black tabular-nums text-white">
+        <span className="flex-1 text-sm font-black tabular-nums text-white">
           {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
           {isPaused && <span className="ml-1.5 text-[10px] font-normal text-white/40">paused</span>}
         </span>
       )}
       <button
         onClick={onOpen}
-        className="text-xs text-white/50 hover:text-white transition-colors px-1"
+        className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
       >
-        Open
+        Expand
       </button>
       <div className="w-px h-4 bg-white/15" />
       <button onClick={onStop} className="text-white/40 hover:text-red-400 transition-colors">
@@ -244,17 +246,6 @@ interface SessionData {
   }[];
 }
 
-function formatTime12(t: string) {
-  const [h = '0', m = '00'] = t.split(':');
-  const hour = parseInt(h, 10);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  return `${hour % 12 || 12}:${m} ${ampm}`;
-}
-
-function toLocalDateStr(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-CA');
-}
-
 function initials(first: string, last: string) {
   return `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
 }
@@ -273,6 +264,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
     { name: string; icon: string; description?: string }[]
   >([]);
   const [restTimerOpen, setRestTimerOpen] = useState(false);
+  const [hasUnsaved, setHasUnsaved] = useState(false);
   const restTimer = useRestTimer(id);
 
   const fetchSession = useCallback(async (sid: string) => {
@@ -388,11 +380,6 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const clientName = `${session.client.user.firstName} ${session.client.user.lastName}`;
   const clientInit = initials(session.client.user.firstName, session.client.user.lastName);
   const isActive = session.status === 'IN_PROGRESS' && !!session.startedAt;
-  const displayDate = new Date(toLocalDateStr(session.scheduledDate)).toLocaleDateString('en-IN', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
 
   return (
     <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
@@ -406,29 +393,35 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         {/* Top bar */}
         <div className="flex h-14 items-center gap-3 px-4">
           <button
-            onClick={() => router.push('/trainer')}
+            onClick={async () => {
+              if (isActive && hasUnsaved) {
+                const ok = await confirm({
+                  title: 'Leave session?',
+                  description: 'You have unsaved workout changes. They will be lost if you leave.',
+                  confirmText: 'Leave',
+                  variant: 'destructive',
+                });
+                if (!ok) return;
+              }
+              router.push('/trainer');
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
 
-          {/* Client avatar + name */}
-          <div className="flex flex-1 items-center gap-2.5 min-w-0">
+          {/* Client avatar only */}
+          <div className="flex flex-1 items-center gap-2 min-w-0">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
               {clientInit}
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold leading-none">{clientName}</p>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
-                {displayDate} · {formatTime12(session.scheduledTime)}
-              </p>
-            </div>
+            <p className="truncate text-sm font-semibold">{clientName}</p>
           </div>
 
           {/* Live timer */}
           {isActive && session.startedAt ? (
             <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+              <Timer className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
               <span className="font-mono text-sm font-bold tabular-nums text-emerald-500">
                 <InlineTimer
                   startedAt={session.startedAt}
@@ -445,11 +438,6 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
 
         {/* Session meta chips */}
         <div className="flex items-center gap-3 px-4 pb-2.5">
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Timer className="h-3 w-3" />
-            {session.durationMin} min
-          </div>
-          <div className="h-3 w-px bg-border" />
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
             <Dumbbell className="h-3 w-3" />
             {session.workoutLogs?.length ?? 0} exercise
@@ -502,32 +490,31 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             sessionInstanceId={session.id}
             clientProfileId={session.client.id}
             existingLogs={session.workoutLogs}
+            onUnsavedChange={setHasUnsaved}
           />
         </div>
       </div>
 
       {/* ── Sticky footer ── */}
-      <div className="sticky bottom-0 z-20 border-t bg-background/95 px-4 py-3 backdrop-blur">
+      <div className="sticky bottom-0 z-20 border-t bg-background/95 px-4 py-2 backdrop-blur">
+        {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
+          <RestTimerPill
+            remaining={restTimer.remaining}
+            isPaused={restTimer.isPaused}
+            isDone={restTimer.isDone}
+            onOpen={() => setRestTimerOpen(true)}
+            onStop={restTimer.stop}
+          />
+        )}
         <button
           onClick={handleEnd}
           disabled={ending}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500/10 py-4 text-sm font-semibold text-red-500 ring-1 ring-red-500/20 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/40 transition-colors hover:bg-red-700 disabled:opacity-50"
         >
           <Square className="h-4 w-4" />
           {ending ? 'Ending Session…' : 'End Session'}
         </button>
       </div>
-
-      {/* Rest timer — floating pill when sheet is closed */}
-      {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
-        <RestTimerPill
-          remaining={restTimer.remaining}
-          isPaused={restTimer.isPaused}
-          isDone={restTimer.isDone}
-          onOpen={() => setRestTimerOpen(true)}
-          onStop={restTimer.stop}
-        />
-      )}
 
       {/* Rest timer sheet */}
       {restTimerOpen && (

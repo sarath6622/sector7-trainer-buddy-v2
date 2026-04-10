@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
   Search,
@@ -12,7 +13,6 @@ import {
   Timer,
   User2,
   ChevronDown,
-  ChevronUp,
   TrendingUp,
   ArrowUpRight,
   ArrowDownRight,
@@ -67,6 +67,7 @@ interface ExerciseEntry {
 interface WorkoutLoggerProps {
   sessionInstanceId: string;
   clientProfileId?: string; // when set, enables per-exercise progress modal
+  onUnsavedChange?: (hasUnsaved: boolean) => void;
   existingLogs?: {
     id: string;
     exerciseId: string;
@@ -152,6 +153,7 @@ const TYPE_COLS: Record<ExerciseType, ColDef[]> = {
 export function WorkoutLogger({
   sessionInstanceId,
   clientProfileId,
+  onUnsavedChange,
   existingLogs,
 }: WorkoutLoggerProps) {
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
@@ -258,7 +260,7 @@ export function WorkoutLogger({
 
   function addExercise(exercise: ExerciseOption) {
     setExercises((prev) => [
-      ...prev,
+      ...prev.map((e) => ({ ...e, collapsed: true })),
       {
         tempId: `temp-${Date.now()}`,
         exerciseId: exercise.id,
@@ -290,9 +292,13 @@ export function WorkoutLogger({
   }
 
   function toggleCollapse(tempId: string) {
-    setExercises((prev) =>
-      prev.map((e) => (e.tempId === tempId ? { ...e, collapsed: !e.collapsed } : e)),
-    );
+    setExercises((prev) => {
+      const target = prev.find((e) => e.tempId === tempId);
+      const isCollapsed = target?.collapsed ?? false;
+      return prev.map((e) =>
+        e.tempId === tempId ? { ...e, collapsed: !isCollapsed } : { ...e, collapsed: true },
+      );
+    });
   }
 
   function addSet(exerciseIndex: number) {
@@ -397,6 +403,10 @@ export function WorkoutLogger({
 
   const hasUnsaved = exercises.some((e) => !e.saved);
 
+  useEffect(() => {
+    onUnsavedChange?.(hasUnsaved);
+  }, [hasUnsaved, onUnsavedChange]);
+
   return (
     <div className="space-y-3">
       {/* ── Badge celebration overlay ── */}
@@ -437,87 +447,98 @@ export function WorkoutLogger({
         </div>
         <button
           onClick={() => setShowSearch((v) => !v)}
-          className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
+          className={`flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${
             showSearch
               ? 'bg-muted text-muted-foreground'
               : 'bg-primary/10 text-primary hover:bg-primary/15'
           }`}
         >
           {showSearch ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-          {showSearch ? 'Cancel' : 'Add Exercise'}
         </button>
       </div>
 
-      {/* ── Exercise search panel ── */}
+      {/* ── Exercise search modal ── */}
       {showSearch && (
-        <div className="rounded-2xl border bg-card shadow-sm">
-          <div className="flex items-center gap-2 border-b px-3 py-2.5">
-            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <input
-              ref={searchRef}
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              placeholder="Search exercises…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              setShowSearch(false);
+              setSearchQuery('');
+              setSearchResults([]);
+            }}
+          />
+          <div className="fixed left-4 right-4 top-24 z-50 rounded-2xl border bg-card shadow-2xl overflow-hidden">
+            <div className="flex items-center gap-2 border-b px-3 py-2.5">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input
+                ref={searchRef}
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                placeholder="Search exercises…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setShowSearch(false);
+                    setSearchQuery('');
+                  }
+                }}
+              />
+              <button
+                onClick={() => {
                   setShowSearch(false);
                   setSearchQuery('');
-                }
-              }}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
+                  setSearchResults([]);
+                }}
                 className="rounded-md p-1 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
+            </div>
+
+            {searchResults.length > 0 ? (
+              <div className="max-h-72 overflow-y-auto divide-y divide-border/50">
+                {searchResults.map((ex) => {
+                  const cfg = TYPE_CONFIG[ex.exerciseType];
+                  const Icon = cfg.icon;
+                  return (
+                    <button
+                      key={ex.id}
+                      onClick={() => addExercise(ex)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-muted/60"
+                    >
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
+                      >
+                        <Icon className={`h-4 w-4 ${cfg.text}`} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{ex.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {ex.targetMuscleGroup}
+                          {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
+                      >
+                        {cfg.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : searchQuery.trim() ? (
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                No exercises found
+              </p>
+            ) : (
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                Start typing to search…
+              </p>
             )}
           </div>
-
-          {searchResults.length > 0 ? (
-            <div className="max-h-60 overflow-y-auto divide-y divide-border/50">
-              {searchResults.map((ex) => {
-                const cfg = TYPE_CONFIG[ex.exerciseType];
-                const Icon = cfg.icon;
-                return (
-                  <button
-                    key={ex.id}
-                    onClick={() => addExercise(ex)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-muted/60"
-                  >
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
-                    >
-                      <Icon className={`h-4 w-4 ${cfg.text}`} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{ex.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {ex.targetMuscleGroup}
-                        {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
-                    >
-                      {cfg.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : searchQuery.trim() ? (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-              No exercises found
-            </p>
-          ) : (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-              Start typing to search…
-            </p>
-          )}
-        </div>
+        </>
       )}
 
       {/* ── Empty state ── */}
@@ -529,7 +550,7 @@ export function WorkoutLogger({
           <div className="space-y-1">
             <p className="text-base font-semibold">No exercises yet</p>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Tap &ldquo;Add Exercise&rdquo; above to start logging
+              Tap &ldquo;Add Exercise&rdquo; below to start logging
             </p>
           </div>
           <button
@@ -571,7 +592,7 @@ export function WorkoutLogger({
                   <span
                     className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
                   >
-                    {entry.sets.length}×
+                    {entry.sets.length} {entry.sets.length === 1 ? 'set' : 'sets'}
                   </span>
                   {!entry.saved && (
                     <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
@@ -608,11 +629,12 @@ export function WorkoutLogger({
                   onClick={() => toggleCollapse(entry.tempId)}
                   className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition-colors active:bg-muted"
                 >
-                  {entry.collapsed ? (
+                  <motion.div
+                    animate={{ rotate: entry.collapsed ? 0 : 180 }}
+                    transition={{ duration: 0.2, ease: 'easeInOut' }}
+                  >
                     <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronUp className="h-4 w-4" />
-                  )}
+                  </motion.div>
                 </button>
                 <button
                   onClick={() => removeExercise(entry.tempId)}
@@ -624,92 +646,121 @@ export function WorkoutLogger({
             </div>
 
             {/* Set table (collapsible) */}
-            {!entry.collapsed && (
-              <div className="border-t border-border/40 px-4 pb-4 pt-3">
-                {/* Column header row */}
-                <div className={`mb-2 grid items-center gap-2 ${getGridClass(cols.length)}`}>
-                  <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    #
-                  </span>
-                  {cols.map((col) => (
-                    <span
-                      key={col.key as string}
-                      className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                    >
-                      {col.label}
-                    </span>
-                  ))}
-                  <span />
-                </div>
-
-                {/* Set rows */}
-                <div className="space-y-2">
-                  {entry.sets.map((set, setIdx) => (
-                    <div
-                      key={setIdx}
-                      className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
-                    >
-                      {/* Set number badge */}
-                      <div className="flex items-center justify-center">
-                        <span
-                          className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-                          style={{ backgroundColor: cfg.accent + '22', color: cfg.accent }}
-                        >
-                          {set.setNumber}
-                        </span>
-                      </div>
-
-                      {/* Dynamic fields */}
-                      {cols.map((col) => (
-                        <Input
-                          key={col.key as string}
-                          type="number"
-                          inputMode="decimal"
-                          placeholder="—"
-                          step={col.step}
-                          min={col.min}
-                          max={col.max}
-                          className="h-11 rounded-xl text-center text-sm font-semibold tabular-nums"
-                          value={
-                            col.key === 'notes'
-                              ? set.notes
-                              : ((set[col.key] as number | undefined) ?? '')
-                          }
-                          onChange={(e) => updateSet(exIdx, setIdx, col.key, e.target.value)}
-                        />
-                      ))}
-
-                      {/* Remove set */}
-                      <button
-                        onClick={() => removeSet(exIdx, setIdx)}
-                        disabled={entry.sets.length <= 1}
-                        className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground/40 transition-colors active:bg-destructive/10 active:text-destructive disabled:pointer-events-none disabled:opacity-20"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Add Set */}
-                <button
-                  onClick={() => addSet(exIdx)}
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
+            <AnimatePresence initial={false}>
+              {!entry.collapsed && (
+                <motion.div
+                  key="content"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  style={{ overflow: 'hidden' }}
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Set
-                </button>
-              </div>
-            )}
+                  <div className="border-t border-border/40 px-4 pb-4 pt-3">
+                    {/* Column header row */}
+                    <div className={`mb-2 grid items-center gap-2 ${getGridClass(cols.length)}`}>
+                      <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        #
+                      </span>
+                      {cols.map((col) => (
+                        <span
+                          key={col.key as string}
+                          className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                        >
+                          {col.label}
+                        </span>
+                      ))}
+                      <span />
+                    </div>
+
+                    {/* Set rows */}
+                    <div className="space-y-2">
+                      {entry.sets.map((set, setIdx) => (
+                        <div
+                          key={setIdx}
+                          className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
+                        >
+                          {/* Set number badge */}
+                          <div className="flex items-center justify-center">
+                            <span
+                              className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
+                              style={{ backgroundColor: cfg.accent + '22', color: cfg.accent }}
+                            >
+                              {set.setNumber}
+                            </span>
+                          </div>
+
+                          {/* Dynamic fields */}
+                          {cols.map((col) => (
+                            <Input
+                              key={col.key as string}
+                              type="number"
+                              inputMode="decimal"
+                              placeholder={col.key === 'rpe' ? '1–10' : '—'}
+                              step={col.step}
+                              min={col.min}
+                              max={col.max}
+                              className="h-11 rounded-xl text-center text-sm font-semibold tabular-nums border border-zinc-700 focus:border-blue-500 focus-visible:ring-0"
+                              value={
+                                col.key === 'notes'
+                                  ? set.notes
+                                  : ((set[col.key] as number | undefined) ?? '')
+                              }
+                              onChange={(e) => updateSet(exIdx, setIdx, col.key, e.target.value)}
+                            />
+                          ))}
+
+                          {/* Remove set */}
+                          <button
+                            onClick={() => removeSet(exIdx, setIdx)}
+                            disabled={entry.sets.length <= 1}
+                            className="flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground/40 transition-colors active:bg-destructive/10 active:text-destructive disabled:pointer-events-none disabled:opacity-20"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add Set */}
+                    <button
+                      onClick={() => addSet(exIdx)}
+                      className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Set
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         );
       })}
+
+      {/* ── Add Exercise (bottom CTA) ── */}
+      {exercises.length > 0 && (
+        <button
+          onClick={() => {
+            setShowSearch((v) => !v);
+            if (!showSearch) setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
+          }}
+          className={`flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed py-4 text-sm font-semibold transition-colors ${
+            showSearch
+              ? 'border-border/40 text-muted-foreground'
+              : 'border-primary/30 text-primary hover:bg-primary/5'
+          }`}
+        >
+          {showSearch ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {showSearch ? 'Cancel' : 'Add Exercise'}
+        </button>
+      )}
 
       {/* ── Bottom save bar (when unsaved changes) ── */}
       {hasUnsaved && exercises.length > 0 && (
         <div className="sticky bottom-0 -mx-4 border-t border-border/50 bg-background/95 px-4 py-3 backdrop-blur">
           <Button
-            className="w-full gap-2 rounded-xl py-3 text-sm font-semibold"
+            className="w-full gap-2 rounded-xl py-2 text-sm font-semibold"
             onClick={saveWorkout}
             disabled={saving}
           >
