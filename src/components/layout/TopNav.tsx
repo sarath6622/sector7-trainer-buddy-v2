@@ -220,9 +220,9 @@ export function TopNav({
               <span className="sr-only">Toggle menu</span>
             </SheetTrigger>
             <SheetContent
-              side="right"
+              side="left"
               showCloseButton={false}
-              className="w-full max-w-none border-none sm:max-w-none bg-gradient-to-b from-[#1a1a1a] to-[#111] p-0"
+              className="w-[80vw] max-w-sm border-none bg-gradient-to-b from-[#1a1a1a] to-[#111] p-0"
             >
               <div
                 className="flex h-dvh flex-col overflow-hidden"
@@ -237,16 +237,15 @@ export function TopNav({
                   </SheetClose>
                 </div>
 
-                {/* Nav items — numbered, large, uppercase */}
+                {/* Nav items */}
                 <nav className="mt-4 flex-1 min-h-0 overflow-y-auto flex flex-col px-6">
-                  {navItems.map((item, index) => {
+                  {navItems.map((item) => {
                     const isDashboard =
                       item.href === '/admin' || item.href === '/trainer' || item.href === '/client';
                     const isActive = isDashboard
                       ? pathname === item.href
                       : pathname === item.href || pathname.startsWith(item.href + '/');
-                    const num = String(index + 1).padStart(2, '0');
-
+                    const Icon = item.icon;
                     return (
                       <SheetClose
                         key={item.href}
@@ -255,14 +254,19 @@ export function TopNav({
                       >
                         <span
                           className={cn(
-                            'flex items-baseline gap-4 border-b border-white/10 py-5 transition-all active:scale-95 active:opacity-70',
-                            isActive ? 'text-[#E8652C]' : 'text-white/80 hover:text-white',
+                            'flex items-center gap-4 border-b border-white/10 py-4 px-3 rounded-xl transition-all active:scale-95 active:opacity-70',
+                            isActive
+                              ? 'text-[#E8652C] bg-[#E8652C]/10'
+                              : 'text-white/80 hover:text-white hover:bg-white/5',
                           )}
                         >
-                          <span className="text-xs font-light text-white/30">{num}</span>
-                          <span className="text-xl font-bold uppercase tracking-[0.15em]">
-                            {item.label}
-                          </span>
+                          <Icon
+                            className={cn(
+                              'h-5 w-5 shrink-0',
+                              isActive ? 'text-[#E8652C]' : 'text-white/40',
+                            )}
+                          />
+                          <span className="text-xl font-bold tracking-normal">{item.label}</span>
                         </span>
                       </SheetClose>
                     );
@@ -277,31 +281,35 @@ export function TopNav({
                       onClick={toggleTheme}
                       className="mb-5 flex items-center gap-3 text-sm text-white/60 transition-colors hover:text-white"
                     >
-                      <Sun className="h-4 w-4 dark:hidden" />
-                      <Moon className="hidden h-4 w-4 dark:block" />
+                      <Moon className="h-4 w-4 dark:hidden" />
+                      <Sun className="hidden h-4 w-4 dark:block" />
                       <span>Switch to {theme === 'dark' ? 'light' : 'dark'} mode</span>
                     </button>
 
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 border border-white/20">
-                        <AvatarFallback className="bg-[#E8652C]/20 text-[#E8652C] text-sm font-semibold">
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-medium text-white">
-                          {user.firstName} {user.lastName}
-                        </p>
-                        <p className="text-xs text-white/40">{roleLabel}</p>
+                    <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/5 px-4 py-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar className="h-10 w-10 border border-white/20 shrink-0">
+                          <AvatarFallback className="bg-[#E8652C]/20 text-[#E8652C] text-sm font-semibold">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">
+                            {user.firstName} {user.lastName}
+                          </p>
+                          <p className="text-xs text-white/60 uppercase tracking-wide">
+                            {roleLabel}
+                          </p>
+                        </div>
                       </div>
+                      <button
+                        onClick={onLogout}
+                        className="shrink-0 p-2 rounded-xl text-white/40 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                        aria-label="Log out"
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      onClick={onLogout}
-                      className="mt-4 flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-white"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Log out
-                    </button>
                   </div>
                 </div>
               </div>
