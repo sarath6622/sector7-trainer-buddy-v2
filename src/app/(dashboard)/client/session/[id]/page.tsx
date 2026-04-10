@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, use } from 'react';
+import { useRestTimer } from '@/hooks/useRestTimer';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -146,7 +147,7 @@ function formatVal(val: number | string | null | undefined, fallback = '—') {
   return String(val);
 }
 
-// ─── Rest Timer (persistent via localStorage) ─────────────────────────────────
+// ─── Rest Timer UI ────────────────────────────────────────────────────────────
 
 const REST_PRESETS = [
   { label: '1 min', seconds: 60 },
@@ -154,112 +155,6 @@ const REST_PRESETS = [
   { label: '3 min', seconds: 180 },
   { label: '5 min', seconds: 300 },
 ];
-
-const STORAGE_KEY = 'sector7_rest_timer';
-
-interface RestTimerState {
-  endTime: number | null; // epoch ms when timer ends (null = not running)
-  pausedRemaining: number | null; // seconds left when paused (null = not paused)
-  total: number | null; // original duration for progress ring
-}
-
-function readStorage(): RestTimerState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as RestTimerState;
-  } catch {
-    /* ignore */
-  }
-  return { endTime: null, pausedRemaining: null, total: null };
-}
-
-function writeStorage(s: RestTimerState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  } catch {
-    /* ignore */
-  }
-}
-
-function clearStorage() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
-// Returns current remaining seconds from persisted state
-function calcRemaining(s: RestTimerState): number | null {
-  if (s.pausedRemaining !== null) return s.pausedRemaining;
-  if (s.endTime !== null) {
-    const r = Math.round((s.endTime - Date.now()) / 1000);
-    return r > 0 ? r : 0;
-  }
-  return null;
-}
-
-// ── Hook: manages timer state, persisted in localStorage ──────────────────────
-function useRestTimer() {
-  const [, forceUpdate] = useState(0);
-  const tick = () => forceUpdate((n) => n + 1);
-
-  const stored = readStorage();
-  const remaining = calcRemaining(stored);
-  const isRunning = stored.endTime !== null && remaining !== null && remaining > 0;
-  const isPaused = stored.pausedRemaining !== null;
-  const isDone = remaining === 0 && stored.total !== null;
-  const progress = stored.total && remaining !== null ? remaining / stored.total : 1;
-
-  // Interval — only runs when active, survives sheet open/close
-  useEffect(() => {
-    if (!isRunning) return;
-    const id = setInterval(tick, 500);
-    return () => clearInterval(id);
-  }, [isRunning]);
-
-  function start(seconds: number) {
-    writeStorage({ endTime: Date.now() + seconds * 1000, pausedRemaining: null, total: seconds });
-    tick();
-  }
-
-  function pause() {
-    const s = readStorage();
-    const r = calcRemaining(s);
-    if (r === null) return;
-    writeStorage({ endTime: null, pausedRemaining: r, total: s.total });
-    tick();
-  }
-
-  function resume() {
-    const s = readStorage();
-    if (s.pausedRemaining === null) return;
-    writeStorage({
-      endTime: Date.now() + s.pausedRemaining * 1000,
-      pausedRemaining: null,
-      total: s.total,
-    });
-    tick();
-  }
-
-  function stop() {
-    clearStorage();
-    tick();
-  }
-
-  return {
-    remaining,
-    isRunning,
-    isPaused,
-    isDone,
-    progress,
-    total: stored.total,
-    start,
-    pause,
-    resume,
-    stop,
-  };
-}
 
 // ── Floating pill shown when sheet is closed but timer is active ───────────────
 function RestTimerPill({
@@ -486,7 +381,7 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
     unit: string;
   } | null>(null);
   const [restTimerOpen, setRestTimerOpen] = useState(false);
-  const restTimer = useRestTimer();
+  const restTimer = useRestTimer(id);
 
   const fetchSession = useCallback(async () => {
     const res = await fetch(`/api/client/sessions/${id}`);
