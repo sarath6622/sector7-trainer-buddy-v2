@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, use, useRef } from 'react';
+import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -146,7 +146,7 @@ function formatVal(val: number | string | null | undefined, fallback = '—') {
   return String(val);
 }
 
-// ─── Rest Timer ───────────────────────────────────────────────────────────────
+// ─── Rest Timer (persistent via localStorage) ─────────────────────────────────
 
 const REST_PRESETS = [
   { label: '1 min', seconds: 60 },
@@ -155,48 +155,169 @@ const REST_PRESETS = [
   { label: '5 min', seconds: 300 },
 ];
 
-function RestTimerSheet({ onClose }: { onClose: () => void }) {
-  const [selected, setSelected] = useState<number | null>(null);
-  const [custom, setCustom] = useState('');
-  const [remaining, setRemaining] = useState<number | null>(null);
-  const [paused, setPaused] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+const STORAGE_KEY = 'sector7_rest_timer';
 
-  const done = remaining === 0;
+interface RestTimerState {
+  endTime: number | null; // epoch ms when timer ends (null = not running)
+  pausedRemaining: number | null; // seconds left when paused (null = not paused)
+  total: number | null; // original duration for progress ring
+}
 
-  function startTimer(seconds: number) {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setRemaining(seconds);
-    setPaused(false);
+function readStorage(): RestTimerState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as RestTimerState;
+  } catch {
+    /* ignore */
   }
+  return { endTime: null, pausedRemaining: null, total: null };
+}
 
-  // Tick
+function writeStorage(s: RestTimerState) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearStorage() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+// Returns current remaining seconds from persisted state
+function calcRemaining(s: RestTimerState): number | null {
+  if (s.pausedRemaining !== null) return s.pausedRemaining;
+  if (s.endTime !== null) {
+    const r = Math.round((s.endTime - Date.now()) / 1000);
+    return r > 0 ? r : 0;
+  }
+  return null;
+}
+
+// ── Hook: manages timer state, persisted in localStorage ──────────────────────
+function useRestTimer() {
+  const [, forceUpdate] = useState(0);
+  const tick = () => forceUpdate((n) => n + 1);
+
+  const stored = readStorage();
+  const remaining = calcRemaining(stored);
+  const isRunning = stored.endTime !== null && remaining !== null && remaining > 0;
+  const isPaused = stored.pausedRemaining !== null;
+  const isDone = remaining === 0 && stored.total !== null;
+  const progress = stored.total && remaining !== null ? remaining / stored.total : 1;
+
+  // Interval — only runs when active, survives sheet open/close
   useEffect(() => {
-    if (remaining === null || remaining <= 0 || paused) return;
-    intervalRef.current = setInterval(() => {
-      setRemaining((r) => (r !== null && r > 0 ? r - 1 : 0));
-    }, 1000);
-    return () => clearInterval(intervalRef.current!);
-  }, [remaining, paused]);
+    if (!isRunning) return;
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [isRunning]);
 
-  function handleStop() {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setRemaining(null);
-    setPaused(false);
-    setSelected(null);
-    setCustom('');
+  function start(seconds: number) {
+    writeStorage({ endTime: Date.now() + seconds * 1000, pausedRemaining: null, total: seconds });
+    tick();
   }
 
-  function handleCustomStart() {
-    const secs = parseInt(custom, 10);
-    if (!secs || secs <= 0) return;
-    startTimer(secs);
+  function pause() {
+    const s = readStorage();
+    const r = calcRemaining(s);
+    if (r === null) return;
+    writeStorage({ endTime: null, pausedRemaining: r, total: s.total });
+    tick();
   }
+
+  function resume() {
+    const s = readStorage();
+    if (s.pausedRemaining === null) return;
+    writeStorage({
+      endTime: Date.now() + s.pausedRemaining * 1000,
+      pausedRemaining: null,
+      total: s.total,
+    });
+    tick();
+  }
+
+  function stop() {
+    clearStorage();
+    tick();
+  }
+
+  return {
+    remaining,
+    isRunning,
+    isPaused,
+    isDone,
+    progress,
+    total: stored.total,
+    start,
+    pause,
+    resume,
+    stop,
+  };
+}
+
+// ── Floating pill shown when sheet is closed but timer is active ───────────────
+function RestTimerPill({
+  remaining,
+  isPaused,
+  isDone,
+  onOpen,
+  onStop,
+}: {
+  remaining: number | null;
+  isPaused: boolean;
+  isDone: boolean;
+  onOpen: () => void;
+  onStop: () => void;
+}) {
+  if (remaining === null && !isDone) return null;
+  const mins = remaining !== null ? Math.floor(remaining / 60) : 0;
+  const secs = remaining !== null ? remaining % 60 : 0;
+
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full bg-zinc-900 border border-white/15 shadow-2xl px-4 py-2.5">
+      <BedDouble className={`h-4 w-4 ${isDone ? 'text-emerald-400' : 'text-blue-400'}`} />
+      {isDone ? (
+        <span className="text-sm font-bold text-emerald-400">Rest done!</span>
+      ) : (
+        <span className="text-sm font-black tabular-nums text-white">
+          {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+          {isPaused && <span className="ml-1.5 text-[10px] font-normal text-white/40">paused</span>}
+        </span>
+      )}
+      <button
+        onClick={onOpen}
+        className="text-xs text-white/50 hover:text-white transition-colors px-1"
+      >
+        Open
+      </button>
+      <div className="w-px h-4 bg-white/15" />
+      <button onClick={onStop} className="text-white/40 hover:text-red-400 transition-colors">
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+// ── Sheet ─────────────────────────────────────────────────────────────────────
+function RestTimerSheet({
+  onClose,
+  timer,
+}: {
+  onClose: () => void;
+  timer: ReturnType<typeof useRestTimer>;
+}) {
+  const [custom, setCustom] = useState('');
+  const { remaining, isRunning, isPaused, isDone, progress, total, start, pause, resume, stop } =
+    timer;
 
   const mins = remaining !== null ? Math.floor(remaining / 60) : 0;
   const secs = remaining !== null ? remaining % 60 : 0;
-  const totalForPreset = selected ?? (parseInt(custom, 10) || 0);
-  const progress = totalForPreset > 0 && remaining !== null ? remaining / totalForPreset : 1;
   const circumference = 2 * Math.PI * 54;
 
   return (
@@ -222,10 +343,9 @@ function RestTimerSheet({ onClose }: { onClose: () => void }) {
 
         <div className="px-5 py-5 space-y-5">
           {/* Countdown ring */}
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-3">
             <div className="relative w-36 h-36">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                {/* Track */}
                 <circle
                   cx="60"
                   cy="60"
@@ -234,22 +354,21 @@ function RestTimerSheet({ onClose }: { onClose: () => void }) {
                   stroke="rgba(255,255,255,0.08)"
                   strokeWidth="8"
                 />
-                {/* Progress */}
                 <circle
                   cx="60"
                   cy="60"
                   r="54"
                   fill="none"
-                  stroke={done ? '#22c55e' : '#3b82f6'}
+                  stroke={isDone ? '#22c55e' : '#3b82f6'}
                   strokeWidth="8"
                   strokeLinecap="round"
                   strokeDasharray={circumference}
                   strokeDashoffset={circumference * (1 - progress)}
-                  className="transition-all duration-1000"
+                  className="transition-all duration-500"
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                {done ? (
+                {isDone ? (
                   <p className="text-lg font-bold text-emerald-400">Done!</p>
                 ) : remaining !== null ? (
                   <>
@@ -257,7 +376,7 @@ function RestTimerSheet({ onClose }: { onClose: () => void }) {
                       {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
                     </p>
                     <p className="text-[10px] text-white/40 mt-0.5">
-                      {paused ? 'paused' : 'remaining'}
+                      {isPaused ? 'paused' : 'remaining'}
                     </p>
                   </>
                 ) : (
@@ -266,18 +385,18 @@ function RestTimerSheet({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {/* Pause / Stop controls */}
-            {remaining !== null && !done && (
+            {/* Controls */}
+            {(isRunning || isPaused) && !isDone && (
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setPaused((p) => !p)}
+                  onClick={isPaused ? resume : pause}
                   className="flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-semibold transition-colors"
                 >
-                  {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                  {paused ? 'Resume' : 'Pause'}
+                  {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                  {isPaused ? 'Resume' : 'Pause'}
                 </button>
                 <button
-                  onClick={handleStop}
+                  onClick={stop}
                   className="flex items-center gap-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 px-4 py-2 text-sm font-semibold transition-colors"
                 >
                   <X className="h-4 w-4" />
@@ -285,11 +404,9 @@ function RestTimerSheet({ onClose }: { onClose: () => void }) {
                 </button>
               </div>
             )}
-
-            {/* Restart after done */}
-            {done && (
+            {isDone && (
               <button
-                onClick={handleStop}
+                onClick={stop}
                 className="rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 px-5 py-2 text-sm font-semibold transition-colors"
               >
                 Reset
@@ -307,14 +424,13 @@ function RestTimerSheet({ onClose }: { onClose: () => void }) {
                 <button
                   key={p.seconds}
                   onClick={() => {
-                    setSelected(p.seconds);
                     setCustom('');
-                    startTimer(p.seconds);
+                    start(p.seconds);
                   }}
                   className={`rounded-2xl py-3 text-sm font-bold transition-colors ${
-                    selected === p.seconds && remaining !== null
+                    total === p.seconds && (isRunning || isPaused)
                       ? 'bg-blue-500 text-white'
-                      : 'bg-white/8 text-white/70 hover:bg-white/15'
+                      : 'bg-white/[0.08] text-white/70 hover:bg-white/15'
                   }`}
                 >
                   {p.label}
@@ -323,7 +439,7 @@ function RestTimerSheet({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* Custom input */}
+          {/* Custom */}
           <div>
             <p className="text-xs text-white/40 font-semibold uppercase tracking-wide mb-2">
               Custom (seconds)
@@ -333,15 +449,15 @@ function RestTimerSheet({ onClose }: { onClose: () => void }) {
                 type="number"
                 min={1}
                 value={custom}
-                onChange={(e) => {
-                  setCustom(e.target.value);
-                  setSelected(null);
-                }}
+                onChange={(e) => setCustom(e.target.value)}
                 placeholder="e.g. 90"
-                className="flex-1 rounded-xl bg-white/8 border border-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-blue-500"
+                className="flex-1 rounded-xl bg-white/[0.08] border border-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-blue-500"
               />
               <button
-                onClick={handleCustomStart}
+                onClick={() => {
+                  const s = parseInt(custom, 10);
+                  if (s > 0) start(s);
+                }}
                 disabled={!custom || parseInt(custom, 10) <= 0}
                 className="rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-colors"
               >
@@ -370,6 +486,7 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
     unit: string;
   } | null>(null);
   const [restTimerOpen, setRestTimerOpen] = useState(false);
+  const restTimer = useRestTimer();
 
   const fetchSession = useCallback(async () => {
     const res = await fetch(`/api/client/sessions/${id}`);
@@ -704,8 +821,21 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {/* Rest timer — floating pill when sheet is closed */}
+      {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
+        <RestTimerPill
+          remaining={restTimer.remaining}
+          isPaused={restTimer.isPaused}
+          isDone={restTimer.isDone}
+          onOpen={() => setRestTimerOpen(true)}
+          onStop={restTimer.stop}
+        />
+      )}
+
       {/* Rest timer sheet */}
-      {restTimerOpen && <RestTimerSheet onClose={() => setRestTimerOpen(false)} />}
+      {restTimerOpen && (
+        <RestTimerSheet onClose={() => setRestTimerOpen(false)} timer={restTimer} />
+      )}
 
       {/* Exercise progress modal */}
       {progressModal && (
