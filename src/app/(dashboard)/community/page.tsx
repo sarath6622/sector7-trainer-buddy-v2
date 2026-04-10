@@ -299,7 +299,7 @@ function PostCard({
   }
 
   return (
-    <article className="border-b border-border/40 bg-background">
+    <article className="border-b border-border/70 bg-background">
       {/* ── Author header ── */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
@@ -315,6 +315,7 @@ function PostCard({
           <button
             className="text-muted-foreground hover:text-destructive p-1 transition-colors"
             onClick={() => onDelete(post.id)}
+            aria-label="Delete post"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -679,9 +680,9 @@ export default function CommunityFeedPage() {
 
   if (loading) {
     return (
-      <div className="max-w-lg mx-auto">
+      <div className="-mx-4 -mt-4 md:-mx-6 md:-mt-6 max-w-lg md:mx-auto">
         {/* Header skeleton */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-border/40">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-border/70">
           <div className="space-y-1.5">
             <Skeleton className="h-6 w-32" />
             <Skeleton className="h-3.5 w-48" />
@@ -690,7 +691,7 @@ export default function CommunityFeedPage() {
         </div>
         {/* Post skeletons */}
         {[1, 2].map((i) => (
-          <div key={i} className="border-b border-border/40">
+          <div key={i} className="border-b border-border/70">
             <div className="flex items-center gap-3 px-4 py-3">
               <Skeleton className="h-11 w-11 rounded-full" />
               <div className="space-y-1.5">
@@ -725,9 +726,9 @@ export default function CommunityFeedPage() {
         }
       `}</style>
 
-      <div className="max-w-lg mx-auto">
+      <div className="-mx-4 -mt-4 md:-mx-6 md:-mt-6 max-w-lg md:mx-auto">
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-border/40">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-border/70">
           <div>
             <h1 className="text-xl font-bold">Community</h1>
             <p className="text-xs text-muted-foreground">PRs, achievements & gym energy</p>
