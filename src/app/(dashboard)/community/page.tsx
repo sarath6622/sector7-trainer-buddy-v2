@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
   Heart,
@@ -8,14 +9,14 @@ import {
   Trophy,
   Trash2,
   Send,
-  ChevronDown,
   X,
   Flame,
   Dumbbell,
   Zap,
   Star,
+  MoreHorizontal,
+  Flag,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
@@ -51,36 +52,36 @@ interface Post {
   _count: { reactions: number; comments: number };
 }
 
-// ─── PR achievement banner images (SVG gradients) ─────
+// ─── PR themes ────────────────────────────────────────
 
 const PR_THEMES = [
   {
     bg: 'from-orange-600 via-orange-500 to-yellow-400',
-    icon: <Trophy className="h-12 w-12 text-white drop-shadow-lg" />,
+    icon: <Trophy className="h-14 w-14 text-white drop-shadow-lg" />,
     label: 'PERSONAL RECORD',
     pattern: 'radial-gradient(circle at 20% 50%, rgba(255,255,255,0.08) 0%, transparent 60%)',
   },
   {
     bg: 'from-red-700 via-red-500 to-orange-400',
-    icon: <Flame className="h-12 w-12 text-white drop-shadow-lg" />,
+    icon: <Flame className="h-14 w-14 text-white drop-shadow-lg" />,
     label: 'NEW BEST',
     pattern: 'radial-gradient(circle at 80% 30%, rgba(255,255,255,0.1) 0%, transparent 50%)',
   },
   {
     bg: 'from-zinc-800 via-zinc-700 to-zinc-600',
-    icon: <Dumbbell className="h-12 w-12 text-orange-400 drop-shadow-lg" />,
+    icon: <Dumbbell className="h-14 w-14 text-orange-400 drop-shadow-lg" />,
     label: 'CRUSHED IT',
     pattern: 'radial-gradient(circle at 50% 80%, rgba(255,165,0,0.1) 0%, transparent 60%)',
   },
   {
     bg: 'from-amber-700 via-yellow-600 to-yellow-400',
-    icon: <Zap className="h-12 w-12 text-white drop-shadow-lg" />,
+    icon: <Zap className="h-14 w-14 text-white drop-shadow-lg" />,
     label: 'POWER MOVE',
     pattern: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.12) 0%, transparent 50%)',
   },
   {
     bg: 'from-stone-800 via-orange-900 to-orange-700',
-    icon: <Star className="h-12 w-12 text-yellow-300 drop-shadow-lg" />,
+    icon: <Star className="h-14 w-14 text-yellow-300 drop-shadow-lg" />,
     label: 'MILESTONE',
     pattern: 'radial-gradient(circle at 70% 60%, rgba(255,255,255,0.07) 0%, transparent 55%)',
   },
@@ -102,11 +103,18 @@ function Avatar({
 }: {
   name: string;
   imageUrl?: string | null;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
 }) {
-  const sizeClass = size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm';
+  const sizeClass =
+    size === 'sm' ? 'w-8 h-8 text-xs' : size === 'lg' ? 'w-11 h-11 text-sm' : 'w-9 h-9 text-xs';
   if (imageUrl) {
-    return <img src={imageUrl} alt={name} className={`${sizeClass} rounded-full object-cover`} />;
+    return (
+      <img
+        src={imageUrl}
+        alt={name}
+        className={`${sizeClass} rounded-full object-cover ring-2 ring-white/10`}
+      />
+    );
   }
   const initials = name
     .split(' ')
@@ -116,7 +124,7 @@ function Avatar({
     .toUpperCase();
   return (
     <div
-      className={`${sizeClass} rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center text-white font-bold flex-shrink-0`}
+      className={`${sizeClass} rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center text-white font-bold flex-shrink-0 ring-2 ring-white/10`}
     >
       {initials}
     </div>
@@ -140,14 +148,15 @@ function CommentDrawer({
 }) {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const drawerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Close on backdrop click
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
     }
     document.addEventListener('keydown', handleKey);
+    // Focus input when drawer opens
+    setTimeout(() => inputRef.current?.focus(), 100);
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
@@ -164,30 +173,33 @@ function CommentDrawer({
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} />
-      {/* Drawer */}
-      <div
-        ref={drawerRef}
-        className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-2xl border-t border-white/10 flex flex-col max-h-[80vh]"
-        style={{ maxWidth: '100vw' }}
-      >
-        {/* Handle + header */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-3 border-b border-white/10 flex-shrink-0">
-          <div className="absolute left-1/2 -translate-x-1/2 top-2 w-10 h-1 rounded-full bg-white/20" />
-          <p className="font-semibold text-sm pt-2">
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-3xl border-t border-white/10 flex flex-col max-h-[85vh]">
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-white/20" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pb-3 border-b border-white/10">
+          <p className="font-bold text-base">
             Comments
-            <span className="ml-2 text-muted-foreground font-normal">({post._count.comments})</span>
+            <span className="ml-2 text-sm text-muted-foreground font-normal">
+              {post._count.comments}
+            </span>
           </p>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1">
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-muted-foreground hover:text-foreground"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Comments list */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
           {post.comments.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground text-sm">
+            <div className="text-center py-12 text-muted-foreground text-sm">
               No comments yet. Be the first!
             </div>
           ) : (
@@ -197,18 +209,17 @@ function CommentDrawer({
                 <div key={c.id} className="flex items-start gap-3 group">
                   <Avatar name={cName} imageUrl={c.client.user.profileImageUrl} size="sm" />
                   <div className="flex-1 min-w-0">
-                    <div className="bg-white/5 rounded-2xl px-3 py-2">
-                      <p className="text-xs font-semibold text-foreground">{cName}</p>
-                      <p className="text-sm text-foreground/90 mt-0.5">{c.content}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 ml-3">
+                    <span className="text-xs font-bold text-foreground mr-2">{cName}</span>
+                    <span className="text-sm text-foreground/90">{c.content}</span>
+                    <p className="text-[11px] text-muted-foreground mt-1">
                       {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
                     </p>
                   </div>
                   {c.client.id === myClientProfileId && (
                     <button
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive p-1"
+                      className="text-muted-foreground/50 active:text-destructive p-1 mt-0.5"
                       onClick={() => onDeleteComment(post.id, c.id)}
+                      aria-label="Delete comment"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -221,12 +232,13 @@ function CommentDrawer({
 
         {/* Input */}
         {myClientProfileId && (
-          <div className="px-4 py-3 border-t border-white/10 flex items-end gap-2 flex-shrink-0 bg-zinc-900">
+          <div className="px-4 py-3 border-t border-white/10 flex items-end gap-3 bg-zinc-900 pb-safe">
             <Textarea
+              ref={inputRef}
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
               placeholder="Add a comment…"
-              className="resize-none text-sm min-h-[40px] max-h-[100px] bg-white/5 border-white/10 rounded-2xl"
+              className="resize-none text-sm min-h-[40px] max-h-[100px] bg-white/5 border-white/10 rounded-2xl flex-1"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -234,14 +246,13 @@ function CommentDrawer({
                 }
               }}
             />
-            <Button
-              size="icon"
-              className="rounded-full bg-orange-500 hover:bg-orange-600 flex-shrink-0"
+            <button
               onClick={handleComment}
               disabled={submitting || !commentText.trim()}
+              className="rounded-full bg-orange-500 hover:bg-orange-600 disabled:opacity-40 w-10 h-10 flex items-center justify-center flex-shrink-0 transition-colors"
             >
-              <Send className="h-4 w-4" />
-            </Button>
+              <Send className="h-4 w-4 text-white" />
+            </button>
           </div>
         )}
       </div>
@@ -257,128 +268,261 @@ function PostCard({
   onReact,
   onOpenComments,
   onDelete,
+  onOptions,
 }: {
   post: Post;
   myClientProfileId: string | null | undefined;
   onReact: (postId: string) => void;
   onOpenComments: (post: Post) => void;
   onDelete: (postId: string) => void;
+  onOptions: (postId: string) => void;
 }) {
   const isReacted = post.reactions.some((r) => r.clientProfileId === myClientProfileId);
   const isOwner = post.client.id === myClientProfileId;
   const fullName = `${post.client.user.firstName} ${post.client.user.lastName}`;
   const theme = getPRTheme(post.exerciseId);
 
+  // Double-tap to like
+  const lastTapRef = useRef(0);
+  const [showHeartBurst, setShowHeartBurst] = useState(false);
+
+  function handleDoubleTap() {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      if (!isReacted) {
+        onReact(post.id);
+        setShowHeartBurst(true);
+        setTimeout(() => setShowHeartBurst(false), 800);
+      }
+    }
+    lastTapRef.current = now;
+  }
+
   return (
-    <article className="bg-card border border-border/60 rounded-2xl overflow-hidden">
-      {/* PR achievement banner */}
-      {post.isAutoGenerated && post.exercise && (
+    <article className="border-b border-border/40 bg-background">
+      {/* ── Author header ── */}
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={fullName} imageUrl={post.client.user.profileImageUrl} size="lg" />
+          <div>
+            <p className="font-bold text-sm leading-tight">{fullName}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+            </p>
+          </div>
+        </div>
+        {isOwner ? (
+          <button
+            className="text-muted-foreground hover:text-destructive p-1 transition-colors"
+            onClick={() => onDelete(post.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        ) : (
+          <button className="text-muted-foreground p-1" onClick={() => onOptions(post.id)}>
+            <MoreHorizontal className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+
+      {/* ── PR achievement banner (full-width, like a post image) ── */}
+      {post.isAutoGenerated && post.exercise ? (
         <div
-          className={`relative bg-gradient-to-br ${theme.bg} px-6 py-8 flex flex-col items-center justify-center gap-3 overflow-hidden`}
-          style={{
-            background: `${theme.pattern}, linear-gradient(135deg, var(--tw-gradient-stops))`,
-          }}
+          className={`relative bg-gradient-to-br ${theme.bg} w-full aspect-[4/3] flex flex-col items-center justify-center gap-4 overflow-hidden select-none`}
+          onTouchEnd={handleDoubleTap}
+          onClick={handleDoubleTap}
         >
-          {/* Decorative ring */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full border-4 border-white" />
-            <div className="absolute -bottom-12 -left-6 w-32 h-32 rounded-full border-2 border-white" />
+          {/* Radial pattern overlay */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: theme.pattern }}
+          />
+          {/* Decorative rings */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none">
+            <div className="absolute -top-10 -right-10 w-52 h-52 rounded-full border-4 border-white" />
+            <div className="absolute -bottom-16 -left-8 w-44 h-44 rounded-full border-2 border-white" />
           </div>
 
-          {/* Icon + label */}
-          <div className="relative z-10 flex flex-col items-center gap-2">
+          <div className="relative z-10 flex flex-col items-center gap-3">
             {theme.icon}
-            <span className="text-xs font-black tracking-widest text-white/70 uppercase">
+            <span className="text-xs font-black tracking-widest text-white/90 uppercase">
               {theme.label}
             </span>
           </div>
 
-          {/* Exercise + weight */}
-          <div className="relative z-10 text-center">
-            <p className="text-white/80 text-sm font-medium">{post.exercise.name}</p>
-            <p className="text-white font-black text-4xl tracking-tight leading-none mt-1">
-              {post.weightKg} <span className="text-2xl">kg</span>
+          <div className="relative z-10 text-center px-6">
+            <p className="text-white text-base font-semibold">{post.exercise.name}</p>
+            <p className="text-white font-black text-6xl tracking-tight leading-none mt-2">
+              {post.weightKg}
+              <span className="text-3xl ml-1 font-bold">kg</span>
             </p>
             {post.reps != null && (
-              <p className="text-white/70 text-sm mt-1 font-medium">× {post.reps} reps</p>
+              <p className="text-white/85 text-base mt-2 font-medium">× {post.reps} reps</p>
             )}
           </div>
-        </div>
-      )}
 
-      {/* Post body */}
-      <div className="px-4 pt-3 pb-1">
-        {/* Author row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar name={fullName} imageUrl={post.client.user.profileImageUrl} />
-            <div>
-              <p className="font-semibold text-sm">{fullName}</p>
-              <p className="text-xs text-muted-foreground">
-                {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-              </p>
+          {/* Double-tap heart burst */}
+          {showHeartBurst && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+              <Heart
+                className="h-28 w-28 fill-white text-white opacity-0"
+                style={{
+                  animation: 'heartBurst 0.8s ease-out forwards',
+                }}
+              />
             </div>
-          </div>
-          {isOwner && (
-            <button
-              className="text-muted-foreground hover:text-destructive p-1 transition-colors"
-              onClick={() => onDelete(post.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
           )}
         </div>
+      ) : (
+        // Text-only post
+        post.content && (
+          <div className="px-4 pb-1">
+            <p className="text-sm leading-relaxed">{post.content}</p>
+          </div>
+        )
+      )}
 
-        {/* Caption */}
-        {post.content && (
-          <p className="text-sm text-foreground mt-3 leading-relaxed">{post.content}</p>
-        )}
-      </div>
-
-      {/* Counts row */}
-      {(post._count.reactions > 0 || post._count.comments > 0) && (
-        <div className="flex items-center gap-4 px-4 py-2 text-xs text-muted-foreground">
+      {/* ── Action row ── */}
+      <div className="px-4 pt-3 pb-1 flex items-center gap-5">
+        <button
+          onClick={() => onReact(post.id)}
+          disabled={!myClientProfileId}
+          className="flex items-center gap-1.5 transition-transform active:scale-75"
+          aria-label="Praise"
+        >
+          <Heart
+            className={`h-6 w-6 transition-colors ${
+              isReacted ? 'fill-red-500 text-red-500' : 'text-foreground'
+            }`}
+          />
           {post._count.reactions > 0 && (
-            <span className="flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
-                <Heart className="h-2.5 w-2.5 fill-white text-white" />
-              </span>
+            <span
+              className={`text-sm font-semibold ${isReacted ? 'text-red-500' : 'text-foreground'}`}
+            >
               {post._count.reactions}
             </span>
           )}
-          {post._count.comments > 0 && (
-            <button
-              className="ml-auto hover:text-foreground transition-colors"
-              onClick={() => onOpenComments(post)}
-            >
-              {post._count.comments} comment{post._count.comments !== 1 ? 's' : ''}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Action bar */}
-      <div className="flex items-center border-t border-border/50 mx-0">
-        <button
-          className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors ${
-            isReacted ? 'text-red-400' : 'text-muted-foreground hover:text-foreground'
-          }`}
-          onClick={() => onReact(post.id)}
-          disabled={!myClientProfileId}
-        >
-          <Heart className={`h-4.5 w-4.5 ${isReacted ? 'fill-red-400 text-red-400' : ''}`} />
-          {isReacted ? 'Praised' : 'Praise'}
         </button>
-        <div className="w-px h-6 bg-border/50" />
         <button
-          className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           onClick={() => onOpenComments(post)}
+          className="flex items-center gap-1.5 transition-transform active:scale-75"
+          aria-label="Comment"
         >
-          <MessageCircle className="h-4 w-4" />
-          Comment
+          <MessageCircle className="h-6 w-6 text-foreground" />
+          {post._count.comments > 0 && (
+            <span className="text-sm font-semibold text-foreground">{post._count.comments}</span>
+          )}
         </button>
       </div>
+
+      {/* ── Caption (for PR posts the exercise name doubles as caption) ── */}
+      {post.content && post.isAutoGenerated && (
+        <p className="px-4 pb-1 text-sm">
+          <span className="font-bold mr-2">{fullName}</span>
+          {post.content}
+        </p>
+      )}
+
+      {/* ── Comments preview ── */}
+      {post._count.comments > 1 && (
+        <button
+          className="px-4 pb-1 text-sm text-muted-foreground hover:text-foreground transition-colors text-left"
+          onClick={() => onOpenComments(post)}
+        >
+          View all {post._count.comments} comments
+        </button>
+      )}
+
+      {/* ── First comment preview ── */}
+      {post.comments[0] && (
+        <p className="px-4 pb-3 text-sm line-clamp-1">
+          <span className="font-bold mr-1">
+            {post.comments[0].client.user.firstName} {post.comments[0].client.user.lastName}
+          </span>
+          {post.comments[0].content}
+        </p>
+      )}
+
+      {/* Spacer if no bottom content */}
+      {!post.content && post._count.comments === 0 && post._count.reactions === 0 && (
+        <div className="pb-3" />
+      )}
     </article>
+  );
+}
+
+// ─── Post Options Sheet ───────────────────────────────
+
+function PostOptionsSheet({ onReport, onClose }: { onReport: () => void; onClose: () => void }) {
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-3xl border-t border-white/10 pb-safe">
+        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mt-3 mb-2" />
+        <div className="px-4 py-2">
+          <button
+            onClick={onReport}
+            className="w-full flex items-center gap-4 px-2 py-4 rounded-2xl hover:bg-white/5 active:bg-white/10 transition-colors text-left"
+          >
+            <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+              <Flag className="h-5 w-5 text-red-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Report post</p>
+              <p className="text-xs text-muted-foreground">Flag inappropriate content</p>
+            </div>
+          </button>
+        </div>
+        <div className="px-4 pb-4">
+          <button
+            onClick={onClose}
+            className="w-full rounded-2xl border border-white/10 py-3 text-sm font-semibold text-muted-foreground hover:bg-white/5 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Delete Confirm Sheet ─────────────────────────────
+
+function DeleteConfirmSheet({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40" onClick={onCancel} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-3xl border-t border-white/10 p-6 pb-safe space-y-4">
+        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+        <div className="flex flex-col items-center text-center gap-2">
+          <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center">
+            <Trash2 className="h-6 w-6 text-red-400" />
+          </div>
+          <p className="font-bold text-base">Delete post?</p>
+          <p className="text-sm text-muted-foreground">This cannot be undone.</p>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-2xl border border-white/10 py-3 text-sm font-semibold text-muted-foreground hover:bg-white/5 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-2xl bg-red-500 hover:bg-red-600 py-3 text-sm font-semibold text-white transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -386,12 +530,16 @@ function PostCard({
 
 export default function CommunityFeedPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [drawerPost, setDrawerPost] = useState<Post | null>(null);
+  const [deletePostId, setDeletePostId] = useState<string | null>(null);
+  const [optionsPostId, setOptionsPostId] = useState<string | null>(null);
   const myClientProfileId = session?.user?.clientProfileId;
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const fetchFeed = useCallback(async (cursor?: string) => {
     const url = `/api/community/feed${cursor ? `?cursor=${cursor}` : ''}`;
@@ -409,6 +557,22 @@ export default function CommunityFeedPage() {
       .catch(() => toast.error('Failed to load feed'))
       .finally(() => setLoading(false));
   }, [fetchFeed]);
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    if (!sentinelRef.current || !nextCursor) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && nextCursor && !loadingMore) {
+          loadMore();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextCursor, loadingMore]);
 
   async function loadMore() {
     if (!nextCursor || loadingMore) return;
@@ -473,7 +637,6 @@ export default function CommunityFeedPage() {
           : p,
       ),
     );
-    // Update drawer post too
     setDrawerPost((prev) =>
       prev?.id === postId
         ? {
@@ -486,6 +649,7 @@ export default function CommunityFeedPage() {
   }
 
   async function handleDelete(postId: string) {
+    setDeletePostId(null);
     const res = await fetch(`/api/community/posts/${postId}`, { method: 'DELETE' });
     if (!res.ok) {
       toast.error('Could not delete post');
@@ -515,14 +679,33 @@ export default function CommunityFeedPage() {
 
   if (loading) {
     return (
-      <div className="max-w-lg mx-auto p-4 space-y-4">
-        <Skeleton className="h-8 w-40" />
+      <div className="max-w-lg mx-auto">
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-border/40">
+          <div className="space-y-1.5">
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-3.5 w-48" />
+          </div>
+          <Skeleton className="h-9 w-28 rounded-xl" />
+        </div>
+        {/* Post skeletons */}
         {[1, 2].map((i) => (
-          <div key={i} className="rounded-2xl overflow-hidden border border-border/60 space-y-0">
-            <Skeleton className="h-52 w-full rounded-none" />
-            <div className="p-4 space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-20" />
+          <div key={i} className="border-b border-border/40">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Skeleton className="h-11 w-11 rounded-full" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </div>
+            <Skeleton className="w-full aspect-square rounded-none" />
+            <div className="px-4 pt-3 pb-4 space-y-2">
+              <div className="flex gap-4">
+                <Skeleton className="h-6 w-6 rounded-full" />
+                <Skeleton className="h-6 w-6 rounded-full" />
+              </div>
+              <Skeleton className="h-3.5 w-20" />
+              <Skeleton className="h-3.5 w-48" />
             </div>
           </div>
         ))}
@@ -532,27 +715,35 @@ export default function CommunityFeedPage() {
 
   return (
     <>
-      <div className="max-w-lg mx-auto p-4 space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+      {/* Heart burst keyframe */}
+      <style>{`
+        @keyframes heartBurst {
+          0%   { opacity: 0; transform: scale(0.2); }
+          30%  { opacity: 1; transform: scale(1.2); }
+          60%  { opacity: 1; transform: scale(1.0); }
+          100% { opacity: 0; transform: scale(1.1); }
+        }
+      `}</style>
+
+      <div className="max-w-lg mx-auto">
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-border/40">
           <div>
-            <h1 className="text-2xl font-bold">Community</h1>
-            <p className="text-sm text-muted-foreground">PRs, achievements & gym energy</p>
+            <h1 className="text-xl font-bold">Community</h1>
+            <p className="text-xs text-muted-foreground">PRs, achievements & gym energy</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 rounded-xl"
-            onClick={() => (window.location.href = '/community/leaderboard')}
+          <button
+            onClick={() => router.push('/community/leaderboard')}
+            className="flex items-center gap-1.5 rounded-xl border border-border/60 px-3 py-1.5 text-sm font-medium hover:bg-muted/50 transition-colors"
           >
-            <Trophy className="h-4 w-4" />
+            <Trophy className="h-4 w-4 text-amber-500" />
             Leaderboard
-          </Button>
+          </button>
         </div>
 
-        {/* Feed */}
+        {/* ── Feed ── */}
         {posts.length === 0 ? (
-          <div className="text-center py-20 text-muted-foreground space-y-3">
+          <div className="text-center py-24 text-muted-foreground space-y-3">
             <div className="w-20 h-20 rounded-full bg-orange-500/10 flex items-center justify-center mx-auto">
               <Trophy className="h-10 w-10 text-orange-500/40" />
             </div>
@@ -560,7 +751,7 @@ export default function CommunityFeedPage() {
             <p className="text-sm">Hit a PR to get the community going!</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <>
             {posts.map((post) => (
               <PostCard
                 key={post.id}
@@ -568,27 +759,47 @@ export default function CommunityFeedPage() {
                 myClientProfileId={myClientProfileId}
                 onReact={handleReact}
                 onOpenComments={setDrawerPost}
-                onDelete={handleDelete}
+                onDelete={setDeletePostId}
+                onOptions={setOptionsPostId}
               />
             ))}
-          </div>
-        )}
 
-        {/* Load more */}
-        {nextCursor && (
-          <div className="flex justify-center pt-2">
-            <Button
-              variant="outline"
-              onClick={loadMore}
-              disabled={loadingMore}
-              className="gap-2 rounded-xl"
-            >
-              {loadingMore ? 'Loading…' : 'Load more'}
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </div>
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="h-12 flex items-center justify-center">
+              {loadingMore && (
+                <div className="flex gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce"
+                      style={{ animationDelay: `${i * 0.15}s` }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
+
+      {/* Post options sheet */}
+      {optionsPostId && (
+        <PostOptionsSheet
+          onReport={() => {
+            setOptionsPostId(null);
+            toast.success('Report submitted. We will review it shortly.');
+          }}
+          onClose={() => setOptionsPostId(null)}
+        />
+      )}
+
+      {/* Delete confirmation sheet */}
+      {deletePostId && (
+        <DeleteConfirmSheet
+          onConfirm={() => handleDelete(deletePostId)}
+          onCancel={() => setDeletePostId(null)}
+        />
+      )}
 
       {/* Comment drawer */}
       {drawerPost && (
