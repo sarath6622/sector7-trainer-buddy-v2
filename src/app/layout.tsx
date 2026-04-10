@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { Providers } from '@/components/Providers';
+import { NavigationProgress } from '@/components/layout/NavigationProgress';
 import './globals.css';
 
 const inter = Inter({
@@ -46,6 +47,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
+        <NavigationProgress />
         <Providers>{children}</Providers>
         <Toaster
           position="bottom-right"

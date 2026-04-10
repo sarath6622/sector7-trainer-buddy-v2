@@ -255,7 +255,7 @@ export function TopNav({
                       >
                         <span
                           className={cn(
-                            'flex items-baseline gap-4 border-b border-white/10 py-5 transition-colors',
+                            'flex items-baseline gap-4 border-b border-white/10 py-5 transition-all active:scale-95 active:opacity-70',
                             isActive ? 'text-[#E8652C]' : 'text-white/80 hover:text-white',
                           )}
                         >

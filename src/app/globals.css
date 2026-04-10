@@ -2,6 +2,32 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
+/* ── NProgress — branded to Sector 7 orange ─────────────────────────────── */
+#nprogress {
+  pointer-events: none;
+}
+#nprogress .bar {
+  background: #e8652c;
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+}
+#nprogress .peg {
+  display: block;
+  position: absolute;
+  right: 0;
+  width: 100px;
+  height: 100%;
+  box-shadow:
+    0 0 10px #e8652c,
+    0 0 5px #e8652c;
+  opacity: 1;
+  transform: rotate(3deg) translate(0px, -4px);
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

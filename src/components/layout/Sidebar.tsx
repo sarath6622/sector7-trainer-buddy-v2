@@ -40,7 +40,7 @@ export function Sidebar({ navItems, navBadges, className }: SidebarProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all active:scale-95 active:opacity-70',
                 isActive
                   ? 'bg-primary/15 text-primary font-semibold'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
