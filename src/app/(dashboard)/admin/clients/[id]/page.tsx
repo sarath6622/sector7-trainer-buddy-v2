@@ -3,14 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, KeyRound, Plus, Save, Trash2, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useConfirm } from '@/hooks/use-confirm';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -66,6 +62,39 @@ interface TrainerOption {
   trainerProfile: { id: string } | null;
 }
 
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-3">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+          {title}
+        </p>
+        {action}
+      </div>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
 export default function ClientProfilePage() {
   const { confirm, ConfirmDialog } = useConfirm();
   const params = useParams();
@@ -77,18 +106,15 @@ export default function ClientProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Reset password state
   const [resetPassword, setResetPassword] = useState('');
   const [resetSaving, setResetSaving] = useState(false);
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
 
-  // Badges state
   const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>([]);
   const [lockedBadges, setLockedBadges] = useState<LockedBadge[]>([]);
   const [badgesLoading, setBadgesLoading] = useState(true);
 
-  // PT Packages state
   const [packages, setPackages] = useState<PtPackage[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
   const [trainers, setTrainers] = useState<TrainerOption[]>([]);
@@ -97,12 +123,11 @@ export default function ClientProfilePage() {
     trainerProfileId: '',
     sessionsPerMonth: '12',
     sessionCharge: '',
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: new Date().toISOString().split('T')[0] ?? '',
   });
   const [mappingSaving, setMappingSaving] = useState(false);
   const [mappingError, setMappingError] = useState('');
 
-  // Form state
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -157,7 +182,7 @@ export default function ClientProfilePage() {
         setPackages(data);
       }
     } catch {
-      // silently fail — packages section will show empty
+      /* silent */
     } finally {
       setPackagesLoading(false);
     }
@@ -171,7 +196,7 @@ export default function ClientProfilePage() {
         setTrainers(data);
       }
     } catch {
-      // silently fail
+      /* silent */
     }
   }, []);
 
@@ -179,13 +204,9 @@ export default function ClientProfilePage() {
     fetchClient();
     fetchTrainers();
   }, [fetchClient, fetchTrainers]);
-
   useEffect(() => {
-    if (client?.clientProfile?.id) {
-      fetchPackages(client.clientProfile.id);
-    }
+    if (client?.clientProfile?.id) fetchPackages(client.clientProfile.id);
   }, [client?.clientProfile?.id, fetchPackages]);
-
   useEffect(() => {
     if (!id) return;
     setBadgesLoading(true);
@@ -228,11 +249,9 @@ export default function ClientProfilePage() {
         }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error ?? 'Failed to save');
-      } else {
-        await fetchClient();
-      }
+        const d = await res.json();
+        setError(d.error ?? 'Failed to save');
+      } else await fetchClient();
     } catch {
       setError('Failed to save changes');
     } finally {
@@ -251,8 +270,8 @@ export default function ClientProfilePage() {
         body: JSON.stringify({ newPassword: resetPassword }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        setResetError(data.error ?? 'Failed to reset password');
+        const d = await res.json();
+        setResetError(d.error ?? 'Failed to reset password');
       } else {
         setResetPassword('');
         setResetSuccess(true);
@@ -275,9 +294,7 @@ export default function ClientProfilePage() {
     if (!ok) return;
     try {
       const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        router.push('/admin/clients');
-      }
+      if (res.ok) router.push('/admin/clients');
     } catch {
       setError('Failed to delete client');
     }
@@ -302,15 +319,15 @@ export default function ClientProfilePage() {
         }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        setMappingError(data.error ?? 'Failed to create mapping');
+        const d = await res.json();
+        setMappingError(d.error ?? 'Failed to create mapping');
       } else {
         setShowAddMapping(false);
         setMappingForm({
           trainerProfileId: '',
           sessionsPerMonth: '12',
           sessionCharge: '',
-          startDate: new Date().toISOString().split('T')[0],
+          startDate: new Date().toISOString().split('T')[0] ?? '',
         });
         await fetchPackages(client.clientProfile.id);
       }
@@ -328,139 +345,163 @@ export default function ClientProfilePage() {
       confirmText: 'Deactivate',
       variant: 'destructive',
     });
-    if (!ok) return;
-    if (!client?.clientProfile?.id) return;
+    if (!ok || !client?.clientProfile?.id) return;
     try {
       const res = await fetch(`/api/admin/mappings/${pkgId}`, { method: 'DELETE' });
-      if (res.ok) {
-        await fetchPackages(client.clientProfile.id);
-      }
+      if (res.ok) await fetchPackages(client.clientProfile.id);
     } catch {
-      // silently fail
+      /* silent */
     }
   }
 
-  function updateForm(field: string, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  function f(field: string, value: string) {
+    setForm((p) => ({ ...p, [field]: value }));
   }
 
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
+      <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
+        <div className="flex h-14 items-center gap-3 border-b px-4">
+          <Skeleton className="h-8 w-8 rounded-xl" />
+          <Skeleton className="h-4 w-40 rounded-lg" />
+        </div>
+        <div className="flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
+          <Skeleton className="h-40 w-full rounded-2xl" />
+          <Skeleton className="h-48 w-full rounded-2xl" />
+          <Skeleton className="h-24 w-full rounded-2xl" />
+        </div>
       </div>
     );
   }
 
   if (!client) {
-    return <p className="text-muted-foreground">{error || 'Client not found'}</p>;
+    return (
+      <div className="-m-4 md:-m-6 flex h-full items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">{error || 'Client not found'}</p>
+      </div>
+    );
   }
 
+  const initials = `${client.firstName[0]}${client.lastName[0]}`.toUpperCase();
   const activePackages = packages.filter((p) => p.isActive);
   const inactivePackages = packages.filter((p) => !p.isActive);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/admin/clients')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">
-              {client.firstName} {client.lastName}
-            </h1>
-            <p className="text-sm text-muted-foreground">{client.email}</p>
+    <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
+      {/* Sticky header */}
+      <div className="sticky top-0 z-20 border-b border-white/[0.06] bg-background/95 backdrop-blur">
+        <div className="flex h-14 items-center gap-3 px-4">
+          <button
+            onClick={() => router.push('/admin/clients')}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div className="flex flex-1 items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold leading-none">
+                {client.firstName} {client.lastName}
+              </p>
+              <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{client.email}</p>
+            </div>
+            <span
+              className={cn(
+                'shrink-0 rounded-full px-2 py-px text-[10px] font-semibold',
+                client.isActive
+                  ? 'bg-emerald-500/15 text-emerald-400'
+                  : 'bg-muted text-muted-foreground',
+              )}
+            >
+              {client.isActive ? 'Active' : 'Inactive'}
+            </span>
           </div>
-          <Badge variant={client.isActive ? 'default' : 'secondary'}>
-            {client.isActive ? 'Active' : 'Inactive'}
-          </Badge>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="mr-1 h-4 w-4" />
-            <span className="hidden sm:inline">Deactivate</span>
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving}>
-            <Save className="mr-1 h-4 w-4" />
-            {saving ? 'Saving...' : 'Save'}
-          </Button>
+          {/* Actions */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              onClick={handleDelete}
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+            >
+              <Save className="h-3.5 w-3.5" />
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {/* Scrollable form */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="space-y-2.5 px-4 py-3 pb-10">
+          {error && (
+            <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </p>
+          )}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Personal Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
+          {/* Personal Information */}
+          <Section title="Personal Information">
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="First Name">
                 <Input
-                  id="firstName"
                   value={form.firstName}
-                  onChange={(e) => updateForm('firstName', e.target.value)}
+                  onChange={(e) => f('firstName', e.target.value)}
+                  className="h-9 text-xs border-white/[0.08]"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
+              </Field>
+              <Field label="Last Name">
                 <Input
-                  id="lastName"
                   value={form.lastName}
-                  onChange={(e) => updateForm('lastName', e.target.value)}
+                  onChange={(e) => f('lastName', e.target.value)}
+                  className="h-9 text-xs border-white/[0.08]"
                 />
-              </div>
+              </Field>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
+            <Field label="Phone">
               <Input
-                id="phone"
                 value={form.phone}
-                onChange={(e) => updateForm('phone', e.target.value)}
+                onChange={(e) => f('phone', e.target.value)}
+                className="h-9 text-xs border-white/[0.08]"
               />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Emergency Contact">
+                <Input
+                  value={form.emergencyContactName}
+                  onChange={(e) => f('emergencyContactName', e.target.value)}
+                  placeholder="Name"
+                  className="h-9 text-xs border-white/[0.08]"
+                />
+              </Field>
+              <Field label="Emergency Phone">
+                <Input
+                  value={form.emergencyContactPhone}
+                  onChange={(e) => f('emergencyContactPhone', e.target.value)}
+                  className="h-9 text-xs border-white/[0.08]"
+                />
+              </Field>
             </div>
-            <Separator />
-            <div className="space-y-2">
-              <Label htmlFor="emergencyName">Emergency Contact</Label>
-              <Input
-                id="emergencyName"
-                placeholder="Name"
-                value={form.emergencyContactName}
-                onChange={(e) => updateForm('emergencyContactName', e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="emergencyPhone">Emergency Phone</Label>
-              <Input
-                id="emergencyPhone"
-                value={form.emergencyContactPhone}
-                onChange={(e) => updateForm('emergencyContactPhone', e.target.value)}
-              />
-            </div>
-          </CardContent>
-        </Card>
+          </Section>
 
-        {/* Health Metrics */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Health Metrics</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="gender">Gender</Label>
+          {/* Health Metrics */}
+          <Section title="Health Metrics">
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="Gender">
                 <Select
                   value={form.gender || 'unset'}
-                  onValueChange={(v) => updateForm('gender', v === 'unset' ? '' : (v ?? ''))}
+                  onValueChange={(v) => f('gender', v === 'unset' ? '' : (v ?? ''))}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Not set" />
+                  <SelectTrigger className="h-9 text-xs border-white/[0.08]">
+                    <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unset">Not set</SelectItem>
@@ -468,269 +509,240 @@ export default function ClientProfilePage() {
                     <SelectItem value="FEMALE">Female</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="height">Height (cm)</Label>
+              </Field>
+              <Field label="Height (cm)">
                 <Input
-                  id="height"
                   type="number"
                   value={form.height}
-                  onChange={(e) => updateForm('height', e.target.value)}
+                  onChange={(e) => f('height', e.target.value)}
+                  className="h-9 text-xs border-white/[0.08]"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="weight">Weight (kg)</Label>
+              </Field>
+              <Field label="Weight (kg)">
                 <Input
-                  id="weight"
                   type="number"
                   value={form.currentWeight}
-                  onChange={(e) => updateForm('currentWeight', e.target.value)}
+                  onChange={(e) => f('currentWeight', e.target.value)}
+                  className="h-9 text-xs border-white/[0.08]"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bodyFat">Body Fat %</Label>
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Body Fat %">
                 <Input
-                  id="bodyFat"
                   type="number"
                   value={form.bodyFatPercentage}
-                  onChange={(e) => updateForm('bodyFatPercentage', e.target.value)}
+                  onChange={(e) => f('bodyFatPercentage', e.target.value)}
+                  className="h-9 text-xs border-white/[0.08]"
                 />
-              </div>
+              </Field>
+              <Field label="Session Duration (min)">
+                <Input
+                  type="number"
+                  placeholder="Branch default"
+                  value={form.sessionDurationOverrideMin}
+                  onChange={(e) => f('sessionDurationOverrideMin', e.target.value)}
+                  className="h-9 text-xs border-white/[0.08]"
+                />
+              </Field>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="medical">Medical Conditions</Label>
+            <Field label="Medical Conditions">
               <Textarea
-                id="medical"
                 value={form.medicalConditions}
-                onChange={(e) => updateForm('medicalConditions', e.target.value)}
+                rows={2}
+                onChange={(e) => f('medicalConditions', e.target.value)}
+                className="resize-none text-xs border-white/[0.08]"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="goals">Fitness Goals</Label>
+            </Field>
+            <Field label="Fitness Goals">
               <Textarea
-                id="goals"
                 value={form.fitnessGoals}
-                onChange={(e) => updateForm('fitnessGoals', e.target.value)}
+                rows={2}
+                onChange={(e) => f('fitnessGoals', e.target.value)}
+                className="resize-none text-xs border-white/[0.08]"
               />
-            </div>
-            <Separator />
-            <div className="space-y-2">
-              <Label htmlFor="sessionDuration">Session Duration Override (min)</Label>
-              <Input
-                id="sessionDuration"
-                type="number"
-                placeholder="Use branch default"
-                value={form.sessionDurationOverrideMin}
-                onChange={(e) => updateForm('sessionDurationOverrideMin', e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">Leave blank to use branch default</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </Field>
+          </Section>
 
-      {/* Reset Password */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Reset Password</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-3">
-            <Input
-              type="password"
-              placeholder="New password (min 6 characters)"
-              value={resetPassword}
-              onChange={(e) => setResetPassword(e.target.value)}
-              className="max-w-xs"
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleResetPassword}
-              disabled={resetSaving || resetPassword.length < 6}
-            >
-              <KeyRound className="mr-1 h-4 w-4" />
-              {resetSaving ? 'Resetting...' : 'Reset Password'}
-            </Button>
-          </div>
-          {resetError && <p className="text-sm text-destructive">{resetError}</p>}
-          {resetSuccess && <p className="text-sm text-emerald-600">Password reset successfully.</p>}
-        </CardContent>
-      </Card>
-
-      {/* Trainer Mapping / PT Packages */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Trainer Mappings</CardTitle>
-          <Button
-            size="sm"
-            onClick={() => setShowAddMapping(!showAddMapping)}
-            disabled={!client.clientProfile}
-          >
-            {showAddMapping ? <X className="mr-1 h-4 w-4" /> : <Plus className="mr-1 h-4 w-4" />}
-            {showAddMapping ? 'Cancel' : 'Assign Trainer'}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Add Mapping Form */}
-          {showAddMapping && (
-            <div className="rounded-lg border p-4 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="trainerSelect">Trainer</Label>
-                  <select
-                    id="trainerSelect"
-                    className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm"
-                    value={mappingForm.trainerProfileId}
-                    onChange={(e) =>
-                      setMappingForm((prev) => ({ ...prev, trainerProfileId: e.target.value }))
-                    }
-                  >
-                    <option value="">Select a trainer</option>
-                    {trainers
-                      .filter((t) => t.trainerProfile)
-                      .map((t) => (
-                        <option key={t.trainerProfile!.id} value={t.trainerProfile!.id}>
-                          {t.firstName} {t.lastName}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sessionsPerMonth">Sessions / Month</Label>
-                  <Input
-                    id="sessionsPerMonth"
-                    type="number"
-                    min="1"
-                    value={mappingForm.sessionsPerMonth}
-                    onChange={(e) =>
-                      setMappingForm((prev) => ({ ...prev, sessionsPerMonth: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sessionCharge">Session Charge</Label>
-                  <Input
-                    id="sessionCharge"
-                    type="number"
-                    min="0"
-                    placeholder="Optional"
-                    value={mappingForm.sessionCharge}
-                    onChange={(e) =>
-                      setMappingForm((prev) => ({ ...prev, sessionCharge: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date</Label>
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={mappingForm.startDate}
-                    onChange={(e) =>
-                      setMappingForm((prev) => ({ ...prev, startDate: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-              {mappingError && <p className="text-sm text-destructive">{mappingError}</p>}
-              <Button
-                size="sm"
-                onClick={handleAddMapping}
-                disabled={mappingSaving || !mappingForm.trainerProfileId}
+          {/* Trainer Mappings */}
+          <Section
+            title="Trainer Mappings"
+            action={
+              <button
+                onClick={() => setShowAddMapping((v) => !v)}
+                disabled={!client.clientProfile}
+                className="flex items-center gap-1 rounded-lg bg-white/[0.06] px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-white/10 disabled:opacity-40"
               >
-                {mappingSaving ? 'Creating...' : 'Create Mapping'}
-              </Button>
-            </div>
-          )}
-
-          {/* Active Packages */}
-          {packagesLoading ? (
-            <Skeleton className="h-16 w-full" />
-          ) : activePackages.length === 0 && inactivePackages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No trainer mappings yet. Click &quot;Assign Trainer&quot; to create one.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {activePackages.map((pkg) => (
-                <div
-                  key={pkg.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
-                      </span>
-                      <Badge
-                        variant="secondary"
-                        className="bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
-                      >
-                        Active
-                      </Badge>
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <span>{pkg.sessionsPerMonth} sessions/month</span>
-                      {pkg.sessionChargeAmount != null && (
-                        <span>&#8377;{pkg.sessionChargeAmount}/session</span>
-                      )}
-                      <span>Since {new Date(pkg.startDate).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleDeactivateMapping(pkg.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-
-              {/* Inactive Packages */}
-              {inactivePackages.length > 0 && (
-                <>
-                  <Separator />
-                  <p className="text-xs font-medium text-muted-foreground">Past Mappings</p>
-                  {inactivePackages.map((pkg) => (
-                    <div
-                      key={pkg.id}
-                      className="flex items-center justify-between rounded-lg border border-dashed p-3 opacity-60"
+                {showAddMapping ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                {showAddMapping ? 'Cancel' : 'Assign Trainer'}
+              </button>
+            }
+          >
+            {/* Add form */}
+            {showAddMapping && (
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 space-y-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Trainer">
+                    <select
+                      className="flex h-9 w-full rounded-lg border border-white/[0.08] bg-transparent px-3 text-xs text-foreground focus:outline-none focus:border-primary"
+                      value={mappingForm.trainerProfileId}
+                      onChange={(e) =>
+                        setMappingForm((p) => ({ ...p, trainerProfileId: e.target.value }))
+                      }
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
+                      <option value="">Select trainer</option>
+                      {trainers
+                        .filter((t) => t.trainerProfile)
+                        .map((t) => (
+                          <option key={t.trainerProfile!.id} value={t.trainerProfile!.id}>
+                            {t.firstName} {t.lastName}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                  <Field label="Sessions / Month">
+                    <Input
+                      type="number"
+                      min="1"
+                      value={mappingForm.sessionsPerMonth}
+                      onChange={(e) =>
+                        setMappingForm((p) => ({ ...p, sessionsPerMonth: e.target.value }))
+                      }
+                      className="h-9 text-xs border-white/[0.08]"
+                    />
+                  </Field>
+                  <Field label="Start Date">
+                    <Input
+                      type="date"
+                      value={mappingForm.startDate}
+                      onChange={(e) => setMappingForm((p) => ({ ...p, startDate: e.target.value }))}
+                      className="h-9 text-xs border-white/[0.08]"
+                    />
+                  </Field>
+                  <Field label="Session Charge (optional)">
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="—"
+                      value={mappingForm.sessionCharge}
+                      onChange={(e) =>
+                        setMappingForm((p) => ({ ...p, sessionCharge: e.target.value }))
+                      }
+                      className="h-9 text-xs border-white/[0.08]"
+                    />
+                  </Field>
+                </div>
+                {mappingError && <p className="text-xs text-destructive">{mappingError}</p>}
+                <button
+                  onClick={handleAddMapping}
+                  disabled={mappingSaving || !mappingForm.trainerProfileId}
+                  className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  {mappingSaving ? 'Creating…' : 'Create Mapping'}
+                </button>
+              </div>
+            )}
+
+            {/* Package list */}
+            {packagesLoading ? (
+              <Skeleton className="h-12 w-full rounded-xl" />
+            ) : activePackages.length === 0 && inactivePackages.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No trainer mappings yet.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {activePackages.map((pkg) => (
+                  <div
+                    key={pkg.id}
+                    className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-semibold truncate">
+                          {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
+                        </p>
+                        <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-px text-[9px] font-semibold text-emerald-400">
+                          Active
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        {pkg.sessionsPerMonth} sessions/mo
+                        {pkg.sessionChargeAmount != null &&
+                          ` · ₹${pkg.sessionChargeAmount}/session`}
+                        {' · '}since {new Date(pkg.startDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDeactivateMapping(pkg.id)}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {inactivePackages.length > 0 && (
+                  <>
+                    <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50">
+                      Past
+                    </p>
+                    {inactivePackages.map((pkg) => (
+                      <div
+                        key={pkg.id}
+                        className="flex items-center gap-3 rounded-xl bg-white/[0.02] px-3 py-2 opacity-50"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold truncate">
                             {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
-                          </span>
-                          <Badge variant="secondary">Inactive</Badge>
-                        </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                          <span>{pkg.sessionsPerMonth} sessions/month</span>
-                          <span>
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            {pkg.sessionsPerMonth} sessions/mo
+                            {' · '}
                             {new Date(pkg.startDate).toLocaleDateString()}
                             {pkg.endDate && ` — ${new Date(pkg.endDate).toLocaleDateString()}`}
-                          </span>
+                          </p>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </Section>
 
-      {/* Badges */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Achievement Badges</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {badgesLoading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : (
-            <BadgeGrid earned={earnedBadges} locked={lockedBadges} />
-          )}
-        </CardContent>
-      </Card>
+          {/* Reset Password */}
+          <Section title="Reset Password">
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                placeholder="New password (min 6 chars)"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                className="h-9 flex-1 text-xs border-white/[0.08]"
+              />
+              <button
+                onClick={handleResetPassword}
+                disabled={resetSaving || resetPassword.length < 6}
+                className="flex shrink-0 items-center gap-1.5 rounded-xl bg-white/[0.06] px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+                {resetSaving ? 'Resetting…' : 'Reset'}
+              </button>
+            </div>
+            {resetError && <p className="text-xs text-destructive">{resetError}</p>}
+            {resetSuccess && (
+              <p className="text-xs text-emerald-400">Password reset successfully.</p>
+            )}
+          </Section>
+
+          {/* Badges */}
+          <Section title="Achievement Badges">
+            {badgesLoading ? (
+              <Skeleton className="h-20 w-full rounded-xl" />
+            ) : (
+              <BadgeGrid earned={earnedBadges} locked={lockedBadges} />
+            )}
+          </Section>
+        </div>
+      </div>
 
       {ConfirmDialog}
     </div>
