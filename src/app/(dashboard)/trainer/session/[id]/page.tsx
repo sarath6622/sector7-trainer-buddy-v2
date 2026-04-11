@@ -375,10 +375,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   // ── Loading / starting ──────────────────────────────────────────────────────
   if (loading || starting) {
     return (
-      <div
-        className="-mx-4 md:-mx-6 -mt-4 md:-mt-6 flex h-full flex-col overflow-hidden bg-background"
-        style={{ marginBottom: 'calc(-1.5rem - env(safe-area-inset-bottom))' }}
-      >
+      <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
         <div className="flex h-14 items-center gap-3 border-b px-4">
           <div className="h-8 w-8 animate-pulse rounded-xl bg-muted" />
           <div className="h-4 w-36 animate-pulse rounded-lg bg-muted" />
@@ -402,10 +399,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const isActive = session.status === 'IN_PROGRESS' && !!session.startedAt;
 
   return (
-    <div
-      className="-mx-4 md:-mx-6 -mt-4 md:-mt-6 flex h-full flex-col overflow-hidden bg-background"
-      style={{ marginBottom: 'calc(-1.5rem - env(safe-area-inset-bottom))' }}
-    >
+    <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
       {/* ── Badge celebration overlay ── */}
       {celebrationBadges.length > 0 && (
         <BadgeCelebration badges={celebrationBadges} onDone={() => setCelebrationBadges([])} />
@@ -508,7 +502,10 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
 
       {/* ── Workout logger (scrollable) ── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-4">
+        <div
+          className="px-4 py-4"
+          style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
+        >
           <WorkoutLogger
             sessionInstanceId={session.id}
             clientProfileId={session.client.id}
@@ -518,21 +515,26 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* ── Sticky footer ── */}
-      <div className="sticky bottom-0 z-20 border-t bg-background/95 px-4 pt-2 pb-safe backdrop-blur">
+      {/* ── Floating End Session button ── */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-30 px-4 pt-3"
+        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+      >
         {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
-          <RestTimerPill
-            remaining={restTimer.remaining}
-            isPaused={restTimer.isPaused}
-            isDone={restTimer.isDone}
-            onOpen={() => setRestTimerOpen(true)}
-            onStop={restTimer.stop}
-          />
+          <div className="mb-2">
+            <RestTimerPill
+              remaining={restTimer.remaining}
+              isPaused={restTimer.isPaused}
+              isDone={restTimer.isDone}
+              onOpen={() => setRestTimerOpen(true)}
+              onStop={restTimer.stop}
+            />
+          </div>
         )}
         <button
           onClick={handleEnd}
           disabled={ending}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/40 transition-colors hover:bg-red-700 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 py-4 text-sm font-semibold text-white shadow-xl shadow-red-900/50 transition-colors hover:bg-red-700 disabled:opacity-50"
         >
           <Square className="h-4 w-4" />
           {ending ? 'Ending Session…' : 'End Session'}
