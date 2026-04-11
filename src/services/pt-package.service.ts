@@ -93,8 +93,8 @@ export async function createPtPackage(input: CreatePtPackageInput) {
   await sendNotification({
     branchId: input.branchId,
     recipientId: ptPackage.trainer.user.id,
-    title: 'New Client Assigned',
-    body: `${clientName} has been assigned to you for personal training — ${input.sessionsPerMonth} sessions/month starting ${startFormatted}.`,
+    title: `New client — ${clientName}`,
+    body: `${input.sessionsPerMonth} sessions/month • from ${startFormatted}`,
     channel: 'BOTH',
     metadata: { ptPackageId: ptPackage.id, clientProfileId: input.clientProfileId },
   });
@@ -103,8 +103,8 @@ export async function createPtPackage(input: CreatePtPackageInput) {
   await sendNotification({
     branchId: input.branchId,
     recipientId: ptPackage.client.user.id,
-    title: 'Trainer Assigned',
-    body: `${trainerName} has been assigned as your personal trainer — ${input.sessionsPerMonth} sessions/month starting ${startFormatted}.`,
+    title: `Your trainer — ${trainerName}`,
+    body: `${input.sessionsPerMonth} sessions/month • from ${startFormatted}`,
     channel: 'BOTH',
     metadata: { ptPackageId: ptPackage.id, trainerProfileId: input.trainerProfileId },
   });

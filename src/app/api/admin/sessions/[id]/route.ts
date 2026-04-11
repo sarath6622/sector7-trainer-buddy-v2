@@ -107,15 +107,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         sendNotification({
           branchId: session.user.branchId,
           recipientId: updated.client.user.id,
-          title: 'Session Updated',
-          body: `Your session on ${sessionDateLabel} with ${trainerName} has been updated — ${changeSummary}.`,
+          title: `Session updated — ${sessionDateLabel}`,
+          body: `${trainerName} • ${changeSummary}`,
           channel: 'BOTH',
         }),
         sendNotification({
           branchId: session.user.branchId,
           recipientId: updated.trainer.user.id,
-          title: 'Session Updated',
-          body: `Session with ${clientName} on ${sessionDateLabel} has been updated — ${changeSummary}.`,
+          title: `Session updated — ${sessionDateLabel}`,
+          body: `${clientName} • ${changeSummary}`,
           channel: 'BOTH',
         }),
       ]);

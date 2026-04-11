@@ -23,8 +23,8 @@ export async function notifySessionStarted({
     await sendNotification({
       branchId,
       recipientId: clientUserId,
-      title: 'Session Started',
-      body: `Your session with ${trainerName} at ${scheduledTime} has started.`,
+      title: 'Session in progress',
+      body: `${trainerName} • ${scheduledTime}`,
       channel: 'IN_APP',
       metadata: { type: 'SESSION_STARTED' },
     });
@@ -48,8 +48,8 @@ export async function notifyNoShow({
     await sendNotification({
       branchId,
       recipientId: clientUserId,
-      title: 'Session Marked No-Show',
-      body: `Your session on ${date} at ${time} was marked as no-show.`,
+      title: 'Session missed',
+      body: `${date} at ${time} — marked no-show`,
       channel: 'BOTH',
       metadata: { type: 'NO_SHOW' },
     });
@@ -93,8 +93,8 @@ export async function notifyAdminsLeaveRequested({
       sendNotification({
         branchId,
         recipientId,
-        title: 'New Leave Request',
-        body: `${trainerName} requested ${typeLabel} leave on ${dateRange}.`,
+        title: `Leave request — ${trainerName}`,
+        body: `${typeLabel} • ${dateRange}`,
         channel: 'IN_APP',
         metadata: { type: 'LEAVE_REQUESTED', leaveId },
       }),
@@ -120,8 +120,8 @@ export async function notifyClientsTrainerOnLeave({
       sendNotification({
         branchId,
         recipientId,
-        title: 'Trainer Leave Notice',
-        body: `Your trainer ${trainerName} is on approved leave from ${startDate} to ${endDate}. The admin will arrange a replacement.`,
+        title: `${trainerName} is on leave`,
+        body: `${startDate} – ${endDate} • A replacement will be arranged`,
         channel: 'BOTH',
         metadata: { type: 'TRAINER_ON_LEAVE' },
       }),
@@ -144,8 +144,8 @@ export async function notifyLeaveApproved({
     await sendNotification({
       branchId,
       recipientId: trainerUserId,
-      title: 'Leave Approved',
-      body: `Your leave from ${startDate} to ${endDate} has been approved.`,
+      title: 'Leave approved',
+      body: `${startDate} – ${endDate}`,
       channel: 'BOTH',
       metadata: { type: 'LEAVE_APPROVED' },
     });
@@ -171,8 +171,8 @@ export async function notifyLeaveRejected({
     await sendNotification({
       branchId,
       recipientId: trainerUserId,
-      title: 'Leave Rejected',
-      body: `Your leave from ${startDate} to ${endDate} was rejected.${notes ? ` Reason: ${notes}` : ''}`,
+      title: 'Leave not approved',
+      body: `${startDate} – ${endDate}${notes ? ` • ${notes}` : ''}`,
       channel: 'BOTH',
       metadata: { type: 'LEAVE_REJECTED' },
     });
@@ -202,8 +202,8 @@ export async function notifyReassignment({
     await sendNotification({
       branchId,
       recipientId: clientUserId,
-      title: 'Trainer Reassigned',
-      body: `Your session on ${date} at ${time} has been reassigned from ${originalTrainerName} to ${newTrainerName}.`,
+      title: `Trainer change — ${date}`,
+      body: `${originalTrainerName} → ${newTrainerName} • ${time}`,
       channel: 'BOTH',
       metadata: { type: 'TRAINER_REASSIGNED' },
     });
@@ -229,8 +229,8 @@ export async function notifyTrainerNewAssignment({
     await sendNotification({
       branchId,
       recipientId: trainerUserId,
-      title: 'New Session Assigned',
-      body: `You have been assigned a session with ${clientName} on ${date} at ${time}.`,
+      title: `New session — ${clientName}`,
+      body: `${date} • ${time}`,
       channel: 'BOTH',
       metadata: { type: 'SESSION_ASSIGNED' },
     });

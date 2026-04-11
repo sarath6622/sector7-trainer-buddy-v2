@@ -422,9 +422,9 @@ export async function generateSessions(input: GenerateSessionsInput) {
 
   // Send summary notifications (one per unique client-trainer pair)
   if (created > 0) {
-    const [monthName, yearNum] = (() => {
+    const monthName = (() => {
       const d = new Date(`${input.month}-01`);
-      return [d.toLocaleString('en-IN', { month: 'long' }), d.getFullYear()];
+      return d.toLocaleString('en-IN', { month: 'long' });
     })();
 
     // Count sessions per client-trainer pair from the instancesToCreate list
@@ -459,15 +459,15 @@ export async function generateSessions(input: GenerateSessionsInput) {
           sendNotification({
             branchId: input.branchId,
             recipientId: clientUserId,
-            title: 'Sessions Scheduled',
-            body: `${count} session${count !== 1 ? 's' : ''} scheduled with ${trainerName} for ${monthName} ${yearNum}.`,
+            title: `Sessions scheduled — ${monthName}`,
+            body: `${count} session${count !== 1 ? 's' : ''} with ${trainerName}`,
             channel: 'BOTH',
           }),
           sendNotification({
             branchId: input.branchId,
             recipientId: trainerUserId,
-            title: 'Sessions Scheduled',
-            body: `${count} session${count !== 1 ? 's' : ''} with ${clientName} scheduled for ${monthName} ${yearNum}.`,
+            title: `Sessions scheduled — ${monthName}`,
+            body: `${count} session${count !== 1 ? 's' : ''} with ${clientName}`,
             channel: 'BOTH',
           }),
         ],

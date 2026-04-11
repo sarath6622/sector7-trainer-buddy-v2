@@ -107,15 +107,15 @@ export async function POST(req: Request) {
         sendNotification({
           branchId,
           recipientId: client.user.id,
-          title: 'Sessions Scheduled',
-          body: `${created} session${created !== 1 ? 's' : ''} scheduled with ${trainerName}${dateLabel ? ` starting ${dateLabel}` : ''}.`,
+          title: 'Sessions scheduled',
+          body: `${created} session${created !== 1 ? 's' : ''} with ${trainerName}${dateLabel ? ` • from ${dateLabel}` : ''}`,
           channel: 'BOTH',
         }),
         sendNotification({
           branchId,
           recipientId: trainer.user.id,
-          title: 'Sessions Scheduled',
-          body: `${created} session${created !== 1 ? 's' : ''} with ${clientName} scheduled${dateLabel ? ` starting ${dateLabel}` : ''}.`,
+          title: 'Sessions scheduled',
+          body: `${created} session${created !== 1 ? 's' : ''} with ${clientName}${dateLabel ? ` • from ${dateLabel}` : ''}`,
           channel: 'BOTH',
         }),
       ]);
