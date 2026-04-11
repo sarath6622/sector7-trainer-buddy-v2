@@ -376,56 +376,56 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   if (loading || starting) {
     return (
       <div className="-m-4 md:-m-6 flex flex-col bg-background">
-        {/* Header skeleton */}
+        {/* ── Sticky header ── */}
         <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+          {/* Top bar: back · avatar · name · timer */}
           <div className="flex h-14 items-center gap-3 px-4">
             <div className="h-9 w-9 animate-pulse rounded-xl bg-muted" />
-            <div className="flex flex-1 items-center gap-2">
-              <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
-              <div className="h-4 w-32 animate-pulse rounded-lg bg-muted" />
+            <div className="flex flex-1 items-center gap-2 min-w-0">
+              <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />
+              <div className="h-4 w-28 animate-pulse rounded-lg bg-muted" />
             </div>
-            <div className="h-7 w-20 animate-pulse rounded-full bg-muted" />
+            {/* Timer pill */}
+            <div className="h-8 w-[4.5rem] animate-pulse rounded-full bg-emerald-500/15" />
           </div>
+          {/* Meta chips: exercises logged · IN PROGRESS · Rest */}
           <div className="flex items-center gap-3 px-4 pb-2.5">
-            <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-28 animate-pulse rounded bg-muted" />
             <div className="h-3 w-px bg-border" />
-            <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-px bg-border" />
+            <div className="h-3 w-10 animate-pulse rounded bg-muted" />
           </div>
         </div>
 
-        {/* Exercise card skeletons */}
-        <div className="px-4 py-4 space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-2xl border bg-card p-4 space-y-3">
-              {/* Exercise name + muscle tag */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1.5 flex-1">
-                  <div className="h-4 w-2/3 animate-pulse rounded-lg bg-muted" />
-                  <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
-                </div>
-                <div className="h-6 w-16 animate-pulse rounded-full bg-muted" />
-              </div>
-              {/* Set rows */}
-              {[1, 2, 3].map((j) => (
-                <div key={j} className="flex items-center gap-2">
-                  <div className="h-3 w-6 animate-pulse rounded bg-muted" />
-                  <div className="h-9 flex-1 animate-pulse rounded-xl bg-muted" />
-                  <div className="h-9 flex-1 animate-pulse rounded-xl bg-muted" />
-                  <div className="h-9 w-9 animate-pulse rounded-xl bg-muted" />
-                </div>
-              ))}
-              {/* Add set button */}
-              <div className="h-9 w-full animate-pulse rounded-xl bg-muted" />
+        {/* ── Workout Logger body ── */}
+        <div className="px-4 py-4 space-y-4">
+          {/* "WORKOUT LOG" label row + "+" button */}
+          <div className="flex items-center justify-between">
+            <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+            <div className="h-8 w-8 animate-pulse rounded-xl bg-muted" />
+          </div>
+
+          {/* Empty-state card — mirrors the dashed card in WorkoutLogger */}
+          <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
+            {/* Icon box */}
+            <div className="h-14 w-14 animate-pulse rounded-2xl bg-muted" />
+            {/* Text lines */}
+            <div className="space-y-2 w-full flex flex-col items-center">
+              <div className="h-4 w-36 animate-pulse rounded-lg bg-muted" />
+              <div className="h-3 w-52 animate-pulse rounded bg-muted" />
             </div>
-          ))}
+            {/* "Add First Exercise" button */}
+            <div className="h-10 w-40 animate-pulse rounded-xl bg-primary/20" />
+          </div>
         </div>
 
-        {/* End Session FAB skeleton */}
+        {/* ── End Session FAB ── */}
         <div
           className="fixed bottom-0 left-0 right-0 z-30 px-4 pt-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
         >
-          <div className="h-14 w-full animate-pulse rounded-2xl bg-muted" />
+          <div className="h-14 w-full animate-pulse rounded-2xl bg-red-600/30" />
         </div>
       </div>
     );
