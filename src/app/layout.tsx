@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { Providers } from '@/components/Providers';
 import { NavigationProgress } from '@/components/layout/NavigationProgress';
+import { PWAInstallPrompt } from '@/components/layout/PWAInstallPrompt';
 import './globals.css';
 
 const inter = Inter({
@@ -56,6 +57,7 @@ export default function RootLayout({
       <body className="min-h-dvh flex flex-col">
         <NavigationProgress />
         <Providers>{children}</Providers>
+        <PWAInstallPrompt />
         <Toaster
           position="bottom-right"
           toastOptions={{
