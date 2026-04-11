@@ -508,7 +508,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
 
       {/* ── Workout logger (scrollable) ── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-4 pb-32">
+        <div className="px-4 py-4">
           <WorkoutLogger
             sessionInstanceId={session.id}
             clientProfileId={session.client.id}
