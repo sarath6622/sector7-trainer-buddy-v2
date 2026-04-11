@@ -164,7 +164,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopNav user={user} navItems={navItems} onLogout={handleLogout} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main
+          className="flex-1 overflow-y-auto p-4 md:p-6"
+          style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

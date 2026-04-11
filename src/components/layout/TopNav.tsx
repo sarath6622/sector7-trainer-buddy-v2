@@ -274,7 +274,10 @@ export function TopNav({
                 </nav>
 
                 {/* Bottom section — theme toggle + user */}
-                <div className="shrink-0 px-6 pb-8">
+                <div
+                  className="shrink-0 px-6"
+                  style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
+                >
                   <div className="border-t border-white/10 pt-6">
                     {/* Theme toggle in hamburger */}
                     <button
