@@ -375,7 +375,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   // ── Loading / starting ──────────────────────────────────────────────────────
   if (loading || starting) {
     return (
-      <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
+      <div className="-m-4 md:-m-6 flex flex-col bg-background">
         <div className="flex h-14 items-center gap-3 border-b px-4">
           <div className="h-8 w-8 animate-pulse rounded-xl bg-muted" />
           <div className="h-4 w-36 animate-pulse rounded-lg bg-muted" />
@@ -399,13 +399,13 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const isActive = session.status === 'IN_PROGRESS' && !!session.startedAt;
 
   return (
-    <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
+    <div className="-m-4 md:-m-6 flex flex-col bg-background">
       {/* ── Badge celebration overlay ── */}
       {celebrationBadges.length > 0 && (
         <BadgeCelebration badges={celebrationBadges} onDone={() => setCelebrationBadges([])} />
       )}
 
-      {/* ── Sticky header ── */}
+      {/* ── Sticky header — sticks within main's scroll context ── */}
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         {/* Top bar */}
         <div className="flex h-14 items-center gap-3 px-4">
@@ -500,19 +500,17 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
-      {/* ── Workout logger (scrollable) ── */}
-      <div className="flex-1 overflow-y-auto">
-        <div
-          className="px-4 py-4"
-          style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
-        >
-          <WorkoutLogger
-            sessionInstanceId={session.id}
-            clientProfileId={session.client.id}
-            existingLogs={session.workoutLogs}
-            onUnsavedChange={setHasUnsaved}
-          />
-        </div>
+      {/* ── Workout logger — main scrolls, FAB clears the bottom ── */}
+      <div
+        className="px-4 py-4"
+        style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
+      >
+        <WorkoutLogger
+          sessionInstanceId={session.id}
+          clientProfileId={session.client.id}
+          existingLogs={session.workoutLogs}
+          onUnsavedChange={setHasUnsaved}
+        />
       </div>
 
       {/* ── Floating End Session button ── */}
