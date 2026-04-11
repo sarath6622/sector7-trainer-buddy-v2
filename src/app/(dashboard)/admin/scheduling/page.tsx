@@ -796,8 +796,8 @@ export default function SchedulingPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Scheduling</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {sessionCount} session{sessionCount !== 1 ? 's' : ''} &middot; {scheduledCount} upcoming
-            &middot; {completedCount} completed
+            {sessionCount} session{sessionCount !== 1 ? 's' : ''} · {scheduledCount} upcoming ·{' '}
+            {completedCount} completed
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -816,7 +816,8 @@ export default function SchedulingPage() {
               render={
                 <Button variant="outline" size="sm" className="gap-1.5">
                   <Activity className="h-3.5 w-3.5" />
-                  Check Trainer Availability
+                  <span className="sm:hidden">Availability</span>
+                  <span className="hidden sm:inline">Check Trainer Availability</span>
                 </Button>
               }
             />
@@ -1105,10 +1106,7 @@ export default function SchedulingPage() {
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogTrigger
               render={
-                <Button
-                  size="sm"
-                  className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
-                >
+                <Button size="sm" className="gap-1.5">
                   <Plus className="h-3.5 w-3.5" />
                   New Schedule
                 </Button>

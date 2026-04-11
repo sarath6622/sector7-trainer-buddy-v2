@@ -204,6 +204,16 @@
   color: var(--foreground);
 }
 
+/* Hide the view-switcher (month/week/day) on mobile — component auto-switches to day view */
+@media (max-width: 639px) {
+  .fc .fc-toolbar-chunk:last-child {
+    display: none;
+  }
+  .fc .fc-toolbar-title {
+    font-size: 1rem !important;
+  }
+}
+
 /* Navigation buttons */
 .fc .fc-button {
   background: var(--card) !important;

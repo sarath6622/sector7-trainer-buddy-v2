@@ -100,15 +100,14 @@ export function SessionCalendar({
   return (
     <div className="space-y-4">
       {(showLegend || filterSlot) && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-muted/40 px-4 py-2.5">
-          {filterSlot}
-          {filterSlot && showLegend && <div className="ml-auto" />}
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-4 py-2.5">
+          {/* Legend — hidden on mobile to save vertical space */}
           {showLegend && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1.5">
               {STATUS_LABELS.map((s) => (
                 <div key={s.key} className="flex items-center gap-1.5">
                   <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm"
+                    className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
                     style={{ backgroundColor: s.accent }}
                   />
                   <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
@@ -116,6 +115,8 @@ export function SessionCalendar({
               ))}
             </div>
           )}
+          {/* Filter slot (expand button etc.) always visible, pushed right */}
+          {filterSlot && <div className="ml-auto flex items-center gap-2">{filterSlot}</div>}
         </div>
       )}
       <FullCalendar
