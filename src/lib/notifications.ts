@@ -139,10 +139,12 @@ async function createInAppNotification({
   });
 
   // Send FCM push to all registered devices for this user
-  void sendFcmPush({ recipientId, title, body }).catch(() => {
-    // FCM failures are non-critical — silently ignore
+  void sendFcmPush({ recipientId, title, body }).catch((err) => {
+    console.error('[FCM Push] Unhandled error in sendFcmPush:', err);
   });
 }
+
+const FCM_TAG = '[FCM Push]';
 
 async function sendFcmPush({
   recipientId,
@@ -153,30 +155,57 @@ async function sendFcmPush({
   title: string;
   body: string;
 }) {
-  if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_PRIVATE_KEY) return;
+  const hasProjectId = !!process.env.FIREBASE_PROJECT_ID;
+  const hasPrivateKey = !!process.env.FIREBASE_PRIVATE_KEY;
+
+  if (!hasProjectId || !hasPrivateKey) {
+    console.warn(`${FCM_TAG} Skipped — env vars missing:`, {
+      FIREBASE_PROJECT_ID: hasProjectId ? '✓' : '✗ MISSING',
+      FIREBASE_PRIVATE_KEY: hasPrivateKey ? '✓' : '✗ MISSING',
+    });
+    return;
+  }
 
   const tokens = await prisma.fcmToken.findMany({
     where: { userId: recipientId },
     select: { token: true },
   });
 
-  if (tokens.length === 0) return;
+  console.log(`${FCM_TAG} Sending to user ${recipientId} — ${tokens.length} device token(s) found`);
 
-  const messaging = getFirebaseMessagingAdmin();
+  if (tokens.length === 0) {
+    console.warn(`${FCM_TAG} No FCM tokens registered for user ${recipientId} — push skipped`);
+    return;
+  }
 
-  await messaging.sendEachForMulticast({
-    tokens: tokens.map((t) => t.token),
-    notification: { title, body },
-    webpush: {
-      notification: {
-        title,
-        body,
-        icon: '/icons/icon-192x192.png',
-        badge: '/icons/icon-72x72.png',
+  try {
+    const messaging = getFirebaseMessagingAdmin();
+    const result = await messaging.sendEachForMulticast({
+      tokens: tokens.map((t) => t.token),
+      notification: { title, body },
+      webpush: {
+        notification: {
+          title,
+          body,
+          icon: '/icons/icon-192x192.png',
+          badge: '/icons/icon-72x72.png',
+        },
+        fcmOptions: { link: '/' },
       },
-      fcmOptions: { link: '/' },
-    },
-  });
+    });
+
+    console.log(
+      `${FCM_TAG} Multicast result — successCount: ${result.successCount}, failureCount: ${result.failureCount}`,
+    );
+
+    result.responses.forEach((resp, i) => {
+      if (!resp.success) {
+        console.error(`${FCM_TAG} Token[${i}] failed:`, resp.error?.code, resp.error?.message);
+      }
+    });
+  } catch (err) {
+    console.error(`${FCM_TAG} sendEachForMulticast threw an error:`, err);
+  }
 }
 
 /**
