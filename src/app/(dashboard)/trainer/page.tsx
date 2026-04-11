@@ -425,10 +425,11 @@ export default function TrainerDashboard() {
                     <div className="mt-2.5 pl-12">
                       <button
                         onClick={() => router.push(`/trainer/session/${session.id}`)}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+                        className="relative overflow-hidden flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-all hover:bg-emerald-700 active:scale-95 [touch-action:manipulation] [-webkit-tap-highlight-color:transparent]"
                       >
-                        <Square className="h-3 w-3" />
-                        Resume Session
+                        <span className="absolute inset-0 rounded-xl animate-ping bg-emerald-400 opacity-25" />
+                        <Square className="relative h-3 w-3" />
+                        <span className="relative">Resume Session</span>
                       </button>
                     </div>
                   )}

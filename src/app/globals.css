@@ -161,6 +161,15 @@
     @apply font-sans;
   }
 
+  /* Touch feedback — remove native iOS tap highlight, eliminate 300ms delay */
+  button,
+  [role='button'],
+  a,
+  [tabindex]:not([tabindex='-1']) {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
   /* Prevent iOS Safari from zooming in when focusing inputs with font-size < 16px */
   @media screen and (-webkit-min-device-pixel-ratio: 0) {
     input,
@@ -245,6 +254,7 @@
   background: var(--primary) !important;
   color: var(--primary-foreground) !important;
   border-color: var(--primary) !important;
+  transform: scale(0.95) !important;
 }
 
 .fc .fc-button-group > .fc-button {
