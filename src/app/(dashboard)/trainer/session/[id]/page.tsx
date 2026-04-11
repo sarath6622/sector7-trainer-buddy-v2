@@ -375,7 +375,10 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   // ── Loading / starting ──────────────────────────────────────────────────────
   if (loading || starting) {
     return (
-      <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
+      <div
+        className="-mx-4 md:-mx-6 -mt-4 md:-mt-6 flex h-full flex-col overflow-hidden bg-background"
+        style={{ marginBottom: 'calc(-1.5rem - env(safe-area-inset-bottom))' }}
+      >
         <div className="flex h-14 items-center gap-3 border-b px-4">
           <div className="h-8 w-8 animate-pulse rounded-xl bg-muted" />
           <div className="h-4 w-36 animate-pulse rounded-lg bg-muted" />
@@ -399,7 +402,10 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const isActive = session.status === 'IN_PROGRESS' && !!session.startedAt;
 
   return (
-    <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
+    <div
+      className="-mx-4 md:-mx-6 -mt-4 md:-mt-6 flex h-full flex-col overflow-hidden bg-background"
+      style={{ marginBottom: 'calc(-1.5rem - env(safe-area-inset-bottom))' }}
+    >
       {/* ── Badge celebration overlay ── */}
       {celebrationBadges.length > 0 && (
         <BadgeCelebration badges={celebrationBadges} onDone={() => setCelebrationBadges([])} />
@@ -513,7 +519,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* ── Sticky footer ── */}
-      <div className="sticky bottom-0 z-20 border-t bg-background/95 px-4 py-2 backdrop-blur">
+      <div className="sticky bottom-0 z-20 border-t bg-background/95 px-4 pt-2 pb-safe backdrop-blur">
         {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
           <RestTimerPill
             remaining={restTimer.remaining}
