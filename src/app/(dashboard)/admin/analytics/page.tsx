@@ -378,6 +378,14 @@ export default function AnalyticsPage() {
                     pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-400';
                   const textColor =
                     pct >= 70 ? 'text-emerald-400' : pct >= 40 ? 'text-amber-400' : 'text-red-400';
+                  const badgeBg =
+                    t.totalSessions === 0
+                      ? 'bg-muted/40'
+                      : pct >= 70
+                        ? 'bg-emerald-500/10'
+                        : pct >= 40
+                          ? 'bg-amber-500/10'
+                          : 'bg-red-500/10';
                   const initials = t.trainerName
                     .split(' ')
                     .map((n) => n[0])
@@ -393,41 +401,45 @@ export default function AnalyticsPage() {
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
                         {initials}
                       </div>
-                      {/* Name */}
-                      <p className="text-sm font-medium w-28 shrink-0 truncate">{t.trainerName}</p>
-                      {/* Bar (70%) + count (30%) */}
-                      <div className="flex flex-1 items-center gap-2 min-w-0">
-                        <div
-                          className="h-2 rounded-full bg-muted/60 overflow-hidden"
-                          style={{ flex: 7 }}
-                        >
+                      {/* Name + bar */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate mb-2">{t.trainerName}</p>
+                        <div className="flex items-center gap-2">
                           <div
                             className={cn(
-                              'h-full rounded-full transition-all duration-500',
-                              barColor,
+                              'h-1.5 flex-1 rounded-full overflow-hidden',
+                              t.totalSessions === 0
+                                ? 'bg-[repeating-linear-gradient(90deg,transparent,transparent_4px,hsl(var(--muted))_4px,hsl(var(--muted))_8px)] opacity-40'
+                                : 'bg-muted/60',
                             )}
-                            style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%` }}
-                          />
-                        </div>
-                        <div className="flex items-baseline gap-0.5 shrink-0" style={{ flex: 3 }}>
-                          <span className="text-sm font-bold tabular-nums">
-                            {t.completedSessions}
-                          </span>
-                          <span className="text-xs text-muted-foreground tabular-nums">
-                            {' '}
-                            / {t.totalSessions}
+                          >
+                            {t.totalSessions > 0 && (
+                              <div
+                                className={cn(
+                                  'h-full rounded-full transition-all duration-500',
+                                  barColor,
+                                )}
+                                style={{ width: pct === 0 ? '3px' : `${pct}%` }}
+                              />
+                            )}
+                          </div>
+                          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+                            {t.completedSessions}/{t.totalSessions}
                           </span>
                         </div>
                       </div>
-                      {/* Rate */}
-                      <span
-                        className={cn(
-                          'text-xs font-bold tabular-nums w-8 text-right shrink-0',
-                          textColor,
-                        )}
-                      >
-                        {pct > 0 ? `${pct}%` : '—'}
-                      </span>
+                      {/* Rate badge */}
+                      <div className="shrink-0">
+                        <span
+                          className={cn(
+                            'text-xs font-bold tabular-nums px-2 py-0.5 rounded-full',
+                            textColor,
+                            badgeBg,
+                          )}
+                        >
+                          {t.totalSessions === 0 ? '—' : `${pct}%`}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -454,6 +466,14 @@ export default function AnalyticsPage() {
                     pct >= 80 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-400';
                   const textColor =
                     pct >= 80 ? 'text-emerald-400' : pct >= 60 ? 'text-amber-400' : 'text-red-400';
+                  const badgeBg =
+                    a.totalSessions === 0
+                      ? 'bg-muted/40'
+                      : pct >= 80
+                        ? 'bg-emerald-500/10'
+                        : pct >= 60
+                          ? 'bg-amber-500/10'
+                          : 'bg-red-500/10';
                   const initials = a.clientName
                     .split(' ')
                     .map((n) => n[0])
@@ -469,46 +489,52 @@ export default function AnalyticsPage() {
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-xs font-bold text-violet-400">
                         {initials}
                       </div>
-                      {/* Name */}
-                      <div className="w-28 shrink-0 min-w-0">
-                        <p className="text-sm font-medium truncate">{a.clientName}</p>
-                        {a.noShow > 0 && (
-                          <p className="text-[10px] text-red-400 tabular-nums">
-                            {a.noShow} no-show{a.noShow > 1 ? 's' : ''}
-                          </p>
-                        )}
-                      </div>
-                      {/* Bar (70%) + count (30%) */}
-                      <div className="flex flex-1 items-center gap-2 min-w-0">
-                        <div
-                          className="h-2 rounded-full bg-muted/60 overflow-hidden"
-                          style={{ flex: 7 }}
-                        >
+                      {/* Name + bar */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <p className="text-sm font-medium truncate">{a.clientName}</p>
+                          {a.noShow > 0 && (
+                            <span className="text-[10px] text-red-400 tabular-nums shrink-0">
+                              {a.noShow} no-show{a.noShow > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
                           <div
                             className={cn(
-                              'h-full rounded-full transition-all duration-500',
-                              barColor,
+                              'h-1.5 flex-1 rounded-full overflow-hidden',
+                              a.totalSessions === 0
+                                ? 'bg-[repeating-linear-gradient(90deg,transparent,transparent_4px,hsl(var(--muted))_4px,hsl(var(--muted))_8px)] opacity-40'
+                                : 'bg-muted/60',
                             )}
-                            style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%` }}
-                          />
-                        </div>
-                        <div className="flex items-baseline gap-0.5 shrink-0" style={{ flex: 3 }}>
-                          <span className="text-sm font-bold tabular-nums">{a.attended}</span>
-                          <span className="text-xs text-muted-foreground tabular-nums">
-                            {' '}
-                            / {a.totalSessions}
+                          >
+                            {a.totalSessions > 0 && (
+                              <div
+                                className={cn(
+                                  'h-full rounded-full transition-all duration-500',
+                                  barColor,
+                                )}
+                                style={{ width: pct === 0 ? '3px' : `${pct}%` }}
+                              />
+                            )}
+                          </div>
+                          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+                            {a.attended}/{a.totalSessions}
                           </span>
                         </div>
                       </div>
-                      {/* Rate */}
-                      <span
-                        className={cn(
-                          'text-xs font-bold tabular-nums w-8 text-right shrink-0',
-                          textColor,
-                        )}
-                      >
-                        {pct > 0 ? `${pct}%` : '—'}
-                      </span>
+                      {/* Rate badge */}
+                      <div className="shrink-0 text-right">
+                        <span
+                          className={cn(
+                            'text-xs font-bold tabular-nums px-2 py-0.5 rounded-full',
+                            textColor,
+                            badgeBg,
+                          )}
+                        >
+                          {a.totalSessions === 0 ? '—' : `${pct}%`}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
