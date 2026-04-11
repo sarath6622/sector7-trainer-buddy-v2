@@ -3,6 +3,7 @@ import { getServerSession, hasRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { reviewLeaveSchema } from '@/lib/validators';
 import * as leaveService from '@/services/leave.service';
+import { triggerUserEvent } from '@/lib/pusher';
 
 /**
  * PUT /api/admin/leaves/[id]/reject — Reject a leave request
@@ -24,6 +25,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       notes: input.notes,
       actorId: session.user.id,
       branchId: session.user.branchId,
+    });
+
+    // Pusher: notify the trainer in real-time
+    void triggerUserEvent(leave.trainer.user.id, 'LEAVE_STATUS_CHANGED', {
+      leaveId: id,
+      status: 'REJECTED',
+      notes: input.notes ?? null,
     });
 
     return NextResponse.json({ data: leave });

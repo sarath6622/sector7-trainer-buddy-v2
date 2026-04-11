@@ -9,6 +9,8 @@ import { InlineTimer } from '@/components/timer/SessionTimer';
 import { WorkoutLogger } from '@/components/workout/WorkoutLogger';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 import { useRestTimer } from '@/hooks/useRestTimer';
+import { usePusherChannel } from '@/hooks/usePusherChannel';
+import type { SessionStartedPayload, SessionEndedPayload } from '@/lib/pusher';
 
 const REST_PRESETS = [
   { label: '1 min', seconds: 60 },
@@ -266,6 +268,21 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const [restTimerOpen, setRestTimerOpen] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const restTimer = useRestTimer(id);
+
+  // ── Real-time: subscribe to session channel ───────────────────────────────
+  usePusherChannel(`session-${id}`, {
+    SESSION_STARTED: (data) => {
+      const payload = data as SessionStartedPayload;
+      setSession((prev) =>
+        prev ? { ...prev, status: 'IN_PROGRESS', startedAt: payload.startedAt } : prev,
+      );
+    },
+    SESSION_ENDED: (data) => {
+      const payload = data as SessionEndedPayload;
+      toast.success(`Session ended — ${payload.actualDurationMin} min`);
+      setSession((prev) => (prev ? { ...prev, status: 'COMPLETED' } : prev));
+    },
+  });
 
   const fetchSession = useCallback(async (sid: string) => {
     const res = await fetch(`/api/trainer/sessions/${sid}`);

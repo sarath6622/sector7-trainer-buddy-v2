@@ -3,9 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { NAV_BY_ROLE, type NavItem } from '@/lib/constants';
+import { usePusherChannel } from '@/hooks/usePusherChannel';
+import type { NotificationPayload, LeaveStatusChangedPayload } from '@/lib/pusher';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -16,6 +19,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isAdmin = role === 'SUPER_ADMIN' || role === 'BRANCH_ADMIN';
 
   const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
+
+  // ── Real-time: subscribe to the current user's channel ────────────────────
+  const userId = session?.user?.id ?? null;
+  usePusherChannel(userId ? `user-${userId}` : null, {
+    NOTIFICATION: (data) => {
+      const payload = data as NotificationPayload;
+      toast(payload.title, { description: payload.body });
+    },
+    LEAVE_STATUS_CHANGED: (data) => {
+      const payload = data as LeaveStatusChangedPayload;
+      const approved = payload.status === 'APPROVED';
+      toast(approved ? 'Leave Approved' : 'Leave Rejected', {
+        description:
+          payload.notes ??
+          (approved ? 'Your leave request was approved.' : 'Your leave request was rejected.'),
+      });
+    },
+  });
 
   useEffect(() => {
     if (status !== 'loading' && !session?.user) {

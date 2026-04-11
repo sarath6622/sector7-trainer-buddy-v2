@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { usePusherChannel } from '@/hooks/usePusherChannel';
+import type { SessionStartedPayload } from '@/lib/pusher';
 import {
   AlertCircle,
   ArrowRight,
@@ -172,6 +174,23 @@ export default function ClientDashboard() {
       setLoading(false);
     }
   }, []);
+
+  // Real-time: when active session starts/ends, refresh dashboard so timer appears/disappears
+  const activeSessionId = data?.activeSession?.id ?? null;
+  usePusherChannel(activeSessionId ? `session-${activeSessionId}` : null, {
+    SESSION_STARTED: (_data) => {
+      const payload = _data as SessionStartedPayload;
+      setData((prev) =>
+        prev?.activeSession
+          ? { ...prev, activeSession: { ...prev.activeSession, startedAt: payload.startedAt } }
+          : prev,
+      );
+    },
+    SESSION_ENDED: () => {
+      // Refresh dashboard to clear the active session banner
+      void fetchDashboard();
+    },
+  });
 
   useEffect(() => {
     fetchDashboard();

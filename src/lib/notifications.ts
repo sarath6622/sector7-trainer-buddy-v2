@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import type { NotificationChannel, NotificationStatus, Prisma } from '@prisma/client';
 import { getFirebaseMessagingAdmin } from '@/lib/firebase-admin';
+import { triggerUserEvent } from '@/lib/pusher';
 
 // ─── Types ──────────────────────────────────────────
 
@@ -125,7 +126,7 @@ async function createInAppNotification({
   body,
   metadata,
 }: Omit<SendNotificationInput, 'channel'>) {
-  await prisma.notificationLog.create({
+  const log = await prisma.notificationLog.create({
     data: {
       branchId,
       recipientId,
@@ -136,6 +137,15 @@ async function createInAppNotification({
       metadata: metadata ?? undefined,
       sentAt: new Date(),
     },
+  });
+
+  // Pusher: push NOTIFICATION event to the recipient's user channel (real-time in-app bell)
+  void triggerUserEvent(recipientId, 'NOTIFICATION', {
+    id: log.id,
+    title,
+    body,
+  }).catch((err) => {
+    console.error('[Pusher] Failed to trigger NOTIFICATION event:', err);
   });
 
   // Send FCM push to all registered devices for this user

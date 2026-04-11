@@ -7,6 +7,7 @@ import {
   evaluateSessionMilestoneBadges,
   type NewBadge,
 } from '@/services/badge.service';
+import { triggerSessionEvent } from '@/lib/pusher';
 import type { SessionStatus } from '@prisma/client';
 
 interface StartSessionInput {
@@ -135,6 +136,13 @@ export async function startSession({
     scheduledTime: session.scheduledTime,
   });
 
+  // Pusher real-time: broadcast to session channel and client user channel
+  void triggerSessionEvent(sessionId, 'SESSION_STARTED', {
+    sessionId,
+    startedAt: now.toISOString(),
+    expectedDurationMin: session.durationMin,
+  });
+
   return {
     session: updated,
     timer: {
@@ -216,6 +224,13 @@ export async function endSession({
   } catch {
     // badge evaluation failure must never break session end
   }
+
+  // Pusher real-time: broadcast session ended to session channel
+  void triggerSessionEvent(sessionId, 'SESSION_ENDED', {
+    sessionId,
+    endedAt: now.toISOString(),
+    actualDurationMin,
+  });
 
   return {
     session: updated,
