@@ -100,7 +100,7 @@ export function SessionCalendar({
   return (
     <div className="space-y-4">
       {(showLegend || filterSlot) && (
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-4 py-2.5">
+        <div className="hidden sm:flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-4 py-2.5">
           {/* Legend — hidden on mobile to save vertical space */}
           {showLegend && (
             <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1.5">
