@@ -36,8 +36,8 @@ export async function GET() {
     firebaseAdminInit = `✗ Failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 
-  // ── Pusher env vars ──────────────────────────────────────────────────────
-  const pusher = {
+  // ── Pusher env vars + live trigger test ──────────────────────────────────
+  const pusherEnv = {
     PUSHER_APP_ID: process.env.PUSHER_APP_ID ? `✓ ${process.env.PUSHER_APP_ID}` : '✗ MISSING',
     PUSHER_KEY: process.env.PUSHER_KEY ? `✓ ${process.env.PUSHER_KEY}` : '✗ MISSING',
     PUSHER_SECRET: process.env.PUSHER_SECRET ? '✓ (set)' : '✗ MISSING',
@@ -48,8 +48,22 @@ export async function GET() {
     NEXT_PUBLIC_PUSHER_CLUSTER: process.env.NEXT_PUBLIC_PUSHER_CLUSTER
       ? `✓ ${process.env.NEXT_PUBLIC_PUSHER_CLUSTER}`
       : '✗ MISSING',
-    note: 'Pusher SDK is NOT yet integrated — env vars are set but no pusher-js or pusher package is installed/used in code',
   };
+
+  let pusherTrigger: string;
+  try {
+    const { triggerUserEvent } = await import('@/lib/pusher');
+    await triggerUserEvent('__diagnostic__', 'NOTIFICATION', {
+      id: 'diag',
+      title: 'Diagnostic ping',
+      body: 'Pusher connectivity test from /api/notifications/diagnostic',
+    });
+    pusherTrigger = '✓ SDK initialized and test event triggered successfully';
+  } catch (err) {
+    pusherTrigger = `✗ Failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+
+  const pusher = { ...pusherEnv, sdkTriggerTest: pusherTrigger };
 
   // ── FCM tokens in DB ─────────────────────────────────────────────────────
   let fcmTokenCount: number | string;
