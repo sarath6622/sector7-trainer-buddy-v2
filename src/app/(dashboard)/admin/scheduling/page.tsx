@@ -9,7 +9,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -29,7 +28,6 @@ import {
   Pencil,
   Plus,
   Search,
-  SkipForward,
   Timer,
   Trash2,
   User,
@@ -40,20 +38,6 @@ import type { EventInput, EventClickArg, DateSelectArg, DatesSetArg } from '@ful
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { cn } from '@/lib/utils';
-
-interface Schedule {
-  id: string;
-  trainerProfileId: string;
-  clientProfileId: string;
-  dayOfWeek: string;
-  startTime: string;
-  durationMin: number;
-  isActive: boolean;
-  validFrom: string;
-  validUntil: string | null;
-  client: { user: { firstName: string; lastName: string } };
-  trainer: { user: { firstName: string; lastName: string } };
-}
 
 interface SessionInstance {
   id: string;
@@ -70,23 +54,6 @@ interface Conflict {
   sessionB: { id: string; scheduledDate: string; scheduledTime: string; clientName: string };
   trainerName: string;
   overlapMinutes: number;
-}
-
-interface PreviewClient {
-  scheduleId: string;
-  clientName: string;
-  dayOfWeek: string;
-  startTime: string;
-  durationMin: number;
-  dates: string[];
-}
-
-interface GeneratePreview {
-  willCreate: number;
-  daysAffected: number;
-  skippedDueToOverride: { scheduleId: string; date: string; reason: string }[];
-  skippedDueToConflict: { scheduleId: string; date: string; reason: string }[];
-  preview: { trainerName: string; clients: PreviewClient[] }[];
 }
 
 interface TrainerOption {
@@ -380,21 +347,15 @@ const JS_DAY_MAP = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 
 export default function SchedulingPage() {
   const { confirm, ConfirmDialog } = useConfirm();
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [sessions, setSessions] = useState<SessionInstance[]>([]);
-  const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [conflicts] = useState<Conflict[]>([]);
   const [trainers, setTrainers] = useState<TrainerOption[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionInstance | null>(null);
   const [selectedTrainer, setSelectedTrainer] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [generatePreview, setGeneratePreview] = useState<GeneratePreview | null>(null);
-  const [excludedScheduleIds, setExcludedScheduleIds] = useState<Set<string>>(new Set());
-  const [previewing, setPreviewing] = useState(false);
   const [editingSession, setEditingSession] = useState(false);
   const [editForm, setEditForm] = useState({
     scheduledDate: '',
@@ -402,10 +363,6 @@ export default function SchedulingPage() {
     trainerProfileId: '',
   });
   const [editSaving, setEditSaving] = useState(false);
-  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
-  const [scheduleEditForm, setScheduleEditForm] = useState({ startTime: '', durationMin: '' });
-  const [scheduleEditSaving, setScheduleEditSaving] = useState(false);
-  const [scheduleTrainerFilter, setScheduleTrainerFilter] = useState('');
 
   // Availability check modal
   const [availCheckOpen, setAvailCheckOpen] = useState(false);
@@ -415,11 +372,6 @@ export default function SchedulingPage() {
   const [availTrainerData, setAvailTrainerData] = useState<TrainerAvailData | null>(null);
   const [availTrainerId, setAvailTrainerId] = useState('');
   const [availDuration, setAvailDuration] = useState(60);
-
-  const [generateMonth, setGenerateMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
 
   const [form, setForm] = useState({
     trainerProfileId: '',
@@ -444,18 +396,6 @@ export default function SchedulingPage() {
     Array<{ trainerProfileId: string; sessionsPerMonth: number }>
   >([]);
   const [mappingsLoading, setMappingsLoading] = useState(false);
-
-  const fetchSchedules = useCallback(async () => {
-    try {
-      const res = await fetch('/api/admin/schedules');
-      if (res.ok) {
-        const { data } = await res.json();
-        setSchedules(data);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
 
   // Tracks the calendar's currently visible date range so fetchSessions always loads
   // the right data regardless of what the "Generate" month picker is set to.
@@ -507,8 +447,8 @@ export default function SchedulingPage() {
   useEffect(() => {
     // fetchSessions is omitted here — FullCalendar fires datesSet on mount
     // which calls fetchSessions with the correct visible range automatically.
-    Promise.all([fetchSchedules(), fetchTrainersAndClients()]).finally(() => setLoading(false));
-  }, [fetchSchedules, fetchTrainersAndClients]);
+    fetchTrainersAndClients().finally(() => setLoading(false));
+  }, [fetchTrainersAndClients]);
 
   // Unique trainer names from sessions for filter chips
   const trainerNames = useMemo(() => {
@@ -695,148 +635,6 @@ export default function SchedulingPage() {
     fetchPackageInfo,
   ]);
 
-  async function handlePreviewGenerate() {
-    setPreviewing(true);
-    setExcludedScheduleIds(new Set());
-    try {
-      const res = await fetch('/api/admin/schedules/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month: generateMonth, dryRun: true }),
-      });
-      if (res.ok) {
-        const { data } = await res.json();
-        setGeneratePreview(data);
-      } else {
-        toast.error('Failed to preview sessions');
-      }
-    } catch {
-      toast.error('Failed to preview sessions');
-    } finally {
-      setPreviewing(false);
-    }
-  }
-
-  function toggleScheduleExclusion(scheduleId: string) {
-    setExcludedScheduleIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(scheduleId)) {
-        next.delete(scheduleId);
-      } else {
-        next.add(scheduleId);
-      }
-      return next;
-    });
-  }
-
-  async function handleSaveScheduleEdit(scheduleId: string) {
-    setScheduleEditSaving(true);
-    try {
-      const res = await fetch(`/api/admin/schedules/${scheduleId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          startTime: scheduleEditForm.startTime,
-          durationMin: parseInt(scheduleEditForm.durationMin, 10),
-        }),
-      });
-      if (res.ok) {
-        setEditingScheduleId(null);
-        toast.success('Schedule updated — refreshing preview...');
-        await fetchSchedules();
-        // Re-run dry-run to refresh preview
-        const previewRes = await fetch('/api/admin/schedules/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ month: generateMonth, dryRun: true }),
-        });
-        if (previewRes.ok) {
-          const { data } = await previewRes.json();
-          setGeneratePreview(data);
-        }
-      } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to update schedule');
-      }
-    } catch {
-      toast.error('Failed to update schedule');
-    } finally {
-      setScheduleEditSaving(false);
-    }
-  }
-
-  // Compute selected counts from preview
-  const selectedPreviewCount = useMemo(() => {
-    if (!generatePreview) return { sessions: 0, days: 0 };
-    let sessions = 0;
-    const days = new Set<string>();
-    for (const trainer of generatePreview.preview) {
-      for (const client of trainer.clients) {
-        if (!excludedScheduleIds.has(client.scheduleId)) {
-          sessions += client.dates.length;
-          client.dates.forEach((d) => days.add(d));
-        }
-      }
-    }
-    return { sessions, days: days.size };
-  }, [generatePreview, excludedScheduleIds]);
-
-  async function handleConfirmGenerate() {
-    if (!generatePreview) return;
-
-    // Collect only the selected schedule IDs
-    const allScheduleIds = generatePreview.preview.flatMap((t) =>
-      t.clients.map((c) => c.scheduleId),
-    );
-    const selectedIds = allScheduleIds.filter((id) => !excludedScheduleIds.has(id));
-    if (selectedIds.length === 0) {
-      toast.error('No schedules selected');
-      return;
-    }
-
-    setGenerating(true);
-    setGeneratePreview(null);
-    setConflicts([]);
-    try {
-      const res = await fetch('/api/admin/schedules/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          month: generateMonth,
-          scheduleIds: selectedIds,
-        }),
-      });
-      if (res.ok) {
-        const { data } = await res.json();
-        setConflicts(data.conflicts);
-        await fetchSessions();
-        toast.success(
-          `Generated ${data.created} sessions.${data.conflicts.length > 0 ? ` ${data.conflicts.length} conflict(s) found.` : ''}`,
-        );
-      }
-    } catch {
-      toast.error('Failed to generate sessions');
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  async function handleDeleteSchedule(scheduleId: string) {
-    const ok = await confirm({
-      title: 'Deactivate Schedule',
-      description: 'Deactivate this recurring schedule?',
-      confirmText: 'Deactivate',
-      variant: 'destructive',
-    });
-    if (!ok) return;
-    try {
-      await fetch(`/api/admin/schedules/${scheduleId}`, { method: 'DELETE' });
-      await fetchSchedules();
-    } catch {
-      /* ignore */
-    }
-  }
-
   function handleStartEdit() {
     if (!selectedSession) return;
     setEditForm({
@@ -991,8 +789,6 @@ export default function SchedulingPage() {
   const sessionCount = filteredSessions.length;
   const scheduledCount = filteredSessions.filter((s) => s.status === 'SCHEDULED').length;
   const completedCount = filteredSessions.filter((s) => s.status === 'COMPLETED').length;
-  const activeScheduleCount = schedules.filter((s) => s.isActive).length;
-
   return (
     <div className="mx-auto max-w-6xl space-y-4 pb-8">
       {/* Header row */}
@@ -1005,228 +801,8 @@ export default function SchedulingPage() {
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          {/* Generate Sessions */}
-          <div className="flex items-center gap-2">
-            <Input
-              type="month"
-              value={generateMonth}
-              onChange={(e) => setGenerateMonth(e.target.value)}
-              className="h-8 w-[140px] text-sm"
-            />
-            <Button
-              onClick={handlePreviewGenerate}
-              disabled={generating || previewing}
-              size="sm"
-              className="h-8 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-            >
-              {previewing ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Loading...
-                </>
-              ) : generating ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <CalendarPlus className="h-3.5 w-3.5" />
-                  Generate
-                </>
-              )}
-            </Button>
-          </div>
-
           {/* Secondary actions row */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Recurring Schedules — opens dialog */}
-            <Dialog
-              open={recurringDialogOpen}
-              onOpenChange={(v) => {
-                setRecurringDialogOpen(v);
-                if (!v) setScheduleTrainerFilter('');
-              }}
-            >
-              <DialogTrigger
-                render={
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Recurring
-                    <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                      {activeScheduleCount}
-                    </Badge>
-                  </Button>
-                }
-              />
-              <DialogContent className="w-[min(92vw,1100px)] sm:max-w-[1100px] gap-0 overflow-hidden p-0">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-border/60 px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-                      <Calendar className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-semibold">Recurring Schedules</h2>
-                      <p className="text-xs text-muted-foreground">
-                        {schedules.length} schedule{schedules.length !== 1 ? 's' : ''} ·{' '}
-                        {schedules.filter((s) => s.isActive).length} active
-                      </p>
-                    </div>
-                  </div>
-                  {/* Trainer filter */}
-                  <select
-                    className="h-8 rounded-lg border border-border bg-muted/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    value={scheduleTrainerFilter}
-                    onChange={(e) => setScheduleTrainerFilter(e.target.value)}
-                  >
-                    <option value="">All Trainers</option>
-                    {Array.from(
-                      new Set(
-                        schedules.map(
-                          (s) => `${s.trainer.user.firstName} ${s.trainer.user.lastName}`,
-                        ),
-                      ),
-                    )
-                      .sort()
-                      .map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-
-                {/* Table */}
-                {schedules.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-16 text-center">
-                    <Calendar className="h-8 w-8 text-muted-foreground/40" />
-                    <p className="text-sm text-muted-foreground">No recurring schedules yet.</p>
-                    <p className="text-xs text-muted-foreground/60">
-                      Create one with &ldquo;+ New Schedule&rdquo;.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="max-h-[55vh] overflow-y-auto">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
-                        <tr className="border-b border-border/50">
-                          {[
-                            'Client',
-                            'Trainer',
-                            'Day',
-                            'Time',
-                            'Duration',
-                            'Valid From',
-                            'Status',
-                            '',
-                          ].map((h) => (
-                            <th
-                              key={h}
-                              className="whitespace-nowrap px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
-                            >
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/30">
-                        {schedules.map((s) => {
-                          const trainerName = `${s.trainer.user.firstName} ${s.trainer.user.lastName}`;
-                          if (scheduleTrainerFilter && trainerName !== scheduleTrainerFilter)
-                            return null;
-                          const dayLabel =
-                            s.dayOfWeek.charAt(0) + s.dayOfWeek.slice(1).toLowerCase();
-                          const DAY_COLOR: Record<string, string> = {
-                            Monday: 'bg-blue-500/10 text-blue-400',
-                            Tuesday: 'bg-violet-500/10 text-violet-400',
-                            Wednesday: 'bg-emerald-500/10 text-emerald-400',
-                            Thursday: 'bg-orange-500/10 text-orange-400',
-                            Friday: 'bg-pink-500/10 text-pink-400',
-                            Saturday: 'bg-amber-500/10 text-amber-400',
-                            Sunday: 'bg-red-500/10 text-red-400',
-                          };
-                          return (
-                            <tr
-                              key={s.id}
-                              className={`transition-colors hover:bg-muted/20 ${!s.isActive ? 'opacity-50' : ''}`}
-                            >
-                              <td className="whitespace-nowrap px-4 py-3 font-medium">
-                                {s.client.user.firstName} {s.client.user.lastName}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                                {trainerName}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3">
-                                <span
-                                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold ${DAY_COLOR[dayLabel] ?? 'bg-muted text-muted-foreground'}`}
-                                >
-                                  {dayLabel}
-                                </span>
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 font-mono text-xs">
-                                {formatTime12(s.startTime)}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                                {s.durationMin} min
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                                {new Date(s.validFrom).toLocaleDateString('en-GB', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                })}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3">
-                                {s.isActive ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                    Active
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">
-                                    Inactive
-                                  </span>
-                                )}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3">
-                                {s.isActive && (
-                                  <button
-                                    onClick={() => handleDeleteSchedule(s.id)}
-                                    className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500"
-                                    title="Deactivate"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Footer */}
-                <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-6 py-3">
-                  <p className="text-xs text-muted-foreground">
-                    {schedules.filter((s) => s.isActive).length} active ·{' '}
-                    {schedules.filter((s) => !s.isActive).length} inactive
-                  </p>
-                  <button
-                    onClick={() => {
-                      setRecurringDialogOpen(false);
-                      setCreateDialogOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-                  >
-                    <Plus className="h-3 w-3" /> New Schedule
-                  </button>
-                </div>
-              </DialogContent>
-            </Dialog>
-
             {/* Trainer Availability Check */}
             <Dialog
               open={availCheckOpen}
@@ -2143,315 +1719,6 @@ export default function SchedulingPage() {
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Generate Preview Dialog */}
-      <Dialog
-        open={!!generatePreview}
-        onOpenChange={(v) => {
-          if (!v) {
-            setGeneratePreview(null);
-            setExcludedScheduleIds(new Set());
-            setEditingScheduleId(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="text-base">Generate Sessions — Preview</DialogTitle>
-            <p className="text-xs text-muted-foreground">
-              Review, edit, or toggle schedules before generating. Changes to time/duration update
-              the recurring schedule.
-            </p>
-          </DialogHeader>
-          {generatePreview && (
-            <div className="space-y-3 flex-1 overflow-hidden flex flex-col">
-              {/* Summary stats */}
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div className="rounded-lg border bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
-                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">
-                    {selectedPreviewCount.sessions}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {selectedPreviewCount.sessions === 1 ? 'Session' : 'Sessions'} selected
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
-                  <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
-                    {selectedPreviewCount.days}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {selectedPreviewCount.days === 1 ? 'Day' : 'Days'} affected
-                  </p>
-                </div>
-                {generatePreview.skippedDueToOverride.length > 0 && (
-                  <div className="rounded-lg border bg-amber-50 px-3 py-2 dark:bg-amber-950/30">
-                    <p className="text-xl font-bold text-amber-700 dark:text-amber-400">
-                      {generatePreview.skippedDueToOverride.length}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">Skipped (unavailable)</p>
-                  </div>
-                )}
-                {generatePreview.skippedDueToConflict.length > 0 && (
-                  <div className="rounded-lg border bg-red-50 px-3 py-2 dark:bg-red-950/30">
-                    <p className="text-xl font-bold text-red-700 dark:text-red-400">
-                      {generatePreview.skippedDueToConflict.length}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">Skipped (conflicts)</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Nothing to create */}
-              {generatePreview.willCreate === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No new sessions to generate. All schedules already have instances for this month.
-                </p>
-              )}
-
-              {/* Trainer breakdown with toggleable & editable schedules */}
-              {generatePreview.preview.length > 0 && (
-                <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
-                  {generatePreview.preview.map((trainer) => {
-                    const trainerSelectedCount = trainer.clients.reduce(
-                      (sum, c) =>
-                        sum + (excludedScheduleIds.has(c.scheduleId) ? 0 : c.dates.length),
-                      0,
-                    );
-                    return (
-                      <div key={trainer.trainerName} className="rounded-lg border">
-                        <div className="border-b bg-muted/40 px-3 py-1.5 flex items-center justify-between">
-                          <span className="text-xs font-semibold flex items-center gap-1.5">
-                            <User className="h-3 w-3 text-muted-foreground" />
-                            {trainer.trainerName}
-                          </span>
-                          <Badge variant="secondary" className="text-[10px]">
-                            {trainerSelectedCount}{' '}
-                            {trainerSelectedCount === 1 ? 'session' : 'sessions'}
-                          </Badge>
-                        </div>
-                        <div className="divide-y">
-                          {trainer.clients.map((client) => {
-                            const isExcluded = excludedScheduleIds.has(client.scheduleId);
-                            const isEditing = editingScheduleId === client.scheduleId;
-                            return (
-                              <div
-                                key={client.scheduleId}
-                                className={`px-3 py-2 transition-opacity ${isExcluded ? 'opacity-40' : ''}`}
-                              >
-                                {/* Client row */}
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleScheduleExclusion(client.scheduleId)}
-                                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                                      isExcluded
-                                        ? 'border-muted-foreground/30 bg-transparent'
-                                        : 'border-emerald-600 bg-emerald-600'
-                                    }`}
-                                  >
-                                    {!isExcluded && <Check className="h-3 w-3 text-white" />}
-                                  </button>
-                                  <span className="text-xs font-medium flex-1 truncate">
-                                    {client.clientName}
-                                  </span>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    {!isEditing && (
-                                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                        {client.dayOfWeek.slice(0, 3)} &middot; {client.startTime}{' '}
-                                        &middot; {client.durationMin}min
-                                      </span>
-                                    )}
-                                    {!isExcluded && !isEditing && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setEditingScheduleId(client.scheduleId);
-                                          setScheduleEditForm({
-                                            startTime: client.startTime,
-                                            durationMin: String(client.durationMin),
-                                          });
-                                        }}
-                                        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                        title="Edit schedule timing"
-                                      >
-                                        <Pencil className="h-3 w-3" />
-                                      </button>
-                                    )}
-                                    <Badge
-                                      variant={isExcluded ? 'outline' : 'secondary'}
-                                      className="text-[10px]"
-                                    >
-                                      {client.dates.length}{' '}
-                                      {client.dates.length === 1 ? 'date' : 'dates'}
-                                    </Badge>
-                                  </div>
-                                </div>
-
-                                {/* Inline edit form */}
-                                {isEditing && !isExcluded && (
-                                  <div className="mt-2 ml-6 flex items-end gap-2 rounded-md border bg-muted/30 p-2">
-                                    <div className="flex-1">
-                                      <Label className="text-[10px] text-muted-foreground mb-0.5 block">
-                                        Time
-                                      </Label>
-                                      <Input
-                                        type="time"
-                                        value={scheduleEditForm.startTime}
-                                        onChange={(e) =>
-                                          setScheduleEditForm((f) => ({
-                                            ...f,
-                                            startTime: e.target.value,
-                                          }))
-                                        }
-                                        className="h-7 text-xs"
-                                      />
-                                    </div>
-                                    <div className="w-20">
-                                      <Label className="text-[10px] text-muted-foreground mb-0.5 block">
-                                        Duration
-                                      </Label>
-                                      <Input
-                                        type="number"
-                                        min={15}
-                                        step={15}
-                                        value={scheduleEditForm.durationMin}
-                                        onChange={(e) =>
-                                          setScheduleEditForm((f) => ({
-                                            ...f,
-                                            durationMin: e.target.value,
-                                          }))
-                                        }
-                                        className="h-7 text-xs"
-                                      />
-                                    </div>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 px-2 text-xs"
-                                      onClick={() => setEditingScheduleId(null)}
-                                    >
-                                      Cancel
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      className="h-7 px-2 text-xs gap-1 bg-emerald-600 text-white hover:bg-emerald-700"
-                                      disabled={scheduleEditSaving}
-                                      onClick={() => handleSaveScheduleEdit(client.scheduleId)}
-                                    >
-                                      {scheduleEditSaving ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <Check className="h-3 w-3" />
-                                      )}
-                                      Save
-                                    </Button>
-                                  </div>
-                                )}
-
-                                {/* Date pills */}
-                                {!isExcluded && !isEditing && (
-                                  <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
-                                    {client.dates.map((date) => (
-                                      <span
-                                        key={date}
-                                        className="inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                                      >
-                                        {new Date(date + 'T00:00:00').toLocaleDateString('en-IN', {
-                                          weekday: 'short',
-                                          day: 'numeric',
-                                          month: 'short',
-                                        })}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Skipped details */}
-              {(generatePreview.skippedDueToConflict.length > 0 ||
-                generatePreview.skippedDueToOverride.length > 0) && (
-                <div className="space-y-1.5 border-t pt-2">
-                  {generatePreview.skippedDueToConflict.length > 0 && (
-                    <details className="text-xs">
-                      <summary className="cursor-pointer font-medium text-red-600 dark:text-red-400">
-                        <SkipForward className="mr-1 inline h-3 w-3" />
-                        {generatePreview.skippedDueToConflict.length} skipped due to conflicts
-                      </summary>
-                      <ul className="mt-1 ml-4 list-disc space-y-0.5 text-muted-foreground">
-                        {generatePreview.skippedDueToConflict.map((s, i) => (
-                          <li key={i}>
-                            {s.date}: {s.reason}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                  {generatePreview.skippedDueToOverride.length > 0 && (
-                    <details className="text-xs">
-                      <summary className="cursor-pointer font-medium text-amber-600 dark:text-amber-400">
-                        <AlertTriangle className="mr-1 inline h-3 w-3" />
-                        {generatePreview.skippedDueToOverride.length} skipped due to unavailability
-                      </summary>
-                      <ul className="mt-1 ml-4 list-disc space-y-0.5 text-muted-foreground">
-                        {generatePreview.skippedDueToOverride.map((s, i) => (
-                          <li key={i}>
-                            {s.date}: {s.reason}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter className="border-t pt-3 mt-0">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setGeneratePreview(null);
-                setExcludedScheduleIds(new Set());
-                setEditingScheduleId(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirmGenerate}
-              disabled={generating || selectedPreviewCount.sessions === 0}
-              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              {generating ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Check className="h-3.5 w-3.5" />
-                  Confirm & Generate
-                  {selectedPreviewCount.sessions > 0 && (
-                    <span className="font-normal opacity-80">
-                      ({selectedPreviewCount.sessions}{' '}
-                      {selectedPreviewCount.sessions === 1 ? 'session' : 'sessions'},{' '}
-                      {selectedPreviewCount.days} {selectedPreviewCount.days === 1 ? 'day' : 'days'}
-                      )
-                    </span>
-                  )}
-                </>
-              )}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
