@@ -792,7 +792,7 @@ export default function SchedulingPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 pb-8">
       {/* Header row */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Scheduling</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
@@ -800,7 +800,7 @@ export default function SchedulingPage() {
             &middot; {completedCount} completed
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Trainer Availability Check */}
           <Dialog
             open={availCheckOpen}
