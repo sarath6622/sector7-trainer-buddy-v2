@@ -46,7 +46,8 @@ messaging.onBackgroundMessage((payload) => {
   return new Response(sw, {
     headers: {
       'Content-Type': 'application/javascript',
-      // No caching — env vars must always be fresh
+      // Allow SW to control the full origin, not just /api/
+      'Service-Worker-Allowed': '/',
       'Cache-Control': 'no-store',
     },
   });
