@@ -800,675 +800,667 @@ export default function SchedulingPage() {
             &middot; {completedCount} completed
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          {/* Secondary actions row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Trainer Availability Check */}
-            <Dialog
-              open={availCheckOpen}
-              onOpenChange={(v) => {
-                setAvailCheckOpen(v);
-                if (!v) {
-                  setAvailSmartData(null);
-                  setAvailTrainerData(null);
-                }
-              }}
-            >
-              <DialogTrigger
-                render={
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <Activity className="h-3.5 w-3.5" />
-                    Availability
-                  </Button>
-                }
-              />
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10">
-                      <Activity className="h-4 w-4 text-violet-500" />
-                    </div>
-                    <div>
-                      <span>Trainer Availability Check</span>
-                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
-                        Find the best time slots or inspect a single trainer&apos;s schedule
-                      </p>
-                    </div>
-                  </DialogTitle>
-                </DialogHeader>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Trainer Availability Check */}
+          <Dialog
+            open={availCheckOpen}
+            onOpenChange={(v) => {
+              setAvailCheckOpen(v);
+              if (!v) {
+                setAvailSmartData(null);
+                setAvailTrainerData(null);
+              }
+            }}
+          >
+            <DialogTrigger
+              render={
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Activity className="h-3.5 w-3.5" />
+                  Check Trainer Availability
+                </Button>
+              }
+            />
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10">
+                    <Activity className="h-4 w-4 text-violet-500" />
+                  </div>
+                  <div>
+                    <span>Trainer Availability Check</span>
+                    <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                      Find the best time slots or inspect a single trainer&apos;s schedule
+                    </p>
+                  </div>
+                </DialogTitle>
+              </DialogHeader>
 
-                {/* Mode tabs */}
-                <div className="flex gap-1 rounded-xl bg-muted/50 p-1">
-                  <button
-                    onClick={() => {
-                      setAvailMode('smart');
-                      setAvailSmartData(null);
-                      setAvailTrainerData(null);
-                    }}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
-                      availMode === 'smart'
-                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <Zap className="h-3.5 w-3.5" />
-                    Smart Slot Finder
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAvailMode('trainer');
-                      setAvailSmartData(null);
-                      setAvailTrainerData(null);
-                    }}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
-                      availMode === 'trainer'
-                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <User className="h-3.5 w-3.5" />
-                    Single Trainer View
-                  </button>
-                </div>
+              {/* Mode tabs */}
+              <div className="flex gap-1 rounded-xl bg-muted/50 p-1">
+                <button
+                  onClick={() => {
+                    setAvailMode('smart');
+                    setAvailSmartData(null);
+                    setAvailTrainerData(null);
+                  }}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+                    availMode === 'smart'
+                      ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Zap className="h-3.5 w-3.5" />
+                  Smart Slot Finder
+                </button>
+                <button
+                  onClick={() => {
+                    setAvailMode('trainer');
+                    setAvailSmartData(null);
+                    setAvailTrainerData(null);
+                  }}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+                    availMode === 'trainer'
+                      ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <User className="h-3.5 w-3.5" />
+                  Single Trainer View
+                </button>
+              </div>
 
-                {/* Controls */}
-                <div className="flex items-end gap-3">
-                  {availMode === 'smart' ? (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground">
-                        Session Duration
-                      </Label>
-                      <div className="flex gap-1.5">
-                        {[30, 45, 60, 90].map((d) => (
-                          <button
-                            key={d}
-                            onClick={() => setAvailDuration(d)}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                              availDuration === d
-                                ? 'bg-primary text-primary-foreground shadow-sm'
-                                : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-                            }`}
-                          >
-                            {d}m
-                          </button>
-                        ))}
+              {/* Controls */}
+              <div className="flex items-end gap-3">
+                {availMode === 'smart' ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      Session Duration
+                    </Label>
+                    <div className="flex gap-1.5">
+                      {[30, 45, 60, 90].map((d) => (
+                        <button
+                          key={d}
+                          onClick={() => setAvailDuration(d)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                            availDuration === d
+                              ? 'bg-primary text-primary-foreground shadow-sm'
+                              : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {d}m
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      Select Trainer
+                    </Label>
+                    <FormSearchSelect
+                      options={trainers
+                        .filter((t) => t.trainerProfile)
+                        .map((t) => ({
+                          value: t.trainerProfile!.id,
+                          label: `${t.firstName} ${t.lastName}`,
+                        }))}
+                      value={availTrainerId}
+                      onChange={setAvailTrainerId}
+                      placeholder="Choose a trainer"
+                      icon={User}
+                    />
+                  </div>
+                )}
+                <Button
+                  onClick={fetchAvailability}
+                  disabled={availLoading || (availMode === 'trainer' && !availTrainerId)}
+                  size="sm"
+                  className="gap-1.5 bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-700"
+                >
+                  {availLoading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="h-3.5 w-3.5" />
+                      Check
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Results */}
+              <div className="max-h-[420px] overflow-y-auto space-y-3">
+                {/* Smart results */}
+                {availMode === 'smart' &&
+                  availSmartData &&
+                  (availSmartData.recommendations.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      No free slots found. All trainers are fully booked.
+                    </p>
+                  ) : (
+                    availSmartData.recommendations.map(({ day, slots }) => (
+                      <div key={day} className="rounded-xl bg-muted/30 p-3 ring-1 ring-border/40">
+                        <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          {day.charAt(0) + day.slice(1).toLowerCase()}
+                        </p>
+                        <div className="space-y-1.5">
+                          {slots.map((slot, i) => (
+                            <div
+                              key={i}
+                              className="flex items-center justify-between rounded-lg bg-background px-3 py-2 ring-1 ring-border/50"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
+                                  <Clock className="h-3.5 w-3.5 text-violet-500" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium">
+                                    {formatTime12(slot.startTime)} – {formatTime12(slot.endTime)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {slot.freeTrainers.length} trainer
+                                    {slot.freeTrainers.length !== 1 ? 's' : ''} free
+                                    {slot.busyTrainerCount > 0 &&
+                                      ` · ${slot.busyTrainerCount} busy`}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap justify-end gap-1">
+                                {slot.freeTrainers.slice(0, 3).map((t) => (
+                                  <span
+                                    key={t.id}
+                                    className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
+                                  >
+                                    {t.name.split(' ')[0]}
+                                    <span className="ml-1 opacity-60">({t.currentLoad})</span>
+                                  </span>
+                                ))}
+                                {slot.freeTrainers.length > 3 && (
+                                  <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                                    +{slot.freeTrainers.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  ))}
+
+                {/* Trainer view results */}
+                {availMode === 'trainer' && availTrainerData && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-4 py-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10">
+                        <User className="h-4 w-4 text-violet-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">{availTrainerData.trainer.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {availTrainerData.trainer.workStart} – {availTrainerData.trainer.workEnd}
+                          {' · '}
+                          {availTrainerData.trainer.totalScheduledSessions} recurring session
+                          {availTrainerData.trainer.totalScheduledSessions !== 1 ? 's' : ''}
+                        </p>
                       </div>
                     </div>
-                  ) : (
-                    <div className="flex-1 space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground">
-                        Select Trainer
-                      </Label>
-                      <FormSearchSelect
-                        options={trainers
-                          .filter((t) => t.trainerProfile)
-                          .map((t) => ({
-                            value: t.trainerProfile!.id,
-                            label: `${t.firstName} ${t.lastName}`,
-                          }))}
-                        value={availTrainerId}
-                        onChange={setAvailTrainerId}
-                        placeholder="Choose a trainer"
-                        icon={User}
-                      />
+                    {availTrainerData.weekView.map((dayView) => (
+                      <div
+                        key={dayView.day}
+                        className={`rounded-xl p-3 ring-1 ${
+                          dayView.isWorkingDay
+                            ? 'bg-muted/30 ring-border/40'
+                            : 'bg-muted/10 ring-border/20 opacity-50'
+                        }`}
+                      >
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            {dayView.day.charAt(0) + dayView.day.slice(1).toLowerCase()}
+                          </p>
+                          {!dayView.isWorkingDay && (
+                            <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                              Day off
+                            </span>
+                          )}
+                        </div>
+                        {dayView.isWorkingDay && (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {dayView.bookedSlots.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-red-500/70">
+                                  Booked
+                                </p>
+                                {dayView.bookedSlots.map((s, i) => (
+                                  <div
+                                    key={i}
+                                    className="flex items-center gap-2 rounded-lg bg-red-500/5 px-2.5 py-1.5 ring-1 ring-red-500/10"
+                                  >
+                                    <Clock className="h-3 w-3 shrink-0 text-red-400" />
+                                    <span className="text-xs">
+                                      {formatTime12(s.startTime)}
+                                      <span className="ml-1 text-muted-foreground">
+                                        ({s.durationMin}m)
+                                      </span>
+                                      <span className="ml-1 font-medium">
+                                        {' '}
+                                        · {s.clientName.split(' ')[0]}
+                                      </span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {dayView.freeWindows.length > 0 ? (
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-emerald-500/70">
+                                  Free
+                                </p>
+                                {dayView.freeWindows.map((w, i) => (
+                                  <div
+                                    key={i}
+                                    className="flex items-center gap-2 rounded-lg bg-emerald-500/5 px-2.5 py-1.5 ring-1 ring-emerald-500/10"
+                                  >
+                                    <Check className="h-3 w-3 shrink-0 text-emerald-400" />
+                                    <span className="text-xs">
+                                      {formatTime12(w.startTime)} – {formatTime12(w.endTime)}
+                                      <span className="ml-1 text-muted-foreground">
+                                        ({w.durationMin}m)
+                                      </span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">Fully booked</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {!availLoading && !availSmartData && !availTrainerData && (
+                  <div className="flex flex-col items-center gap-2 py-8 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10">
+                      <Activity className="h-5 w-5 text-violet-500" />
                     </div>
-                  )}
+                    <p className="text-sm text-muted-foreground">
+                      {availMode === 'smart'
+                        ? 'Click Check to find the best available slots across all trainers'
+                        : 'Select a trainer and click Check to view their weekly schedule'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* New Schedule — opens dialog */}
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger
+              render={
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New Schedule
+                </Button>
+              }
+            />
+            <DialogContent
+              showCloseButton={false}
+              className="sm:max-w-[580px] gap-0 overflow-hidden p-0"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10">
+                    <CalendarPlus className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold">Schedule Sessions</h2>
+                    <p className="text-xs text-muted-foreground">
+                      Pick specific dates for this month
+                    </p>
+                  </div>
+                </div>
+                <input
+                  type="month"
+                  value={scheduleMonth}
+                  onChange={(e) => {
+                    setScheduleMonth(e.target.value);
+                    setSelectedDates(new Set());
+                  }}
+                  className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+
+              {/* Body */}
+              <div className="max-h-[68vh] overflow-y-auto px-5 py-4 space-y-4">
+                {/* Client first, then Trainer (auto-filled from mapping) */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">Client</Label>
+                    <FormSearchSelect
+                      options={clients
+                        .filter((c) => c.clientProfile)
+                        .map((c) => ({
+                          value: c.clientProfile!.id,
+                          label: `${c.firstName} ${c.lastName}`,
+                        }))}
+                      value={form.clientProfileId}
+                      onChange={(v) => {
+                        setForm((prev) => ({ ...prev, clientProfileId: v }));
+                        setSelectedDates(new Set());
+                      }}
+                      placeholder="Select client"
+                      icon={Users}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      Trainer
+                      {mappingsLoading && (
+                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                      )}
+                    </Label>
+                    <FormSearchSelect
+                      options={
+                        form.clientProfileId && clientMappings.length > 0
+                          ? trainers
+                              .filter(
+                                (t) =>
+                                  t.trainerProfile &&
+                                  clientMappings.some(
+                                    (m) => m.trainerProfileId === t.trainerProfile!.id,
+                                  ),
+                              )
+                              .map((t) => ({
+                                value: t.trainerProfile!.id,
+                                label: `${t.firstName} ${t.lastName}`,
+                              }))
+                          : trainers
+                              .filter((t) => t.trainerProfile)
+                              .map((t) => ({
+                                value: t.trainerProfile!.id,
+                                label: `${t.firstName} ${t.lastName}`,
+                              }))
+                      }
+                      value={form.trainerProfileId}
+                      onChange={(v) => {
+                        setForm((prev) => ({ ...prev, trainerProfileId: v }));
+                        setSelectedDates(new Set());
+                      }}
+                      placeholder={
+                        mappingsLoading
+                          ? 'Loading...'
+                          : form.clientProfileId && clientMappings.length === 0
+                            ? 'No mapped trainer'
+                            : 'Select trainer'
+                      }
+                      icon={User}
+                    />
+                  </div>
+                </div>
+
+                {/* Calendar + package info — only when pair is selected */}
+                {form.trainerProfileId && form.clientProfileId ? (
+                  <>
+                    {/* Package info bar */}
+                    {packageLoading ? (
+                      <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading package info...
+                      </div>
+                    ) : packageInfo && packageInfo.sessionsPerMonth > 0 ? (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-muted/40 px-3 py-2 text-xs">
+                        <span className="font-medium">
+                          {packageInfo.sessionsPerMonth} sessions/month
+                        </span>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          {packageInfo.alreadyScheduled} scheduled
+                        </span>
+                        <span className="text-muted-foreground">·</span>
+                        {(() => {
+                          const rem = Math.max(
+                            0,
+                            packageInfo.sessionsPerMonth -
+                              packageInfo.alreadyScheduled -
+                              selectedDates.size,
+                          );
+                          return (
+                            <span
+                              className={
+                                rem > 0
+                                  ? 'font-semibold text-blue-600 dark:text-blue-400'
+                                  : 'font-semibold text-red-500'
+                              }
+                            >
+                              {rem} remaining
+                            </span>
+                          );
+                        })()}
+                        {selectedDates.size > 0 && (
+                          <>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="font-semibold text-blue-600 dark:text-blue-400">
+                              {selectedDates.size} selected
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    ) : !packageLoading ? (
+                      <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                        No active PT package for this pairing — scheduling without session limit
+                      </div>
+                    ) : null}
+
+                    {/* Month calendar grid */}
+                    <div>
+                      {/* Day headers */}
+                      <div className="mb-1 grid grid-cols-7">
+                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                          <div
+                            key={d}
+                            className="py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                          >
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+                      {/* Weeks */}
+                      {buildMonthCalendar(scheduleMonth).map((week, wi) => {
+                        const remaining =
+                          packageInfo && packageInfo.sessionsPerMonth > 0
+                            ? Math.max(
+                                0,
+                                packageInfo.sessionsPerMonth -
+                                  packageInfo.alreadyScheduled -
+                                  selectedDates.size,
+                              )
+                            : Infinity;
+                        const todayStr = new Date().toISOString().split('T')[0]!;
+                        return (
+                          <div key={wi} className="mb-0.5 grid grid-cols-7 gap-0.5">
+                            {week.map((dateStr, di) => {
+                              if (!dateStr) return <div key={di} />;
+                              const isAlready =
+                                packageInfo?.alreadyDates.includes(dateStr) ?? false;
+                              const isSelected = selectedDates.has(dateStr);
+                              const isPast = dateStr < todayStr;
+                              const canSelect =
+                                !isAlready && !isPast && (isSelected || remaining > 0);
+                              const dayNum = parseInt(dateStr.split('-')[2]!, 10);
+                              return (
+                                <button
+                                  key={dateStr}
+                                  type="button"
+                                  disabled={!canSelect}
+                                  title={
+                                    isAlready
+                                      ? 'Already scheduled'
+                                      : isPast
+                                        ? 'Past date'
+                                        : !canSelect
+                                          ? 'Session limit reached'
+                                          : undefined
+                                  }
+                                  onClick={() => {
+                                    setSelectedDates((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(dateStr)) {
+                                        next.delete(dateStr);
+                                      } else if (remaining > 0) {
+                                        next.add(dateStr);
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  className={cn(
+                                    'relative flex h-9 w-full items-center justify-center rounded-lg text-sm transition-colors',
+                                    isAlready &&
+                                      'cursor-default bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+                                    isSelected && 'bg-blue-600 font-semibold text-white shadow-sm',
+                                    !isAlready &&
+                                      !isSelected &&
+                                      !isPast &&
+                                      canSelect &&
+                                      'hover:bg-muted',
+                                    !isAlready &&
+                                      !isSelected &&
+                                      (isPast || !canSelect) &&
+                                      'cursor-default text-muted-foreground/40',
+                                  )}
+                                >
+                                  {dayNum}
+                                  {isAlready && (
+                                    <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-emerald-500" />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 py-10 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10">
+                      <Calendar className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {!form.clientProfileId
+                        ? 'Select a client to get started'
+                        : mappingsLoading
+                          ? 'Loading trainer mappings...'
+                          : form.clientProfileId && clientMappings.length === 0
+                            ? 'No active trainer mapping found for this client'
+                            : 'Select a trainer to see the calendar'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Start Time & Duration */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Clock className="h-3 w-3" /> Start Time
+                    </Label>
+                    <Input
+                      type="time"
+                      value={form.startTime}
+                      onChange={(e) => setForm((prev) => ({ ...prev, startTime: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Timer className="h-3 w-3" /> Duration (min)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="15"
+                      step="15"
+                      value={form.durationMin}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, durationMin: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Error */}
+                {formError && (
+                  <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-500">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {formError}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
+                <p className="text-xs text-muted-foreground">
+                  {selectedDates.size > 0
+                    ? `${selectedDates.size} date${selectedDates.size !== 1 ? 's' : ''} selected`
+                    : 'No dates selected'}
+                </p>
+                <div className="flex gap-2">
                   <Button
-                    onClick={fetchAvailability}
-                    disabled={availLoading || (availMode === 'trainer' && !availTrainerId)}
+                    variant="outline"
                     size="sm"
-                    className="gap-1.5 bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-700"
+                    onClick={() => {
+                      setCreateDialogOpen(false);
+                      setForm({
+                        trainerProfileId: '',
+                        clientProfileId: '',
+                        startTime: '07:00',
+                        durationMin: '60',
+                      });
+                      setSelectedDates(new Set());
+                      setPackageInfo(null);
+                      setClientMappings([]);
+                      setFormError('');
+                    }}
                   >
-                    {availLoading ? (
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleBulkCreate}
+                    disabled={
+                      bulkSaving ||
+                      selectedDates.size === 0 ||
+                      !form.trainerProfileId ||
+                      !form.clientProfileId
+                    }
+                    className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
+                  >
+                    {bulkSaving ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Checking...
+                        Scheduling...
                       </>
                     ) : (
                       <>
-                        <Search className="h-3.5 w-3.5" />
-                        Check
+                        <CalendarPlus className="h-3.5 w-3.5" />
+                        Schedule{selectedDates.size > 0 ? ` ${selectedDates.size}` : ''} Session
+                        {selectedDates.size !== 1 ? 's' : ''}
                       </>
                     )}
                   </Button>
                 </div>
-
-                {/* Results */}
-                <div className="max-h-[420px] overflow-y-auto space-y-3">
-                  {/* Smart results */}
-                  {availMode === 'smart' &&
-                    availSmartData &&
-                    (availSmartData.recommendations.length === 0 ? (
-                      <p className="py-6 text-center text-sm text-muted-foreground">
-                        No free slots found. All trainers are fully booked.
-                      </p>
-                    ) : (
-                      availSmartData.recommendations.map(({ day, slots }) => (
-                        <div key={day} className="rounded-xl bg-muted/30 p-3 ring-1 ring-border/40">
-                          <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                            {day.charAt(0) + day.slice(1).toLowerCase()}
-                          </p>
-                          <div className="space-y-1.5">
-                            {slots.map((slot, i) => (
-                              <div
-                                key={i}
-                                className="flex items-center justify-between rounded-lg bg-background px-3 py-2 ring-1 ring-border/50"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
-                                    <Clock className="h-3.5 w-3.5 text-violet-500" />
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium">
-                                      {formatTime12(slot.startTime)} – {formatTime12(slot.endTime)}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {slot.freeTrainers.length} trainer
-                                      {slot.freeTrainers.length !== 1 ? 's' : ''} free
-                                      {slot.busyTrainerCount > 0 &&
-                                        ` · ${slot.busyTrainerCount} busy`}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap justify-end gap-1">
-                                  {slot.freeTrainers.slice(0, 3).map((t) => (
-                                    <span
-                                      key={t.id}
-                                      className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
-                                    >
-                                      {t.name.split(' ')[0]}
-                                      <span className="ml-1 opacity-60">({t.currentLoad})</span>
-                                    </span>
-                                  ))}
-                                  {slot.freeTrainers.length > 3 && (
-                                    <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                                      +{slot.freeTrainers.length - 3}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))
-                    ))}
-
-                  {/* Trainer view results */}
-                  {availMode === 'trainer' && availTrainerData && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-4 py-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10">
-                          <User className="h-4 w-4 text-violet-500" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold">{availTrainerData.trainer.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {availTrainerData.trainer.workStart} –{' '}
-                            {availTrainerData.trainer.workEnd}
-                            {' · '}
-                            {availTrainerData.trainer.totalScheduledSessions} recurring session
-                            {availTrainerData.trainer.totalScheduledSessions !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      </div>
-                      {availTrainerData.weekView.map((dayView) => (
-                        <div
-                          key={dayView.day}
-                          className={`rounded-xl p-3 ring-1 ${
-                            dayView.isWorkingDay
-                              ? 'bg-muted/30 ring-border/40'
-                              : 'bg-muted/10 ring-border/20 opacity-50'
-                          }`}
-                        >
-                          <div className="mb-2 flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              {dayView.day.charAt(0) + dayView.day.slice(1).toLowerCase()}
-                            </p>
-                            {!dayView.isWorkingDay && (
-                              <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                                Day off
-                              </span>
-                            )}
-                          </div>
-                          {dayView.isWorkingDay && (
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {dayView.bookedSlots.length > 0 && (
-                                <div className="space-y-1">
-                                  <p className="text-[10px] font-medium uppercase tracking-wide text-red-500/70">
-                                    Booked
-                                  </p>
-                                  {dayView.bookedSlots.map((s, i) => (
-                                    <div
-                                      key={i}
-                                      className="flex items-center gap-2 rounded-lg bg-red-500/5 px-2.5 py-1.5 ring-1 ring-red-500/10"
-                                    >
-                                      <Clock className="h-3 w-3 shrink-0 text-red-400" />
-                                      <span className="text-xs">
-                                        {formatTime12(s.startTime)}
-                                        <span className="ml-1 text-muted-foreground">
-                                          ({s.durationMin}m)
-                                        </span>
-                                        <span className="ml-1 font-medium">
-                                          {' '}
-                                          · {s.clientName.split(' ')[0]}
-                                        </span>
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {dayView.freeWindows.length > 0 ? (
-                                <div className="space-y-1">
-                                  <p className="text-[10px] font-medium uppercase tracking-wide text-emerald-500/70">
-                                    Free
-                                  </p>
-                                  {dayView.freeWindows.map((w, i) => (
-                                    <div
-                                      key={i}
-                                      className="flex items-center gap-2 rounded-lg bg-emerald-500/5 px-2.5 py-1.5 ring-1 ring-emerald-500/10"
-                                    >
-                                      <Check className="h-3 w-3 shrink-0 text-emerald-400" />
-                                      <span className="text-xs">
-                                        {formatTime12(w.startTime)} – {formatTime12(w.endTime)}
-                                        <span className="ml-1 text-muted-foreground">
-                                          ({w.durationMin}m)
-                                        </span>
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-xs text-muted-foreground italic">Fully booked</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Empty state */}
-                  {!availLoading && !availSmartData && !availTrainerData && (
-                    <div className="flex flex-col items-center gap-2 py-8 text-center">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10">
-                        <Activity className="h-5 w-5 text-violet-500" />
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {availMode === 'smart'
-                          ? 'Click Check to find the best available slots across all trainers'
-                          : 'Select a trainer and click Check to view their weekly schedule'}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            {/* New Schedule — opens dialog */}
-            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-              <DialogTrigger
-                render={
-                  <Button
-                    size="sm"
-                    className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    New Schedule
-                  </Button>
-                }
-              />
-              <DialogContent
-                showCloseButton={false}
-                className="sm:max-w-[580px] gap-0 overflow-hidden p-0"
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10">
-                      <CalendarPlus className="h-4 w-4 text-blue-500" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-semibold">Schedule Sessions</h2>
-                      <p className="text-xs text-muted-foreground">
-                        Pick specific dates for this month
-                      </p>
-                    </div>
-                  </div>
-                  <input
-                    type="month"
-                    value={scheduleMonth}
-                    onChange={(e) => {
-                      setScheduleMonth(e.target.value);
-                      setSelectedDates(new Set());
-                    }}
-                    className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-
-                {/* Body */}
-                <div className="max-h-[68vh] overflow-y-auto px-5 py-4 space-y-4">
-                  {/* Client first, then Trainer (auto-filled from mapping) */}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground">Client</Label>
-                      <FormSearchSelect
-                        options={clients
-                          .filter((c) => c.clientProfile)
-                          .map((c) => ({
-                            value: c.clientProfile!.id,
-                            label: `${c.firstName} ${c.lastName}`,
-                          }))}
-                        value={form.clientProfileId}
-                        onChange={(v) => {
-                          setForm((prev) => ({ ...prev, clientProfileId: v }));
-                          setSelectedDates(new Set());
-                        }}
-                        placeholder="Select client"
-                        icon={Users}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                        Trainer
-                        {mappingsLoading && (
-                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                        )}
-                      </Label>
-                      <FormSearchSelect
-                        options={
-                          form.clientProfileId && clientMappings.length > 0
-                            ? trainers
-                                .filter(
-                                  (t) =>
-                                    t.trainerProfile &&
-                                    clientMappings.some(
-                                      (m) => m.trainerProfileId === t.trainerProfile!.id,
-                                    ),
-                                )
-                                .map((t) => ({
-                                  value: t.trainerProfile!.id,
-                                  label: `${t.firstName} ${t.lastName}`,
-                                }))
-                            : trainers
-                                .filter((t) => t.trainerProfile)
-                                .map((t) => ({
-                                  value: t.trainerProfile!.id,
-                                  label: `${t.firstName} ${t.lastName}`,
-                                }))
-                        }
-                        value={form.trainerProfileId}
-                        onChange={(v) => {
-                          setForm((prev) => ({ ...prev, trainerProfileId: v }));
-                          setSelectedDates(new Set());
-                        }}
-                        placeholder={
-                          mappingsLoading
-                            ? 'Loading...'
-                            : form.clientProfileId && clientMappings.length === 0
-                              ? 'No mapped trainer'
-                              : 'Select trainer'
-                        }
-                        icon={User}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Calendar + package info — only when pair is selected */}
-                  {form.trainerProfileId && form.clientProfileId ? (
-                    <>
-                      {/* Package info bar */}
-                      {packageLoading ? (
-                        <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Loading package info...
-                        </div>
-                      ) : packageInfo && packageInfo.sessionsPerMonth > 0 ? (
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-muted/40 px-3 py-2 text-xs">
-                          <span className="font-medium">
-                            {packageInfo.sessionsPerMonth} sessions/month
-                          </span>
-                          <span className="text-muted-foreground">·</span>
-                          <span className="text-emerald-600 dark:text-emerald-400">
-                            {packageInfo.alreadyScheduled} scheduled
-                          </span>
-                          <span className="text-muted-foreground">·</span>
-                          {(() => {
-                            const rem = Math.max(
-                              0,
-                              packageInfo.sessionsPerMonth -
-                                packageInfo.alreadyScheduled -
-                                selectedDates.size,
-                            );
-                            return (
-                              <span
-                                className={
-                                  rem > 0
-                                    ? 'font-semibold text-blue-600 dark:text-blue-400'
-                                    : 'font-semibold text-red-500'
-                                }
-                              >
-                                {rem} remaining
-                              </span>
-                            );
-                          })()}
-                          {selectedDates.size > 0 && (
-                            <>
-                              <span className="text-muted-foreground">·</span>
-                              <span className="font-semibold text-blue-600 dark:text-blue-400">
-                                {selectedDates.size} selected
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      ) : !packageLoading ? (
-                        <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-                          No active PT package for this pairing — scheduling without session limit
-                        </div>
-                      ) : null}
-
-                      {/* Month calendar grid */}
-                      <div>
-                        {/* Day headers */}
-                        <div className="mb-1 grid grid-cols-7">
-                          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-                            <div
-                              key={d}
-                              className="py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                            >
-                              {d}
-                            </div>
-                          ))}
-                        </div>
-                        {/* Weeks */}
-                        {buildMonthCalendar(scheduleMonth).map((week, wi) => {
-                          const remaining =
-                            packageInfo && packageInfo.sessionsPerMonth > 0
-                              ? Math.max(
-                                  0,
-                                  packageInfo.sessionsPerMonth -
-                                    packageInfo.alreadyScheduled -
-                                    selectedDates.size,
-                                )
-                              : Infinity;
-                          const todayStr = new Date().toISOString().split('T')[0]!;
-                          return (
-                            <div key={wi} className="mb-0.5 grid grid-cols-7 gap-0.5">
-                              {week.map((dateStr, di) => {
-                                if (!dateStr) return <div key={di} />;
-                                const isAlready =
-                                  packageInfo?.alreadyDates.includes(dateStr) ?? false;
-                                const isSelected = selectedDates.has(dateStr);
-                                const isPast = dateStr < todayStr;
-                                const canSelect =
-                                  !isAlready && !isPast && (isSelected || remaining > 0);
-                                const dayNum = parseInt(dateStr.split('-')[2]!, 10);
-                                return (
-                                  <button
-                                    key={dateStr}
-                                    type="button"
-                                    disabled={!canSelect}
-                                    title={
-                                      isAlready
-                                        ? 'Already scheduled'
-                                        : isPast
-                                          ? 'Past date'
-                                          : !canSelect
-                                            ? 'Session limit reached'
-                                            : undefined
-                                    }
-                                    onClick={() => {
-                                      setSelectedDates((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(dateStr)) {
-                                          next.delete(dateStr);
-                                        } else if (remaining > 0) {
-                                          next.add(dateStr);
-                                        }
-                                        return next;
-                                      });
-                                    }}
-                                    className={cn(
-                                      'relative flex h-9 w-full items-center justify-center rounded-lg text-sm transition-colors',
-                                      isAlready &&
-                                        'cursor-default bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-                                      isSelected &&
-                                        'bg-blue-600 font-semibold text-white shadow-sm',
-                                      !isAlready &&
-                                        !isSelected &&
-                                        !isPast &&
-                                        canSelect &&
-                                        'hover:bg-muted',
-                                      !isAlready &&
-                                        !isSelected &&
-                                        (isPast || !canSelect) &&
-                                        'cursor-default text-muted-foreground/40',
-                                    )}
-                                  >
-                                    {dayNum}
-                                    {isAlready && (
-                                      <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-emerald-500" />
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2 py-10 text-center">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10">
-                        <Calendar className="h-5 w-5 text-blue-500" />
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {!form.clientProfileId
-                          ? 'Select a client to get started'
-                          : mappingsLoading
-                            ? 'Loading trainer mappings...'
-                            : form.clientProfileId && clientMappings.length === 0
-                              ? 'No active trainer mapping found for this client'
-                              : 'Select a trainer to see the calendar'}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Start Time & Duration */}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                        <Clock className="h-3 w-3" /> Start Time
-                      </Label>
-                      <Input
-                        type="time"
-                        value={form.startTime}
-                        onChange={(e) =>
-                          setForm((prev) => ({ ...prev, startTime: e.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                        <Timer className="h-3 w-3" /> Duration (min)
-                      </Label>
-                      <Input
-                        type="number"
-                        min="15"
-                        step="15"
-                        value={form.durationMin}
-                        onChange={(e) =>
-                          setForm((prev) => ({ ...prev, durationMin: e.target.value }))
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  {/* Error */}
-                  {formError && (
-                    <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-500">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                      {formError}
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
-                  <p className="text-xs text-muted-foreground">
-                    {selectedDates.size > 0
-                      ? `${selectedDates.size} date${selectedDates.size !== 1 ? 's' : ''} selected`
-                      : 'No dates selected'}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setCreateDialogOpen(false);
-                        setForm({
-                          trainerProfileId: '',
-                          clientProfileId: '',
-                          startTime: '07:00',
-                          durationMin: '60',
-                        });
-                        setSelectedDates(new Set());
-                        setPackageInfo(null);
-                        setClientMappings([]);
-                        setFormError('');
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleBulkCreate}
-                      disabled={
-                        bulkSaving ||
-                        selectedDates.size === 0 ||
-                        !form.trainerProfileId ||
-                        !form.clientProfileId
-                      }
-                      className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
-                    >
-                      {bulkSaving ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Scheduling...
-                        </>
-                      ) : (
-                        <>
-                          <CalendarPlus className="h-3.5 w-3.5" />
-                          Schedule{selectedDates.size > 0 ? ` ${selectedDates.size}` : ''} Session
-                          {selectedDates.size !== 1 ? 's' : ''}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-          {/* end secondary actions row */}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
