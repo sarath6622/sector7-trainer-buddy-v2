@@ -31,16 +31,10 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Handle background push messages
-messaging.onBackgroundMessage((payload) => {
-  const { title, body } = payload.notification ?? {};
-  if (!title) return;
-  self.registration.showNotification(title, {
-    body: body ?? '',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
-  });
-});
+// Firebase compat SDK auto-shows the notification when the message has a
+// notification payload. showNotification() must NOT be called here or the
+// OS will display two notifications for every push.
+messaging.onBackgroundMessage(() => {});
 `;
 
   return new Response(sw, {
