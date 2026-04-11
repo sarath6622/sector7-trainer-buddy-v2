@@ -49,10 +49,32 @@ export function useFcmToken() {
           return;
         }
 
-        console.log(`${TAG} Getting FCM token from Firebase…`);
+        console.log(`${TAG} Registering Firebase messaging service worker…`);
+        const swRegistration = await navigator.serviceWorker.register('/api/firebase-sw', {
+          scope: '/',
+        });
+        // Wait for the SW to be active before requesting a token
+        await new Promise<void>((resolve) => {
+          if (swRegistration.active) {
+            resolve();
+            return;
+          }
+          const sw = swRegistration.installing ?? swRegistration.waiting;
+          if (!sw) {
+            resolve();
+            return;
+          }
+          sw.addEventListener('statechange', function handler() {
+            if (sw.state === 'activated') {
+              sw.removeEventListener('statechange', handler);
+              resolve();
+            }
+          });
+        });
+        console.log(`${TAG} Service worker active — getting FCM token…`);
         const token = await getToken(messaging, {
           vapidKey: VAPID_KEY,
-          serviceWorkerRegistration: await navigator.serviceWorker.ready,
+          serviceWorkerRegistration: swRegistration,
         });
 
         if (!token) {
