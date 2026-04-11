@@ -375,7 +375,10 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   // ── Loading / starting ──────────────────────────────────────────────────────
   if (loading || starting) {
     return (
-      <div className="-m-4 md:-m-6 flex flex-col bg-background">
+      <div
+        className="-m-4 md:-m-6 flex flex-col bg-background"
+        style={{ height: 'calc(100dvh - 3.5rem - env(safe-area-inset-top))' }}
+      >
         {/* ── Sticky header ── */}
         <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
           {/* Top bar: back · avatar · name · timer */}
@@ -399,7 +402,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* ── Workout Logger body ── */}
-        <div className="px-4 py-4 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
           {/* "WORKOUT LOG" label row + "+" button */}
           <div className="flex items-center justify-between">
             <div className="h-3 w-24 animate-pulse rounded bg-muted" />
@@ -422,7 +425,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
 
         {/* ── End Session FAB ── */}
         <div
-          className="fixed bottom-0 left-0 right-0 z-30 px-4 pt-3"
+          className="shrink-0 px-4 pt-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
         >
           <div className="h-14 w-full animate-pulse rounded-2xl bg-red-600/30" />
@@ -438,7 +441,10 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const isActive = session.status === 'IN_PROGRESS' && !!session.startedAt;
 
   return (
-    <div className="-m-4 md:-m-6 flex flex-col bg-background">
+    <div
+      className="-m-4 md:-m-6 flex flex-col bg-background"
+      style={{ height: 'calc(100dvh - 3.5rem - env(safe-area-inset-top))' }}
+    >
       {/* ── Badge celebration overlay ── */}
       {celebrationBadges.length > 0 && (
         <BadgeCelebration badges={celebrationBadges} onDone={() => setCelebrationBadges([])} />
@@ -539,11 +545,8 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
-      {/* ── Workout logger — main scrolls, FAB clears the bottom ── */}
-      <div
-        className="px-4 py-4"
-        style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
-      >
+      {/* ── Workout logger — page owns scroll, button stays pinned to bottom ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
         <WorkoutLogger
           sessionInstanceId={session.id}
           clientProfileId={session.client.id}
@@ -552,9 +555,9 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         />
       </div>
 
-      {/* ── Floating End Session button ── */}
+      {/* ── End Session footer — always visible at bottom, no fixed needed ── */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-30 px-4 pt-3"
+        className="shrink-0 px-4 pt-3"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
         {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
