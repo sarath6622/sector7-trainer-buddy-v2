@@ -3,17 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import {
-  ChevronLeft,
-  ChevronRight,
-  CreditCard,
-  Mail,
-  Phone,
-  Plus,
-  Search,
-  Target,
-  Users,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, Mail, Phone, Plus, Search, Target, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -88,7 +78,6 @@ interface ClientUser {
     id: string;
     currentWeight: number | null;
     fitnessGoals: string | null;
-    paymentStatus: 'PAID' | 'PENDING';
   } | null;
 }
 
@@ -136,29 +125,6 @@ export default function ClientListPage() {
     fetchClients();
   }, [fetchClients]);
 
-  async function togglePaymentStatus(client: ClientUser) {
-    if (!client.clientProfile) return;
-    const newStatus = client.clientProfile.paymentStatus === 'PAID' ? 'PENDING' : 'PAID';
-    try {
-      const res = await fetch(`/api/admin/users/${client.clientProfile.id}/payment-status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentStatus: newStatus }),
-      });
-      if (res.ok) {
-        setClients((prev) =>
-          prev.map((c) =>
-            c.id === client.id && c.clientProfile
-              ? { ...c, clientProfile: { ...c.clientProfile, paymentStatus: newStatus } }
-              : c,
-          ),
-        );
-      }
-    } catch (err) {
-      console.error('Failed to update payment status:', err);
-    }
-  }
-
   const filtered = clients.filter((c) => {
     const matchesSearch =
       !search ||
@@ -172,7 +138,6 @@ export default function ClientListPage() {
   });
 
   const activeCount = clients.filter((c) => c.isActive).length;
-  const pendingCount = clients.filter((c) => c.clientProfile?.paymentStatus === 'PENDING').length;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-8">
@@ -182,12 +147,6 @@ export default function ClientListPage() {
           <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {clients.length} total &middot; {activeCount} active
-            {pendingCount > 0 && (
-              <span className="text-amber-600 dark:text-amber-400">
-                {' '}
-                &middot; {pendingCount} payment pending
-              </span>
-            )}
           </p>
         </div>
         <Link href="/admin/clients/new">
@@ -300,38 +259,6 @@ export default function ClientListPage() {
                       <Target className="h-3.5 w-3.5 shrink-0" />
                       <span className="truncate">{client.clientProfile.fitnessGoals}</span>
                     </div>
-                  )}
-                </div>
-
-                {/* Footer: Payment */}
-                <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <CreditCard className="h-3.5 w-3.5" />
-                    <span>Payment</span>
-                  </div>
-                  {client.clientProfile ? (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        togglePaymentStatus(client);
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          'text-xs transition-opacity hover:opacity-80',
-                          client.clientProfile.paymentStatus === 'PAID'
-                            ? 'bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
-                            : 'bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
-                        )}
-                      >
-                        {client.clientProfile.paymentStatus === 'PAID' ? 'Paid' : 'Pending'}
-                      </Badge>
-                    </button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </div>
               </Link>
