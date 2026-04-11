@@ -376,17 +376,56 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   if (loading || starting) {
     return (
       <div className="-m-4 md:-m-6 flex flex-col bg-background">
-        <div className="flex h-14 items-center gap-3 border-b px-4">
-          <div className="h-8 w-8 animate-pulse rounded-xl bg-muted" />
-          <div className="h-4 w-36 animate-pulse rounded-lg bg-muted" />
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        {/* Header skeleton */}
+        <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+          <div className="flex h-14 items-center gap-3 px-4">
+            <div className="h-9 w-9 animate-pulse rounded-xl bg-muted" />
+            <div className="flex flex-1 items-center gap-2">
+              <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+              <div className="h-4 w-32 animate-pulse rounded-lg bg-muted" />
+            </div>
+            <div className="h-7 w-20 animate-pulse rounded-full bg-muted" />
           </div>
-          <p className="text-sm font-medium text-muted-foreground">
-            {starting ? 'Starting session…' : 'Loading…'}
-          </p>
+          <div className="flex items-center gap-3 px-4 pb-2.5">
+            <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-px bg-border" />
+            <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+          </div>
+        </div>
+
+        {/* Exercise card skeletons */}
+        <div className="px-4 py-4 space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-2xl border bg-card p-4 space-y-3">
+              {/* Exercise name + muscle tag */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-4 w-2/3 animate-pulse rounded-lg bg-muted" />
+                  <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
+                </div>
+                <div className="h-6 w-16 animate-pulse rounded-full bg-muted" />
+              </div>
+              {/* Set rows */}
+              {[1, 2, 3].map((j) => (
+                <div key={j} className="flex items-center gap-2">
+                  <div className="h-3 w-6 animate-pulse rounded bg-muted" />
+                  <div className="h-9 flex-1 animate-pulse rounded-xl bg-muted" />
+                  <div className="h-9 flex-1 animate-pulse rounded-xl bg-muted" />
+                  <div className="h-9 w-9 animate-pulse rounded-xl bg-muted" />
+                </div>
+              ))}
+              {/* Add set button */}
+              <div className="h-9 w-full animate-pulse rounded-xl bg-muted" />
+            </div>
+          ))}
+        </div>
+
+        {/* End Session FAB skeleton */}
+        <div
+          className="fixed bottom-0 left-0 right-0 z-30 px-4 pt-3"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+        >
+          <div className="h-14 w-full animate-pulse rounded-2xl bg-muted" />
         </div>
       </div>
     );
