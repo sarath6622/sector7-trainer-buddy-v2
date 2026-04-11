@@ -211,7 +211,7 @@ export function WorkoutLogger({
         }));
 
       setExercises(
-        deduped.map((log) => ({
+        deduped.map((log, idx) => ({
           tempId: log.id,
           exerciseId: log.exercise.id,
           exerciseName: log.exercise.name,
@@ -227,7 +227,7 @@ export function WorkoutLogger({
             notes: s.notes ?? '',
           })),
           saved: true,
-          collapsed: false,
+          collapsed: idx !== deduped.length - 1,
         })),
       );
     }
