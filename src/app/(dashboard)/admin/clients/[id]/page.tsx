@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, KeyRound, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowLeft, KeyRound, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Input } from '@/components/ui/input';
@@ -124,9 +124,19 @@ export default function ClientProfilePage() {
     sessionsPerMonth: '12',
     sessionCharge: '',
     startDate: new Date().toISOString().split('T')[0] ?? '',
+    endDate: '',
   });
   const [mappingSaving, setMappingSaving] = useState(false);
   const [mappingError, setMappingError] = useState('');
+
+  const [editingPkgId, setEditingPkgId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    sessionsPerMonth: '',
+    sessionCharge: '',
+    endDate: '',
+  });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const [form, setForm] = useState({
     firstName: '',
@@ -316,6 +326,7 @@ export default function ClientProfilePage() {
             ? parseFloat(mappingForm.sessionCharge)
             : undefined,
           startDate: mappingForm.startDate,
+          endDate: mappingForm.endDate || undefined,
         }),
       });
       if (!res.ok) {
@@ -328,6 +339,7 @@ export default function ClientProfilePage() {
           sessionsPerMonth: '12',
           sessionCharge: '',
           startDate: new Date().toISOString().split('T')[0] ?? '',
+          endDate: '',
         });
         await fetchPackages(client.clientProfile.id);
       }
@@ -351,6 +363,44 @@ export default function ClientProfilePage() {
       if (res.ok) await fetchPackages(client.clientProfile.id);
     } catch {
       /* silent */
+    }
+  }
+
+  function startEditing(pkg: PtPackage) {
+    setEditingPkgId(pkg.id);
+    setEditForm({
+      sessionsPerMonth: pkg.sessionsPerMonth.toString(),
+      sessionCharge: pkg.sessionChargeAmount?.toString() ?? '',
+      endDate: pkg.endDate ? pkg.endDate.split('T')[0]! : '',
+    });
+    setEditError('');
+  }
+
+  async function handleEditMapping() {
+    if (!editingPkgId || !client?.clientProfile?.id) return;
+    setEditSaving(true);
+    setEditError('');
+    try {
+      const res = await fetch(`/api/admin/mappings/${editingPkgId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionsPerMonth: parseInt(editForm.sessionsPerMonth, 10),
+          sessionCharge: editForm.sessionCharge ? parseFloat(editForm.sessionCharge) : undefined,
+          endDate: editForm.endDate || null,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setEditError(d.error ?? 'Failed to update mapping');
+      } else {
+        setEditingPkgId(null);
+        await fetchPackages(client.clientProfile.id);
+      }
+    } catch {
+      setEditError('Failed to update mapping');
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -619,6 +669,15 @@ export default function ClientProfilePage() {
                       className="h-9 text-xs border-white/[0.08]"
                     />
                   </Field>
+                  <Field label="End Date (optional)">
+                    <Input
+                      type="date"
+                      value={mappingForm.endDate}
+                      min={mappingForm.startDate}
+                      onChange={(e) => setMappingForm((p) => ({ ...p, endDate: e.target.value }))}
+                      className="h-9 text-xs border-white/[0.08]"
+                    />
+                  </Field>
                   <Field label="Session Charge (optional)">
                     <Input
                       type="number"
@@ -650,35 +709,105 @@ export default function ClientProfilePage() {
               <p className="text-xs text-muted-foreground">No trainer mappings yet.</p>
             ) : (
               <div className="space-y-1.5">
-                {activePackages.map((pkg) => (
-                  <div
-                    key={pkg.id}
-                    className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-xs font-semibold truncate">
-                          {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
-                        </p>
-                        <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-px text-[9px] font-semibold text-emerald-400">
-                          Active
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-[10px] text-muted-foreground">
-                        {pkg.sessionsPerMonth} sessions/mo
-                        {pkg.sessionChargeAmount != null &&
-                          ` · ₹${pkg.sessionChargeAmount}/session`}
-                        {' · '}since {new Date(pkg.startDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleDeactivateMapping(pkg.id)}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                {activePackages.map((pkg) =>
+                  editingPkgId === pkg.id ? (
+                    <div
+                      key={pkg.id}
+                      className="rounded-xl border border-primary/30 bg-white/[0.04] p-3 space-y-2.5"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                        Editing — {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
+                      </p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Field label="Sessions / Month">
+                          <Input
+                            type="number"
+                            min="1"
+                            value={editForm.sessionsPerMonth}
+                            onChange={(e) =>
+                              setEditForm((p) => ({ ...p, sessionsPerMonth: e.target.value }))
+                            }
+                            className="h-9 text-xs border-white/[0.08]"
+                          />
+                        </Field>
+                        <Field label="Session Charge (optional)">
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="—"
+                            value={editForm.sessionCharge}
+                            onChange={(e) =>
+                              setEditForm((p) => ({ ...p, sessionCharge: e.target.value }))
+                            }
+                            className="h-9 text-xs border-white/[0.08]"
+                          />
+                        </Field>
+                        <Field label="End Date (optional)">
+                          <Input
+                            type="date"
+                            value={editForm.endDate}
+                            onChange={(e) =>
+                              setEditForm((p) => ({ ...p, endDate: e.target.value }))
+                            }
+                            className="h-9 text-xs border-white/[0.08]"
+                          />
+                        </Field>
+                      </div>
+                      {editError && <p className="text-xs text-destructive">{editError}</p>}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleEditMapping}
+                          disabled={editSaving}
+                          className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                        >
+                          <Save className="h-3 w-3" />
+                          {editSaving ? 'Saving…' : 'Save Changes'}
+                        </button>
+                        <button
+                          onClick={() => setEditingPkgId(null)}
+                          className="rounded-xl px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      key={pkg.id}
+                      className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-semibold truncate">
+                            {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
+                          </p>
+                          <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-px text-[9px] font-semibold text-emerald-400">
+                            Active
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          {pkg.sessionsPerMonth} sessions/mo
+                          {pkg.sessionChargeAmount != null &&
+                            ` · ₹${pkg.sessionChargeAmount}/session`}
+                          {' · '}since {new Date(pkg.startDate).toLocaleDateString()}
+                          {pkg.endDate && ` · ends ${new Date(pkg.endDate).toLocaleDateString()}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => startEditing(pkg)}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeactivateMapping(pkg.id)}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ),
+                )}
                 {inactivePackages.length > 0 && (
                   <>
                     <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50">

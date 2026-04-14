@@ -15,6 +15,7 @@ import {
   Dumbbell,
   Flame,
   RefreshCw,
+  Sparkles,
   Target,
   Zap,
   TrendingDown,
@@ -48,6 +49,12 @@ interface EngagementStats {
   monthAttendanceRate: number | null;
 }
 
+interface PackageExpiry {
+  daysUntilExpiry: number | null;
+  isExpired: boolean;
+  endDate: string | null;
+}
+
 interface DashboardData {
   sessionCount: {
     total: number;
@@ -61,6 +68,7 @@ interface DashboardData {
     remaining: number;
   };
   engagementStats: EngagementStats;
+  packageExpiry: PackageExpiry | null;
   nextSession?: {
     id: string;
     scheduledDate: string;
@@ -255,6 +263,7 @@ export default function ClientDashboard() {
   const {
     sessionCount,
     engagementStats,
+    packageExpiry,
     latestProgress,
     prevProgress,
     prs,
@@ -262,6 +271,10 @@ export default function ClientDashboard() {
     activeSession,
     trainer,
   } = data;
+
+  const isExpired = packageExpiry?.isExpired ?? false;
+  const daysLeft = packageExpiry?.daysUntilExpiry ?? null;
+  const isExpiringSoon = !isExpired && daysLeft !== null && daysLeft <= 7;
 
   const usedPct =
     sessionCount.total > 0 ? Math.round((sessionCount.used / sessionCount.total) * 100) : 0;
@@ -296,6 +309,12 @@ export default function ClientDashboard() {
         <h1 className="text-2xl font-bold tracking-tight">Hey, {firstName}</h1>
         <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your fitness overview</p>
       </div>
+
+      {/* ── Package expired card ── */}
+      {isExpired && <PackageExpiredCard />}
+
+      {/* ── Expiring soon banner ── */}
+      {isExpiringSoon && daysLeft !== null && <PackageExpiringSoonBanner daysLeft={daysLeft} />}
 
       {/* ── Engagement stats strip ── */}
       <EngagementStrip stats={engagementStats} />
@@ -778,6 +797,102 @@ function DashboardSkeleton() {
             <Bone className="h-3 w-20" />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Package expired card ─────────────────────────────────────────────────────
+
+function PackageExpiredCard() {
+  const messages = [
+    {
+      emoji: '🏋️',
+      headline: "You've been benched!",
+      sub: "But only temporarily — let's fix that.",
+    },
+    { emoji: '😴', headline: 'Permanent rest day?', sub: 'Your body disagrees. Time to renew!' },
+    {
+      emoji: '🦺',
+      headline: 'Gains are waiting.',
+      sub: 'Your package expired. The gym misses you.',
+    },
+  ];
+  // Stable pick based on day of month
+  const msg = messages[new Date().getDate() % messages.length]!;
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl p-5 text-white"
+      style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)' }}
+    >
+      {/* Decorative blobs */}
+      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-purple-500/20 blur-2xl" />
+      <div className="absolute -left-4 -bottom-6 h-24 w-24 rounded-full bg-orange-500/20 blur-2xl" />
+
+      {/* Floating emoji */}
+      <div className="relative">
+        <div className="flex items-start justify-between">
+          <div className="text-4xl animate-bounce">{msg.emoji}</div>
+          <div className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
+            Package Expired
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <p className="text-lg font-bold leading-snug">{msg.headline}</p>
+          <p className="mt-1 text-sm text-white/70">{msg.sub}</p>
+        </div>
+
+        {/* Progress bar — at 0% */}
+        <div className="mt-4 space-y-1">
+          <div className="flex items-center justify-between text-[11px] text-white/60">
+            <span>Package active</span>
+            <span className="font-semibold text-red-400">Expired</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="h-full w-0 rounded-full bg-gradient-to-r from-red-500 to-orange-400" />
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/10 px-4 py-3 ring-1 ring-white/20 backdrop-blur-sm">
+          <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
+          <p className="text-sm text-white/90">
+            Contact your gym admin to renew your PT package and get back on track.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Package expiring soon banner ─────────────────────────────────────────────
+
+function PackageExpiringSoonBanner({ daysLeft }: { daysLeft: number }) {
+  const isUrgent = daysLeft <= 2;
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-2xl p-4 ring-1 ${
+        isUrgent ? 'bg-red-500/10 ring-red-500/30' : 'bg-amber-500/10 ring-amber-500/30'
+      }`}
+    >
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg ${
+          isUrgent ? 'bg-red-500/15' : 'bg-amber-500/15'
+        }`}
+      >
+        {isUrgent ? '⏰' : '📅'}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className={`text-sm font-semibold ${isUrgent ? 'text-red-400' : 'text-amber-400'}`}>
+          {daysLeft === 1 ? 'Expires tomorrow!' : `Expires in ${daysLeft} days`}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {isUrgent
+            ? 'Heads up — contact your admin to renew before it lapses.'
+            : 'Your PT package is expiring soon. Ask your admin to extend it.'}
+        </p>
       </div>
     </div>
   );

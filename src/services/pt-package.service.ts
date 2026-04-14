@@ -10,12 +10,14 @@ interface CreatePtPackageInput {
   sessionsPerMonth: number;
   sessionCharge?: number;
   startDate: string;
+  endDate?: string;
   actorId: string;
 }
 
 interface UpdatePtPackageInput {
   sessionsPerMonth?: number;
   sessionCharge?: number;
+  endDate?: string | null;
   isActive?: boolean;
 }
 
@@ -70,6 +72,7 @@ export async function createPtPackage(input: CreatePtPackageInput) {
       sessionsPerMonth: input.sessionsPerMonth,
       sessionChargeAmount: input.sessionCharge ?? null,
       startDate: new Date(input.startDate),
+      endDate: input.endDate ? new Date(input.endDate) : null,
     },
     include: {
       client: {
@@ -121,6 +124,7 @@ export async function createPtPackage(input: CreatePtPackageInput) {
       sessionsPerMonth: input.sessionsPerMonth,
       sessionCharge: input.sessionCharge ?? null,
       startDate: input.startDate,
+      endDate: input.endDate ?? null,
     },
   });
 
@@ -141,6 +145,16 @@ export async function getPtPackages(input: ListPtPackagesInput) {
   if (input.clientId) {
     where.clientProfileId = input.clientId;
   }
+
+  // Lazy expiry: deactivate any packages whose endDate has passed
+  await prisma.ptPackage.updateMany({
+    where: {
+      branchId: input.branchId,
+      isActive: true,
+      endDate: { lt: new Date() },
+    },
+    data: { isActive: false },
+  });
 
   const packages = await prisma.ptPackage.findMany({
     where,
@@ -192,9 +206,12 @@ export async function updatePtPackage(
   const data: Record<string, unknown> = {};
   if (input.sessionsPerMonth !== undefined) data.sessionsPerMonth = input.sessionsPerMonth;
   if (input.sessionCharge !== undefined) data.sessionChargeAmount = input.sessionCharge;
+  if ('endDate' in input) {
+    data.endDate = input.endDate ? new Date(input.endDate) : null;
+  }
   if (input.isActive !== undefined) {
     data.isActive = input.isActive;
-    if (!input.isActive) {
+    if (!input.isActive && !('endDate' in input)) {
       data.endDate = new Date();
     }
   }

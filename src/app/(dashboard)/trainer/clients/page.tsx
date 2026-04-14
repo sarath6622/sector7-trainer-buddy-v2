@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock,
   Dumbbell,
+  History,
   RefreshCw,
   Target,
   TrendingUp,
@@ -103,8 +104,29 @@ interface ClientData {
   reassignedSessionCount?: number;
 }
 
+interface PastClientData {
+  clientProfile: {
+    id: string;
+    fitnessGoals?: string;
+    user: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone?: string;
+      profileImageUrl?: string;
+    };
+  };
+  package: {
+    id: string;
+    sessionsPerMonth: number;
+    sessionChargeAmount?: number | null;
+    endDate?: string | null;
+  };
+}
+
 export default function TrainerClientsPage() {
   const [clients, setClients] = useState<ClientData[]>([]);
+  const [pastClients, setPastClients] = useState<PastClientData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -114,8 +136,9 @@ export default function TrainerClientsPage() {
     try {
       const res = await fetch('/api/trainer/clients');
       if (res.ok) {
-        const { data } = await res.json();
-        setClients(data);
+        const json = await res.json();
+        setClients(json.data);
+        setPastClients(json.pastClients ?? []);
       } else {
         setError(true);
       }
@@ -197,10 +220,13 @@ export default function TrainerClientsPage() {
               &middot; {totalNoShows} no-show{totalNoShows !== 1 ? 's' : ''} this month
             </span>
           )}
+          {pastClients.length > 0 && (
+            <span className="text-muted-foreground/60"> &middot; {pastClients.length} past</span>
+          )}
         </p>
       </div>
 
-      {clients.length === 0 ? (
+      {clients.length === 0 && pastClients.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/60">
             <Users className="h-6 w-6 text-muted-foreground" />
@@ -208,150 +234,222 @@ export default function TrainerClientsPage() {
           <p className="text-muted-foreground">No clients assigned to you yet.</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {clients.map((item) => {
-            const fullName = `${item.clientProfile.user.firstName} ${item.clientProfile.user.lastName}`;
-            const color = getColorForName(fullName);
-            const initials =
-              `${item.clientProfile.user.firstName[0]}${item.clientProfile.user.lastName[0]}`.toUpperCase();
-            const usedPct =
-              item.stats.totalThisMonth > 0
-                ? Math.round((item.stats.used / item.stats.totalThisMonth) * 100)
-                : 0;
+        <>
+          {clients.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {clients.map((item) => {
+                const fullName = `${item.clientProfile.user.firstName} ${item.clientProfile.user.lastName}`;
+                const color = getColorForName(fullName);
+                const initials =
+                  `${item.clientProfile.user.firstName[0]}${item.clientProfile.user.lastName[0]}`.toUpperCase();
+                const usedPct =
+                  item.stats.totalThisMonth > 0
+                    ? Math.round((item.stats.used / item.stats.totalThisMonth) * 100)
+                    : 0;
 
-            return (
-              <Link
-                key={item.clientProfile.id}
-                href={`/trainer/clients/${item.clientProfile.id}/progress`}
-                className={`group rounded-2xl bg-card p-5 ring-1 transition-all hover:shadow-sm ${
-                  item.isReassigned
-                    ? 'ring-blue-500/30 hover:ring-blue-500/60'
-                    : 'ring-border/50 hover:ring-primary/40'
-                }`}
-              >
-                {/* Avatar + Name + Payment */}
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${color.bg} ring-2 ${color.ring}`}
+                return (
+                  <Link
+                    key={item.clientProfile.id}
+                    href={`/trainer/clients/${item.clientProfile.id}/progress`}
+                    className={`group rounded-2xl bg-card p-5 ring-1 transition-all hover:shadow-sm ${
+                      item.isReassigned
+                        ? 'ring-blue-500/30 hover:ring-blue-500/60'
+                        : 'ring-border/50 hover:ring-primary/40'
+                    }`}
                   >
-                    <span className={`text-sm font-bold ${color.text}`}>{initials}</span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="truncate font-semibold group-hover:text-primary transition-colors">
-                        {fullName}
-                      </p>
-                      {item.isReassigned ? (
-                        <span className="flex items-center gap-1 shrink-0 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-500">
-                          <ArrowLeftRight className="h-2.5 w-2.5" />
-                          Cover ({item.reassignedSessionCount})
+                    {/* Avatar + Name + Payment */}
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${color.bg} ring-2 ${color.ring}`}
+                      >
+                        <span className={`text-sm font-bold ${color.text}`}>{initials}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="truncate font-semibold group-hover:text-primary transition-colors">
+                            {fullName}
+                          </p>
+                          {item.isReassigned ? (
+                            <span className="flex items-center gap-1 shrink-0 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-500">
+                              <ArrowLeftRight className="h-2.5 w-2.5" />
+                              Cover ({item.reassignedSessionCount})
+                            </span>
+                          ) : (
+                            item.clientProfile.paymentStatus === 'PENDING' && (
+                              <Badge
+                                variant="destructive"
+                                className="shrink-0 text-[10px] px-1.5 py-0"
+                              >
+                                Unpaid
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                        {item.clientProfile.fitnessGoals && (
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Target className="h-3 w-3 shrink-0" />
+                            <span className="line-clamp-1">{item.clientProfile.fitnessGoals}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Session progress bar + stats */}
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+                        <span>
+                          {item.isReassigned ? 'Upcoming cover sessions' : 'Sessions used'}
                         </span>
-                      ) : (
-                        item.clientProfile.paymentStatus === 'PENDING' && (
-                          <Badge variant="destructive" className="shrink-0 text-[10px] px-1.5 py-0">
-                            Unpaid
-                          </Badge>
-                        )
+                        <span className="font-medium text-foreground">
+                          {item.isReassigned
+                            ? `${item.stats.scheduled} session${item.stats.scheduled !== 1 ? 's' : ''}`
+                            : `${item.stats.used}/${item.stats.totalThisMonth}`}
+                        </span>
+                      </div>
+                      {!item.isReassigned && (
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted/60">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all duration-500"
+                            style={{ width: `${Math.min(usedPct, 100)}%` }}
+                          />
+                        </div>
                       )}
                     </div>
-                    {item.clientProfile.fitnessGoals && (
-                      <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Target className="h-3 w-3 shrink-0" />
-                        <span className="line-clamp-1">{item.clientProfile.fitnessGoals}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
 
-                {/* Session progress bar + stats */}
-                <div className="mt-4">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
-                    <span>{item.isReassigned ? 'Upcoming cover sessions' : 'Sessions used'}</span>
-                    <span className="font-medium text-foreground">
-                      {item.isReassigned
-                        ? `${item.stats.scheduled} session${item.stats.scheduled !== 1 ? 's' : ''}`
-                        : `${item.stats.used}/${item.stats.totalThisMonth}`}
-                    </span>
-                  </div>
-                  {!item.isReassigned && (
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted/60">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${Math.min(usedPct, 100)}%` }}
+                    {/* Stats row */}
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <StatPill
+                        icon={<Dumbbell className="h-3 w-3" />}
+                        value={item.stats.completed}
+                        label="Done"
+                        color="text-emerald-600 dark:text-emerald-400"
+                        bg="bg-emerald-500/10"
+                      />
+                      <StatPill
+                        icon={<Calendar className="h-3 w-3" />}
+                        value={item.stats.remaining}
+                        label="Left"
+                        color="text-blue-600 dark:text-blue-400"
+                        bg="bg-blue-500/10"
+                      />
+                      <StatPill
+                        icon={<AlertCircle className="h-3 w-3" />}
+                        value={item.stats.noShow}
+                        label="No-show"
+                        color={
+                          item.stats.noShow > 0
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-muted-foreground'
+                        }
+                        bg={item.stats.noShow > 0 ? 'bg-red-500/10' : 'bg-muted/40'}
                       />
                     </div>
-                  )}
-                </div>
 
-                {/* Stats row */}
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <StatPill
-                    icon={<Dumbbell className="h-3 w-3" />}
-                    value={item.stats.completed}
-                    label="Done"
-                    color="text-emerald-600 dark:text-emerald-400"
-                    bg="bg-emerald-500/10"
-                  />
-                  <StatPill
-                    icon={<Calendar className="h-3 w-3" />}
-                    value={item.stats.remaining}
-                    label="Left"
-                    color="text-blue-600 dark:text-blue-400"
-                    bg="bg-blue-500/10"
-                  />
-                  <StatPill
-                    icon={<AlertCircle className="h-3 w-3" />}
-                    value={item.stats.noShow}
-                    label="No-show"
-                    color={
-                      item.stats.noShow > 0
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-muted-foreground'
-                    }
-                    bg={item.stats.noShow > 0 ? 'bg-red-500/10' : 'bg-muted/40'}
-                  />
-                </div>
-
-                {/* Next session */}
-                <div className="mt-3 border-t border-border/40 pt-3">
-                  {item.nextSession ? (
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10">
-                        <span className="text-sm font-bold leading-none text-primary">
-                          {new Date(item.nextSession.scheduledDate).getDate()}
-                        </span>
-                        <span className="text-[9px] font-medium uppercase text-primary/70">
-                          {new Date(item.nextSession.scheduledDate).toLocaleDateString('en-IN', {
-                            month: 'short',
-                          })}
-                        </span>
-                      </div>
-                      <div className="min-w-0 text-xs">
-                        <p className="font-medium">{formatDate(item.nextSession.scheduledDate)}</p>
-                        <div className="mt-0.5 flex items-center gap-1 text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          <span>{formatTime(item.nextSession.scheduledTime)}</span>
+                    {/* Next session */}
+                    <div className="mt-3 border-t border-border/40 pt-3">
+                      {item.nextSession ? (
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10">
+                            <span className="text-sm font-bold leading-none text-primary">
+                              {new Date(item.nextSession.scheduledDate).getDate()}
+                            </span>
+                            <span className="text-[9px] font-medium uppercase text-primary/70">
+                              {new Date(item.nextSession.scheduledDate).toLocaleDateString(
+                                'en-IN',
+                                {
+                                  month: 'short',
+                                },
+                              )}
+                            </span>
+                          </div>
+                          <div className="min-w-0 text-xs">
+                            <p className="font-medium">
+                              {formatDate(item.nextSession.scheduledDate)}
+                            </p>
+                            <div className="mt-0.5 flex items-center gap-1 text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              <span>{formatTime(item.nextSession.scheduledTime)}</span>
+                            </div>
+                          </div>
+                          <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                         </div>
-                      </div>
-                      <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>No upcoming sessions</span>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      <span>No upcoming sessions</span>
-                    </div>
-                  )}
-                </div>
 
-                {/* View progress link */}
-                <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-                  <TrendingUp className="h-3.5 w-3.5" />
-                  View progress
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+                    {/* View progress link */}
+                    <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      View progress
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Past Clients */}
+          {pastClients.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-muted-foreground/60" />
+                <h2 className="text-sm font-semibold text-muted-foreground/60 uppercase tracking-widest">
+                  Past Clients
+                </h2>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {pastClients.map((item) => {
+                  const fullName = `${item.clientProfile.user.firstName} ${item.clientProfile.user.lastName}`;
+                  const color = getColorForName(fullName);
+                  const initials =
+                    `${item.clientProfile.user.firstName[0]}${item.clientProfile.user.lastName[0]}`.toUpperCase();
+
+                  return (
+                    <Link
+                      key={item.clientProfile.id}
+                      href={`/trainer/clients/${item.clientProfile.id}/progress`}
+                      className="group rounded-2xl bg-card/50 p-4 ring-1 ring-border/30 opacity-60 hover:opacity-100 transition-all hover:ring-border/60"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${color.bg} ring-2 ${color.ring} grayscale`}
+                        >
+                          <span className={`text-sm font-bold ${color.text}`}>{initials}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="truncate text-sm font-semibold">{fullName}</p>
+                            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                              Expired
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {item.package.sessionsPerMonth} sessions/mo
+                            {item.package.endDate &&
+                              ` · ended ${new Date(item.package.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                          </p>
+                          {item.clientProfile.fitnessGoals && (
+                            <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground/60">
+                              <Target className="h-3 w-3 shrink-0" />
+                              <span className="line-clamp-1">
+                                {item.clientProfile.fitnessGoals}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 shrink-0 mt-0.5" />
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

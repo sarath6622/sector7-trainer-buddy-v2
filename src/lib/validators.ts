@@ -135,11 +135,13 @@ export const createMappingSchema = z.object({
   sessionsPerMonth: z.number().int().positive(),
   sessionCharge: z.number().min(0).optional(),
   startDate: dateSchema,
+  endDate: dateSchema.optional(),
 });
 
 export const updateMappingSchema = z.object({
   sessionsPerMonth: z.number().int().positive().optional(),
   sessionCharge: z.number().min(0).optional(),
+  endDate: dateSchema.optional().nullable(),
   isActive: z.boolean().optional(),
 });
 

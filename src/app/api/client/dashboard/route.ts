@@ -59,7 +59,7 @@ export async function GET() {
       },
     });
 
-    // Trainer info from active PT package
+    // Trainer info from active PT package (also check endDate even if still isActive)
     const activePkg = await prisma.ptPackage.findFirst({
       where: { branchId, clientProfileId, isActive: true },
       include: {
@@ -68,6 +68,44 @@ export async function GET() {
         },
       },
     });
+
+    // Package expiry info
+    let packageExpiry: {
+      daysUntilExpiry: number | null;
+      isExpired: boolean;
+      endDate: string | null;
+    } = {
+      daysUntilExpiry: null,
+      isExpired: false,
+      endDate: null,
+    };
+
+    if (activePkg?.endDate) {
+      const end = new Date(
+        activePkg.endDate.getFullYear(),
+        activePkg.endDate.getMonth(),
+        activePkg.endDate.getDate(),
+      );
+      const daysLeft = Math.ceil((end.getTime() - today.getTime()) / 86_400_000);
+      packageExpiry = {
+        daysUntilExpiry: daysLeft,
+        isExpired: daysLeft <= 0,
+        endDate: activePkg.endDate.toISOString(),
+      };
+    } else if (!activePkg) {
+      // Check if there's a recently expired package
+      const expiredPkg = await prisma.ptPackage.findFirst({
+        where: { branchId, clientProfileId, isActive: false },
+        orderBy: { endDate: 'desc' },
+      });
+      if (expiredPkg) {
+        packageExpiry = {
+          daysUntilExpiry: null,
+          isExpired: true,
+          endDate: expiredPkg.endDate?.toISOString() ?? null,
+        };
+      }
+    }
 
     // All progress entries — needed to extract per-metric latest (sparse entries)
     const allProgressEntries = await prisma.progressEntry.findMany({
@@ -194,6 +232,7 @@ export async function GET() {
               sessionsPerMonth: activePkg.sessionsPerMonth,
             }
           : null,
+        packageExpiry,
         latestProgress,
         prevProgress,
         prs,

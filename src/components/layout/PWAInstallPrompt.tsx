@@ -6,6 +6,14 @@ import { cn } from '@/lib/utils';
 
 const DISMISSED_KEY = 's7:pwa-install-dismissed';
 
+function isDismissed() {
+  try {
+    return sessionStorage.getItem(DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -26,7 +34,7 @@ type PromptKind = 'none' | 'native' | 'ios';
 function resolveInitialKind(): PromptKind {
   if (typeof window === 'undefined') return 'none';
   if (isInStandaloneMode()) return 'none';
-  if (localStorage.getItem(DISMISSED_KEY)) return 'none';
+  if (isDismissed()) return 'none';
   if (isIOS()) return 'ios';
   return 'none'; // updated to 'native' by beforeinstallprompt event
 }
@@ -41,6 +49,7 @@ export function PWAInstallPrompt() {
 
     const handler = (e: Event) => {
       e.preventDefault();
+      if (isDismissed()) return; // respect the user's dismissal
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setPromptKind('native');
     };
@@ -50,7 +59,11 @@ export function PWAInstallPrompt() {
   }, [promptKind]);
 
   function dismiss() {
-    localStorage.setItem(DISMISSED_KEY, '1');
+    try {
+      sessionStorage.setItem(DISMISSED_KEY, '1');
+    } catch {
+      // ignore storage errors (private browsing, etc.)
+    }
     setPromptKind('none');
   }
 

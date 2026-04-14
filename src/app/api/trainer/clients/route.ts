@@ -178,7 +178,54 @@ export async function GET() {
       }),
     );
 
-    return NextResponse.json({ data: [...clientsWithStats, ...reassignedClients] });
+    // ── 3. Past clients (inactive PT packages) ─────────────────
+    await prisma.ptPackage.updateMany({
+      where: { branchId, trainerProfileId, isActive: true, endDate: { lt: now } },
+      data: { isActive: false },
+    });
+
+    const pastPackages = await prisma.ptPackage.findMany({
+      where: { branchId, trainerProfileId, isActive: false },
+      include: {
+        client: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                profileImageUrl: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { endDate: 'desc' },
+    });
+
+    // Deduplicate: one card per client, keeping the most recently ended package
+    const seenClientIds = new Set<string>();
+    const pastClients = pastPackages
+      .filter((pkg) => {
+        if (seenClientIds.has(pkg.clientProfileId)) return false;
+        seenClientIds.add(pkg.clientProfileId);
+        return true;
+      })
+      .map((pkg) => ({
+        clientProfile: pkg.client,
+        package: {
+          id: pkg.id,
+          sessionsPerMonth: pkg.sessionsPerMonth,
+          sessionChargeAmount: pkg.sessionChargeAmount,
+          endDate: pkg.endDate,
+        },
+      }));
+
+    return NextResponse.json({
+      data: [...clientsWithStats, ...reassignedClients],
+      pastClients,
+    });
   } catch (error) {
     console.error('[GET /api/trainer/clients] Error:', error);
     const { error: msg, code, status } = toErrorResponse(error);
