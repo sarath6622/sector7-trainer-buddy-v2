@@ -74,10 +74,12 @@ export async function GET() {
       daysUntilExpiry: number | null;
       isExpired: boolean;
       endDate: string | null;
+      startDate: string | null;
     } = {
       daysUntilExpiry: null,
       isExpired: false,
       endDate: null,
+      startDate: null,
     };
 
     if (activePkg?.endDate) {
@@ -91,6 +93,7 @@ export async function GET() {
         daysUntilExpiry: daysLeft,
         isExpired: daysLeft <= 0,
         endDate: activePkg.endDate.toISOString(),
+        startDate: activePkg.startDate.toISOString(),
       };
     } else if (!activePkg) {
       // Check if there's a recently expired package
@@ -103,6 +106,7 @@ export async function GET() {
           daysUntilExpiry: null,
           isExpired: true,
           endDate: expiredPkg.endDate?.toISOString() ?? null,
+          startDate: expiredPkg.startDate.toISOString(),
         };
       }
     }

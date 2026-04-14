@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { SessionTimer } from '@/components/timer/SessionTimer';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
+import Image from 'next/image';
 import Link from 'next/link';
 
 interface ProgressSnapshot {
@@ -53,6 +54,7 @@ interface PackageExpiry {
   daysUntilExpiry: number | null;
   isExpired: boolean;
   endDate: string | null;
+  startDate: string | null;
 }
 
 interface DashboardData {
@@ -272,9 +274,7 @@ export default function ClientDashboard() {
     trainer,
   } = data;
 
-  const isExpired = packageExpiry?.isExpired ?? false;
-  const daysLeft = packageExpiry?.daysUntilExpiry ?? null;
-  const isExpiringSoon = !isExpired && daysLeft !== null && daysLeft <= 7;
+  const hasPackageExpiry = packageExpiry?.endDate != null;
 
   const usedPct =
     sessionCount.total > 0 ? Math.round((sessionCount.used / sessionCount.total) * 100) : 0;
@@ -310,11 +310,8 @@ export default function ClientDashboard() {
         <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your fitness overview</p>
       </div>
 
-      {/* ── Package expired card ── */}
-      {isExpired && <PackageExpiredCard />}
-
-      {/* ── Expiring soon banner ── */}
-      {isExpiringSoon && daysLeft !== null && <PackageExpiringSoonBanner daysLeft={daysLeft} />}
+      {/* ── Package status card (always shown when end date is set) ── */}
+      {hasPackageExpiry && packageExpiry && <PackageStatusCard expiry={packageExpiry} />}
 
       {/* ── Engagement stats strip ── */}
       <EngagementStrip stats={engagementStats} />
@@ -514,10 +511,12 @@ export default function ClientDashboard() {
                 className="flex flex-col items-center gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 min-w-[80px]"
               >
                 {b.badgeDefinition.imageUrl ? (
-                  <img
+                  <Image
                     src={b.badgeDefinition.imageUrl}
                     alt={b.badgeDefinition.name}
-                    className="h-8 w-8 object-contain"
+                    width={32}
+                    height={32}
+                    className="object-contain"
                   />
                 ) : (
                   <span className="text-2xl">{b.badgeDefinition.icon}</span>
@@ -804,96 +803,153 @@ function DashboardSkeleton() {
 
 // ─── Package expired card ─────────────────────────────────────────────────────
 
-function PackageExpiredCard() {
-  const messages = [
-    {
-      emoji: '🏋️',
-      headline: "You've been benched!",
-      sub: "But only temporarily — let's fix that.",
-    },
-    { emoji: '😴', headline: 'Permanent rest day?', sub: 'Your body disagrees. Time to renew!' },
-    {
-      emoji: '🦺',
-      headline: 'Gains are waiting.',
-      sub: 'Your package expired. The gym misses you.',
-    },
-  ];
-  // Stable pick based on day of month
-  const msg = messages[new Date().getDate() % messages.length]!;
+// ─── Package status card (all states) ────────────────────────────────────────
 
-  return (
-    <div
-      className="relative overflow-hidden rounded-2xl p-5 text-white"
-      style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)' }}
-    >
-      {/* Decorative blobs */}
-      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-purple-500/20 blur-2xl" />
-      <div className="absolute -left-4 -bottom-6 h-24 w-24 rounded-full bg-orange-500/20 blur-2xl" />
+function PackageStatusCard({ expiry }: { expiry: PackageExpiry }) {
+  const { daysUntilExpiry, isExpired, endDate, startDate } = expiry;
 
-      {/* Floating emoji */}
-      <div className="relative">
-        <div className="flex items-start justify-between">
-          <div className="text-4xl animate-bounce">{msg.emoji}</div>
-          <div className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
-            Package Expired
+  // Progress along package lifetime — derived from daysUntilExpiry to avoid Date.now()
+  let progressPct = 0;
+  if (startDate && endDate && daysUntilExpiry !== null) {
+    const totalDays = Math.round(
+      (new Date(endDate).getTime() - new Date(startDate).getTime()) / 86_400_000,
+    );
+    if (totalDays > 0) {
+      const usedDays = totalDays - daysUntilExpiry;
+      progressPct = Math.min(100, Math.max(0, Math.round((usedDays / totalDays) * 100)));
+    }
+  }
+
+  const isUrgent = !isExpired && daysUntilExpiry !== null && daysUntilExpiry <= 7;
+  const endFormatted = endDate
+    ? new Date(endDate).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      })
+    : null;
+
+  // ── Expired state: fun full card ───────────────────────────────────────────
+  if (isExpired) {
+    const messages = [
+      {
+        emoji: '🏋️',
+        headline: "You've been benched!",
+        sub: "But only temporarily — let's fix that.",
+      },
+      { emoji: '😴', headline: 'Permanent rest day?', sub: 'Your body disagrees. Time to renew!' },
+      {
+        emoji: '🦺',
+        headline: 'Gains are waiting.',
+        sub: 'Your package expired. The gym misses you.',
+      },
+    ];
+    const msg = messages[new Date().getDate() % messages.length]!;
+    return (
+      <div
+        className="relative overflow-hidden rounded-2xl p-5 text-white"
+        style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)' }}
+      >
+        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-purple-500/20 blur-2xl" />
+        <div className="absolute -left-4 -bottom-6 h-24 w-24 rounded-full bg-orange-500/20 blur-2xl" />
+        <div className="relative">
+          <div className="flex items-start justify-between">
+            <div className="text-4xl animate-bounce">{msg.emoji}</div>
+            <div className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
+              Package Expired
+            </div>
           </div>
-        </div>
-
-        <div className="mt-3">
-          <p className="text-lg font-bold leading-snug">{msg.headline}</p>
-          <p className="mt-1 text-sm text-white/70">{msg.sub}</p>
-        </div>
-
-        {/* Progress bar — at 0% */}
-        <div className="mt-4 space-y-1">
-          <div className="flex items-center justify-between text-[11px] text-white/60">
-            <span>Package active</span>
-            <span className="font-semibold text-red-400">Expired</span>
+          <div className="mt-3">
+            <p className="text-lg font-bold leading-snug">{msg.headline}</p>
+            <p className="mt-1 text-sm text-white/70">{msg.sub}</p>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-            <div className="h-full w-0 rounded-full bg-gradient-to-r from-red-500 to-orange-400" />
+          <div className="mt-4 space-y-1">
+            <div className="flex items-center justify-between text-[11px] text-white/60">
+              <span>Package active</span>
+              <span className="font-semibold text-red-400">
+                Expired{endFormatted ? ` · ${endFormatted}` : ''}
+              </span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full w-full rounded-full bg-gradient-to-r from-red-500 to-orange-400" />
+            </div>
           </div>
-        </div>
-
-        {/* CTA */}
-        <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/10 px-4 py-3 ring-1 ring-white/20 backdrop-blur-sm">
-          <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
-          <p className="text-sm text-white/90">
-            Contact your gym admin to renew your PT package and get back on track.
-          </p>
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/10 px-4 py-3 ring-1 ring-white/20 backdrop-blur-sm">
+            <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
+            <p className="text-sm text-white/90">
+              Contact your gym admin to renew your PT package and get back on track.
+            </p>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-// ─── Package expiring soon banner ─────────────────────────────────────────────
+  // ── Active with end date: countdown card ──────────────────────────────────
+  const barColor = isUrgent
+    ? 'bg-gradient-to-r from-red-500 to-orange-400'
+    : progressPct >= 75
+      ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
+      : 'bg-gradient-to-r from-primary to-primary/70';
 
-function PackageExpiringSoonBanner({ daysLeft }: { daysLeft: number }) {
-  const isUrgent = daysLeft <= 2;
   return (
     <div
-      className={`flex items-center gap-3 rounded-2xl p-4 ring-1 ${
-        isUrgent ? 'bg-red-500/10 ring-red-500/30' : 'bg-amber-500/10 ring-amber-500/30'
+      className={`rounded-2xl p-4 ring-1 ${
+        isUrgent ? 'bg-red-500/10 ring-red-500/30' : 'bg-card ring-border/50'
       }`}
     >
-      <div
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg ${
-          isUrgent ? 'bg-red-500/15' : 'bg-amber-500/15'
-        }`}
-      >
-        {isUrgent ? '⏰' : '📅'}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{isUrgent ? '⏰' : '📦'}</span>
+          <span className="text-sm font-semibold">PT Package</span>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+            isUrgent ? 'bg-red-500/15 text-red-400' : 'bg-emerald-500/15 text-emerald-400'
+          }`}
+        >
+          {isUrgent ? 'Expiring soon' : 'Active'}
+        </span>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className={`text-sm font-semibold ${isUrgent ? 'text-red-400' : 'text-amber-400'}`}>
-          {daysLeft === 1 ? 'Expires tomorrow!' : `Expires in ${daysLeft} days`}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {isUrgent
-            ? 'Heads up — contact your admin to renew before it lapses.'
-            : 'Your PT package is expiring soon. Ask your admin to extend it.'}
+
+      {/* Countdown */}
+      <div className="mt-3 flex items-end justify-between">
+        <div>
+          <p
+            className={`text-3xl font-bold leading-none ${isUrgent ? 'text-red-400' : 'text-foreground'}`}
+          >
+            {daysUntilExpiry === 0 ? 'Today' : daysUntilExpiry === 1 ? '1' : daysUntilExpiry}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {daysUntilExpiry === 0
+              ? 'expires today'
+              : daysUntilExpiry === 1
+                ? 'day left'
+                : 'days remaining'}
+          </p>
+        </div>
+        {endFormatted && <p className="text-[11px] text-muted-foreground">Ends {endFormatted}</p>}
+      </div>
+
+      {/* Progress bar */}
+      <div className="mt-3 space-y-1">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted/60">
+          <div
+            className={`h-full rounded-full transition-all duration-700 ${barColor}`}
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <p className="text-[10px] text-muted-foreground text-right">
+          {progressPct}% of package used
         </p>
       </div>
+
+      {isUrgent && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl bg-red-500/10 px-3 py-2.5">
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-red-400" />
+          <p className="text-xs text-red-300">Contact your admin to renew before it lapses.</p>
+        </div>
+      )}
     </div>
   );
 }
