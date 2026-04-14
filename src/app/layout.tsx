@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Chakra_Petch } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { Providers } from '@/components/Providers';
 import { NavigationProgress } from '@/components/layout/NavigationProgress';
 import { PWAInstallPrompt } from '@/components/layout/PWAInstallPrompt';
+import { SplashScreen } from '@/components/layout/SplashScreen';
 import './globals.css';
 
 const inter = Inter({
@@ -14,6 +15,12 @@ const inter = Inter({
 const jetbrainsMono = JetBrains_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
+});
+
+const chakraPetch = Chakra_Petch({
+  variable: '--font-logo',
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
 });
 
 export const viewport: Viewport = {
@@ -51,10 +58,17 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} h-dvh antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${chakraPetch.variable} h-dvh antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/* Preload splash letter images — fetched in parallel before JS runs */}
+        {['s', 'e', 'c', 't', 'o', 'r', '7'].map((l) => (
+          <link key={l} rel="preload" as="image" href={`/splash-vector/${l}.png`} />
+        ))}
+      </head>
       <body className="min-h-dvh flex flex-col">
+        <SplashScreen />
         <NavigationProgress />
         <Providers>{children}</Providers>
         <PWAInstallPrompt />

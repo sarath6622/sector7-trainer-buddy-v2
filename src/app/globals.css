@@ -150,6 +150,66 @@
   --sidebar-ring: oklch(0.637 0.179 38.5);
 }
 
+/* ── Splash Screen Animations ───────────────────────────────────────────── */
+@keyframes letter-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ghost-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 0.055;
+    transform: translateY(0);
+  }
+}
+
+@keyframes letter-swap-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.55) translateY(-10px);
+  }
+}
+
+@keyframes letter-swap-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.55) translateY(12px);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.1) translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes accent-sweep {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 100%;
+    opacity: 1;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
