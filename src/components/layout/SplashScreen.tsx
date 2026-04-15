@@ -229,7 +229,8 @@ export function SplashScreen() {
                   width: 'auto',
                   display: 'block',
                   userSelect: 'none',
-                  opacity: 0.65,
+                  opacity: 0.75,
+                  filter: 'brightness(6)',
                 }}
               />
             </div>
@@ -252,7 +253,8 @@ export function SplashScreen() {
                 width: 'auto',
                 display: 'block',
                 userSelect: 'none',
-                opacity: 0.5,
+                opacity: 0.6,
+                filter: 'brightness(6)',
               }}
             />
           </div>
