@@ -5,6 +5,7 @@ import { Providers } from '@/components/Providers';
 import { NavigationProgress } from '@/components/layout/NavigationProgress';
 import { PWAInstallPrompt } from '@/components/layout/PWAInstallPrompt';
 import { SplashScreen } from '@/components/layout/SplashScreen';
+import { SplashGate } from '@/components/layout/SplashGate';
 import './globals.css';
 
 const inter = Inter({
@@ -70,8 +71,10 @@ export default function RootLayout({
       <body className="min-h-dvh flex flex-col">
         <SplashScreen />
         <NavigationProgress />
-        <Providers>{children}</Providers>
-        <PWAInstallPrompt />
+        <SplashGate>
+          <Providers>{children}</Providers>
+          <PWAInstallPrompt />
+        </SplashGate>
         <Toaster
           position="bottom-right"
           toastOptions={{
