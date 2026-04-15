@@ -230,21 +230,26 @@ export function SplashScreen() {
             </div>
           </div>
 
-          {/* GYM CROSSFIT — centred below the full wordmark block */}
+          {/* GYM CROSSFIT — brand image asset, centred below the wordmark */}
           <div
             style={{
-              fontFamily: 'var(--font-logo), ui-sans-serif, sans-serif',
-              fontSize: 'clamp(0.45rem, 1.3vw, 0.65rem)',
-              fontWeight: 600,
-              letterSpacing: '0.45em',
-              color: 'rgba(255,255,255,0.5)',
-              textTransform: 'uppercase',
-              marginTop: '0.5rem',
+              marginTop: '0.6rem',
               opacity: 0,
               animation: `slam-up 350ms cubic-bezier(0.175,0.885,0.32,1.275) ${TAGLINE_DEL + 80}ms forwards`,
             }}
           >
-            GYM CROSSFIT
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/splash-vector/gym-crossfit.png"
+              alt="Gym Crossfit"
+              style={{
+                height: 'clamp(0.6rem, 1.8vw, 0.9rem)',
+                width: 'auto',
+                display: 'block',
+                userSelect: 'none',
+                opacity: 0.5,
+              }}
+            />
           </div>
         </div>
       </div>
