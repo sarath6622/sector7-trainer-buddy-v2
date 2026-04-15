@@ -123,7 +123,7 @@ export function SplashScreen() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#111111',
+          backgroundColor: '#000000',
         }}
       >
         {/* Screen Shake Wrapper */}
