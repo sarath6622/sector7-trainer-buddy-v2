@@ -135,89 +135,84 @@ export function SplashScreen() {
             animation: `screen-shake 300ms cubic-bezier(0.36,0.07,0.19,0.97) ${IMPACT_TIME}ms forwards`,
           }}
         >
-          {/* ── Wordmark ──────────────────────────────────────────────────────── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-            {LETTERS.map((letter, i) => {
-              const riseDelay = i * STAGGER;
+          {/* ── Wordmark + FITNESS grouped ───────────────────────────────────
+               inline-flex column with alignItems:flex-end right-aligns
+               FITNESS to the exact right edge of the wordmark row,
+               matching the logo where "fitness" sits below OR. */}
+          <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            {/* Wordmark row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+              {LETTERS.map((letter, i) => {
+                const riseDelay = i * STAGGER;
 
-              if (i === T_IDX) {
-                return (
-                  // T stays in normal flow at letter size — no layout gap.
-                  // The 7 is absolutely centred over T and overflows its bounds,
-                  // so it punches out large without shifting adjacent letters.
-                  <span key="T-slot" style={{ position: 'relative', display: 'inline-flex' }}>
-                    {/* T — normal letter size, in flow */}
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        opacity: 0,
-                        animation: [
-                          `s7-rise     ${LETTER_DUR}ms  cubic-bezier(0.22,1,0.36,1) ${riseDelay}ms  forwards`,
-                          `s7-swap-out ${SWAP_OUT_DUR}ms ease-in                    ${SWAP_START}ms  forwards`,
-                        ].join(', '),
-                      }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={letter.src} alt="T" style={IMG} />
-                    </span>
-
-                    {/* 7 — two wrappers:
-                        outer = static centering (translate never gets overridden)
-                        inner = animation only (keyframe transforms don't fight centering) */}
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        display: 'inline-flex',
-                        width: 'max-content',
-                        filter: 'drop-shadow(0 0 20px rgba(232,101,44,0.7))',
-                      }}
-                    >
+                if (i === T_IDX) {
+                  return (
+                    // T stays in normal flow at letter size — no layout gap.
+                    // The 7 is absolutely centred over T and overflows its bounds,
+                    // so it punches out large without shifting adjacent letters.
+                    <span key="T-slot" style={{ position: 'relative', display: 'inline-flex' }}>
+                      {/* T — normal letter size, in flow */}
                       <span
                         style={{
                           display: 'inline-flex',
-                          width: 'max-content',
                           opacity: 0,
-                          animation: `s7-swap-in ${SWAP_IN_DUR}ms cubic-bezier(0.175,0.885,0.32,1.275) ${SWAP_IN_DEL}ms forwards`,
+                          animation: [
+                            `s7-rise     ${LETTER_DUR}ms  cubic-bezier(0.22,1,0.36,1) ${riseDelay}ms  forwards`,
+                            `s7-swap-out ${SWAP_OUT_DUR}ms ease-in                    ${SWAP_START}ms  forwards`,
+                          ].join(', '),
                         }}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/splash-vector/7.png" alt="7" style={HERO_IMG} />
+                        <img src={letter.src} alt="T" style={IMG} />
+                      </span>
+
+                      {/* 7 — two wrappers:
+                          outer = static centering (translate never gets overridden)
+                          inner = animation only (keyframe transforms don't fight centering) */}
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          display: 'inline-flex',
+                          width: 'max-content',
+                          filter: 'drop-shadow(0 0 20px rgba(232,101,44,0.7))',
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            width: 'max-content',
+                            opacity: 0,
+                            animation: `s7-swap-in ${SWAP_IN_DUR}ms cubic-bezier(0.175,0.885,0.32,1.275) ${SWAP_IN_DEL}ms forwards`,
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/splash-vector/7.png" alt="7" style={HERO_IMG} />
+                        </span>
                       </span>
                     </span>
+                  );
+                }
+
+                return (
+                  <span
+                    key={letter.key}
+                    style={{
+                      display: 'inline-flex',
+                      opacity: 0,
+                      animation: `s7-rise ${LETTER_DUR}ms cubic-bezier(0.22,1,0.36,1) ${riseDelay}ms forwards`,
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={letter.src} alt={letter.key} style={IMG} />
                   </span>
                 );
-              }
+              })}
+            </div>
 
-              return (
-                <span
-                  key={letter.key}
-                  style={{
-                    display: 'inline-flex',
-                    opacity: 0,
-                    animation: `s7-rise ${LETTER_DUR}ms cubic-bezier(0.22,1,0.36,1) ${riseDelay}ms forwards`,
-                  }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={letter.src} alt={letter.key} style={IMG} />
-                </span>
-              );
-            })}
-          </div>
-
-          {/* ── New Typography Lockup ────────────────────────────────────────── */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              marginTop: '1rem',
-              opacity: 0,
-              animation: `slam-up 350ms cubic-bezier(0.175, 0.885, 0.32, 1.275) ${TAGLINE_DEL}ms forwards`,
-            }}
-          >
+            {/* FITNESS — right-aligned below wordmark, matching logo position */}
             <div
               style={{
                 fontFamily: 'var(--font-logo), ui-sans-serif, sans-serif',
@@ -226,23 +221,30 @@ export function SplashScreen() {
                 letterSpacing: '0.3em',
                 color: 'rgba(255,255,255,0.65)',
                 textTransform: 'uppercase',
-                marginBottom: '0.2rem',
+                marginTop: '0.3rem',
+                opacity: 0,
+                animation: `slam-up 350ms cubic-bezier(0.175,0.885,0.32,1.275) ${TAGLINE_DEL}ms forwards`,
               }}
             >
               FITNESS
             </div>
-            <div
-              style={{
-                fontFamily: 'var(--font-logo), ui-sans-serif, sans-serif',
-                fontSize: 'clamp(0.45rem, 1.3vw, 0.65rem)',
-                fontWeight: 600,
-                letterSpacing: '0.3em',
-                color: 'rgba(255,255,255,0.35)',
-                textTransform: 'uppercase',
-              }}
-            >
-              GYM CROSSFIT
-            </div>
+          </div>
+
+          {/* GYM CROSSFIT — centred below the full wordmark block */}
+          <div
+            style={{
+              fontFamily: 'var(--font-logo), ui-sans-serif, sans-serif',
+              fontSize: 'clamp(0.45rem, 1.3vw, 0.65rem)',
+              fontWeight: 600,
+              letterSpacing: '0.3em',
+              color: 'rgba(255,255,255,0.35)',
+              textTransform: 'uppercase',
+              marginTop: '0.5rem',
+              opacity: 0,
+              animation: `slam-up 350ms cubic-bezier(0.175,0.885,0.32,1.275) ${TAGLINE_DEL + 80}ms forwards`,
+            }}
+          >
+            GYM CROSSFIT
           </div>
         </div>
       </div>
