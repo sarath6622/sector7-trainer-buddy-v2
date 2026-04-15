@@ -212,21 +212,26 @@ export function SplashScreen() {
               })}
             </div>
 
-            {/* FITNESS — right-aligned below wordmark, matching logo position */}
+            {/* FITNESS — brand image asset, right-aligned below wordmark */}
             <div
               style={{
-                fontFamily: 'var(--font-logo), ui-sans-serif, sans-serif',
-                fontSize: 'clamp(0.5rem, 1.5vw, 0.72rem)',
-                fontWeight: 700,
-                letterSpacing: '0.3em',
-                color: 'rgba(255,255,255,0.65)',
-                textTransform: 'uppercase',
                 marginTop: '0.3rem',
                 opacity: 0,
                 animation: `slam-up 350ms cubic-bezier(0.175,0.885,0.32,1.275) ${TAGLINE_DEL}ms forwards`,
               }}
             >
-              FITNESS
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/splash-vector/fitness.png"
+                alt="Fitness"
+                style={{
+                  height: 'clamp(0.55rem, 1.6vw, 0.8rem)',
+                  width: 'auto',
+                  display: 'block',
+                  userSelect: 'none',
+                  opacity: 0.65,
+                }}
+              />
             </div>
           </div>
 

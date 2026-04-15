@@ -67,6 +67,7 @@ export default function RootLayout({
         {['s', 'e', 'c', 't', 'o', 'r', '7'].map((l) => (
           <link key={l} rel="preload" as="image" href={`/splash-vector/${l}.png`} />
         ))}
+        <link rel="preload" as="image" href="/splash-vector/fitness.png" />
         <link rel="preload" as="image" href="/splash-vector/gym-crossfit.png" />
       </head>
       <body className="min-h-dvh flex flex-col">
