@@ -4,6 +4,18 @@ import { AppError } from '@/lib/errors';
 import { timeSlotsOverlap } from '@/services/session-generation.service';
 import type { DayOfWeek } from '@prisma/client';
 
+interface CreateScheduleByTrainerInput {
+  branchId: string;
+  clientProfileId: string;
+  trainerProfileId: string; // the authenticated trainer's profile id
+  actorId: string; // the authenticated trainer's user id
+  dayOfWeek: DayOfWeek;
+  startTime: string;
+  durationMin: number;
+  validFrom: string;
+  validUntil?: string;
+}
+
 interface CreateScheduleInput {
   branchId: string;
   clientProfileId: string;
@@ -272,6 +284,205 @@ export async function deleteSchedule(id: string, branchId: string, actorId: stri
 
   await auditLog({
     action: 'SCHEDULE_DEACTIVATED',
+    actorId,
+    subjectType: 'SessionSchedule',
+    subjectId: id,
+    branchId,
+    oldValue: { isActive: true },
+    newValue: { isActive: false },
+  });
+
+  return { success: true };
+}
+
+// ─── TRAINER SELF-SCHEDULING ─────────────────────────────────────────────────
+
+/**
+ * Create a schedule initiated by the trainer themselves.
+ *
+ * Guard: verifies an active PtPackage links this trainer to the client.
+ * Conflict detection: same as admin-side (hard block, not soft warning).
+ * Sets createdByUserId so the UI can distinguish trainer-created vs admin-created schedules.
+ */
+export async function createScheduleByTrainer(input: CreateScheduleByTrainerInput) {
+  // 1. Verify the active PtPackage — trainer can only schedule for assigned clients
+  const activePackage = await prisma.ptPackage.findFirst({
+    where: {
+      branchId: input.branchId,
+      trainerProfileId: input.trainerProfileId,
+      clientProfileId: input.clientProfileId,
+      isActive: true,
+    },
+  });
+  if (!activePackage) {
+    throw new AppError(
+      'NOT_ASSIGNED_CLIENT',
+      'You can only create schedules for clients assigned to you via an active PT package.',
+      403,
+    );
+  }
+
+  // 2. Load trainer profile for working hours / days validation
+  const trainer = await prisma.trainerProfile.findFirst({
+    where: { id: input.trainerProfileId, branchId: input.branchId },
+  });
+  if (!trainer) {
+    throw new AppError('TRAINER_NOT_FOUND', 'Trainer profile not found', 404);
+  }
+
+  // 3. Validate working day
+  if (trainer.workingDays.length > 0 && !trainer.workingDays.includes(input.dayOfWeek as never)) {
+    throw new AppError(
+      'DAY_OUTSIDE_WORKING_DAYS',
+      `${input.dayOfWeek} is not in your default working days. Update your working days in your profile first.`,
+      400,
+    );
+  }
+
+  // 4. Validate working hours
+  if (trainer.workingHoursStart && trainer.workingHoursEnd) {
+    if (input.startTime < trainer.workingHoursStart || input.startTime >= trainer.workingHoursEnd) {
+      throw new AppError(
+        'TIME_OUTSIDE_WORKING_HOURS',
+        `Start time ${input.startTime} is outside your working hours (${trainer.workingHoursStart}–${trainer.workingHoursEnd}).`,
+        400,
+      );
+    }
+  }
+
+  // 5. Trainer conflict check
+  const trainerSchedules = await prisma.sessionSchedule.findMany({
+    where: {
+      branchId: input.branchId,
+      trainerProfileId: input.trainerProfileId,
+      dayOfWeek: input.dayOfWeek,
+      isActive: true,
+    },
+    include: {
+      client: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+
+  for (const existing of trainerSchedules) {
+    const overlap = timeSlotsOverlap(
+      input.startTime,
+      input.durationMin,
+      existing.startTime,
+      existing.durationMin,
+    );
+    if (overlap > 0) {
+      const clientName = `${existing.client.user.firstName} ${existing.client.user.lastName}`;
+      throw new AppError(
+        'TRAINER_SCHEDULE_CONFLICT',
+        `You already have a session with ${clientName} on ${input.dayOfWeek} at ${existing.startTime} (${existing.durationMin}min). Overlap: ${overlap} minutes.`,
+        409,
+      );
+    }
+  }
+
+  // 6. Client conflict check
+  const clientSchedules = await prisma.sessionSchedule.findMany({
+    where: {
+      branchId: input.branchId,
+      clientProfileId: input.clientProfileId,
+      dayOfWeek: input.dayOfWeek,
+      isActive: true,
+    },
+    include: {
+      trainer: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+
+  for (const existing of clientSchedules) {
+    const overlap = timeSlotsOverlap(
+      input.startTime,
+      input.durationMin,
+      existing.startTime,
+      existing.durationMin,
+    );
+    if (overlap > 0) {
+      const trainerName = `${existing.trainer.user.firstName} ${existing.trainer.user.lastName}`;
+      throw new AppError(
+        'CLIENT_SCHEDULE_CONFLICT',
+        `This client already has a session with ${trainerName} on ${input.dayOfWeek} at ${existing.startTime} (${existing.durationMin}min). Overlap: ${overlap} minutes.`,
+        409,
+      );
+    }
+  }
+
+  // 7. Create the schedule
+  const schedule = await prisma.sessionSchedule.create({
+    data: {
+      branchId: input.branchId,
+      clientProfileId: input.clientProfileId,
+      trainerProfileId: input.trainerProfileId,
+      dayOfWeek: input.dayOfWeek,
+      startTime: input.startTime,
+      durationMin: input.durationMin,
+      validFrom: new Date(input.validFrom),
+      validUntil: input.validUntil ? new Date(input.validUntil) : null,
+      createdByUserId: input.actorId,
+    },
+    include: SCHEDULE_INCLUDE,
+  });
+
+  await auditLog({
+    action: 'SCHEDULE_CREATED_BY_TRAINER',
+    actorId: input.actorId,
+    subjectType: 'SessionSchedule',
+    subjectId: schedule.id,
+    branchId: input.branchId,
+    newValue: {
+      clientProfileId: input.clientProfileId,
+      trainerProfileId: input.trainerProfileId,
+      dayOfWeek: input.dayOfWeek,
+      startTime: input.startTime,
+      durationMin: input.durationMin,
+    },
+  });
+
+  return schedule;
+}
+
+/**
+ * List all active schedules for a specific trainer (their view of own schedules).
+ */
+export async function getTrainerOwnSchedules(trainerProfileId: string, branchId: string) {
+  const schedules = await prisma.sessionSchedule.findMany({
+    where: { branchId, trainerProfileId },
+    include: SCHEDULE_INCLUDE,
+    orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+  });
+  return { data: schedules };
+}
+
+/**
+ * Deactivate a trainer-created schedule.
+ * Guard: only the owning trainer or admin can deactivate it.
+ */
+export async function deleteTrainerSchedule(
+  id: string,
+  branchId: string,
+  trainerProfileId: string,
+  actorId: string,
+) {
+  const existing = await prisma.sessionSchedule.findFirst({
+    where: { id, branchId },
+  });
+  if (!existing) {
+    throw new AppError('SCHEDULE_NOT_FOUND', 'Schedule not found', 404);
+  }
+  if (existing.trainerProfileId !== trainerProfileId) {
+    throw new AppError('FORBIDDEN', 'You can only deactivate your own schedules.', 403);
+  }
+
+  await prisma.sessionSchedule.update({
+    where: { id },
+    data: { isActive: false },
+  });
+
+  await auditLog({
+    action: 'SCHEDULE_DEACTIVATED_BY_TRAINER',
     actorId,
     subjectType: 'SessionSchedule',
     subjectId: id,

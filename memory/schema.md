@@ -633,3 +633,49 @@ model AuditLog {
 - **TrainerReassignment** links to a single **SessionInstance** (one-time swap)
 - **KickboxingEnrollment** optionally links to a **ClientProfile** (null for external clients)
 - **AuditLog** and **NotificationLog** are append-only operational tables
+- **RescheduleRequest** links a **ClientProfile** to a **SessionInstance** with a proposed new date/time; reviewed by admin or trainer
+
+---
+
+## Phase 22 Schema Additions (2026-04-17)
+
+### New Enum: RescheduleStatus
+
+```prisma
+enum RescheduleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+```
+
+### New Model: RescheduleRequest
+
+```prisma
+model RescheduleRequest {
+  id                String           @id @default(cuid())
+  branchId          String
+  sessionInstanceId String           // session the client wants to reschedule
+  clientProfileId   String           // client making the request
+  requestedDate     DateTime         // proposed new date
+  requestedTime     String           // proposed new time "HH:MM" (24hr)
+  reason            String?
+  status            RescheduleStatus @default(PENDING)
+  reviewedByUserId  String?          // admin or trainer who actioned it
+  reviewedAt        DateTime?
+  reviewNotes       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  // One PENDING request allowed per session at a time (service layer enforcement)
+  @@map("reschedule_requests")
+}
+```
+
+### Altered: SessionSchedule
+
+- Added `createdByUserId String?` — tracks whether admin or trainer created the schedule (null on legacy records)
+
+### Migration
+
+- `20260417100000_add_reschedule_request` — applied to Neon DB

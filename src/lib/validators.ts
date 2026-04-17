@@ -78,6 +78,8 @@ export const genderSchema = z.enum(['MALE', 'FEMALE']);
 
 export const genderFilterSchema = z.enum(['MALE', 'FEMALE', 'ALL']);
 
+export const rescheduleStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED']);
+
 // ─── PAGINATION ──────────────────────────────────────
 
 export const paginationSchema = z.object({
@@ -616,6 +618,54 @@ export const listBadgeDefinitionsSchema = paginationSchema.extend({
   genderFilter: genderFilterSchema.optional(),
 });
 
+// ─── TRAINER: SELF-SCHEDULING ────────────────────────
+// Trainers may create/manage session schedules for their own assigned clients.
+// Authorization layer enforces that trainerProfileId matches the requesting trainer
+// and that an active PtPackage links the trainer to the client.
+
+export const createTrainerScheduleSchema = z.object({
+  clientProfileId: cuidSchema,
+  dayOfWeek: dayOfWeekSchema,
+  startTime: timeSchema,
+  durationMin: z.number().int().positive(),
+  validFrom: dateSchema,
+  validUntil: dateSchema.optional(),
+});
+
+export const updateTrainerScheduleSchema = createTrainerScheduleSchema
+  .omit({ clientProfileId: true })
+  .partial()
+  .extend({
+    isActive: z.boolean().optional(),
+  });
+
+export const generateTrainerSessionsSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'Must be YYYY-MM format'),
+  scheduleIds: z.array(cuidSchema).optional(),
+  dryRun: z.boolean().optional(),
+});
+
+// ─── CLIENT: RESCHEDULE REQUESTS ─────────────────────
+
+export const submitRescheduleRequestSchema = z.object({
+  sessionInstanceId: cuidSchema,
+  requestedDate: dateSchema,
+  requestedTime: timeSchema,
+  reason: z.string().max(500).optional(),
+});
+
+export const reviewRescheduleRequestSchema = z.object({
+  reviewNotes: z.string().max(500).optional(),
+});
+
+export const listRescheduleRequestsSchema = paginationSchema.extend({
+  status: rescheduleStatusSchema.optional(),
+  clientId: cuidSchema.optional(),
+  trainerId: cuidSchema.optional(),
+  dateFrom: dateSchema.optional(),
+  dateTo: dateSchema.optional(),
+});
+
 // ─── TYPE EXPORTS ────────────────────────────────────
 
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -650,3 +700,9 @@ export type BulkCreateAvailabilityOverrideInput = z.infer<
 export type CreateBadgeDefinitionInput = z.infer<typeof createBadgeDefinitionSchema>;
 export type UpdateBadgeDefinitionInput = z.infer<typeof updateBadgeDefinitionSchema>;
 export type ListBadgeDefinitionsInput = z.infer<typeof listBadgeDefinitionsSchema>;
+export type CreateTrainerScheduleInput = z.infer<typeof createTrainerScheduleSchema>;
+export type UpdateTrainerScheduleInput = z.infer<typeof updateTrainerScheduleSchema>;
+export type GenerateTrainerSessionsInput = z.infer<typeof generateTrainerSessionsSchema>;
+export type SubmitRescheduleRequestInput = z.infer<typeof submitRescheduleRequestSchema>;
+export type ReviewRescheduleRequestInput = z.infer<typeof reviewRescheduleRequestSchema>;
+export type ListRescheduleRequestsInput = z.infer<typeof listRescheduleRequestsSchema>;

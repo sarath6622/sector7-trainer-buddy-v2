@@ -25,28 +25,34 @@ export async function GET(req: Request) {
     const dateTo = searchParams.get('dateTo'); // YYYY-MM-DD  — range end
     const status = searchParams.get('status'); // e.g. IN_PROGRESS — filter by status
 
+    const clientId = searchParams.get('clientId');
+
     const where: Record<string, unknown> = {
       branchId: session.user.branchId,
       trainerProfileId,
     };
 
+    if (clientId) {
+      where.clientProfileId = clientId;
+    }
+
     if (status) {
       where.status = status;
     }
 
+    // Parse a YYYY-MM-DD string as LOCAL midnight (not UTC midnight) so date
+    // boundaries match how sessions are stored (also written as local midnight).
+    function localDate(str: string, endOfDay = false): Date {
+      const [y, m, d] = str.split('-').map(Number);
+      return endOfDay ? new Date(y!, m! - 1, d!, 23, 59, 59, 999) : new Date(y!, m! - 1, d!);
+    }
+
     if (date) {
-      const d = new Date(date);
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
-      where.scheduledDate = { gte: d, lte: dayEnd };
+      where.scheduledDate = { gte: localDate(date), lte: localDate(date, true) };
     } else if (dateFrom || dateTo) {
       const range: Record<string, Date> = {};
-      if (dateFrom) range.gte = new Date(dateFrom);
-      if (dateTo) {
-        const end = new Date(dateTo);
-        end.setHours(23, 59, 59, 999);
-        range.lte = end;
-      }
+      if (dateFrom) range.gte = localDate(dateFrom);
+      if (dateTo) range.lte = localDate(dateTo, true);
       where.scheduledDate = range;
     } else if (month) {
       const [yearStr, monthStr] = month.split('-');

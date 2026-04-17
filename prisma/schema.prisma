@@ -144,6 +144,12 @@ enum GenderFilter {
   ALL
 }
 
+enum RescheduleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─── BRANCH ──────────────────────────────────────────
 
 model Branch {
@@ -179,6 +185,7 @@ model Branch {
   branchSettings       BranchSettings?
   userBadges           UserBadge[]
   communityPosts       CommunityPost[]
+  rescheduleRequests   RescheduleRequest[]
 
   @@map("branches")
 }
@@ -334,6 +341,7 @@ model ClientProfile {
   communityPosts       CommunityPost[]
   communityReactions   CommunityReaction[]
   communityComments    CommunityComment[]
+  rescheduleRequests   RescheduleRequest[]
 
   @@index([branchId])
   @@map("client_profiles")
@@ -376,6 +384,7 @@ model SessionSchedule {
   isActive         Boolean   @default(true)
   validFrom        DateTime
   validUntil       DateTime?
+  createdByUserId  String?   // null = legacy; populated for all new records (admin or trainer)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -425,6 +434,7 @@ model SessionInstance {
 
   workoutLogs          WorkoutLog[]
   trainerReassignment  TrainerReassignment?
+  rescheduleRequests   RescheduleRequest[]
 
   @@index([branchId, scheduledDate])
   @@index([branchId, clientProfileId, scheduledDate])
@@ -589,6 +599,36 @@ model TrainerReassignment {
 
   @@index([branchId])
   @@map("trainer_reassignments")
+}
+
+// ─── RESCHEDULE REQUESTS ─────────────────────────────────
+
+/// A client-initiated request to move a specific session to a new date/time.
+/// Reviewed and actioned by admin or the assigned trainer.
+/// One PENDING request is allowed per session at a time (enforced in service layer).
+model RescheduleRequest {
+  id                String           @id @default(cuid())
+  branchId          String
+  sessionInstanceId String           // the session the client wants to move
+  clientProfileId   String           // the client making the request
+  requestedDate     DateTime         // proposed new date (date portion only used)
+  requestedTime     String           // proposed new time "HH:MM" (24hr)
+  reason            String?
+  status            RescheduleStatus @default(PENDING)
+  reviewedByUserId  String?          // admin or trainer who actioned this
+  reviewedAt        DateTime?
+  reviewNotes       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  branch          Branch          @relation(fields: [branchId], references: [id])
+  sessionInstance SessionInstance @relation(fields: [sessionInstanceId], references: [id])
+  client          ClientProfile   @relation(fields: [clientProfileId], references: [id])
+
+  @@index([branchId, status])
+  @@index([branchId, clientProfileId])
+  @@index([sessionInstanceId])
+  @@map("reschedule_requests")
 }
 
 // ─── KICKBOXING ──────────────────────────────────────

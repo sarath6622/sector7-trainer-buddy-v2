@@ -19,6 +19,7 @@ export type {
   PaymentRecord,
   NotificationLog,
   AuditLog,
+  RescheduleRequest,
 } from '@prisma/client';
 
 import type { User, TrainerProfile, ClientProfile } from '@prisma/client';
@@ -58,4 +59,36 @@ export interface SessionTimer {
   startedAt: string;
   expectedDurationMin: number;
   elapsedMin?: number;
+}
+
+/** RescheduleRequest with all relations needed for list/detail views */
+export interface RescheduleRequestWithRelations {
+  id: string;
+  branchId: string;
+  sessionInstanceId: string;
+  clientProfileId: string;
+  requestedDate: Date;
+  requestedTime: string;
+  reason: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewedByUserId: string | null;
+  reviewedAt: Date | null;
+  reviewNotes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  client: {
+    id: string;
+    user: { firstName: string; lastName: string; email: string; phone: string | null };
+  };
+  sessionInstance: {
+    id: string;
+    scheduledDate: Date;
+    scheduledTime: string;
+    durationMin: number;
+    status: string;
+    trainer: {
+      id: string;
+      user: { firstName: string; lastName: string };
+    };
+  };
 }

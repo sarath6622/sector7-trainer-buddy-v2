@@ -9,6 +9,7 @@ interface GenerateSessionsInput {
   scheduleIds?: string[];
   actorId: string;
   dryRun?: boolean;
+  trainerProfileId?: string; // when set, scope generation to this trainer's schedules only
 }
 
 interface Conflict {
@@ -90,6 +91,9 @@ export async function generateSessions(input: GenerateSessionsInput) {
   };
   if (input.scheduleIds?.length) {
     whereSchedule.id = { in: input.scheduleIds };
+  }
+  if (input.trainerProfileId) {
+    whereSchedule.trainerProfileId = input.trainerProfileId;
   }
 
   const schedules = await prisma.sessionSchedule.findMany({

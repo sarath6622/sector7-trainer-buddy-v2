@@ -456,6 +456,134 @@ export async function getSessionCounts({ clientProfileId, branchId, month }: Ses
   };
 }
 
+interface BookSessionByTrainerInput {
+  trainerProfileId: string;
+  clientProfileId: string;
+  branchId: string;
+  actorId: string;
+  scheduledDate: string; // YYYY-MM-DD
+  scheduledTime: string; // HH:MM
+  durationMin: number;
+  notes?: string;
+}
+
+/**
+ * Book a single session instance directly — trainer-initiated manual booking.
+ * Guards: PtPackage assignment, no double-booking on the same slot.
+ */
+export async function bookSessionByTrainer({
+  trainerProfileId,
+  clientProfileId,
+  branchId,
+  actorId,
+  scheduledDate,
+  scheduledTime,
+  durationMin,
+  notes,
+}: BookSessionByTrainerInput) {
+  // Verify the trainer is assigned to this client via an active PtPackage
+  const assignment = await prisma.ptPackage.findFirst({
+    where: {
+      branchId,
+      clientProfileId,
+      trainerProfileId,
+      isActive: true,
+    },
+  });
+  if (!assignment) {
+    throw new AppError(
+      'NOT_ASSIGNED',
+      'You are not assigned to this client or the package is not active.',
+      403,
+    );
+  }
+
+  const dateObj = new Date(scheduledDate);
+  const dayStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+  const dayEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59);
+
+  // Check trainer doesn't already have a session overlapping this slot
+  const trainerConflicts = await prisma.sessionInstance.findMany({
+    where: {
+      branchId,
+      trainerProfileId,
+      scheduledDate: { gte: dayStart, lte: dayEnd },
+      status: { notIn: ['CANCELLED'] },
+    },
+    select: { scheduledTime: true, durationMin: true },
+  });
+
+  const [newH, newM] = scheduledTime.split(':').map(Number);
+  const newStart = (newH ?? 0) * 60 + (newM ?? 0);
+  const newEnd = newStart + durationMin;
+
+  for (const existing of trainerConflicts) {
+    const [exH, exM] = existing.scheduledTime.split(':').map(Number);
+    const exStart = (exH ?? 0) * 60 + (exM ?? 0);
+    const exEnd = exStart + existing.durationMin;
+    if (newStart < exEnd && newEnd > exStart) {
+      throw new AppError(
+        'TRAINER_CONFLICT',
+        `You already have a session at ${existing.scheduledTime} on this date that overlaps with the requested time.`,
+        409,
+      );
+    }
+  }
+
+  // Check client doesn't have a conflicting session
+  const clientConflicts = await prisma.sessionInstance.findMany({
+    where: {
+      branchId,
+      clientProfileId,
+      scheduledDate: { gte: dayStart, lte: dayEnd },
+      status: { notIn: ['CANCELLED'] },
+    },
+    select: { scheduledTime: true, durationMin: true },
+  });
+
+  for (const existing of clientConflicts) {
+    const [exH, exM] = existing.scheduledTime.split(':').map(Number);
+    const exStart = (exH ?? 0) * 60 + (exM ?? 0);
+    const exEnd = exStart + existing.durationMin;
+    if (newStart < exEnd && newEnd > exStart) {
+      throw new AppError(
+        'CLIENT_CONFLICT',
+        `This client already has a session at ${existing.scheduledTime} on this date that overlaps.`,
+        409,
+      );
+    }
+  }
+
+  const session = await prisma.sessionInstance.create({
+    data: {
+      branchId,
+      clientProfileId,
+      trainerProfileId,
+      scheduledDate: dayStart,
+      scheduledTime,
+      durationMin,
+      status: 'SCHEDULED',
+      notes: notes ?? null,
+    },
+    include: {
+      client: { include: { user: { select: { firstName: true, lastName: true } } } },
+      trainer: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+
+  await auditLog({
+    action: 'SESSION_BOOKED_BY_TRAINER',
+    actorId,
+    subjectType: 'SessionInstance',
+    subjectId: session.id,
+    branchId,
+    newValue: { clientProfileId, scheduledDate, scheduledTime, durationMin },
+    metadata: { trainerProfileId },
+  });
+
+  return session;
+}
+
 /**
  * Get the active (IN_PROGRESS) session for a trainer
  */

@@ -5,7 +5,6 @@ import {
   ClipboardList,
   Dumbbell,
   TrendingUp,
-  CreditCard,
   Settings,
   FileText,
   UserCheck,
@@ -15,6 +14,7 @@ import {
   ArrowLeftRight,
   Trophy,
   Flame,
+  CalendarClock,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -31,12 +31,12 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Scheduling', href: '/admin/scheduling', icon: Calendar },
   { label: 'Sessions', href: '/admin/sessions', icon: ClipboardList },
   { label: 'Leaves', href: '/admin/leaves', icon: CalendarDays },
+  { label: 'Reschedules', href: '/admin/reschedule-requests', icon: CalendarClock },
   { label: 'Reassignment', href: '/admin/reassignments', icon: ArrowLeftRight },
   { label: 'Exercises', href: '/admin/exercises', icon: Dumbbell },
   { label: 'Badges', href: '/admin/badges', icon: Trophy },
   { label: 'Kickboxing', href: '/admin/kickboxing', icon: Activity },
   { label: 'CrossFit', href: '/admin/crossfit', icon: Dumbbell },
-  { label: 'Payments', href: '/admin/payments', icon: CreditCard },
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { label: 'Audit Log', href: '/admin/audit-log', icon: FileText },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
@@ -46,6 +46,7 @@ export const TRAINER_NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/trainer', icon: LayoutDashboard },
   { label: 'My Clients', href: '/trainer/clients', icon: Users },
   { label: 'Schedule', href: '/trainer/schedule', icon: Calendar },
+  { label: 'Reschedules', href: '/trainer/reschedule-requests', icon: CalendarClock },
   { label: 'Leaves', href: '/trainer/leaves', icon: CalendarDays },
   { label: 'Analytics', href: '/trainer/analytics', icon: BarChart3 },
   { label: 'Community', href: '/community', icon: Flame },
@@ -59,6 +60,7 @@ export const CLIENT_NAV_ITEMS: NavItem[] = [
   { label: 'Badges', href: '/client/badges', icon: Trophy },
   { label: 'Community', href: '/community', icon: Flame },
   { label: 'Unavailability', href: '/client/unavailability', icon: CalendarDays },
+  { label: 'Reschedules', href: '/client/reschedule-requests', icon: CalendarClock },
 ];
 
 export const CROSSFIT_TRAINER_NAV_ITEMS: NavItem[] = [
