@@ -496,25 +496,26 @@ export async function evaluateWeightLiftedBadges(
 ): Promise<NewBadge[]> {
   const definitions = await getGenderFilteredDefinitions('WEIGHT_LIFTED', clientProfileId);
 
-  // Filter to definitions for this specific exercise
-  const exerciseDefs = definitions.filter((d) => d.exerciseId === exerciseId);
-  const newBadges: NewBadge[] = [];
+  // Filter to definitions for this specific exercise that the user qualifies for,
+  // then pick only the highest threshold badge (avoid awarding all lower tiers).
+  const qualifying = definitions
+    .filter(
+      (d) => d.exerciseId === exerciseId && d.thresholdValue && currentWeightKg >= d.thresholdValue,
+    )
+    .sort((a, b) => (b.thresholdValue ?? 0) - (a.thresholdValue ?? 0));
 
-  for (const def of exerciseDefs) {
-    if (def.thresholdValue && currentWeightKg >= def.thresholdValue) {
-      const awarded = await awardBadge(
-        clientProfileId,
-        branchId,
-        def.id,
-        exerciseId,
-        undefined,
-        actorId,
-      );
-      if (awarded) newBadges.push(awarded);
-    }
-  }
+  const def = qualifying[0];
+  if (!def) return [];
 
-  return newBadges;
+  const awarded = await awardBadge(
+    clientProfileId,
+    branchId,
+    def.id,
+    exerciseId,
+    undefined,
+    actorId,
+  );
+  return awarded ? [awarded] : [];
 }
 
 // ─── Evaluation: Exercise Milestone ────────────────────────────────────────
@@ -540,49 +541,66 @@ export async function evaluateExerciseMilestoneBadges(
 
   const newBadges: NewBadge[] = [];
 
+  // For each threshold unit, collect qualifying defs and pick only the highest.
+  // This prevents awarding all lower-tier badges when a user clears a top threshold.
+  const maxWeight = Math.max(...sets.map((s) => s.weightKg ?? 0));
+  const maxReps = Math.max(...sets.map((s) => s.reps ?? 0));
+  const durations = sets.map((s) => s.durationSec ?? 0).filter((d) => d > 0);
+
+  const qualifyingByUnit: Record<string, typeof exerciseDefs> = {};
+
   for (const def of exerciseDefs) {
     if (!def.thresholdValue || !def.thresholdUnit) continue;
 
     let achieved = false;
 
     switch (def.thresholdUnit) {
-      case 'KG': {
-        const maxWeight = Math.max(...sets.map((s) => s.weightKg ?? 0));
+      case 'KG':
         achieved = maxWeight >= def.thresholdValue;
         break;
-      }
-      case 'REPS': {
-        const maxReps = Math.max(...sets.map((s) => s.reps ?? 0));
+      case 'REPS':
         achieved = maxReps >= def.thresholdValue;
         break;
-      }
       case 'SECONDS': {
-        const durations = sets.map((s) => s.durationSec ?? 0).filter((d) => d > 0);
         if (durations.length === 0) break;
-
         if (def.durationCondition === 'SHORTER_IS_BETTER') {
-          const minDuration = Math.min(...durations);
-          achieved = minDuration <= def.thresholdValue;
+          achieved = Math.min(...durations) <= def.thresholdValue;
         } else {
-          // LONGER_IS_BETTER (default)
-          const maxDuration = Math.max(...durations);
-          achieved = maxDuration >= def.thresholdValue;
+          achieved = Math.max(...durations) >= def.thresholdValue;
         }
         break;
       }
     }
 
     if (achieved) {
-      const awarded = await awardBadge(
-        clientProfileId,
-        branchId,
-        def.id,
-        exerciseId,
-        undefined,
-        actorId,
-      );
-      if (awarded) newBadges.push(awarded);
+      const key = def.thresholdUnit;
+      if (!qualifyingByUnit[key]) qualifyingByUnit[key] = [];
+      qualifyingByUnit[key]!.push(def);
     }
+  }
+
+  // Award only the highest-threshold badge per unit type
+  for (const [unit, defs] of Object.entries(qualifyingByUnit)) {
+    const sorted = [...defs].sort((a, b) => {
+      if (unit === 'SECONDS' && defs[0]?.durationCondition === 'SHORTER_IS_BETTER') {
+        // Lower threshold = harder (faster time) → pick lowest threshold value
+        return (a.thresholdValue ?? 0) - (b.thresholdValue ?? 0);
+      }
+      return (b.thresholdValue ?? 0) - (a.thresholdValue ?? 0);
+    });
+
+    const top = sorted[0];
+    if (!top) continue;
+
+    const awarded = await awardBadge(
+      clientProfileId,
+      branchId,
+      top.id,
+      exerciseId,
+      undefined,
+      actorId,
+    );
+    if (awarded) newBadges.push(awarded);
   }
 
   return newBadges;
