@@ -1,7 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
-import { notifySessionStarted, notifyNoShow } from '@/services/notification.service';
+import {
+  notifySessionStarted,
+  notifyNoShow,
+  notifySessionBooked,
+} from '@/services/notification.service';
 import {
   evaluateStreakBadges,
   evaluateSessionMilestoneBadges,
@@ -566,7 +570,7 @@ export async function bookSessionByTrainer({
       notes: notes ?? null,
     },
     include: {
-      client: { include: { user: { select: { firstName: true, lastName: true } } } },
+      client: { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
       trainer: { include: { user: { select: { firstName: true, lastName: true } } } },
     },
   });
@@ -579,6 +583,16 @@ export async function bookSessionByTrainer({
     branchId,
     newValue: { clientProfileId, scheduledDate, scheduledTime, durationMin },
     metadata: { trainerProfileId },
+  });
+
+  // Notify the client their session has been booked (fire-and-forget)
+  const trainerUser = session.trainer.user;
+  notifySessionBooked({
+    branchId,
+    clientUserId: session.client.user.id,
+    trainerName: `${trainerUser.firstName} ${trainerUser.lastName}`,
+    date: scheduledDate,
+    time: scheduledTime,
   });
 
   return session;

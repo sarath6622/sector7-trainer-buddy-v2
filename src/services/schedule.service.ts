@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { timeSlotsOverlap } from '@/services/session-generation.service';
+import { notifyScheduleCreated } from '@/services/notification.service';
 import type { DayOfWeek } from '@prisma/client';
 
 interface CreateScheduleByTrainerInput {
@@ -45,8 +46,12 @@ interface ListSchedulesInput {
 }
 
 const SCHEDULE_INCLUDE = {
-  client: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
-  trainer: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+  client: {
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+  },
+  trainer: {
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+  },
 } as const;
 
 /**
@@ -176,6 +181,15 @@ export async function createSchedule(input: CreateScheduleInput) {
       startTime: input.startTime,
       durationMin: input.durationMin,
     },
+  });
+
+  // Notify the client their recurring schedule has been set up (fire-and-forget)
+  notifyScheduleCreated({
+    branchId: input.branchId,
+    clientUserId: schedule.client.user.id,
+    trainerName: `${schedule.trainer.user.firstName} ${schedule.trainer.user.lastName}`,
+    dayOfWeek: input.dayOfWeek,
+    startTime: input.startTime,
   });
 
   return schedule;
@@ -439,6 +453,15 @@ export async function createScheduleByTrainer(input: CreateScheduleByTrainerInpu
       startTime: input.startTime,
       durationMin: input.durationMin,
     },
+  });
+
+  // Notify the client their recurring schedule has been set up (fire-and-forget)
+  notifyScheduleCreated({
+    branchId: input.branchId,
+    clientUserId: schedule.client.user.id,
+    trainerName: `${schedule.trainer.user.firstName} ${schedule.trainer.user.lastName}`,
+    dayOfWeek: input.dayOfWeek,
+    startTime: input.startTime,
   });
 
   return schedule;

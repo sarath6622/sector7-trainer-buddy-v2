@@ -239,6 +239,62 @@ export async function notifyTrainerNewAssignment({
   }
 }
 
+// ─── Session Booking Notifications ─────────────────
+
+export async function notifySessionBooked({
+  branchId,
+  clientUserId,
+  trainerName,
+  date,
+  time,
+}: {
+  branchId: string;
+  clientUserId: string;
+  trainerName: string;
+  date: string;
+  time: string;
+}) {
+  try {
+    await sendNotification({
+      branchId,
+      recipientId: clientUserId,
+      title: 'Session scheduled',
+      body: `${trainerName} • ${date} at ${time}`,
+      channel: 'IN_APP',
+      metadata: { type: 'SESSION_BOOKED' },
+    });
+  } catch (error) {
+    console.error('[Notification] Failed to send session booked:', error);
+  }
+}
+
+export async function notifyScheduleCreated({
+  branchId,
+  clientUserId,
+  trainerName,
+  dayOfWeek,
+  startTime,
+}: {
+  branchId: string;
+  clientUserId: string;
+  trainerName: string;
+  dayOfWeek: string;
+  startTime: string;
+}) {
+  try {
+    await sendNotification({
+      branchId,
+      recipientId: clientUserId,
+      title: 'Recurring schedule set',
+      body: `${trainerName} • ${dayOfWeek}s at ${startTime}`,
+      channel: 'IN_APP',
+      metadata: { type: 'SCHEDULE_CREATED' },
+    });
+  } catch (error) {
+    console.error('[Notification] Failed to send schedule created:', error);
+  }
+}
+
 // ─── Generic Notification ───────────────────────────
 
 export async function notifyUser({
