@@ -58,7 +58,7 @@ export default function NewClientPage() {
           email: form.email,
           phone: form.phone || undefined,
           password: form.password,
-          role: 'CLIENT',
+          roles: ['CLIENT'],
           gender: form.gender || undefined,
           emergencyContactName: form.emergencyContactName || undefined,
           emergencyContactPhone: form.emergencyContactPhone || undefined,
