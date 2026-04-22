@@ -18,6 +18,7 @@ import {
   CalendarCheck,
   UmbrellaOff,
   ChevronRight,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -37,6 +38,19 @@ interface SessionData {
   trainer: {
     user: { firstName: string; lastName: string };
   };
+}
+
+interface ClientWithPackage {
+  clientProfile: {
+    id: string;
+    user: { firstName: string; lastName: string };
+  };
+  package: {
+    startDate: string;
+    endDate: string | null;
+    sessionsPerMonth: number;
+  } | null;
+  isReassigned: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -94,6 +108,7 @@ export default function TrainerDashboard() {
   const [activeSession, setActiveSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [clients, setClients] = useState<ClientWithPackage[]>([]);
 
   const fetchAll = useCallback(async () => {
     const now = new Date();
@@ -107,11 +122,12 @@ export default function TrainerDashboard() {
     const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     try {
-      const [todayRes, upcomingRes, monthRes, staleRes] = await Promise.all([
+      const [todayRes, upcomingRes, monthRes, staleRes, clientsRes] = await Promise.all([
         fetch(`/api/trainer/schedule?date=${today}`),
         fetch(`/api/trainer/schedule?dateFrom=${tomorrow}&dateTo=${future}`),
         fetch(`/api/trainer/schedule?month=${monthStr}`),
         fetch(`/api/trainer/schedule?status=IN_PROGRESS`),
+        fetch('/api/trainer/clients'),
       ]);
       let todayHasActive = false;
       if (todayRes.ok) {
@@ -144,6 +160,10 @@ export default function TrainerDashboard() {
       if (monthRes.ok) {
         const { data } = await monthRes.json();
         setMonthSessions(data);
+      }
+      if (clientsRes.ok) {
+        const { data } = await clientsRes.json();
+        setClients((data as ClientWithPackage[]).filter((c) => !c.isReassigned));
       }
     } finally {
       setLoading(false);
@@ -501,6 +521,92 @@ export default function TrainerDashboard() {
           </div>
         )}
       </div>
+
+      {/* ── Client Package Status ── */}
+      {clients.length > 0 && (
+        <div className="rounded-2xl bg-card ring-1 ring-border/50 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-semibold">Client Packages</h2>
+            <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+              {clients.length} active
+            </span>
+          </div>
+          <div className="divide-y divide-border/40">
+            {clients.map((c) => {
+              const { firstName, lastName } = c.clientProfile.user;
+              const pkg = c.package;
+              if (!pkg?.endDate) return null;
+
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const start = new Date(pkg.startDate);
+              const end = new Date(pkg.endDate);
+              const totalDays = Math.max(
+                1,
+                Math.round((end.getTime() - start.getTime()) / 86_400_000),
+              );
+              const daysLeft = Math.max(
+                0,
+                Math.ceil((end.getTime() - today.getTime()) / 86_400_000),
+              );
+              const pctUsed = Math.min(100, Math.round(((totalDays - daysLeft) / totalDays) * 100));
+
+              const urgency =
+                daysLeft <= 7
+                  ? { bar: 'bg-red-500', text: 'text-red-400', badge: 'bg-red-500/15 text-red-400' }
+                  : daysLeft <= 14
+                    ? {
+                        bar: 'bg-amber-500',
+                        text: 'text-amber-400',
+                        badge: 'bg-amber-500/15 text-amber-400',
+                      }
+                    : {
+                        bar: 'bg-emerald-500',
+                        text: 'text-emerald-400',
+                        badge: 'bg-emerald-500/15 text-emerald-400',
+                      };
+
+              const endLabel = end.toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              });
+
+              return (
+                <div key={c.clientProfile.id} className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-foreground">
+                      {initials(firstName, lastName)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-medium">
+                          {firstName} {lastName}
+                        </p>
+                        <span
+                          className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold tabular-nums ${urgency.badge}`}
+                        >
+                          {daysLeft}d left
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${urgency.bar}`}
+                          style={{ width: `${pctUsed}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        {pctUsed}% used · Ends {endLabel}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Quick links ── */}
       <div className="grid grid-cols-2 gap-3">

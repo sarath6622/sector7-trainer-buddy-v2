@@ -80,6 +80,8 @@ export async function GET() {
             id: pkg.id,
             sessionsPerMonth: pkg.sessionsPerMonth,
             sessionChargeAmount: pkg.sessionChargeAmount,
+            startDate: pkg.startDate.toISOString(),
+            endDate: pkg.endDate?.toISOString() ?? null,
           },
           stats: {
             totalThisMonth: sessions.length,
@@ -138,7 +140,13 @@ export async function GET() {
         // Fetch this client's PT package to get context (may belong to another trainer)
         const pkg = await prisma.ptPackage.findFirst({
           where: { branchId, clientProfileId: s.clientProfileId, isActive: true },
-          select: { id: true, sessionsPerMonth: true, sessionChargeAmount: true },
+          select: {
+            id: true,
+            sessionsPerMonth: true,
+            sessionChargeAmount: true,
+            startDate: true,
+            endDate: true,
+          },
         });
 
         // All upcoming reassigned sessions for this client with this trainer
@@ -155,6 +163,8 @@ export async function GET() {
                 id: pkg.id,
                 sessionsPerMonth: pkg.sessionsPerMonth,
                 sessionChargeAmount: pkg.sessionChargeAmount,
+                startDate: pkg.startDate.toISOString(),
+                endDate: pkg.endDate?.toISOString() ?? null,
               }
             : null,
           stats: {
