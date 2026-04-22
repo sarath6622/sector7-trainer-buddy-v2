@@ -31,6 +31,16 @@ function getColor(name: string) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]!;
 }
 
+interface ActivePackage {
+  id: string;
+  startDate: string;
+  endDate: string | null;
+  sessionsPerMonth: number;
+  trainer: {
+    user: { firstName: string; lastName: string };
+  };
+}
+
 interface ClientUser {
   id: string;
   firstName: string;
@@ -42,6 +52,7 @@ interface ClientUser {
     id: string;
     currentWeight: number | null;
     fitnessGoals: string | null;
+    ptPackages: ActivePackage[];
   } | null;
 }
 
@@ -105,7 +116,7 @@ export default function ClientListPage() {
 
   return (
     <div className="space-y-3 pb-8">
-      {/* Header — single compact row */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Clients</h1>
@@ -122,7 +133,7 @@ export default function ClientListPage() {
         </Link>
       </div>
 
-      {/* Filters — single row */}
+      {/* Filters */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -145,11 +156,11 @@ export default function ClientListPage() {
         </Select>
       </div>
 
-      {/* List */}
+      {/* Cards */}
       {loading ? (
-        <div className="space-y-1.5">
+        <div className="grid gap-2 sm:grid-cols-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 rounded-xl" />
+            <Skeleton key={i} className="h-36 rounded-xl" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -171,70 +182,138 @@ export default function ClientListPage() {
           )}
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="grid gap-2 sm:grid-cols-2">
           {filtered.map((client) => {
-            const color = getColor(`${client.firstName} ${client.lastName}`);
+            const fullName = `${client.firstName} ${client.lastName}`;
+            const color = getColor(fullName);
             const initials = `${client.firstName[0]}${client.lastName[0]}`.toUpperCase();
+            const pkg = client.clientProfile?.ptPackages?.[0] ?? null;
+
+            // Package expiry calculations
+            let daysLeft: number | null = null;
+            let pctUsed = 0;
+            let urgencyBar = 'bg-emerald-500';
+            let urgencyBadge = 'bg-emerald-500/15 text-emerald-400';
+            if (pkg?.endDate) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const start = new Date(pkg.startDate);
+              const end = new Date(pkg.endDate);
+              const totalDays = Math.max(
+                1,
+                Math.round((end.getTime() - start.getTime()) / 86_400_000),
+              );
+              daysLeft = Math.max(0, Math.ceil((end.getTime() - today.getTime()) / 86_400_000));
+              pctUsed = Math.min(100, Math.round(((totalDays - daysLeft) / totalDays) * 100));
+              if (daysLeft <= 7) {
+                urgencyBar = 'bg-red-500';
+                urgencyBadge = 'bg-red-500/15 text-red-400';
+              } else if (daysLeft <= 14) {
+                urgencyBar = 'bg-amber-500';
+                urgencyBadge = 'bg-amber-500/15 text-amber-400';
+              }
+            }
+
             return (
               <Link
                 key={client.id}
                 href={`/admin/clients/${client.id}`}
-                className="flex items-center gap-3 rounded-xl bg-card px-3 py-2.5 ring-1 ring-white/[0.06] transition-colors hover:ring-primary/30"
+                className="flex flex-col gap-2 rounded-xl bg-card px-3 py-2.5 ring-1 ring-white/[0.06] transition-colors hover:ring-primary/30"
               >
-                {/* Avatar */}
-                <div
-                  className={cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-                    color.bg,
-                    color.text,
-                  )}
-                >
-                  {initials}
+                {/* Row 1: avatar + name + badge + contact */}
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={cn(
+                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                      color.bg,
+                      color.text,
+                    )}
+                  >
+                    {initials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-semibold leading-tight">{fullName}</p>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-full px-1.5 py-px text-[9px] font-semibold',
+                          client.isActive
+                            ? 'bg-emerald-500/15 text-emerald-400'
+                            : 'bg-zinc-500/15 text-zinc-400',
+                        )}
+                      >
+                        {client.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+                        <Mail className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{client.email}</span>
+                      </span>
+                      {client.phone && (
+                        <>
+                          <span className="text-muted-foreground/30">·</span>
+                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
+                            <Phone className="h-3 w-3" />
+                            {client.phone}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Info */}
-                <div className="min-w-0 flex-1">
-                  {/* Row 1: name + badge */}
-                  <div className="flex items-center gap-1.5">
-                    <p className="truncate text-sm font-semibold leading-tight">
-                      {client.firstName} {client.lastName}
-                    </p>
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full px-1.5 py-px text-[9px] font-semibold leading-tight',
-                        client.isActive
-                          ? 'bg-emerald-500/15 text-emerald-400'
-                          : 'bg-zinc-500/15 text-zinc-400',
-                      )}
-                    >
-                      {client.isActive ? 'Active' : 'Inactive'}
+                {/* Fitness goal pill */}
+                {client.clientProfile?.fitnessGoals && (
+                  <div className="flex flex-wrap gap-1">
+                    <span className="flex items-center gap-1 rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      <Target className="h-2.5 w-2.5 shrink-0" />
+                      <span className="truncate">{client.clientProfile.fitnessGoals}</span>
                     </span>
                   </div>
+                )}
 
-                  {/* Row 2: email */}
-                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <Mail className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{client.email}</span>
-                  </div>
-
-                  {/* Row 3: phone + goal (only if present) */}
-                  {(client.phone || client.clientProfile?.fitnessGoals) && (
-                    <div className="mt-0.5 flex items-center gap-2.5 text-[11px] text-muted-foreground/70">
-                      {client.phone && (
-                        <span className="flex items-center gap-1">
-                          <Phone className="h-3 w-3 shrink-0" />
-                          {client.phone}
-                        </span>
-                      )}
-                      {client.clientProfile?.fitnessGoals && (
-                        <span className="flex min-w-0 items-center gap-1">
-                          <Target className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{client.clientProfile.fitnessGoals}</span>
+                {/* PT Package row */}
+                {pkg ? (
+                  <div className="border-t border-white/[0.05] pt-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-muted-foreground truncate">
+                        {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
+                        {' · '}
+                        {pkg.sessionsPerMonth} sess/mo
+                      </span>
+                      {daysLeft !== null && (
+                        <span
+                          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-semibold tabular-nums ${urgencyBadge}`}
+                        >
+                          {daysLeft}d left
                         </span>
                       )}
                     </div>
-                  )}
-                </div>
+                    {pkg.endDate && (
+                      <div className="h-1 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${urgencyBar}`}
+                          style={{ width: `${pctUsed}%` }}
+                        />
+                      </div>
+                    )}
+                    {pkg.endDate && (
+                      <p className="text-[10px] text-muted-foreground/60">
+                        Ends{' '}
+                        {new Date(pkg.endDate).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="border-t border-white/[0.05] pt-2">
+                    <p className="text-[10px] text-muted-foreground/50">No active package</p>
+                  </div>
+                )}
               </Link>
             );
           })}

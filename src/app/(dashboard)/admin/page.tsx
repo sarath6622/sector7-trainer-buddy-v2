@@ -17,6 +17,7 @@ import {
   UserCheck,
   UserX,
   Users,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -65,6 +66,15 @@ interface DashboardAnalytics {
   noShow: NoShowRate[];
 }
 
+interface ExpiringPackage {
+  packageId: string;
+  clientName: string;
+  clientEmail: string;
+  trainerName: string;
+  endDate: string;
+  daysLeft: number;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const QUICK_LINKS = [
@@ -97,6 +107,7 @@ function getGreeting() {
 export default function AdminDashboard() {
   const { data: session } = useSession();
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
+  const [expiringPackages, setExpiringPackages] = useState<ExpiringPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -106,16 +117,18 @@ export default function AdminDashboard() {
     try {
       const month = getCurrentMonth();
       const base = `/api/admin/analytics?month=${month}`;
-      const [u, c, n] = await Promise.all([
+      const [u, c, n, expiring] = await Promise.all([
         fetch(`${base}&report=trainer-utilization`).then((res) => res.json()),
         fetch(`${base}&report=session-consumption`).then((res) => res.json()),
         fetch(`${base}&report=no-show-rate`).then((res) => res.json()),
+        fetch('/api/admin/clients/expiring?days=10').then((res) => res.json()),
       ]);
       setAnalytics({
         utilization: u.data ?? [],
         consumption: c.data ?? [],
         noShow: n.data ?? [],
       });
+      setExpiringPackages(expiring.data ?? []);
     } catch {
       setError(true);
     } finally {
@@ -405,6 +418,59 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+      {/* ── Expiring Packages ── */}
+      {expiringPackages.length > 0 && (
+        <div className="rounded-2xl bg-card ring-1 ring-amber-500/30 overflow-hidden">
+          <div className="flex items-center gap-2 px-5 pt-4 pb-3 border-b border-border/40">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <h2 className="text-sm font-semibold text-amber-500">Packages Expiring Soon</h2>
+            <span className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-500">
+              {expiringPackages.length} within 10 days
+            </span>
+            <Link href="/admin/clients" className="text-xs text-primary hover:underline ml-2">
+              View all →
+            </Link>
+          </div>
+          <div className="divide-y divide-border/40">
+            {expiringPackages.map((pkg) => {
+              const urgency =
+                pkg.daysLeft <= 3
+                  ? 'text-red-400 bg-red-500/15'
+                  : pkg.daysLeft <= 7
+                    ? 'text-amber-400 bg-amber-500/15'
+                    : 'text-yellow-400 bg-yellow-500/15';
+              const initials = pkg.clientName
+                .split(' ')
+                .map((n) => n[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2);
+              return (
+                <div key={pkg.packageId} className="flex items-center gap-3 px-5 py-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-foreground">
+                    {initials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{pkg.clientName}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      with {pkg.trainerName} · ends{' '}
+                      {new Date(pkg.endDate).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold tabular-nums ${urgency}`}
+                  >
+                    {pkg.daysLeft}d left
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -166,7 +166,20 @@ export async function getUsers(input: ListUsersInput) {
       where,
       include: {
         trainerProfile: true,
-        clientProfile: true,
+        clientProfile: {
+          include: {
+            ptPackages: {
+              where: { isActive: true },
+              take: 1,
+              orderBy: { endDate: 'desc' },
+              include: {
+                trainer: {
+                  include: { user: { select: { firstName: true, lastName: true } } },
+                },
+              },
+            },
+          },
+        },
       },
       skip: (page - 1) * pageSize,
       take: pageSize,
