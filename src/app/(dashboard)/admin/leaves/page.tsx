@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  CalendarDays,
+  CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Calendar, CalendarDayButton } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -56,6 +65,12 @@ interface EmergencyBalance {
   quota: number;
   used: number;
   remaining: number;
+}
+
+interface LeaveBalance {
+  month: string;
+  regular: { quota: number; used: number; remaining: number };
+  emergency: { quota: number; used: number; remaining: number };
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -197,6 +212,9 @@ export default function AdminLeavesPage() {
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewCategory, setReviewCategory] = useState<'REGULAR' | 'EMERGENCY'>('REGULAR');
   const [actionLoading, setActionLoading] = useState(false);
+  const [leaveBalance, setLeaveBalance] = useState<LeaveBalance | null>(null);
+  const [leaveBalanceLoading, setLeaveBalanceLoading] = useState(false);
+  const [showLeaveCalendar, setShowLeaveCalendar] = useState(false);
 
   // ── Emergency leave dialog state ──────────────────────────────────────────
   const [emergencyOpen, setEmergencyOpen] = useState(false);
@@ -306,11 +324,21 @@ export default function AdminLeavesPage() {
     setDetailLoading(true);
     setReviewNotes('');
     setReviewCategory('REGULAR');
+    setLeaveBalance(null);
+    setShowLeaveCalendar(false);
     try {
       const res = await fetch(`/api/admin/leaves/${leaveId}`);
       if (res.ok) {
         const { data } = await res.json();
         setSelectedLeave(data);
+        // Fetch leave quota for this trainer/month in parallel
+        const month = data.startDate.slice(0, 7);
+        setLeaveBalanceLoading(true);
+        fetch(`/api/admin/leaves/balance?trainerProfileId=${data.trainerProfileId}&month=${month}`)
+          .then((r) => r.json())
+          .then(({ data: bal }) => setLeaveBalance(bal ?? null))
+          .catch(() => setLeaveBalance(null))
+          .finally(() => setLeaveBalanceLoading(false));
       }
     } finally {
       setDetailLoading(false);
@@ -641,7 +669,17 @@ export default function AdminLeavesPage() {
       )}
 
       {/* ── Detail Dialog ── */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+      <Dialog
+        open={detailOpen}
+        onOpenChange={(open) => {
+          setDetailOpen(open);
+          if (!open) {
+            setSelectedLeave(null);
+            setLeaveBalance(null);
+            setShowLeaveCalendar(false);
+          }
+        }}
+      >
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Leave Request</DialogTitle>
@@ -727,6 +765,76 @@ export default function AdminLeavesPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Leave quota */}
+              {leaveBalanceLoading ? (
+                <Skeleton className="h-16 rounded-xl" />
+              ) : leaveBalance ? (
+                <div className="rounded-xl bg-muted/30 px-3.5 py-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Monthly Quota —{' '}
+                      {new Date(leaveBalance.month + '-01').toLocaleDateString('en-IN', {
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowLeaveCalendar(true)}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                      title="View leave calendar"
+                    >
+                      <CalendarIcon className="h-3 w-3" />
+                      View
+                    </button>
+                  </div>
+                  {/* Regular */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-blue-400 font-medium">Regular</span>
+                      <span className="text-muted-foreground tabular-nums">
+                        {leaveBalance.regular.used}/{leaveBalance.regular.quota}d used
+                        <span
+                          className={`ml-2 font-semibold ${leaveBalance.regular.remaining > 0 ? 'text-blue-400' : 'text-red-400'}`}
+                        >
+                          · {leaveBalance.regular.remaining}d left
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${leaveBalance.regular.remaining > 0 ? 'bg-blue-500' : 'bg-red-500'}`}
+                        style={{
+                          width: `${leaveBalance.regular.quota > 0 ? Math.min(100, (leaveBalance.regular.used / leaveBalance.regular.quota) * 100) : 0}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {/* Emergency */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-amber-400 font-medium">Emergency</span>
+                      <span className="text-muted-foreground tabular-nums">
+                        {leaveBalance.emergency.used}/{leaveBalance.emergency.quota}d used
+                        <span
+                          className={`ml-2 font-semibold ${leaveBalance.emergency.remaining > 0 ? 'text-amber-400' : 'text-red-400'}`}
+                        >
+                          · {leaveBalance.emergency.remaining}d left
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${leaveBalance.emergency.remaining > 0 ? 'bg-amber-500' : 'bg-red-500'}`}
+                        style={{
+                          width: `${leaveBalance.emergency.quota > 0 ? Math.min(100, (leaveBalance.emergency.used / leaveBalance.emergency.quota) * 100) : 0}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {/* Reason */}
               {selectedLeave.reason && (
@@ -847,6 +955,88 @@ export default function AdminLeavesPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {/* ── Leave Calendar Overlay ── */}
+      {showLeaveCalendar &&
+        selectedLeave &&
+        (() => {
+          // Expand all non-rejected leaves for this trainer into individual dates
+          const leaveDays = allLeaves
+            .filter(
+              (l) =>
+                l.trainerProfileId === selectedLeave.trainerProfileId && l.status !== 'REJECTED',
+            )
+            .flatMap((l) => {
+              const dates: Date[] = [];
+              const start = new Date(l.startDate);
+              const end = new Date(l.endDate);
+              const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+              const endLocal = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+              while (cur <= endLocal) {
+                dates.push(new Date(cur));
+                cur.setDate(cur.getDate() + 1);
+              }
+              return dates;
+            });
+
+          const defaultMonth = new Date(selectedLeave.startDate.slice(0, 7) + '-01T00:00:00');
+          const trainerName = `${selectedLeave.trainer.user.firstName} ${selectedLeave.trainer.user.lastName}`;
+
+          return (
+            <>
+              <div
+                className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm"
+                onClick={() => setShowLeaveCalendar(false)}
+              />
+              <div className="fixed left-1/2 top-1/2 z-[201] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-card shadow-2xl ring-1 ring-border/50 overflow-hidden">
+                <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold">{trainerName}&apos;s Leave Days</p>
+                    {leaveDays.length > 0 ? (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-1 align-middle" />
+                        Red dates = on leave (pending or approved)
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        No leaves this month
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLeaveCalendar(false)}
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <Calendar
+                  mode="single"
+                  selected={undefined}
+                  defaultMonth={defaultMonth}
+                  modifiers={{ leaveDay: leaveDays }}
+                  components={{
+                    DayButton: (props) => {
+                      const isLeave = !!props.modifiers?.leaveDay;
+                      return (
+                        <CalendarDayButton
+                          {...props}
+                          className={
+                            isLeave
+                              ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 ring-1 ring-red-500/30 font-semibold'
+                              : undefined
+                          }
+                        />
+                      );
+                    },
+                  }}
+                  className="p-4 [--cell-size:2.75rem]"
+                />
+              </div>
+            </>
+          );
+        })()}
 
       {/* ── Emergency Leave Dialog ── */}
       <Dialog
