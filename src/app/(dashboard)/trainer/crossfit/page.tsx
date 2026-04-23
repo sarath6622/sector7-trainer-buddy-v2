@@ -13,7 +13,6 @@ import {
   UserPlus,
   Dumbbell,
   CalendarDays,
-  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -118,7 +117,6 @@ export default function CrossfitTrainerPage() {
 
   // ── All classes (for "other date" class switcher) ──
   const [allClasses, setAllClasses] = useState<CrossfitClass[]>([]);
-  const [showClassPicker, setShowClassPicker] = useState(false);
 
   // ── Attendance mode state ──
   const [activeClass, setActiveClass] = useState<CrossfitClass | null>(null);
@@ -604,58 +602,7 @@ export default function CrossfitTrainerPage() {
               </button>
             </div>
           </div>
-
-          {/* End Session button (live only) */}
-          {isLive && (
-            <button
-              onClick={() => setShowEndConfirm(true)}
-              disabled={endingSession}
-              className="flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-500/20 transition-colors disabled:opacity-50 shrink-0"
-            >
-              <StopCircle className="h-3.5 w-3.5" />
-              End
-            </button>
-          )}
-
-          {/* Class picker (for historical browsing) */}
-          {allClasses.length > 1 && (
-            <button
-              onClick={() => setShowClassPicker(!showClassPicker)}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-muted transition-colors"
-            >
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </button>
-          )}
         </div>
-
-        {/* Class picker dropdown */}
-        {showClassPicker && (
-          <div className="border-t border-border/40 px-4 py-2 space-y-1">
-            {allClasses.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => {
-                  enterAttendanceMode(c, activeDate);
-                  setShowClassPicker(false);
-                }}
-                className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
-                  activeClass?.id === c.id ? 'bg-muted' : 'hover:bg-muted/60'
-                }`}
-              >
-                <Dumbbell className="h-4 w-4 text-orange-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{c.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {DAY_LABEL[c.dayOfWeek]} · {formatTime12(c.startTime)}
-                  </p>
-                </div>
-                {activeClass?.id === c.id && (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                )}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Progress bar */}
         {!sessionLoading && enrolledCount > 0 && (
