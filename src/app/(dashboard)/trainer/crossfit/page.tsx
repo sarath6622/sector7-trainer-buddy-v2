@@ -2,20 +2,28 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { CalendarIcon, ChevronLeft, ChevronRight, Search, UserCheck, X } from 'lucide-react';
-import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
+  Search,
+  X,
+  Play,
+  ChevronLeft,
+  CheckCircle2,
+  Circle,
+  UserPlus,
+  Dumbbell,
+  CalendarDays,
+  ChevronDown,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface CrossfitClassTrainer {
+  trainerProfileId: string;
+  trainer: { user: { firstName: string; lastName: string } };
+}
 
 interface CrossfitClass {
   id: string;
@@ -23,7 +31,29 @@ interface CrossfitClass {
   dayOfWeek: string;
   startTime: string;
   durationMin: number;
+  trainers: CrossfitClassTrainer[];
   _count: { enrollments: number };
+}
+
+interface CrossfitSession {
+  id: string;
+  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
+  startedAt: string | null;
+  _count: { attendances: number };
+}
+
+interface TodayItem {
+  class: CrossfitClass;
+  session: CrossfitSession | null;
+}
+
+interface EnrolledMember {
+  enrollmentId: string;
+  clientProfileId: string | null;
+  externalName: string | null;
+  name: string;
+  profileImageUrl: string | null;
+  clientType: 'GYM_MEMBER' | 'GYM_ONLY' | 'EXTERNAL_ONLY';
 }
 
 interface AttendanceRecord {
@@ -43,6 +73,8 @@ interface SearchResult {
   isEnrolled: boolean;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const DAY_LABEL: Record<string, string> = {
   MONDAY: 'Mon',
   TUESDAY: 'Tue',
@@ -53,19 +85,54 @@ const DAY_LABEL: Record<string, string> = {
   SUNDAY: 'Sun',
 };
 
+function formatTime12(t: string) {
+  const [h = '0', m = '00'] = t.split(':');
+  const hour = parseInt(h, 10);
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+
+function initials(name: string) {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
 export default function CrossfitTrainerPage() {
-  const [classes, setClasses] = useState<CrossfitClass[]>([]);
-  const [classesLoading, setClassesLoading] = useState(true);
+  const today = format(new Date(), 'yyyy-MM-dd');
 
-  const [selectedClassId, setSelectedClassId] = useState('');
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  // ── View mode ──
+  // 'pick'       → show today's class cards (initial view)
+  // 'attendance' → roll-call view for a specific class + date
+  const [mode, setMode] = useState<'pick' | 'attendance'>('pick');
 
+  // ── Today's classes ──
+  const [todayItems, setTodayItems] = useState<TodayItem[]>([]);
+  const [todayLoading, setTodayLoading] = useState(true);
+  const [startingClassId, setStartingClassId] = useState<string | null>(null);
+
+  // ── All classes (for "other date" class switcher) ──
+  const [allClasses, setAllClasses] = useState<CrossfitClass[]>([]);
+  const [showClassPicker, setShowClassPicker] = useState(false);
+
+  // ── Attendance mode state ──
+  const [activeClass, setActiveClass] = useState<CrossfitClass | null>(null);
+  const [activeDate, setActiveDate] = useState(today);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
 
+  const [enrolled, setEnrolled] = useState<EnrolledMember[]>([]);
+  const [enrolledLoading, setEnrolledLoading] = useState(false);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
 
+  // ── Walk-in search ──
+  const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -73,25 +140,56 @@ export default function CrossfitTrainerPage() {
   const [markingId, setMarkingId] = useState<string | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Load today's classes ──────────────────────────────────────────────────
+
+  const fetchToday = useCallback(async () => {
+    setTodayLoading(true);
+    try {
+      const res = await fetch('/api/crossfit/sessions/today');
+      const data = await res.json();
+      const items: TodayItem[] = data.data ?? [];
+      setTodayItems(items);
+
+      // Auto-jump to attendance if there's already an in-progress session
+      const live = items.find((i) => i.session?.status === 'IN_PROGRESS');
+      if (live) {
+        enterAttendanceMode(live.class, today);
+      }
+    } catch {
+      // silent
+    } finally {
+      setTodayLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    setClassesLoading(true);
+    fetchToday();
+    // Fetch all classes for the class switcher (historical dates)
     fetch('/api/crossfit/classes')
       .then((r) => r.json())
-      .then((d) => {
-        setClasses(d.data ?? []);
-        if (d.data?.length > 0 && !selectedClassId) {
-          setSelectedClassId(d.data[0].id);
-        }
-      })
-      .catch(() => toast.error('Failed to load classes'))
-      .finally(() => setClassesLoading(false));
-  }, [selectedClassId]);
+      .then((d) => setAllClasses(d.data ?? []))
+      .catch(() => {});
+  }, [fetchToday]);
+
+  // ── Enter attendance mode ────────────────────────────────────────────────
+
+  function enterAttendanceMode(cls: CrossfitClass, date: string) {
+    setActiveClass(cls);
+    setActiveDate(date);
+    setMode('attendance');
+    setShowSearch(false);
+    setSearchQuery('');
+  }
+
+  // ── Open/get session ─────────────────────────────────────────────────────
 
   const openSession = useCallback(async (classId: string, date: string) => {
-    if (!classId) return;
     setSessionLoading(true);
     setSessionId(null);
+    setSessionStatus(null);
     setAttendance([]);
     try {
       const res = await fetch('/api/crossfit/sessions', {
@@ -102,6 +200,7 @@ export default function CrossfitTrainerPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed');
       setSessionId(data.data.id);
+      setSessionStatus(data.data.status);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to open session');
     } finally {
@@ -110,10 +209,25 @@ export default function CrossfitTrainerPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedClassId && selectedDate) {
-      openSession(selectedClassId, selectedDate);
+    if (mode === 'attendance' && activeClass && activeDate) {
+      openSession(activeClass.id, activeDate);
     }
-  }, [selectedClassId, selectedDate, openSession]);
+  }, [mode, activeClass, activeDate, openSession]);
+
+  // ── Load enrolled members ────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (mode === 'attendance' && activeClass) {
+      setEnrolledLoading(true);
+      fetch(`/api/crossfit/classes/${activeClass.id}/enrollments`)
+        .then((r) => r.json())
+        .then((d) => setEnrolled(d.data ?? []))
+        .catch(() => toast.error('Failed to load enrolled members'))
+        .finally(() => setEnrolledLoading(false));
+    }
+  }, [mode, activeClass]);
+
+  // ── Load attendance ──────────────────────────────────────────────────────
 
   const fetchAttendance = useCallback(async (sid: string) => {
     setAttendanceLoading(true);
@@ -132,6 +246,8 @@ export default function CrossfitTrainerPage() {
     if (sessionId) fetchAttendance(sessionId);
   }, [sessionId, fetchAttendance]);
 
+  // ── Walk-in search ───────────────────────────────────────────────────────
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (searchQuery.length < 2) {
@@ -143,18 +259,18 @@ export default function CrossfitTrainerPage() {
       setSearchLoading(true);
       try {
         const params = new URLSearchParams({ q: searchQuery });
-        if (selectedClassId) params.set('classId', selectedClassId);
+        if (activeClass) params.set('classId', activeClass.id);
         const res = await fetch(`/api/crossfit/clients/search?${params}`);
         const data = await res.json();
         setSearchResults(data.data ?? []);
         setShowDropdown(true);
       } catch {
-        // silently fail
+        // silent
       } finally {
         setSearchLoading(false);
       }
     }, 300);
-  }, [searchQuery, selectedClassId]);
+  }, [searchQuery, activeClass]);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -166,7 +282,57 @@ export default function CrossfitTrainerPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  async function markPresent(client: SearchResult) {
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  async function handleStart(item: TodayItem) {
+    setStartingClassId(item.class.id);
+    try {
+      const sessionRes = await fetch('/api/crossfit/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId: item.class.id, date: today }),
+      });
+      const sessionData = await sessionRes.json();
+      if (!sessionRes.ok) throw new Error(sessionData.error ?? 'Failed');
+      const sid = sessionData.data.id;
+
+      const startRes = await fetch(`/api/crossfit/sessions/${sid}/start`, { method: 'POST' });
+      if (!startRes.ok) {
+        const err = await startRes.json();
+        if (err.code !== 'CONFLICT') throw new Error(err.error ?? 'Failed to start');
+      }
+      enterAttendanceMode(item.class, today);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to start session');
+    } finally {
+      setStartingClassId(null);
+    }
+  }
+
+  async function markPresent(member: EnrolledMember) {
+    if (!sessionId) return;
+    const markingKey = member.clientProfileId ?? member.externalName ?? member.enrollmentId;
+    setMarkingId(markingKey);
+    try {
+      const body = member.clientProfileId
+        ? { clientProfileId: member.clientProfileId }
+        : { externalName: member.externalName };
+      const res = await fetch(`/api/crossfit/sessions/${sessionId}/attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed');
+      await fetchAttendance(sessionId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : `Failed to mark ${member.name}`);
+    } finally {
+      setMarkingId(null);
+    }
+  }
+
+  async function markWalkIn(client: SearchResult) {
     if (!sessionId) return;
     setMarkingId(client.id);
     try {
@@ -177,12 +343,12 @@ export default function CrossfitTrainerPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed');
-      toast.success(`${client.name} marked present`);
+      toast.success(`${client.name} added`);
       setSearchQuery('');
       setShowDropdown(false);
       await fetchAttendance(sessionId);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to mark attendance');
+      toast.error(err instanceof Error ? err.message : 'Failed');
     } finally {
       setMarkingId(null);
     }
@@ -191,254 +357,573 @@ export default function CrossfitTrainerPage() {
   async function removeAttendance(record: AttendanceRecord) {
     if (!sessionId) return;
     try {
-      const res = await fetch(`/api/crossfit/sessions/${sessionId}/attendance/${record.id}`, {
+      await fetch(`/api/crossfit/sessions/${sessionId}/attendance/${record.id}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('Failed');
-      const name = record.client
-        ? `${record.client.user.firstName} ${record.client.user.lastName}`
-        : record.externalName;
-      toast.success(`Removed ${name}`);
       await fetchAttendance(sessionId);
     } catch {
-      toast.error('Failed to remove attendance');
+      toast.error('Failed to remove');
     }
   }
 
-  function adjustDate(days: number) {
-    const d = new Date(selectedDate + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    setSelectedDate(format(d, 'yyyy-MM-dd'));
+  // ── Derived ───────────────────────────────────────────────────────────────
+
+  // Build lookup maps for both gym members (by clientProfileId) and externals (by externalName)
+  const markedByClientId = new Map(
+    attendance.filter((a) => a.clientProfileId).map((a) => [a.clientProfileId!, a]),
+  );
+  const markedByExternalName = new Map(
+    attendance.filter((a) => !a.clientProfileId && a.externalName).map((a) => [a.externalName!, a]),
+  );
+
+  function getAttendanceRecord(member: EnrolledMember): AttendanceRecord | undefined {
+    if (member.clientProfileId) return markedByClientId.get(member.clientProfileId);
+    if (member.externalName) return markedByExternalName.get(member.externalName);
+    return undefined;
   }
 
-  const alreadyMarkedIds = new Set(attendance.map((a) => a.clientProfileId).filter(Boolean));
-  const selectedClass = classes.find((c) => c.id === selectedClassId);
-  const filteredResults = searchResults.filter((r) => !alreadyMarkedIds.has(r.id));
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const enrolledCount = enrolled.length;
+  const markedEnrolledCount = enrolled.filter((e) => !!getAttendanceRecord(e)).length;
+  const walkIns = attendance.filter((a) =>
+    a.clientProfileId === null
+      ? !enrolled.some((e) => e.externalName === a.externalName)
+      : !enrolled.some((e) => e.clientProfileId === a.clientProfileId),
+  );
+  const isLive = sessionStatus === 'IN_PROGRESS';
+  const isCompleted = sessionStatus === 'COMPLETED';
 
-  return (
-    <div className="flex flex-col min-h-full">
-      {/* Sticky control bar */}
-      <div className="sticky top-0 z-10 bg-background border-b border-border">
-        {/* Class selector row */}
-        <div className="px-3 pt-3 pb-2">
-          {classesLoading ? (
-            <Skeleton className="h-10 w-full" />
-          ) : classes.length === 0 ? (
-            <p className="text-sm text-muted-foreground px-1">
-              No classes assigned. Ask admin to assign a CrossFit class.
-            </p>
+  // Sort: unmarked first, marked at bottom
+  const sortedEnrolled = [...enrolled].sort((a, b) => {
+    const aMarked = !!getAttendanceRecord(a) ? 1 : 0;
+    const bMarked = !!getAttendanceRecord(b) ? 1 : 0;
+    return aMarked - bMarked;
+  });
+
+  const searchFilteredResults = searchResults.filter((r) => !markedByClientId.has(r.id));
+
+  // ── Render: pick mode ────────────────────────────────────────────────────
+
+  if (mode === 'pick') {
+    return (
+      <div className="flex flex-col min-h-full">
+        {/* Header */}
+        <div className="px-4 pt-4 pb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Dumbbell className="h-5 w-5 text-orange-500" />
+            <h1 className="text-lg font-bold">CrossFit</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {new Date().toLocaleDateString('en-IN', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+          </p>
+        </div>
+
+        {/* Today's classes */}
+        <div className="px-4 space-y-3 flex-1">
+          {todayLoading ? (
+            <>
+              <Skeleton className="h-28 w-full rounded-2xl" />
+              <Skeleton className="h-28 w-full rounded-2xl" />
+            </>
+          ) : todayItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
+                <Dumbbell className="h-7 w-7 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground">No CrossFit classes today</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                Your assigned classes will appear here
+              </p>
+            </div>
           ) : (
-            <Select
-              value={selectedClassId}
-              items={classes.map((c) => ({
-                value: c.id,
-                label: `${c.name} · ${DAY_LABEL[c.dayOfWeek]} ${c.startTime}`,
-              }))}
-              onValueChange={(v) => setSelectedClassId(v ?? '')}
-            >
-              <SelectTrigger className="w-full h-10 font-medium">
-                <SelectValue placeholder="Select a class" />
-              </SelectTrigger>
-              <SelectContent>
-                {classes.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    <span className="font-medium">{c.name}</span>
-                    <span className="text-muted-foreground ml-2">
-                      {DAY_LABEL[c.dayOfWeek]} · {c.startTime} · {c._count.enrollments} enrolled
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            todayItems.map((item) => {
+              const isInProgress = item.session?.status === 'IN_PROGRESS';
+              const isCompleted = item.session?.status === 'COMPLETED';
+              const isStarting = startingClassId === item.class.id;
+
+              return (
+                <div
+                  key={item.class.id}
+                  className={`rounded-2xl p-4 ring-1 ${
+                    isInProgress ? 'bg-emerald-500/8 ring-emerald-500/25' : 'bg-card ring-border/50'
+                  }`}
+                >
+                  {/* Class info */}
+                  <div className="flex items-start gap-3 mb-4">
+                    <div
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                        isInProgress ? 'bg-emerald-500/15' : 'bg-orange-500/10'
+                      }`}
+                    >
+                      <Dumbbell
+                        className={`h-5 w-5 ${isInProgress ? 'text-emerald-500' : 'text-orange-500'}`}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-base leading-tight">{item.class.name}</p>
+                        {isInProgress && (
+                          <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-500 shrink-0">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Live
+                          </span>
+                        )}
+                        {isCompleted && (
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground shrink-0">
+                            Done
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        {formatTime12(item.class.startTime)} · {item.class.durationMin} min
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {item.class._count.enrollments} enrolled
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Action button */}
+                  {isCompleted ? (
+                    <button
+                      onClick={() => enterAttendanceMode(item.class, today)}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-muted py-3 text-sm font-semibold text-muted-foreground hover:bg-muted/80 transition-colors"
+                    >
+                      View Attendance
+                    </button>
+                  ) : isInProgress ? (
+                    <button
+                      onClick={() => enterAttendanceMode(item.class, today)}
+                      className="relative overflow-hidden w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+                    >
+                      <span className="absolute inset-0 rounded-xl animate-ping bg-emerald-400 opacity-20" />
+                      <CheckCircle2 className="relative h-4 w-4" />
+                      <span className="relative">Mark Attendance</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleStart(item)}
+                      disabled={isStarting}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-orange-500 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors disabled:opacity-50"
+                    >
+                      <Play className="h-4 w-4" />
+                      {isStarting ? 'Starting…' : 'Start Class'}
+                    </button>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
 
-        {/* Date nav row */}
-        {selectedClassId && (
-          <div className="flex items-center gap-1 px-3 pb-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0"
-              onClick={() => adjustDate(-1)}
+        {/* Historical / other date link */}
+        {allClasses.length > 0 && (
+          <div className="px-4 pt-4 pb-6">
+            <button
+              onClick={() => {
+                const first = allClasses[0];
+                if (first) enterAttendanceMode(first, today);
+              }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
+              <CalendarDays className="h-4 w-4" />
+              View other dates
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
-            <div className="flex-1 relative">
-              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                type="date"
-                className="pl-8 h-9 text-sm text-center"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+  // ── Render: attendance mode ──────────────────────────────────────────────
+
+  return (
+    <div className="flex flex-col min-h-full">
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border/60">
+        {/* Class name row */}
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            onClick={() => {
+              setMode('pick');
+              fetchToday();
+            }}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-muted transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-base truncate">{activeClass?.name}</p>
+              {isLive && (
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-500 shrink-0">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  LIVE
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">
+                {activeClass &&
+                  `${DAY_LABEL[activeClass.dayOfWeek]} · ${formatTime12(activeClass.startTime)}`}
+              </p>
+              {/* Date switcher (compact) */}
+              <button
+                onClick={() => {
+                  const d = new Date(activeDate + 'T00:00:00');
+                  const newDate = prompt('Enter date (YYYY-MM-DD)', format(d, 'yyyy-MM-dd'));
+                  if (newDate) setActiveDate(newDate);
+                }}
+                className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+              >
+                · {format(new Date(activeDate + 'T00:00:00'), 'd MMM yyyy')}
+              </button>
+            </div>
+          </div>
+
+          {/* Class picker (for historical browsing) */}
+          {allClasses.length > 1 && (
+            <button
+              onClick={() => setShowClassPicker(!showClassPicker)}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-muted transition-colors"
+            >
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+
+        {/* Class picker dropdown */}
+        {showClassPicker && (
+          <div className="border-t border-border/40 px-4 py-2 space-y-1">
+            {allClasses.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => {
+                  enterAttendanceMode(c, activeDate);
+                  setShowClassPicker(false);
+                }}
+                className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
+                  activeClass?.id === c.id ? 'bg-muted' : 'hover:bg-muted/60'
+                }`}
+              >
+                <Dumbbell className="h-4 w-4 text-orange-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{c.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {DAY_LABEL[c.dayOfWeek]} · {formatTime12(c.startTime)}
+                  </p>
+                </div>
+                {activeClass?.id === c.id && (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Progress bar */}
+        {!sessionLoading && enrolledCount > 0 && (
+          <div className="px-4 pb-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground tabular-nums">
+                  {markedEnrolledCount}
+                </span>
+                {' / '}
+                <span className="tabular-nums">{enrolledCount}</span>
+                {' enrolled checked in'}
+                {walkIns.length > 0 && (
+                  <span className="text-muted-foreground/60">
+                    {' '}
+                    · +{walkIns.length} walk-in{walkIns.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </p>
+              <p className="text-xs font-semibold tabular-nums">
+                {enrolledCount > 0 ? Math.round((markedEnrolledCount / enrolledCount) * 100) : 0}%
+              </p>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                style={{
+                  width:
+                    enrolledCount > 0 ? `${(markedEnrolledCount / enrolledCount) * 100}%` : '0%',
+                }}
               />
             </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0"
-              onClick={() => adjustDate(1)}
-              disabled={selectedDate >= today}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
           </div>
         )}
       </div>
 
-      {/* Attendance section */}
-      {selectedClassId && (
-        <div className="flex flex-col flex-1 px-3 pt-3 pb-4 gap-3">
-          {/* Count + class/date label */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">
-                {selectedClass?.name} ·{' '}
-                {format(new Date(selectedDate + 'T00:00:00'), 'EEE, d MMM yyyy')}
-              </p>
-            </div>
-            {!sessionLoading && (
-              <Badge
-                variant="secondary"
-                className="bg-emerald-500/15 text-emerald-600 tabular-nums"
-              >
-                <UserCheck className="h-3 w-3 mr-1" />
-                {attendance.length} present
-              </Badge>
-            )}
+      {/* ── Start banner (if session not started yet) ── */}
+      {!sessionLoading && sessionStatus === 'SCHEDULED' && (
+        <div className="mx-4 mt-3 rounded-2xl bg-orange-500/10 ring-1 ring-orange-500/25 p-4">
+          <p className="text-sm font-semibold text-orange-500 mb-0.5">Class not started yet</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Start the class to begin marking attendance.
+          </p>
+          <button
+            onClick={async () => {
+              if (!sessionId) return;
+              const res = await fetch(`/api/crossfit/sessions/${sessionId}/start`, {
+                method: 'POST',
+              });
+              if (res.ok) setSessionStatus('IN_PROGRESS');
+              else toast.error('Failed to start class');
+            }}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+          >
+            <Play className="h-4 w-4" />
+            Start Class
+          </button>
+        </div>
+      )}
+
+      {/* ── Enrolled member roll call ── */}
+      <div className="flex-1 px-4 pt-3 pb-4">
+        {/* Enrolled list label */}
+        {enrolledCount > 0 && (
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+            Enrolled Members · {enrolledCount}
+          </p>
+        )}
+
+        {enrolledLoading || sessionLoading || attendanceLoading ? (
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-2xl" />
+            ))}
           </div>
+        ) : enrolledCount === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-3">
+              <Dumbbell className="h-6 w-6 text-muted-foreground/30" />
+            </div>
+            <p className="text-sm text-muted-foreground">No enrolled members</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Use walk-in to add members</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {sortedEnrolled.map((member) => {
+              const record = getAttendanceRecord(member);
+              const isMarked = !!record;
+              const markingKey =
+                member.clientProfileId ?? member.externalName ?? member.enrollmentId;
+              const isMarkingThis = markingId === markingKey;
+              const markedTime = record ? format(new Date(record.markedAt), 'HH:mm') : null;
 
-          {/* Search */}
-          {sessionLoading ? (
-            <Skeleton className="h-11 w-full" />
-          ) : (
-            <div ref={searchRef} className="relative">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  className="pl-9 h-11 text-base"
-                  placeholder="Search member by name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
-                />
-                {searchLoading && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                  </div>
-                )}
-              </div>
-
-              {showDropdown && filteredResults.length > 0 && (
-                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg overflow-hidden">
-                  {filteredResults.map((r) => (
-                    <button
-                      key={r.id}
-                      className="w-full flex items-center gap-3 px-3 py-3 text-left hover:bg-accent active:bg-accent/70 transition-colors"
-                      onClick={() => markPresent(r)}
-                      disabled={markingId === r.id}
+              return (
+                <button
+                  key={member.enrollmentId}
+                  onClick={() => {
+                    if (isMarkingThis || isCompleted) return;
+                    if (isMarked && record) {
+                      removeAttendance(record);
+                    } else {
+                      markPresent(member);
+                    }
+                  }}
+                  disabled={isMarkingThis || (!isLive && !isMarked)}
+                  className={`w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all active:scale-[0.98] ${
+                    isMarked
+                      ? 'bg-emerald-500/10 ring-1 ring-emerald-500/25'
+                      : isLive
+                        ? 'bg-card ring-1 ring-border/50 hover:ring-border'
+                        : 'bg-card ring-1 ring-border/30 opacity-60'
+                  } disabled:cursor-default`}
+                >
+                  {/* Avatar */}
+                  <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarImage src={member.profileImageUrl ?? undefined} />
+                    <AvatarFallback
+                      className={`text-xs font-semibold ${isMarked ? 'bg-emerald-500/20 text-emerald-600' : 'bg-muted'}`}
                     >
-                      <Avatar className="h-9 w-9 shrink-0">
-                        <AvatarImage src={r.profileImageUrl ?? undefined} />
-                        <AvatarFallback className="text-xs">
-                          {r.name
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')
-                            .toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{r.name}</p>
-                        {r.isEnrolled && <p className="text-xs text-blue-500">Enrolled</p>}
-                      </div>
-                      {markingId === r.id ? (
-                        <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
-                      ) : (
-                        <span className="text-xs text-muted-foreground shrink-0">Tap to mark</span>
+                      {initials(member.name)}
+                    </AvatarFallback>
+                  </Avatar>
+
+                  {/* Name + time */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">{member.name}</p>
+                      {member.clientType === 'GYM_ONLY' && (
+                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold bg-emerald-500/15 text-emerald-600">
+                          GEN
+                        </span>
                       )}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {showDropdown &&
-                searchQuery.length >= 2 &&
-                filteredResults.length === 0 &&
-                !searchLoading && (
-                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg px-3 py-3 text-sm text-muted-foreground">
-                    No members found for &ldquo;{searchQuery}&rdquo;
+                      {member.clientType === 'EXTERNAL_ONLY' && (
+                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold bg-zinc-500/15 text-zinc-400">
+                          EXT
+                        </span>
+                      )}
+                    </div>
+                    {isMarked && markedTime && (
+                      <p className="text-xs text-emerald-600">Checked in · {markedTime}</p>
+                    )}
+                    {!isMarked && (
+                      <p className="text-xs text-muted-foreground">
+                        {member.clientType === 'GYM_MEMBER'
+                          ? 'PT Client'
+                          : member.clientType === 'GYM_ONLY'
+                            ? 'General'
+                            : 'External'}
+                      </p>
+                    )}
                   </div>
-                )}
-            </div>
-          )}
 
-          {/* Attendance list */}
-          {attendanceLoading ? (
+                  {/* Status icon */}
+                  <div className="shrink-0">
+                    {isMarkingThis ? (
+                      <div className="h-5 w-5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+                    ) : isMarked ? (
+                      <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                    ) : (
+                      <Circle className="h-6 w-6 text-border" />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Walk-ins ── */}
+        {walkIns.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+              Walk-ins · {walkIns.length}
+            </p>
             <div className="space-y-2">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-xl" />
-              ))}
-            </div>
-          ) : attendance.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
-              <UserCheck className="h-10 w-10 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">No one marked yet.</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Search for a member above.</p>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {attendance.map((record, idx) => {
+              {walkIns.map((record) => {
                 const name = record.client
                   ? `${record.client.user.firstName} ${record.client.user.lastName}`
                   : (record.externalName ?? 'Unknown');
                 const avatarSrc = record.client?.user.profileImageUrl ?? undefined;
-                const initials = name
-                  .split(' ')
-                  .map((n) => n[0])
-                  .join('')
-                  .toUpperCase();
                 const markedTime = format(new Date(record.markedAt), 'HH:mm');
 
                 return (
                   <div
                     key={record.id}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-muted/40 border border-border/40"
+                    className="flex items-center gap-3 rounded-2xl bg-blue-500/8 ring-1 ring-blue-500/20 px-3 py-3"
                   >
-                    <span className="text-xs text-muted-foreground w-4 shrink-0 text-center font-mono">
-                      {idx + 1}
-                    </span>
-                    <Avatar className="h-9 w-9 shrink-0">
+                    <Avatar className="h-10 w-10 shrink-0">
                       <AvatarImage src={avatarSrc} />
-                      <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                      <AvatarFallback className="text-xs bg-blue-500/15 text-blue-600">
+                        {initials(name)}
+                      </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{name}</p>
-                      <p className="text-xs text-muted-foreground">{markedTime}</p>
+                      <p className="text-xs text-blue-600">Walk-in · {markedTime}</p>
                     </div>
-                    {!record.clientProfileId && (
-                      <Badge variant="secondary" className="text-xs shrink-0">
-                        Walk-in
-                      </Badge>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                    <button
                       onClick={() => removeAttendance(record)}
+                      className="h-8 w-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
                     >
                       <X className="h-4 w-4" />
-                    </Button>
+                    </button>
                   </div>
                 );
               })}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+
+        {/* ── Add walk-in ── */}
+        {isLive && (
+          <div className="mt-4" ref={searchRef}>
+            {!showSearch ? (
+              <button
+                onClick={() => {
+                  setShowSearch(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 50);
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-3.5 text-sm text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
+              >
+                <UserPlus className="h-4 w-4" />
+                Add walk-in
+              </button>
+            ) : (
+              <div className="rounded-2xl bg-card ring-1 ring-border overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-3 border-b border-border/40">
+                  <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <input
+                    ref={searchInputRef}
+                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    placeholder="Search member name…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+                  />
+                  {searchLoading ? (
+                    <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setShowSearch(false);
+                        setSearchQuery('');
+                        setShowDropdown(false);
+                      }}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                {showDropdown && searchFilteredResults.length > 0 && (
+                  <div>
+                    {searchFilteredResults.map((r) => (
+                      <button
+                        key={r.id}
+                        className="w-full flex items-center gap-3 px-3 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors border-b border-border/30 last:border-0"
+                        onClick={() => markWalkIn(r)}
+                        disabled={markingId === r.id}
+                      >
+                        <Avatar className="h-9 w-9 shrink-0">
+                          <AvatarImage src={r.profileImageUrl ?? undefined} />
+                          <AvatarFallback className="text-xs">{initials(r.name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{r.name}</p>
+                          {r.isEnrolled && (
+                            <p className="text-xs text-blue-500">Already enrolled</p>
+                          )}
+                        </div>
+                        {markingId === r.id ? (
+                          <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
+                        ) : (
+                          <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {showDropdown &&
+                  searchQuery.length >= 2 &&
+                  searchFilteredResults.length === 0 &&
+                  !searchLoading && (
+                    <p className="px-3 py-3 text-sm text-muted-foreground">
+                      No members found for &ldquo;{searchQuery}&rdquo;
+                    </p>
+                  )}
+
+                {searchQuery.length < 2 && (
+                  <p className="px-3 py-3 text-xs text-muted-foreground">
+                    Type at least 2 characters to search
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

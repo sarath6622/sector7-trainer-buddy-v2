@@ -3,7 +3,7 @@ import { getServerSession, hasRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import * as crossfitService from '@/services/crossfit.service';
 
-export async function GET() {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
     if (
@@ -13,16 +13,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 
-    if (!session.user.trainerProfileId) {
-      return NextResponse.json(
-        { error: 'Trainer profile not found', code: 'NOT_FOUND' },
-        { status: 404 },
-      );
-    }
-
-    const data = await crossfitService.getCrossfitClassesByTrainer(
-      session.user.trainerProfileId,
+    const { id } = await params;
+    const data = await crossfitService.startCrossfitSession(
+      id,
       session.user.branchId,
+      session.user.id,
     );
 
     return NextResponse.json({ data });

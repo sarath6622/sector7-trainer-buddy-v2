@@ -54,7 +54,7 @@ export const trainerShiftSchema = z.object({
   days: z.array(dayOfWeekSchema).min(1, 'At least one day is required'),
 });
 
-export const kickboxingClientTypeSchema = z.enum(['GYM_MEMBER', 'EXTERNAL_ONLY']);
+export const kickboxingClientTypeSchema = z.enum(['GYM_MEMBER', 'GYM_ONLY', 'EXTERNAL_ONLY']);
 
 export const difficultyLevelSchema = z.enum(['EASY', 'MEDIUM', 'HARD']);
 
@@ -483,7 +483,7 @@ export const updateProgressSchema = createProgressSchema.partial();
 // ─── ADMIN: CROSSFIT ─────────────────────────────────
 
 export const createCrossfitClassSchema = z.object({
-  trainerProfileId: cuidSchema,
+  trainerProfileIds: z.array(cuidSchema).min(1, 'At least one trainer is required'),
   name: z.string().min(1).max(100),
   dayOfWeek: dayOfWeekSchema,
   startTime: timeSchema,
@@ -491,18 +491,17 @@ export const createCrossfitClassSchema = z.object({
   maxCapacity: z.number().int().positive().default(20),
 });
 
-export const updateCrossfitClassSchema = createCrossfitClassSchema
-  .omit({ trainerProfileId: true, name: true, dayOfWeek: true, startTime: true })
-  .extend({
-    trainerProfileId: cuidSchema.optional(),
-    name: z.string().min(1).max(100).optional(),
-    dayOfWeek: dayOfWeekSchema.optional(),
-    startTime: timeSchema.optional(),
-    isActive: z.boolean().optional(),
-  });
+export const updateCrossfitClassSchema = z.object({
+  trainerProfileIds: z.array(cuidSchema).min(1).optional(),
+  name: z.string().min(1).max(100).optional(),
+  dayOfWeek: dayOfWeekSchema.optional(),
+  startTime: timeSchema.optional(),
+  durationMin: z.number().int().positive().optional(),
+  maxCapacity: z.number().int().positive().optional(),
+  isActive: z.boolean().optional(),
+});
 
 export const createCrossfitEnrollmentSchema = z.object({
-  classId: cuidSchema,
   clientProfileId: cuidSchema.optional(),
   clientType: kickboxingClientTypeSchema,
   externalName: z.string().optional(),
@@ -510,7 +509,6 @@ export const createCrossfitEnrollmentSchema = z.object({
 });
 
 export const listCrossfitEnrollmentsSchema = z.object({
-  classId: cuidSchema.optional(),
   clientType: kickboxingClientTypeSchema.optional(),
 });
 

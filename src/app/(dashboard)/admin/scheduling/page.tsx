@@ -311,10 +311,40 @@ function FormSearchSelect({
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const JS_DAY_MAP = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 
+interface CrossfitClassForCalendar {
+  id: string;
+  name: string;
+  dayOfWeek: string;
+  startTime: string;
+  durationMin: number;
+  isActive: boolean;
+  trainers: Array<{ trainer: { user: { firstName: string; lastName: string } } }>;
+}
+
+/** Returns all dates (as YYYY-MM-DD) within [dateFrom, dateTo] that match dayOfWeek. */
+function getDatesForDayInRange(dayOfWeek: string, dateFrom: string, dateTo: string): string[] {
+  const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+  const targetDay = days.indexOf(dayOfWeek);
+  if (targetDay === -1) return [];
+  const dates: string[] = [];
+  const end = new Date(dateTo + 'T23:59:59');
+  const cur = new Date(dateFrom + 'T00:00:00');
+  // advance to first matching weekday
+  while (cur.getDay() !== targetDay) cur.setDate(cur.getDate() + 1);
+  while (cur <= end) {
+    dates.push(
+      `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`,
+    );
+    cur.setDate(cur.getDate() + 7);
+  }
+  return dates;
+}
+
 export default function SchedulingPage() {
   const { confirm, ConfirmDialog } = useConfirm();
   const [sessions, setSessions] = useState<SessionInstance[]>([]);
   const [conflicts] = useState<Conflict[]>([]);
+  const [crossfitClasses, setCrossfitClasses] = useState<CrossfitClassForCalendar[]>([]);
   const [trainers, setTrainers] = useState<TrainerOption[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -387,9 +417,10 @@ export default function SchedulingPage() {
 
   const fetchTrainersAndClients = useCallback(async () => {
     try {
-      const [tRes, cRes] = await Promise.all([
+      const [tRes, cRes, cfRes] = await Promise.all([
         fetch('/api/admin/users?role=TRAINER&pageSize=100'),
         fetch('/api/admin/users?role=CLIENT&pageSize=100'),
+        fetch('/api/admin/crossfit/classes'),
       ]);
       if (tRes.ok) {
         const { data } = await tRes.json();
@@ -398,6 +429,10 @@ export default function SchedulingPage() {
       if (cRes.ok) {
         const { data } = await cRes.json();
         setClients(data);
+      }
+      if (cfRes.ok) {
+        const { data } = await cfRes.json();
+        setCrossfitClasses((data ?? []).filter((c: CrossfitClassForCalendar) => c.isActive));
       }
     } catch {
       /* ignore */
@@ -661,6 +696,8 @@ export default function SchedulingPage() {
   }
 
   function handleEventClick(info: EventClickArg) {
+    // CrossFit events are read-only — don't open the PT session panel
+    if (info.event.extendedProps?.isCrossfit) return;
     setEditingSession(false);
     const session = sessions.find((s) => s.id === info.event.id);
     setSelectedSession(session ?? null);
@@ -687,7 +724,7 @@ export default function SchedulingPage() {
   }, [isFullscreen]);
 
   // Convert sessions to calendar events
-  const calendarEvents: EventInput[] = filteredSessions.map((s) => {
+  const ptEvents: EventInput[] = filteredSessions.map((s) => {
     const [h, m] = s.scheduledTime.split(':').map(Number);
     const start = new Date(s.scheduledDate);
     start.setHours(h!, m!, 0);
@@ -708,6 +745,33 @@ export default function SchedulingPage() {
       },
     };
   });
+
+  // Generate CrossFit recurring events for the currently visible range
+  const crossfitEvents: EventInput[] = crossfitClasses.flatMap((cls) => {
+    const { start: rangeFrom, end: rangeTo } = calendarRangeRef.current;
+    const dates = getDatesForDayInRange(cls.dayOfWeek, rangeFrom, rangeTo);
+    return dates.map((dateStr) => {
+      const [h, m] = cls.startTime.split(':').map(Number);
+      const start = new Date(dateStr + 'T00:00:00');
+      start.setHours(h!, m!, 0);
+      const end = new Date(start);
+      end.setMinutes(end.getMinutes() + cls.durationMin);
+      const trainerLabel = cls.trainers.map((t) => t.trainer.user.firstName).join(', ');
+      return {
+        id: `cf-${cls.id}-${dateStr}`,
+        title: `${cls.name}${trainerLabel ? ` — ${trainerLabel}` : ''}`,
+        start,
+        end,
+        extendedProps: {
+          status: 'CROSSFIT',
+          trainerColor: '#f97316', // orange for CrossFit
+          isCrossfit: true,
+        },
+      };
+    });
+  });
+
+  const calendarEvents: EventInput[] = [...ptEvents, ...crossfitEvents];
 
   if (loading) {
     return (

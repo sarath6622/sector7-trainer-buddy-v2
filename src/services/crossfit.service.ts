@@ -3,11 +3,24 @@ import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import type { KickboxingClientType, Prisma } from '@prisma/client';
 
-// ─── Class CRUD ─────────────────────────────────────
+// ─── Shared include helpers ──────────────────────────────────────────────────
+
+const classWithTrainers = {
+  trainers: {
+    include: {
+      trainer: {
+        include: { user: { select: { firstName: true, lastName: true } } },
+      },
+    },
+  },
+  _count: { select: { enrollments: { where: { isActive: true } } } },
+} satisfies Prisma.CrossfitClassInclude;
+
+// ─── Class CRUD ─────────────────────────────────────────────────────────────
 
 interface CreateClassInput {
   branchId: string;
-  trainerProfileId: string;
+  trainerProfileIds: string[];
   name: string;
   dayOfWeek: string;
   startTime: string;
@@ -17,31 +30,36 @@ interface CreateClassInput {
 }
 
 export async function createCrossfitClass(input: CreateClassInput) {
-  const { branchId, actorId, ...data } = input;
+  const { branchId, actorId, trainerProfileIds, ...data } = input;
 
-  const trainer = await prisma.trainerProfile.findFirst({
-    where: { id: data.trainerProfileId, branchId },
+  if (!trainerProfileIds.length) {
+    throw new AppError('VALIDATION_ERROR', 'At least one trainer is required', 400);
+  }
+
+  // Verify all trainers exist in this branch
+  const trainers = await prisma.trainerProfile.findMany({
+    where: { id: { in: trainerProfileIds }, branchId },
   });
-  if (!trainer) {
-    throw new AppError('NOT_FOUND', 'Trainer not found', 404);
+  if (trainers.length !== trainerProfileIds.length) {
+    throw new AppError('NOT_FOUND', 'One or more trainers not found in this branch', 404);
   }
 
   const cfClass = await prisma.crossfitClass.create({
     data: {
       branchId,
-      trainerProfileId: data.trainerProfileId,
       name: data.name,
       dayOfWeek: data.dayOfWeek as Prisma.EnumDayOfWeekFieldUpdateOperationsInput['set'] & string,
       startTime: data.startTime,
       durationMin: data.durationMin,
       maxCapacity: data.maxCapacity,
-    },
-    include: {
-      trainer: {
-        include: { user: { select: { firstName: true, lastName: true } } },
+      trainers: {
+        create: trainerProfileIds.map((tid) => ({
+          trainerProfileId: tid,
+          branchId,
+        })),
       },
-      _count: { select: { enrollments: { where: { isActive: true } } } },
     },
+    include: classWithTrainers,
   });
 
   await auditLog({
@@ -49,7 +67,12 @@ export async function createCrossfitClass(input: CreateClassInput) {
     actorId,
     subjectType: 'CrossfitClass',
     subjectId: cfClass.id,
-    newValue: { name: cfClass.name, dayOfWeek: cfClass.dayOfWeek, startTime: cfClass.startTime },
+    newValue: {
+      name: cfClass.name,
+      dayOfWeek: cfClass.dayOfWeek,
+      startTime: cfClass.startTime,
+      trainerProfileIds,
+    },
     branchId,
   });
 
@@ -59,9 +82,25 @@ export async function createCrossfitClass(input: CreateClassInput) {
 export async function getCrossfitClasses(branchId: string) {
   return prisma.crossfitClass.findMany({
     where: { branchId },
+    include: classWithTrainers,
+    orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+  });
+}
+
+export async function getCrossfitClassesByTrainer(trainerProfileId: string, branchId: string) {
+  return prisma.crossfitClass.findMany({
+    where: {
+      branchId,
+      isActive: true,
+      trainers: { some: { trainerProfileId } },
+    },
     include: {
-      trainer: {
-        include: { user: { select: { firstName: true, lastName: true } } },
+      trainers: {
+        include: {
+          trainer: {
+            include: { user: { select: { firstName: true, lastName: true } } },
+          },
+        },
       },
       _count: { select: { enrollments: { where: { isActive: true } } } },
     },
@@ -69,18 +108,8 @@ export async function getCrossfitClasses(branchId: string) {
   });
 }
 
-export async function getCrossfitClassesByTrainer(trainerProfileId: string, branchId: string) {
-  return prisma.crossfitClass.findMany({
-    where: { trainerProfileId, branchId, isActive: true },
-    include: {
-      _count: { select: { enrollments: { where: { isActive: true } } } },
-    },
-    orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
-  });
-}
-
 interface UpdateClassInput {
-  trainerProfileId?: string;
+  trainerProfileIds?: string[];
   name?: string;
   dayOfWeek?: string;
   startTime?: string;
@@ -101,8 +130,6 @@ export async function updateCrossfitClass(
   }
 
   const updateData: Prisma.CrossfitClassUpdateInput = {};
-  if (input.trainerProfileId !== undefined)
-    updateData.trainer = { connect: { id: input.trainerProfileId } };
   if (input.name !== undefined) updateData.name = input.name;
   if (input.dayOfWeek !== undefined)
     updateData.dayOfWeek =
@@ -112,15 +139,31 @@ export async function updateCrossfitClass(
   if (input.maxCapacity !== undefined) updateData.maxCapacity = input.maxCapacity;
   if (input.isActive !== undefined) updateData.isActive = input.isActive;
 
+  // Replace trainer list if provided
+  if (input.trainerProfileIds !== undefined) {
+    if (input.trainerProfileIds.length === 0) {
+      throw new AppError('VALIDATION_ERROR', 'At least one trainer is required', 400);
+    }
+    const trainers = await prisma.trainerProfile.findMany({
+      where: { id: { in: input.trainerProfileIds }, branchId },
+    });
+    if (trainers.length !== input.trainerProfileIds.length) {
+      throw new AppError('NOT_FOUND', 'One or more trainers not found in this branch', 404);
+    }
+    // Delete existing and recreate
+    updateData.trainers = {
+      deleteMany: {},
+      create: input.trainerProfileIds.map((tid) => ({
+        trainerProfileId: tid,
+        branchId,
+      })),
+    };
+  }
+
   const updated = await prisma.crossfitClass.update({
     where: { id },
     data: updateData,
-    include: {
-      trainer: {
-        include: { user: { select: { firstName: true, lastName: true } } },
-      },
-      _count: { select: { enrollments: { where: { isActive: true } } } },
-    },
+    include: classWithTrainers,
   });
 
   await auditLog({
@@ -136,11 +179,10 @@ export async function updateCrossfitClass(
   return updated;
 }
 
-// ─── Enrollment CRUD ────────────────────────────────
+// ─── Enrollment CRUD ────────────────────────────────────────────────────────
 
 interface CreateEnrollmentInput {
   branchId: string;
-  classId: string;
   clientProfileId?: string;
   clientType: KickboxingClientType;
   externalName?: string;
@@ -150,17 +192,6 @@ interface CreateEnrollmentInput {
 
 export async function createCrossfitEnrollment(input: CreateEnrollmentInput) {
   const { branchId, actorId, ...data } = input;
-
-  const cfClass = await prisma.crossfitClass.findFirst({
-    where: { id: data.classId, branchId, isActive: true },
-    include: { _count: { select: { enrollments: { where: { isActive: true } } } } },
-  });
-  if (!cfClass) {
-    throw new AppError('NOT_FOUND', 'CrossFit class not found', 404);
-  }
-  if (cfClass._count.enrollments >= cfClass.maxCapacity) {
-    throw new AppError('CAPACITY_FULL', 'Class has reached maximum capacity', 400);
-  }
 
   if (data.clientType === 'GYM_MEMBER') {
     if (!data.clientProfileId) {
@@ -173,21 +204,21 @@ export async function createCrossfitEnrollment(input: CreateEnrollmentInput) {
       throw new AppError('NOT_FOUND', 'Client not found', 404);
     }
     const existing = await prisma.crossfitEnrollment.findFirst({
-      where: { classId: data.classId, clientProfileId: data.clientProfileId, isActive: true },
+      where: { branchId, clientProfileId: data.clientProfileId, isActive: true },
     });
     if (existing) {
-      throw new AppError('DUPLICATE', 'Client is already enrolled in this class', 409);
+      throw new AppError('DUPLICATE', 'Client is already enrolled in CrossFit', 409);
     }
   } else {
+    // GYM_ONLY and EXTERNAL_ONLY both require a name
     if (!data.externalName) {
-      throw new AppError('VALIDATION_ERROR', 'externalName is required for EXTERNAL_ONLY', 400);
+      throw new AppError('VALIDATION_ERROR', 'Name is required', 400);
     }
   }
 
   const enrollment = await prisma.crossfitEnrollment.create({
     data: {
       branchId,
-      classId: data.classId,
       clientProfileId: data.clientProfileId ?? null,
       clientType: data.clientType,
       externalName: data.externalName,
@@ -206,7 +237,6 @@ export async function createCrossfitEnrollment(input: CreateEnrollmentInput) {
     subjectType: 'CrossfitEnrollment',
     subjectId: enrollment.id,
     newValue: {
-      classId: data.classId,
       clientType: data.clientType,
       clientProfileId: data.clientProfileId,
       externalName: data.externalName,
@@ -219,24 +249,21 @@ export async function createCrossfitEnrollment(input: CreateEnrollmentInput) {
 
 interface ListEnrollmentsInput {
   branchId: string;
-  classId?: string;
   clientType?: KickboxingClientType;
 }
 
 export async function getCrossfitEnrollments(input: ListEnrollmentsInput) {
-  const { branchId, classId, clientType } = input;
+  const { branchId, clientType } = input;
   return prisma.crossfitEnrollment.findMany({
     where: {
       branchId,
       isActive: true,
-      ...(classId ? { classId } : {}),
       ...(clientType ? { clientType } : {}),
     },
     include: {
       client: {
         include: { user: { select: { firstName: true, lastName: true, email: true } } },
       },
-      class: { select: { name: true, dayOfWeek: true, startTime: true, durationMin: true } },
     },
     orderBy: { enrolledAt: 'desc' },
   });
@@ -256,7 +283,6 @@ export async function deleteCrossfitEnrollment(id: string, branchId: string, act
     subjectType: 'CrossfitEnrollment',
     subjectId: id,
     oldValue: {
-      classId: enrollment.classId,
       clientType: enrollment.clientType,
       clientProfileId: enrollment.clientProfileId,
       externalName: enrollment.externalName,
@@ -267,7 +293,7 @@ export async function deleteCrossfitEnrollment(id: string, branchId: string, act
   return { success: true };
 }
 
-// ─── Session Management ─────────────────────────────
+// ─── Session Management ─────────────────────────────────────────────────────
 
 export async function getOrCreateCrossfitSession(
   classId: string,
@@ -309,7 +335,94 @@ export async function getOrCreateCrossfitSession(
   return session;
 }
 
-// ─── Attendance ─────────────────────────────────────
+export async function startCrossfitSession(sessionId: string, branchId: string, actorId: string) {
+  const session = await prisma.crossfitSession.findFirst({ where: { id: sessionId, branchId } });
+  if (!session) {
+    throw new AppError('NOT_FOUND', 'CrossFit session not found', 404);
+  }
+  if (session.status === 'IN_PROGRESS') {
+    return session; // idempotent
+  }
+  if (session.status === 'COMPLETED') {
+    throw new AppError('CONFLICT', 'Session is already completed', 409);
+  }
+
+  const updated = await prisma.crossfitSession.update({
+    where: { id: sessionId },
+    data: {
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+      startedByUserId: actorId,
+    },
+    include: { _count: { select: { attendances: true } } },
+  });
+
+  await auditLog({
+    action: 'CROSSFIT_SESSION_STARTED',
+    actorId,
+    subjectType: 'CrossfitSession',
+    subjectId: sessionId,
+    newValue: { status: 'IN_PROGRESS', startedAt: updated.startedAt },
+    branchId,
+  });
+
+  return updated;
+}
+
+export async function getTodayCrossfitSessionsForTrainer(
+  trainerProfileId: string,
+  branchId: string,
+) {
+  const today = new Date();
+  const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+  const todayDayOfWeek = days[today.getDay()]!;
+
+  const normalizedToday = new Date(today);
+  normalizedToday.setUTCHours(0, 0, 0, 0);
+
+  // Get active classes assigned to this trainer for today's day
+  const classes = await prisma.crossfitClass.findMany({
+    where: {
+      branchId,
+      isActive: true,
+      dayOfWeek: todayDayOfWeek as Prisma.EnumDayOfWeekFilter['equals'],
+      trainers: { some: { trainerProfileId } },
+    },
+    include: {
+      trainers: {
+        include: {
+          trainer: {
+            include: { user: { select: { firstName: true, lastName: true } } },
+          },
+        },
+      },
+      _count: { select: { enrollments: { where: { isActive: true } } } },
+    },
+    orderBy: { startTime: 'asc' },
+  });
+
+  if (classes.length === 0) return [];
+
+  // Fetch existing sessions for today (if any)
+  const classIds = classes.map((c) => c.id);
+  const sessions = await prisma.crossfitSession.findMany({
+    where: {
+      branchId,
+      classId: { in: classIds },
+      date: normalizedToday,
+    },
+    include: { _count: { select: { attendances: true } } },
+  });
+
+  const sessionByClassId = new Map(sessions.map((s) => [s.classId, s]));
+
+  return classes.map((cls) => ({
+    class: cls,
+    session: sessionByClassId.get(cls.id) ?? null,
+  }));
+}
+
+// ─── Attendance ─────────────────────────────────────────────────────────────
 
 interface MarkAttendanceInput {
   clientProfileId?: string;
@@ -439,7 +552,7 @@ export async function getCrossfitAttendance(sessionId: string, branchId: string)
   });
 }
 
-// ─── Client Search ───────────────────────────────────
+// ─── Client Search ───────────────────────────────────────────────────────────
 
 export async function searchCrossfitClients(query: string, branchId: string, classId?: string) {
   if (query.length < 2) return [];
@@ -477,5 +590,33 @@ export async function searchCrossfitClients(query: string, branchId: string, cla
     name: `${c.user.firstName} ${c.user.lastName}`,
     profileImageUrl: c.user.profileImageUrl,
     isEnrolled: enrolledIds.has(c.id),
+  }));
+}
+
+// ─── Enrolled member list for a class ───────────────────────────────────────
+
+export async function getEnrolledClientsForClass(_classId: string, branchId: string) {
+  // Enrollment is program-wide (monthly), not per-class — return all active enrollees for the branch
+  const enrollments = await prisma.crossfitEnrollment.findMany({
+    where: { branchId, isActive: true },
+    include: {
+      client: {
+        include: {
+          user: { select: { firstName: true, lastName: true, profileImageUrl: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return enrollments.map((e) => ({
+    enrollmentId: e.id,
+    clientProfileId: e.client?.id ?? null,
+    externalName: e.externalName ?? null,
+    name: e.client
+      ? `${e.client.user.firstName} ${e.client.user.lastName}`
+      : (e.externalName ?? 'Unknown'),
+    profileImageUrl: e.client?.user.profileImageUrl ?? null,
+    clientType: e.clientType,
   }));
 }

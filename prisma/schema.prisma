@@ -88,8 +88,9 @@ enum DayOfWeek {
 }
 
 enum KickboxingClientType {
-  GYM_MEMBER
-  EXTERNAL_ONLY
+  GYM_MEMBER    // PT client — has a ClientProfile in the system
+  GYM_ONLY      // Gym member without PT — enrolled by name
+  EXTERNAL_ONLY // Not a gym member — walk-in only
 }
 
 enum DifficultyLevel {
@@ -150,6 +151,12 @@ enum RescheduleStatus {
   REJECTED
 }
 
+enum CrossfitSessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+}
+
 enum SwapStatus {
   PENDING
   APPROVED
@@ -183,10 +190,11 @@ model Branch {
   shiftSwaps           ShiftSwap[]
   kickboxingClasses    KickboxingClass[]
   kickboxingEnrollments KickboxingEnrollment[]
-  crossfitClasses      CrossfitClass[]
-  crossfitEnrollments  CrossfitEnrollment[]
-  crossfitSessions     CrossfitSession[]
-  crossfitAttendances  CrossfitAttendance[]
+  crossfitClasses       CrossfitClass[]
+  crossfitClassTrainers CrossfitClassTrainer[]
+  crossfitEnrollments   CrossfitEnrollment[]
+  crossfitSessions      CrossfitSession[]
+  crossfitAttendances   CrossfitAttendance[]
   paymentRecords       PaymentRecord[]
   notificationLogs     NotificationLog[]
   auditLogs            AuditLog[]
@@ -280,9 +288,9 @@ model TrainerProfile {
   reassignmentsTo      TrainerReassignment[] @relation("ReplacementTrainer")
   availabilityOverrides TrainerAvailabilityOverride[]
   shifts               TrainerShift[]
-  kickboxingClasses    KickboxingClass[]
-  crossfitClasses      CrossfitClass[]
-  swapsAsA             ShiftSwap[]     @relation("SwapAsA")
+  kickboxingClasses      KickboxingClass[]
+  crossfitClassTrainers  CrossfitClassTrainer[]
+  swapsAsA               ShiftSwap[]     @relation("SwapAsA")
   swapsAsB             ShiftSwap[]     @relation("SwapAsB")
 
   @@index([branchId])
@@ -746,20 +754,19 @@ model KickboxingEnrollment {
 // ─── CROSSFIT ────────────────────────────────────────
 
 model CrossfitClass {
-  id               String    @id @default(cuid())
-  branchId         String
-  trainerProfileId String
-  name             String    // e.g. "Monday 6AM WOD", "Foundations"
-  dayOfWeek        DayOfWeek
-  startTime        String    // "06:00"
-  durationMin      Int       @default(60)
-  maxCapacity      Int       @default(20)
-  isActive         Boolean   @default(true)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  branchId    String
+  name        String    // e.g. "Monday 6AM WOD", "Foundations"
+  dayOfWeek   DayOfWeek
+  startTime   String    // "06:00"
+  durationMin Int       @default(60)
+  maxCapacity Int       @default(20)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  branch      Branch         @relation(fields: [branchId], references: [id])
-  trainer     TrainerProfile @relation(fields: [trainerProfileId], references: [id])
+  branch      Branch                 @relation(fields: [branchId], references: [id])
+  trainers    CrossfitClassTrainer[]
   enrollments CrossfitEnrollment[]
   sessions    CrossfitSession[]
 
@@ -767,10 +774,28 @@ model CrossfitClass {
   @@map("crossfit_classes")
 }
 
+model CrossfitClassTrainer {
+  id               String   @id @default(cuid())
+  classId          String
+  trainerProfileId String
+  branchId         String
+  createdAt        DateTime @default(now())
+
+  class   CrossfitClass  @relation(fields: [classId], references: [id])
+  trainer TrainerProfile @relation(fields: [trainerProfileId], references: [id])
+  branch  Branch         @relation(fields: [branchId], references: [id])
+
+  @@unique([classId, trainerProfileId])
+  @@index([branchId])
+  @@index([classId])
+  @@index([trainerProfileId])
+  @@map("crossfit_class_trainers")
+}
+
 model CrossfitEnrollment {
   id              String               @id @default(cuid())
   branchId        String
-  classId         String
+  classId         String?              // null = program-wide monthly enrollment
   clientProfileId String?              // null for EXTERNAL_ONLY
   clientType      KickboxingClientType // reuses GYM_MEMBER | EXTERNAL_ONLY
   externalName    String?
@@ -781,28 +806,33 @@ model CrossfitEnrollment {
   updatedAt       DateTime             @updatedAt
 
   branch  Branch             @relation(fields: [branchId], references: [id])
-  class   CrossfitClass      @relation(fields: [classId], references: [id])
+  class   CrossfitClass?     @relation(fields: [classId], references: [id])
   client  ClientProfile?     @relation(fields: [clientProfileId], references: [id])
 
-  @@index([branchId, classId])
+  @@index([branchId])
   @@index([branchId, clientType])
   @@map("crossfit_enrollments")
 }
 
 model CrossfitSession {
-  id        String   @id @default(cuid())
+  id        String                @id @default(cuid())
   branchId  String
   classId   String
-  date      DateTime // the specific date of this session occurrence
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  date      DateTime              // the specific date of this session occurrence
+  status    CrossfitSessionStatus @default(SCHEDULED)
+  startedAt DateTime?
+  endedAt   DateTime?
+  startedByUserId String?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
 
-  branch      Branch              @relation(fields: [branchId], references: [id])
-  class       CrossfitClass       @relation(fields: [classId], references: [id])
+  branch      Branch               @relation(fields: [branchId], references: [id])
+  class       CrossfitClass        @relation(fields: [classId], references: [id])
   attendances CrossfitAttendance[]
 
   @@unique([classId, date])
   @@index([branchId, date])
+  @@index([branchId, status])
   @@map("crossfit_sessions")
 }
 

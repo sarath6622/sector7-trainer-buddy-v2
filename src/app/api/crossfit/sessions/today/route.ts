@@ -14,13 +14,10 @@ export async function GET() {
     }
 
     if (!session.user.trainerProfileId) {
-      return NextResponse.json(
-        { error: 'Trainer profile not found', code: 'NOT_FOUND' },
-        { status: 404 },
-      );
+      return NextResponse.json({ data: [] });
     }
 
-    const data = await crossfitService.getCrossfitClassesByTrainer(
+    const data = await crossfitService.getTodayCrossfitSessionsForTrainer(
       session.user.trainerProfileId,
       session.user.branchId,
     );

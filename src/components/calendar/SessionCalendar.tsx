@@ -14,6 +14,7 @@ const STATUS_STYLES: Record<string, { bg: string; accent: string; label: string 
   COMPLETED: { bg: '#dcfce7', accent: '#22c55e', label: 'Completed' },
   NO_SHOW: { bg: '#fde2e2', accent: '#ef4444', label: 'No Show' },
   CANCELLED: { bg: '#f3f4f6', accent: '#9ca3af', label: 'Cancelled' },
+  CROSSFIT: { bg: '#ffedd5', accent: '#f97316', label: 'CrossFit' },
 };
 
 // Dark mode pastels
@@ -23,6 +24,7 @@ const STATUS_STYLES_DARK: Record<string, { bg: string; accent: string }> = {
   COMPLETED: { bg: 'rgba(34,197,94,0.15)', accent: '#4ade80' },
   NO_SHOW: { bg: 'rgba(239,68,68,0.15)', accent: '#f87171' },
   CANCELLED: { bg: 'rgba(156,163,175,0.12)', accent: '#9ca3af' },
+  CROSSFIT: { bg: 'rgba(249,115,22,0.15)', accent: '#fb923c' },
 };
 
 const STATUS_LABELS = Object.entries(STATUS_STYLES).map(([key, val]) => ({

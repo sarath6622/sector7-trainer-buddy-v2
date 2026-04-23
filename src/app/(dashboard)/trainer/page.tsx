@@ -19,6 +19,7 @@ import {
   UmbrellaOff,
   ChevronRight,
   Users,
+  Dumbbell,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -38,6 +39,17 @@ interface SessionData {
   trainer: {
     user: { firstName: string; lastName: string };
   };
+}
+
+interface CrossfitTodayItem {
+  class: {
+    id: string;
+    name: string;
+    startTime: string;
+    durationMin: number;
+    _count: { enrollments: number };
+  };
+  session: { id: string; status: string } | null;
 }
 
 interface ClientWithPackage {
@@ -106,6 +118,8 @@ export default function TrainerDashboard() {
   const [upcomingSessions, setUpcomingSessions] = useState<SessionData[]>([]);
   const [monthSessions, setMonthSessions] = useState<SessionData[]>([]);
   const [activeSession, setActiveSession] = useState<SessionData | null>(null);
+  const [crossfitToday, setCrossfitToday] = useState<CrossfitTodayItem[]>([]);
+  const [startingCfClassId, setStartingCfClassId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientWithPackage[]>([]);
@@ -122,13 +136,16 @@ export default function TrainerDashboard() {
     const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     try {
-      const [todayRes, upcomingRes, monthRes, staleRes, clientsRes] = await Promise.all([
-        fetch(`/api/trainer/schedule?date=${today}`),
-        fetch(`/api/trainer/schedule?dateFrom=${tomorrow}&dateTo=${future}`),
-        fetch(`/api/trainer/schedule?month=${monthStr}`),
-        fetch(`/api/trainer/schedule?status=IN_PROGRESS`),
-        fetch('/api/trainer/clients'),
-      ]);
+      const [todayRes, upcomingRes, monthRes, staleRes, clientsRes, cfTodayRes] = await Promise.all(
+        [
+          fetch(`/api/trainer/schedule?date=${today}`),
+          fetch(`/api/trainer/schedule?dateFrom=${tomorrow}&dateTo=${future}`),
+          fetch(`/api/trainer/schedule?month=${monthStr}`),
+          fetch(`/api/trainer/schedule?status=IN_PROGRESS`),
+          fetch('/api/trainer/clients'),
+          fetch('/api/crossfit/sessions/today'),
+        ],
+      );
       let todayHasActive = false;
       if (todayRes.ok) {
         const { data } = await todayRes.json();
@@ -164,6 +181,10 @@ export default function TrainerDashboard() {
       if (clientsRes.ok) {
         const { data } = await clientsRes.json();
         setClients((data as ClientWithPackage[]).filter((c) => !c.isReassigned));
+      }
+      if (cfTodayRes.ok) {
+        const { data } = await cfTodayRes.json();
+        setCrossfitToday(data ?? []);
       }
     } finally {
       setLoading(false);
@@ -209,6 +230,42 @@ export default function TrainerDashboard() {
       }
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  async function handleStartCrossfitSession(item: CrossfitTodayItem) {
+    const classId = item.class.id;
+    setStartingCfClassId(classId);
+    try {
+      let sessionId = item.session?.id;
+      // Create session if it doesn't exist yet
+      if (!sessionId) {
+        const today = new Date().toLocaleDateString('en-CA');
+        const createRes = await fetch('/api/crossfit/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ classId, date: today }),
+        });
+        if (!createRes.ok) {
+          const err = await createRes.json();
+          toast.error(err.error || 'Failed to create CrossFit session');
+          return;
+        }
+        const { data: created } = await createRes.json();
+        sessionId = created.id;
+      }
+      // Start the session
+      const startRes = await fetch(`/api/crossfit/sessions/${sessionId}/start`, { method: 'POST' });
+      if (!startRes.ok) {
+        const err = await startRes.json();
+        toast.error(err.error || 'Failed to start CrossFit session');
+        return;
+      }
+      router.push('/trainer/crossfit');
+    } catch {
+      toast.error('Something went wrong');
+    } finally {
+      setStartingCfClassId(null);
     }
   }
 
@@ -471,6 +528,68 @@ export default function TrainerDashboard() {
           </div>
         )}
       </div>
+
+      {/* ── Today's CrossFit Classes ── */}
+      {crossfitToday.length > 0 && (
+        <div className="rounded-2xl bg-card ring-1 ring-orange-500/30 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3">
+            <Dumbbell className="h-4 w-4 text-orange-500" />
+            <h2 className="font-semibold text-orange-500">CrossFit Today</h2>
+            <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-orange-500/15 text-[10px] font-semibold text-orange-500">
+              {crossfitToday.length}
+            </span>
+          </div>
+          <div className="divide-y divide-border/40">
+            {crossfitToday.map((item) => {
+              const isInProgress = item.session?.status === 'IN_PROGRESS';
+              const isStarting = startingCfClassId === item.class.id;
+              return (
+                <div key={item.class.id} className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500/15">
+                      <Dumbbell className="h-4 w-4 text-orange-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{item.class.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatTime12(item.class.startTime)} · {item.class.durationMin} min ·{' '}
+                        {item.class._count.enrollments} enrolled
+                      </p>
+                    </div>
+                    {isInProgress && (
+                      <span className="flex items-center gap-1 shrink-0 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Live
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 pl-12">
+                    {isInProgress ? (
+                      <button
+                        onClick={() => router.push('/trainer/crossfit')}
+                        className="relative overflow-hidden flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-all hover:bg-emerald-700"
+                      >
+                        <span className="absolute inset-0 rounded-xl animate-ping bg-emerald-400 opacity-25" />
+                        <Square className="relative h-3 w-3" />
+                        <span className="relative">Resume &amp; Mark Attendance</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleStartCrossfitSession(item)}
+                        disabled={isStarting}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-orange-500 py-2 text-xs font-semibold text-white transition-colors hover:bg-orange-600 disabled:opacity-50"
+                      >
+                        <Play className="h-3 w-3" />
+                        {isStarting ? 'Starting…' : 'Start CrossFit'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Upcoming Sessions ── */}
       <div className="rounded-2xl bg-card ring-1 ring-border/50 overflow-hidden">

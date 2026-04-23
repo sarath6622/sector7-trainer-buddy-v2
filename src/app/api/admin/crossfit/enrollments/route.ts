@@ -13,7 +13,6 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const input = listCrossfitEnrollmentsSchema.parse({
-      classId: searchParams.get('classId') ?? undefined,
       clientType: searchParams.get('clientType') ?? undefined,
     });
 

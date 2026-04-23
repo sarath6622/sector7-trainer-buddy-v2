@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, Pencil, Dumbbell, Users } from 'lucide-react';
+import { Plus, Trash2, Pencil, Dumbbell, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
@@ -35,28 +35,32 @@ interface Trainer {
   user: { firstName: string; lastName: string };
 }
 
-interface CrossfitClass {
+interface CrossfitClassTrainer {
   id: string;
   trainerProfileId: string;
+  trainer: Trainer;
+}
+
+interface CrossfitClass {
+  id: string;
   name: string;
   dayOfWeek: string;
   startTime: string;
   durationMin: number;
   maxCapacity: number;
   isActive: boolean;
-  trainer: Trainer;
+  trainers: CrossfitClassTrainer[];
   _count: { enrollments: number };
 }
 
 interface Enrollment {
   id: string;
-  classId: string;
   clientProfileId: string | null;
-  clientType: 'GYM_MEMBER' | 'EXTERNAL_ONLY';
+  clientType: 'GYM_MEMBER' | 'GYM_ONLY' | 'EXTERNAL_ONLY';
   externalName: string | null;
   externalPhone: string | null;
+  enrolledAt: string;
   client: { user: { firstName: string; lastName: string; email: string } } | null;
-  class: { name: string; dayOfWeek: string; startTime: string; durationMin: number };
 }
 
 interface TrainerOption {
@@ -78,14 +82,13 @@ export default function CrossfitPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [classFilter, setClassFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
   // Class dialog
   const [classDialogOpen, setClassDialogOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<CrossfitClass | null>(null);
   const [classForm, setClassForm] = useState({
-    trainerProfileId: '',
+    trainerProfileIds: [] as string[],
     name: '',
     dayOfWeek: 'MONDAY',
     startTime: '06:00',
@@ -97,8 +100,7 @@ export default function CrossfitPage() {
   // Enrollment dialog
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
   const [enrollForm, setEnrollForm] = useState({
-    classId: '',
-    clientType: 'GYM_MEMBER' as 'GYM_MEMBER' | 'EXTERNAL_ONLY',
+    clientType: 'GYM_MEMBER' as 'GYM_MEMBER' | 'GYM_ONLY' | 'EXTERNAL_ONLY',
     clientProfileId: '',
     externalName: '',
     externalPhone: '',
@@ -153,7 +155,7 @@ export default function CrossfitPage() {
   function openCreateClass() {
     setEditingClass(null);
     setClassForm({
-      trainerProfileId: '',
+      trainerProfileIds: [],
       name: '',
       dayOfWeek: 'MONDAY',
       startTime: '06:00',
@@ -166,7 +168,7 @@ export default function CrossfitPage() {
   function openEditClass(cls: CrossfitClass) {
     setEditingClass(cls);
     setClassForm({
-      trainerProfileId: cls.trainerProfileId,
+      trainerProfileIds: cls.trainers.map((t) => t.trainerProfileId),
       name: cls.name,
       dayOfWeek: cls.dayOfWeek,
       startTime: cls.startTime,
@@ -174,6 +176,15 @@ export default function CrossfitPage() {
       maxCapacity: cls.maxCapacity,
     });
     setClassDialogOpen(true);
+  }
+
+  function toggleTrainer(trainerId: string) {
+    setClassForm((f) => ({
+      ...f,
+      trainerProfileIds: f.trainerProfileIds.includes(trainerId)
+        ? f.trainerProfileIds.filter((id) => id !== trainerId)
+        : [...f.trainerProfileIds, trainerId],
+    }));
   }
 
   async function submitClass() {
@@ -222,17 +233,18 @@ export default function CrossfitPage() {
     try {
       const body =
         enrollForm.clientType === 'GYM_MEMBER'
-          ? {
-              classId: enrollForm.classId,
-              clientType: 'GYM_MEMBER',
-              clientProfileId: enrollForm.clientProfileId,
-            }
-          : {
-              classId: enrollForm.classId,
-              clientType: 'EXTERNAL_ONLY',
-              externalName: enrollForm.externalName,
-              externalPhone: enrollForm.externalPhone,
-            };
+          ? { clientType: 'GYM_MEMBER', clientProfileId: enrollForm.clientProfileId }
+          : enrollForm.clientType === 'GYM_ONLY'
+            ? {
+                clientType: 'GYM_ONLY',
+                externalName: enrollForm.externalName,
+                externalPhone: enrollForm.externalPhone,
+              }
+            : {
+                clientType: 'EXTERNAL_ONLY',
+                externalName: enrollForm.externalName,
+                externalPhone: enrollForm.externalPhone,
+              };
 
       const res = await fetch('/api/admin/crossfit/enrollments', {
         method: 'POST',
@@ -272,12 +284,17 @@ export default function CrossfitPage() {
   }
 
   const filteredEnrollments = enrollments.filter((e) => {
-    if (classFilter && e.classId !== classFilter) return false;
     if (typeFilter && e.clientType !== typeFilter) return false;
     return true;
   });
 
   const dayLabel = (d: string) => d.charAt(0) + d.slice(1).toLowerCase();
+
+  function trainerNames(cls: CrossfitClass) {
+    return cls.trainers
+      .map((t) => `${t.trainer.user.firstName} ${t.trainer.user.lastName}`)
+      .join(', ');
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -335,7 +352,7 @@ export default function CrossfitPage() {
                         <TableHead>
                           <Users className="h-4 w-4" />
                         </TableHead>
-                        <TableHead className="hidden md:table-cell">Trainer</TableHead>
+                        <TableHead className="hidden md:table-cell">Trainers</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -353,7 +370,12 @@ export default function CrossfitPage() {
                             {cls._count.enrollments}/{cls.maxCapacity}
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
-                            {cls.trainer.user.firstName} {cls.trainer.user.lastName}
+                            <span className="text-sm">{trainerNames(cls)}</span>
+                            {cls.trainers.length > 1 && (
+                              <span className="ml-1 text-xs text-muted-foreground">
+                                ({cls.trainers.length})
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -407,7 +429,6 @@ export default function CrossfitPage() {
                 className="bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => {
                   setEnrollForm({
-                    classId: '',
                     clientType: 'GYM_MEMBER',
                     clientProfileId: '',
                     externalName: '',
@@ -420,42 +441,24 @@ export default function CrossfitPage() {
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                <Select
-                  value={classFilter || 'all'}
-                  items={[
-                    { value: 'all', label: 'All classes' },
-                    ...classes.map((c) => ({ value: c.id, label: c.name })),
-                  ]}
-                  onValueChange={(v) => setClassFilter(v === 'all' || !v ? '' : v)}
-                >
-                  <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder="All classes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All classes</SelectItem>
-                    {classes.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex gap-3 mb-4">
                 <Select
                   value={typeFilter || 'all'}
                   items={[
                     { value: 'all', label: 'All types' },
-                    { value: 'GYM_MEMBER', label: 'Gym Member' },
+                    { value: 'GYM_MEMBER', label: 'PT Client' },
+                    { value: 'GYM_ONLY', label: 'General' },
                     { value: 'EXTERNAL_ONLY', label: 'External' },
                   ]}
                   onValueChange={(v) => setTypeFilter(v === 'all' || !v ? '' : v)}
                 >
-                  <SelectTrigger className="w-full sm:w-48">
+                  <SelectTrigger className="w-48">
                     <SelectValue placeholder="All types" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All types</SelectItem>
-                    <SelectItem value="GYM_MEMBER">Gym Member</SelectItem>
+                    <SelectItem value="GYM_MEMBER">PT Client</SelectItem>
+                    <SelectItem value="GYM_ONLY">General</SelectItem>
                     <SelectItem value="EXTERNAL_ONLY">External</SelectItem>
                   </SelectContent>
                 </Select>
@@ -478,7 +481,9 @@ export default function CrossfitPage() {
                       <TableRow>
                         <TableHead>Member</TableHead>
                         <TableHead>Type</TableHead>
-                        <TableHead className="hidden sm:table-cell">Class</TableHead>
+                        <TableHead className="hidden sm:table-cell text-muted-foreground">
+                          Enrolled
+                        </TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -496,14 +501,24 @@ export default function CrossfitPage() {
                               className={
                                 e.clientType === 'GYM_MEMBER'
                                   ? 'bg-blue-500/15 text-blue-600'
-                                  : 'bg-zinc-500/15 text-zinc-500'
+                                  : e.clientType === 'GYM_ONLY'
+                                    ? 'bg-emerald-500/15 text-emerald-600'
+                                    : 'bg-zinc-500/15 text-zinc-500'
                               }
                             >
-                              {e.clientType === 'GYM_MEMBER' ? 'Gym Member' : 'External'}
+                              {e.clientType === 'GYM_MEMBER'
+                                ? 'PT Client'
+                                : e.clientType === 'GYM_ONLY'
+                                  ? 'General'
+                                  : 'External'}
                             </Badge>
                           </TableCell>
                           <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">
-                            {e.class.name} · {dayLabel(e.class.dayOfWeek)} {e.class.startTime}
+                            {new Date(e.enrolledAt).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button
@@ -541,28 +556,61 @@ export default function CrossfitPage() {
                 onChange={(e) => setClassForm((f) => ({ ...f, name: e.target.value }))}
               />
             </div>
+
+            {/* Multi-trainer selector */}
             <div className="space-y-1.5">
-              <Label>CrossFit Trainer</Label>
+              <Label>CrossFit Trainers</Label>
+              {classForm.trainerProfileIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {classForm.trainerProfileIds.map((tid) => {
+                    const t = trainers.find((tr) => tr.id === tid);
+                    if (!t) return null;
+                    return (
+                      <span
+                        key={tid}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 text-blue-600 px-2.5 py-0.5 text-xs font-medium"
+                      >
+                        {t.user.firstName} {t.user.lastName}
+                        <button
+                          type="button"
+                          onClick={() => toggleTrainer(tid)}
+                          className="hover:opacity-70"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
               <Select
-                value={classForm.trainerProfileId || null}
-                items={trainers.map((t) => ({
-                  value: t.id,
-                  label: `${t.user.firstName} ${t.user.lastName}`,
-                }))}
-                onValueChange={(v) => setClassForm((f) => ({ ...f, trainerProfileId: v ?? '' }))}
+                value={null}
+                items={trainers
+                  .filter((t) => !classForm.trainerProfileIds.includes(t.id))
+                  .map((t) => ({
+                    value: t.id,
+                    label: `${t.user.firstName} ${t.user.lastName}`,
+                  }))}
+                onValueChange={(v) => v && toggleTrainer(v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select trainer" />
+                  <SelectValue placeholder="Add a trainer…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {trainers.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.user.firstName} {t.user.lastName}
-                    </SelectItem>
-                  ))}
+                  {trainers
+                    .filter((t) => !classForm.trainerProfileIds.includes(t.id))
+                    .map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.user.firstName} {t.user.lastName}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
+              {classForm.trainerProfileIds.length === 0 && (
+                <p className="text-xs text-destructive">At least one trainer is required</p>
+              )}
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Day</Label>
@@ -625,7 +673,9 @@ export default function CrossfitPage() {
               <Button
                 className="bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={submitClass}
-                disabled={classSubmitting || !classForm.name || !classForm.trainerProfileId}
+                disabled={
+                  classSubmitting || !classForm.name || classForm.trainerProfileIds.length === 0
+                }
               >
                 {classSubmitting ? 'Saving...' : editingClass ? 'Save Changes' : 'Create Class'}
               </Button>
@@ -641,44 +691,25 @@ export default function CrossfitPage() {
             <DialogTitle>Enroll Member</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Class</Label>
-              <Select
-                value={enrollForm.classId || null}
-                items={classes
-                  .filter((c) => c.isActive)
-                  .map((c) => ({
-                    value: c.id,
-                    label: `${c.name} · ${dayLabel(c.dayOfWeek)} ${c.startTime}`,
-                  }))}
-                onValueChange={(v) => setEnrollForm((f) => ({ ...f, classId: v ?? '' }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select class" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes
-                    .filter((c) => c.isActive)
-                    .map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name} · {dayLabel(c.dayOfWeek)} {c.startTime}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              CrossFit enrollment is monthly — the member can attend any scheduled class.
+            </p>
             <div className="space-y-1.5">
               <Label>Member Type</Label>
               <Select
                 value={enrollForm.clientType}
                 items={[
-                  { value: 'GYM_MEMBER', label: 'Gym Member (has app access)' },
-                  { value: 'EXTERNAL_ONLY', label: 'External / Walk-in' },
+                  { value: 'GYM_MEMBER', label: 'PT Client' },
+                  { value: 'GYM_ONLY', label: 'General (gym member, no PT)' },
+                  { value: 'EXTERNAL_ONLY', label: 'External (walk-in, not a gym member)' },
                 ]}
                 onValueChange={(v) =>
                   setEnrollForm((f) => ({
                     ...f,
-                    clientType: (v ?? 'GYM_MEMBER') as 'GYM_MEMBER' | 'EXTERNAL_ONLY',
+                    clientType: (v ?? 'GYM_MEMBER') as 'GYM_MEMBER' | 'GYM_ONLY' | 'EXTERNAL_ONLY',
+                    clientProfileId: '',
+                    externalName: '',
+                    externalPhone: '',
                   }))
                 }
               >
@@ -686,14 +717,17 @@ export default function CrossfitPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="GYM_MEMBER">Gym Member (has app access)</SelectItem>
-                  <SelectItem value="EXTERNAL_ONLY">External / Walk-in</SelectItem>
+                  <SelectItem value="GYM_MEMBER">PT Client</SelectItem>
+                  <SelectItem value="GYM_ONLY">General (gym member, no PT)</SelectItem>
+                  <SelectItem value="EXTERNAL_ONLY">
+                    External (walk-in, not a gym member)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {enrollForm.clientType === 'GYM_MEMBER' ? (
               <div className="space-y-1.5">
-                <Label>Client</Label>
+                <Label>PT Client</Label>
                 <Select
                   value={enrollForm.clientProfileId || null}
                   items={clients.map((c) => ({
@@ -703,7 +737,7 @@ export default function CrossfitPage() {
                   onValueChange={(v) => setEnrollForm((f) => ({ ...f, clientProfileId: v ?? '' }))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select client" />
+                    <SelectValue placeholder="Select PT client" />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map((c) => (
@@ -719,7 +753,9 @@ export default function CrossfitPage() {
                 <div className="space-y-1.5">
                   <Label>Full Name</Label>
                   <Input
-                    placeholder="External member name"
+                    placeholder={
+                      enrollForm.clientType === 'GYM_ONLY' ? 'Gym member name' : 'Walk-in name'
+                    }
                     value={enrollForm.externalName}
                     onChange={(e) => setEnrollForm((f) => ({ ...f, externalName: e.target.value }))}
                   />
@@ -745,8 +781,8 @@ export default function CrossfitPage() {
                 onClick={submitEnrollment}
                 disabled={
                   enrollSubmitting ||
-                  !enrollForm.classId ||
                   (enrollForm.clientType === 'GYM_MEMBER' && !enrollForm.clientProfileId) ||
+                  (enrollForm.clientType === 'GYM_ONLY' && !enrollForm.externalName) ||
                   (enrollForm.clientType === 'EXTERNAL_ONLY' && !enrollForm.externalName)
                 }
               >
