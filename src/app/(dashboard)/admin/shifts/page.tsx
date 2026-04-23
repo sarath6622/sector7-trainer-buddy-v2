@@ -164,9 +164,18 @@ interface ShiftFormProps {
   onChange: (s: ShiftFormState) => void;
   showApplyFrom: boolean; // false for plain "Add", true for "Edit"
   minApplyFrom?: string; // ISO date string — for edit, prevents setting apply < effectiveFrom
+  applyFromLabel?: string;
+  applyFromHint?: string;
 }
 
-function ShiftForm({ state, onChange, showApplyFrom, minApplyFrom }: ShiftFormProps) {
+function ShiftForm({
+  state,
+  onChange,
+  showApplyFrom,
+  minApplyFrom,
+  applyFromLabel,
+  applyFromHint,
+}: ShiftFormProps) {
   function set<K extends keyof ShiftFormState>(key: K, value: ShiftFormState[K]) {
     onChange({ ...state, [key]: value });
   }
@@ -245,7 +254,7 @@ function ShiftForm({ state, onChange, showApplyFrom, minApplyFrom }: ShiftFormPr
 
       {showApplyFrom && (
         <div className="space-y-2">
-          <Label>Apply from</Label>
+          <Label>{applyFromLabel ?? 'Apply from'}</Label>
           <Input
             type="date"
             min={minApplyFrom ?? new Date().toISOString().slice(0, 10)}
@@ -253,7 +262,8 @@ function ShiftForm({ state, onChange, showApplyFrom, minApplyFrom }: ShiftFormPr
             onChange={(e) => set('applyFrom', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Current shift stays active until this date. Leave blank to apply immediately.
+            {applyFromHint ??
+              'Current shift stays active until this date. Leave blank to apply immediately.'}
           </p>
         </div>
       )}
@@ -364,11 +374,13 @@ function AddShiftDialog({
 
 function EditShiftDialog({
   shift,
+  isScheduled,
   open,
   onOpenChange,
   onEdited,
 }: {
   shift: Shift;
+  isScheduled: boolean;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onEdited: () => void;
@@ -393,12 +405,17 @@ function EditShiftDialog({
         customStart: matchedPreset ? '' : shift.startTime,
         customEnd: matchedPreset ? '' : shift.endTime,
         selectedDays: [...shift.days],
-        applyFrom: new Date().toISOString().slice(0, 10), // default: today
+        // For scheduled shifts pre-fill with their scheduled date so the admin
+        // can see (and change) when it activates. For active shifts default to today.
+        applyFrom: isScheduled
+          ? new Date(shift.effectiveFrom).toISOString().slice(0, 10)
+          : new Date().toISOString().slice(0, 10),
       });
     }
-  }, [open, shift]);
+  }, [open, shift, isScheduled]);
 
-  const minDate = new Date(shift.effectiveFrom).toISOString().slice(0, 10);
+  // Scheduled shifts can be moved to any future date; active shifts already started.
+  const minDate = new Date().toISOString().slice(0, 10);
 
   async function handleSubmit() {
     const isCustom = form.tab === 'custom';
@@ -458,9 +475,20 @@ function EditShiftDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Shift</DialogTitle>
+          <DialogTitle>{isScheduled ? 'Edit Scheduled Shift' : 'Edit Shift'}</DialogTitle>
         </DialogHeader>
-        <ShiftForm state={form} onChange={setForm} showApplyFrom={true} minApplyFrom={minDate} />
+        <ShiftForm
+          state={form}
+          onChange={setForm}
+          showApplyFrom={true}
+          minApplyFrom={minDate}
+          applyFromLabel={isScheduled ? 'Active from' : 'Apply from'}
+          applyFromHint={
+            isScheduled
+              ? 'Change the date this shift becomes active.'
+              : 'Current shift stays active until this date. Leave blank to apply immediately.'
+          }
+        />
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
@@ -689,7 +717,7 @@ function ShiftCard({
   shift: Shift;
   isScheduled: boolean;
   deletingId: string | null;
-  onEdit: (s: Shift) => void;
+  onEdit: (s: Shift, isScheduled: boolean) => void;
   onDelete: (id: string) => void;
 }) {
   return (
@@ -729,16 +757,14 @@ function ShiftCard({
         </div>
       </div>
       <div className="flex shrink-0 gap-0.5">
-        {!isScheduled && (
-          <button
-            type="button"
-            onClick={() => onEdit(shift)}
-            className="rounded p-1 text-muted-foreground hover:bg-blue-500/10 hover:text-blue-500 transition-colors"
-            aria-label="Edit shift"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => onEdit(shift, isScheduled)}
+          className="rounded p-1 text-muted-foreground hover:bg-blue-500/10 hover:text-blue-500 transition-colors"
+          aria-label="Edit shift"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
         <button
           type="button"
           disabled={deletingId === shift.id}
@@ -811,6 +837,7 @@ export default function ShiftsPage() {
 
   const [addTrainer, setAddTrainer] = useState<TrainerWithShifts | null>(null);
   const [editShift, setEditShift] = useState<Shift | null>(null);
+  const [editShiftIsScheduled, setEditShiftIsScheduled] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -1012,7 +1039,10 @@ export default function ShiftsPage() {
                         shift={shift}
                         isScheduled={false}
                         deletingId={deletingId}
-                        onEdit={(s) => setEditShift(s)}
+                        onEdit={(s, scheduled) => {
+                          setEditShift(s);
+                          setEditShiftIsScheduled(scheduled);
+                        }}
                         onDelete={handleDeleteShift}
                       />
                     ))}
@@ -1022,7 +1052,10 @@ export default function ShiftsPage() {
                         shift={shift}
                         isScheduled={true}
                         deletingId={deletingId}
-                        onEdit={(s) => setEditShift(s)}
+                        onEdit={(s, scheduled) => {
+                          setEditShift(s);
+                          setEditShiftIsScheduled(scheduled);
+                        }}
                         onDelete={handleDeleteShift}
                       />
                     ))}
@@ -1063,6 +1096,7 @@ export default function ShiftsPage() {
       {editShift && (
         <EditShiftDialog
           shift={editShift}
+          isScheduled={editShiftIsScheduled}
           open={!!editShift}
           onOpenChange={(v) => {
             if (!v) setEditShift(null);
