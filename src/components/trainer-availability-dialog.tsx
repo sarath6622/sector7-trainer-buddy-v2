@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Activity,
+  Calendar,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -39,6 +40,22 @@ interface TrainerWeekDay {
   workEnd?: string;
   bookedSlots: { startTime: string; durationMin: number; clientName: string }[];
   freeWindows: { startTime: string; endTime: string; durationMin: number }[];
+}
+
+interface DailyTrainerStatus {
+  id: string;
+  name: string;
+  isWorkingDay: boolean;
+  workStart?: string;
+  workEnd?: string;
+  freeWindows: { startTime: string; endTime: string; durationMin: number }[];
+  bookedCount: number;
+}
+
+interface DailyData {
+  date: string;
+  day: string;
+  trainers: DailyTrainerStatus[];
 }
 
 interface TrainerAvailData {
@@ -172,12 +189,14 @@ export function TrainerAvailabilityDialog({
   onOpenChange,
   trainers: trainersProp,
 }: TrainerAvailabilityDialogProps) {
-  const [mode, setMode] = useState<'smart' | 'trainer'>('smart');
+  const [mode, setMode] = useState<'smart' | 'trainer' | 'daily'>('daily');
   const [duration, setDuration] = useState(60);
   const [trainerId, setTrainerId] = useState('');
   const [loading, setLoading] = useState(false);
   const [smartData, setSmartData] = useState<SmartData | null>(null);
   const [trainerData, setTrainerData] = useState<TrainerAvailData | null>(null);
+  const [dailyData, setDailyData] = useState<DailyData | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>(() => todayIso());
 
   // Week selector — defaults to the current week's Monday
   const [weekOf, setWeekOf] = useState<string>(() => getMondayIso(todayIso()));
@@ -199,7 +218,9 @@ export function TrainerAvailabilityDialog({
     if (!open) {
       setSmartData(null);
       setTrainerData(null);
+      setDailyData(null);
       setWeekOf(getMondayIso(todayIso()));
+      setSelectedDate(todayIso());
     }
   }, [open]);
 
@@ -212,28 +233,40 @@ export function TrainerAvailabilityDialog({
     setTrainerData(null);
   }
 
-  function switchMode(m: 'smart' | 'trainer') {
+  function shiftDate(direction: -1 | 1) {
+    const d = new Date(`${selectedDate}T12:00:00`);
+    d.setDate(d.getDate() + direction);
+    setSelectedDate(d.toISOString().slice(0, 10));
+    setDailyData(null);
+  }
+
+  function switchMode(m: 'smart' | 'trainer' | 'daily') {
     setMode(m);
     setSmartData(null);
     setTrainerData(null);
+    setDailyData(null);
   }
 
   async function fetchAvailability() {
     setLoading(true);
     setSmartData(null);
     setTrainerData(null);
+    setDailyData(null);
     try {
       if (mode === 'smart') {
         const res = await fetch(
           `/api/admin/availability-check?mode=smart&durationMin=${duration}&weekOf=${weekOf}`,
         );
         if (res.ok) setSmartData(await res.json());
-      } else {
+      } else if (mode === 'trainer') {
         if (!trainerId) return;
         const res = await fetch(
           `/api/admin/availability-check?mode=trainer&trainerId=${trainerId}&weekOf=${weekOf}`,
         );
         if (res.ok) setTrainerData(await res.json());
+      } else {
+        const res = await fetch(`/api/admin/availability-check?mode=daily&date=${selectedDate}`);
+        if (res.ok) setDailyData(await res.json());
       }
     } catch {
       /* ignore */
@@ -259,62 +292,130 @@ export function TrainerAvailabilityDialog({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Week picker */}
-        <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
-          <button
-            type="button"
-            onClick={() => shiftWeek(-1)}
-            className="rounded p-1 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            aria-label="Previous week"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={weekOf}
-              onChange={(e) => {
-                if (!e.target.value) return;
-                const monday = getMondayIso(e.target.value);
-                setWeekOf(monday);
-                setSmartData(null);
-                setTrainerData(null);
-              }}
-              className="sr-only"
-              id="avail-week-picker"
-            />
-            <label
-              htmlFor="avail-week-picker"
-              className="cursor-pointer text-xs font-medium text-foreground hover:text-primary transition-colors"
+        {/* Date / week picker — adapts to mode */}
+        {mode === 'daily' ? (
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => shiftDate(-1)}
+              className="rounded p-1 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              aria-label="Previous day"
             >
-              {fmtWeekLabel(weekOf)}
-            </label>
-            {weekOf !== getMondayIso(todayIso()) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setWeekOf(getMondayIso(todayIso()));
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  setSelectedDate(e.target.value);
+                  setDailyData(null);
+                }}
+                className="sr-only"
+                id="avail-date-picker"
+              />
+              <label
+                htmlFor="avail-date-picker"
+                className="cursor-pointer text-xs font-medium text-foreground hover:text-primary transition-colors"
+              >
+                {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-IN', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </label>
+              {selectedDate !== todayIso() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(todayIso());
+                    setDailyData(null);
+                  }}
+                  className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => shiftDate(1)}
+              className="rounded p-1 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              aria-label="Next day"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => shiftWeek(-1)}
+              className="rounded p-1 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              aria-label="Previous week"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={weekOf}
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const monday = getMondayIso(e.target.value);
+                  setWeekOf(monday);
                   setSmartData(null);
                   setTrainerData(null);
                 }}
-                className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                className="sr-only"
+                id="avail-week-picker"
+              />
+              <label
+                htmlFor="avail-week-picker"
+                className="cursor-pointer text-xs font-medium text-foreground hover:text-primary transition-colors"
               >
-                Today
-              </button>
-            )}
+                {fmtWeekLabel(weekOf)}
+              </label>
+              {weekOf !== getMondayIso(todayIso()) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWeekOf(getMondayIso(todayIso()));
+                    setSmartData(null);
+                    setTrainerData(null);
+                  }}
+                  className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => shiftWeek(1)}
+              className="rounded p-1 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              aria-label="Next week"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => shiftWeek(1)}
-            className="rounded p-1 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            aria-label="Next week"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+        )}
 
         {/* Mode tabs */}
         <div className="flex gap-1 rounded-xl bg-muted/50 p-1">
+          <button
+            onClick={() => switchMode('daily')}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+              mode === 'daily'
+                ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Calendar className="h-3.5 w-3.5" />
+            Daily Snapshot
+          </button>
           <button
             onClick={() => switchMode('smart')}
             className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
@@ -324,7 +425,7 @@ export function TrainerAvailabilityDialog({
             }`}
           >
             <Zap className="h-3.5 w-3.5" />
-            Smart Slot Finder
+            Smart Slots
           </button>
           <button
             onClick={() => switchMode('trainer')}
@@ -335,13 +436,18 @@ export function TrainerAvailabilityDialog({
             }`}
           >
             <User className="h-3.5 w-3.5" />
-            Single Trainer View
+            Per Trainer
           </button>
         </div>
 
         {/* Controls */}
         <div className="flex items-end gap-3">
-          {mode === 'smart' ? (
+          {mode === 'daily' && (
+            <p className="flex-1 text-xs text-muted-foreground">
+              Shows every trainer&apos;s status for the selected date — sorted by availability.
+            </p>
+          )}
+          {mode === 'smart' && (
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Session Duration</Label>
               <div className="flex gap-1.5">
@@ -360,7 +466,8 @@ export function TrainerAvailabilityDialog({
                 ))}
               </div>
             </div>
-          ) : (
+          )}
+          {mode === 'trainer' && (
             <div className="flex-1 space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Select Trainer</Label>
               <TrainerSearchSelect
@@ -392,6 +499,85 @@ export function TrainerAvailabilityDialog({
 
         {/* Results */}
         <div className="max-h-[420px] overflow-y-auto space-y-3">
+          {/* Daily snapshot results */}
+          {mode === 'daily' && dailyData && (
+            <div className="space-y-2">
+              {dailyData.trainers.map((t) => (
+                <div
+                  key={t.id}
+                  className={`rounded-xl p-3 ring-1 ${
+                    !t.isWorkingDay
+                      ? 'bg-muted/10 ring-border/20 opacity-50'
+                      : t.freeWindows.length > 0
+                        ? 'bg-muted/30 ring-border/40'
+                        : 'bg-muted/20 ring-border/30'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                          !t.isWorkingDay
+                            ? 'bg-muted/50'
+                            : t.freeWindows.length > 0
+                              ? 'bg-emerald-500/10'
+                              : 'bg-amber-500/10'
+                        }`}
+                      >
+                        <User
+                          className={`h-3.5 w-3.5 ${
+                            !t.isWorkingDay
+                              ? 'text-muted-foreground'
+                              : t.freeWindows.length > 0
+                                ? 'text-emerald-500'
+                                : 'text-amber-500'
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold leading-tight">{t.name}</p>
+                        {t.isWorkingDay ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t.workStart} – {t.workEnd}
+                            {t.bookedCount > 0 &&
+                              ` · ${t.bookedCount} session${t.bookedCount !== 1 ? 's' : ''} booked`}
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">Day off</p>
+                        )}
+                      </div>
+                    </div>
+                    {t.isWorkingDay && (
+                      <span
+                        className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium ${
+                          t.freeWindows.length > 0
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        }`}
+                      >
+                        {t.freeWindows.length > 0 ? 'Available' : 'Fully Booked'}
+                      </span>
+                    )}
+                  </div>
+                  {t.isWorkingDay && t.freeWindows.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 pl-[42px]">
+                      {t.freeWindows.map((w, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 rounded-md bg-emerald-500/8 px-2 py-0.5 text-[11px] text-emerald-700 ring-1 ring-emerald-500/15 dark:text-emerald-400"
+                        >
+                          <Check className="h-2.5 w-2.5" />
+                          {formatTime12(w.startTime)} – {formatTime12(w.endTime)}
+                          <span className="opacity-60">({w.durationMin}m)</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Smart results */}
           {mode === 'smart' &&
             smartData &&
@@ -543,15 +729,17 @@ export function TrainerAvailabilityDialog({
           )}
 
           {/* Empty state */}
-          {!loading && !smartData && !trainerData && (
+          {!loading && !smartData && !trainerData && !dailyData && (
             <div className="flex flex-col items-center gap-2 py-8 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10">
                 <Activity className="h-5 w-5 text-violet-500" />
               </div>
               <p className="text-sm text-muted-foreground">
-                {mode === 'smart'
-                  ? 'Click Check to find the best available slots across all trainers'
-                  : 'Select a trainer and click Check to view their weekly schedule'}
+                {mode === 'daily'
+                  ? "Click Check to see every trainer's availability for the selected date"
+                  : mode === 'smart'
+                    ? 'Click Check to find the best available slots across all trainers'
+                    : 'Select a trainer and click Check to view their weekly schedule'}
               </p>
             </div>
           )}

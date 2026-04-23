@@ -166,6 +166,112 @@ export async function GET(req: Request) {
       dayMap.set(s.dayOfWeek as DayOfWeek, existing);
     }
 
+    if (mode === 'daily') {
+      // ── Daily snapshot — all trainers for one specific date ──────
+      const dateParam = searchParams.get('date');
+      const targetDate = dateParam ? new Date(`${dateParam}T12:00:00`) : new Date();
+      const dow = targetDate.getDay(); // 0 = Sun
+      const dayIndex = dow === 0 ? 6 : dow - 1; // 0 = Mon … 6 = Sun
+      const day = DAYS_ORDER[dayIndex]!;
+
+      const toMin = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h! * 60 + m!;
+      };
+      const fromMin = (m: number) =>
+        `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+      const trainerStatuses = trainers.map((trainer) => {
+        const hasAnyShifts = trainer.shifts.length > 0;
+        const dayShifts = hasAnyShifts
+          ? getShiftsActiveOnDate(trainer.shifts, day, targetDate)
+          : [
+              {
+                startTime: '06:00',
+                endTime: '22:00',
+                days: [day],
+                effectiveFrom: now,
+                effectiveUntil: null,
+              },
+            ];
+
+        const isWorkingDay = dayShifts.length > 0;
+        if (!isWorkingDay) {
+          return {
+            id: trainer.id,
+            name: `${trainer.user.firstName} ${trainer.user.lastName}`,
+            isWorkingDay: false,
+            freeWindows: [] as { startTime: string; endTime: string; durationMin: number }[],
+            bookedCount: 0,
+          };
+        }
+
+        const workStart = dayShifts.map((s) => s.startTime).reduce((a, b) => (a < b ? a : b));
+        const workEnd = dayShifts.map((s) => s.endTime).reduce((a, b) => (a > b ? a : b));
+
+        const daySched = trainerDaySchedules.get(trainer.id)?.get(day) ?? [];
+        const bookedSlots = daySched
+          .map((s) => ({
+            startTime: s.startTime,
+            durationMin: s.durationMin,
+            clientName: `${s.client.user.firstName} ${s.client.user.lastName}`,
+          }))
+          .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+        const freeWindows: { startTime: string; endTime: string; durationMin: number }[] = [];
+        for (const shiftWindow of dayShifts) {
+          const startM = toMin(shiftWindow.startTime);
+          const endM = toMin(shiftWindow.endTime);
+          const busyIntervals = bookedSlots
+            .map((s) => ({ s: toMin(s.startTime), e: toMin(s.startTime) + s.durationMin }))
+            .filter((i) => i.s < endM && i.e > startM)
+            .sort((a, b) => a.s - b.s);
+
+          let cursor = startM;
+          for (const interval of busyIntervals) {
+            if (interval.s > cursor) {
+              freeWindows.push({
+                startTime: fromMin(cursor),
+                endTime: fromMin(interval.s),
+                durationMin: interval.s - cursor,
+              });
+            }
+            cursor = Math.max(cursor, interval.e);
+          }
+          if (cursor < endM) {
+            freeWindows.push({
+              startTime: fromMin(cursor),
+              endTime: fromMin(endM),
+              durationMin: endM - cursor,
+            });
+          }
+        }
+
+        return {
+          id: trainer.id,
+          name: `${trainer.user.firstName} ${trainer.user.lastName}`,
+          isWorkingDay: true,
+          workStart,
+          workEnd,
+          freeWindows,
+          bookedCount: bookedSlots.length,
+        };
+      });
+
+      // Sort: working + has free windows first, then working + fully booked, then day off
+      trainerStatuses.sort((a, b) => {
+        const scoreA = a.isWorkingDay ? (a.freeWindows.length > 0 ? 2 : 1) : 0;
+        const scoreB = b.isWorkingDay ? (b.freeWindows.length > 0 ? 2 : 1) : 0;
+        return scoreB - scoreA;
+      });
+
+      return NextResponse.json({
+        date: targetDate.toISOString().slice(0, 10),
+        day,
+        trainers: trainerStatuses,
+      });
+    }
+
     if (mode === 'trainer') {
       // ── Single trainer view ──────────────────────────────────────
       if (!trainerId) {
