@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import {
   Search,
@@ -103,6 +104,7 @@ function initials(name: string) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function CrossfitTrainerPage() {
+  const router = useRouter();
   const today = format(new Date(), 'yyyy-MM-dd');
 
   // ── View mode ──
@@ -565,10 +567,7 @@ export default function CrossfitTrainerPage() {
         {/* Class name row */}
         <div className="flex items-center gap-3 px-4 py-3">
           <button
-            onClick={() => {
-              setMode('pick');
-              fetchToday();
-            }}
+            onClick={() => router.push('/trainer')}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-muted transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />

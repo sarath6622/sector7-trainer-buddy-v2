@@ -49,7 +49,13 @@ interface CrossfitTodayItem {
     durationMin: number;
     _count: { enrollments: number };
   };
-  session: { id: string; status: string } | null;
+  session: {
+    id: string;
+    status: string;
+    startedAt?: string | null;
+    endedAt?: string | null;
+    _count?: { attendances: number };
+  } | null;
 }
 
 interface ClientWithPackage {
@@ -542,12 +548,29 @@ export default function TrainerDashboard() {
           <div className="divide-y divide-border/40">
             {crossfitToday.map((item) => {
               const isInProgress = item.session?.status === 'IN_PROGRESS';
+              const isCompleted = item.session?.status === 'COMPLETED';
               const isStarting = startingCfClassId === item.class.id;
+
+              // Compute actual duration for completed sessions
+              let actualMins: number | null = null;
+              if (isCompleted && item.session?.startedAt && item.session?.endedAt) {
+                actualMins = Math.round(
+                  (new Date(item.session.endedAt).getTime() -
+                    new Date(item.session.startedAt).getTime()) /
+                    60_000,
+                );
+              }
+              const attendanceCount = item.session?._count?.attendances ?? 0;
+
               return (
                 <div key={item.class.id} className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500/15">
-                      <Dumbbell className="h-4 w-4 text-orange-500" />
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${isCompleted ? 'bg-zinc-500/15' : 'bg-orange-500/15'}`}
+                    >
+                      <Dumbbell
+                        className={`h-4 w-4 ${isCompleted ? 'text-zinc-400' : 'text-orange-500'}`}
+                      />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{item.class.name}</p>
@@ -562,28 +585,54 @@ export default function TrainerDashboard() {
                         Live
                       </span>
                     )}
-                  </div>
-                  <div className="mt-2.5 pl-12">
-                    {isInProgress ? (
-                      <button
-                        onClick={() => router.push('/trainer/crossfit')}
-                        className="relative overflow-hidden flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-all hover:bg-emerald-700"
-                      >
-                        <span className="absolute inset-0 rounded-xl animate-ping bg-emerald-400 opacity-25" />
-                        <Square className="relative h-3 w-3" />
-                        <span className="relative">Resume &amp; Mark Attendance</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleStartCrossfitSession(item)}
-                        disabled={isStarting}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-orange-500 py-2 text-xs font-semibold text-white transition-colors hover:bg-orange-600 disabled:opacity-50"
-                      >
-                        <Play className="h-3 w-3" />
-                        {isStarting ? 'Starting…' : 'Start CrossFit'}
-                      </button>
+                    {isCompleted && (
+                      <span className="flex items-center gap-1 shrink-0 rounded-md bg-zinc-500/15 px-2 py-0.5 text-[10px] font-semibold text-zinc-400">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Done
+                      </span>
                     )}
                   </div>
+
+                  {isCompleted ? (
+                    <div className="mt-2.5 pl-12 flex items-center gap-3">
+                      <div className="flex items-center gap-1.5 rounded-xl bg-zinc-500/10 px-3 py-2 flex-1 justify-center">
+                        <Clock className="h-3.5 w-3.5 text-zinc-400" />
+                        <span className="text-xs font-semibold text-zinc-300">
+                          {actualMins != null
+                            ? `${actualMins} min`
+                            : `${item.class.durationMin} min`}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 rounded-xl bg-zinc-500/10 px-3 py-2 flex-1 justify-center">
+                        <Users className="h-3.5 w-3.5 text-zinc-400" />
+                        <span className="text-xs font-semibold text-zinc-300">
+                          {attendanceCount} / {item.class._count.enrollments} attended
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2.5 pl-12">
+                      {isInProgress ? (
+                        <button
+                          onClick={() => router.push('/trainer/crossfit')}
+                          className="relative overflow-hidden flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-all hover:bg-emerald-700"
+                        >
+                          <span className="absolute inset-0 rounded-xl animate-ping bg-emerald-400 opacity-25" />
+                          <Square className="relative h-3 w-3" />
+                          <span className="relative">Resume &amp; Mark Attendance</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleStartCrossfitSession(item)}
+                          disabled={isStarting}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-orange-500 py-2 text-xs font-semibold text-white transition-colors hover:bg-orange-600 disabled:opacity-50"
+                        >
+                          <Play className="h-3 w-3" />
+                          {isStarting ? 'Starting…' : 'Start CrossFit'}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
