@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeftRight, Clock, Pencil, Plus, X } from 'lucide-react';
+import { Activity, ArrowLeftRight, Clock, Pencil, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { TrainerAvailabilityDialog } from '@/components/trainer-availability-dialog';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -814,6 +815,7 @@ export default function ShiftsPage() {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cancellingSwapId, setCancellingSwapId] = useState<string | null>(null);
+  const [availCheckOpen, setAvailCheckOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -951,10 +953,16 @@ export default function ShiftsPage() {
             </p>
           </div>
         </div>
-        <Button variant="outline" className="gap-2" onClick={() => setSwapOpen(true)}>
-          <ArrowLeftRight className="h-4 w-4" />
-          Swap Shifts
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setAvailCheckOpen(true)}>
+            <Activity className="h-4 w-4" />
+            Check Availability
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={() => setSwapOpen(true)}>
+            <ArrowLeftRight className="h-4 w-4" />
+            Swap Shifts
+          </Button>
+        </div>
       </div>
 
       {/* Trainer cards */}
@@ -1068,6 +1076,12 @@ export default function ShiftsPage() {
         open={swapOpen}
         onOpenChange={setSwapOpen}
         onCreated={fetchData}
+      />
+
+      <TrainerAvailabilityDialog
+        open={availCheckOpen}
+        onOpenChange={setAvailCheckOpen}
+        trainers={trainers.map((t) => ({ id: t.id, name: t.name }))}
       />
     </div>
   );

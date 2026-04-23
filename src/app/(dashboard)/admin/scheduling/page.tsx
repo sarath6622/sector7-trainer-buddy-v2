@@ -32,12 +32,12 @@ import {
   Trash2,
   User,
   Users,
-  Zap,
 } from 'lucide-react';
 import type { EventInput, EventClickArg, DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { cn } from '@/lib/utils';
+import { TrainerAvailabilityDialog } from '@/components/trainer-availability-dialog';
 
 interface SessionInstance {
   id: string;
@@ -68,40 +68,6 @@ interface ClientOption {
   firstName: string;
   lastName: string;
   clientProfile: { id: string } | null;
-}
-
-interface SmartSlot {
-  startTime: string;
-  endTime: string;
-  freeTrainers: { id: string; name: string; currentLoad: number }[];
-  busyTrainerCount: number;
-  score: number;
-}
-
-interface SmartData {
-  durationMin: number;
-  recommendations: { day: string; slots: SmartSlot[] }[];
-}
-
-interface TrainerWeekDay {
-  day: string;
-  isWorkingDay: boolean;
-  workStart?: string;
-  workEnd?: string;
-  bookedSlots: { startTime: string; durationMin: number; clientName: string }[];
-  freeWindows: { startTime: string; endTime: string; durationMin: number }[];
-}
-
-interface TrainerAvailData {
-  trainer: {
-    id: string;
-    name: string;
-    workingDays: string[];
-    workStart: string;
-    workEnd: string;
-    totalScheduledSessions: number;
-  };
-  weekView: TrainerWeekDay[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -366,12 +332,6 @@ export default function SchedulingPage() {
 
   // Availability check modal
   const [availCheckOpen, setAvailCheckOpen] = useState(false);
-  const [availMode, setAvailMode] = useState<'smart' | 'trainer'>('smart');
-  const [availLoading, setAvailLoading] = useState(false);
-  const [availSmartData, setAvailSmartData] = useState<SmartData | null>(null);
-  const [availTrainerData, setAvailTrainerData] = useState<TrainerAvailData | null>(null);
-  const [availTrainerId, setAvailTrainerId] = useState('');
-  const [availDuration, setAvailDuration] = useState(60);
 
   const [form, setForm] = useState({
     trainerProfileId: '',
@@ -467,30 +427,6 @@ export default function SchedulingPage() {
       (s) => `${s.trainer.user.firstName} ${s.trainer.user.lastName}` === selectedTrainer,
     );
   }, [sessions, selectedTrainer]);
-
-  async function fetchAvailability() {
-    setAvailLoading(true);
-    setAvailSmartData(null);
-    setAvailTrainerData(null);
-    try {
-      if (availMode === 'smart') {
-        const res = await fetch(
-          `/api/admin/availability-check?mode=smart&durationMin=${availDuration}`,
-        );
-        if (res.ok) setAvailSmartData(await res.json());
-      } else {
-        if (!availTrainerId) return;
-        const res = await fetch(
-          `/api/admin/availability-check?mode=trainer&trainerId=${availTrainerId}`,
-        );
-        if (res.ok) setAvailTrainerData(await res.json());
-      }
-    } catch {
-      /* ignore */
-    } finally {
-      setAvailLoading(false);
-    }
-  }
 
   const fetchClientMappings = useCallback(async (clientId: string) => {
     setMappingsLoading(true);
@@ -802,305 +738,16 @@ export default function SchedulingPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Trainer Availability Check */}
-          <Dialog
-            open={availCheckOpen}
-            onOpenChange={(v) => {
-              setAvailCheckOpen(v);
-              if (!v) {
-                setAvailSmartData(null);
-                setAvailTrainerData(null);
-              }
-            }}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setAvailCheckOpen(true)}
           >
-            <DialogTrigger
-              render={
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <Activity className="h-3.5 w-3.5" />
-                  <span className="sm:hidden">Availability</span>
-                  <span className="hidden sm:inline">Check Trainer Availability</span>
-                </Button>
-              }
-            />
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10">
-                    <Activity className="h-4 w-4 text-violet-500" />
-                  </div>
-                  <div>
-                    <span>Trainer Availability Check</span>
-                    <p className="mt-0.5 text-xs font-normal text-muted-foreground">
-                      Find the best time slots or inspect a single trainer&apos;s schedule
-                    </p>
-                  </div>
-                </DialogTitle>
-              </DialogHeader>
-
-              {/* Mode tabs */}
-              <div className="flex gap-1 rounded-xl bg-muted/50 p-1">
-                <button
-                  onClick={() => {
-                    setAvailMode('smart');
-                    setAvailSmartData(null);
-                    setAvailTrainerData(null);
-                  }}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    availMode === 'smart'
-                      ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Zap className="h-3.5 w-3.5" />
-                  Smart Slot Finder
-                </button>
-                <button
-                  onClick={() => {
-                    setAvailMode('trainer');
-                    setAvailSmartData(null);
-                    setAvailTrainerData(null);
-                  }}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    availMode === 'trainer'
-                      ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <User className="h-3.5 w-3.5" />
-                  Single Trainer View
-                </button>
-              </div>
-
-              {/* Controls */}
-              <div className="flex items-end gap-3">
-                {availMode === 'smart' ? (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">
-                      Session Duration
-                    </Label>
-                    <div className="flex gap-1.5">
-                      {[30, 45, 60, 90].map((d) => (
-                        <button
-                          key={d}
-                          onClick={() => setAvailDuration(d)}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                            availDuration === d
-                              ? 'bg-primary text-primary-foreground shadow-sm'
-                              : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-                          }`}
-                        >
-                          {d}m
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex-1 space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">
-                      Select Trainer
-                    </Label>
-                    <FormSearchSelect
-                      options={trainers
-                        .filter((t) => t.trainerProfile)
-                        .map((t) => ({
-                          value: t.trainerProfile!.id,
-                          label: `${t.firstName} ${t.lastName}`,
-                        }))}
-                      value={availTrainerId}
-                      onChange={setAvailTrainerId}
-                      placeholder="Choose a trainer"
-                      icon={User}
-                    />
-                  </div>
-                )}
-                <Button
-                  onClick={fetchAvailability}
-                  disabled={availLoading || (availMode === 'trainer' && !availTrainerId)}
-                  size="sm"
-                  className="gap-1.5 bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-700"
-                >
-                  {availLoading ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Checking...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="h-3.5 w-3.5" />
-                      Check
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {/* Results */}
-              <div className="max-h-[420px] overflow-y-auto space-y-3">
-                {/* Smart results */}
-                {availMode === 'smart' &&
-                  availSmartData &&
-                  (availSmartData.recommendations.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-muted-foreground">
-                      No free slots found. All trainers are fully booked.
-                    </p>
-                  ) : (
-                    availSmartData.recommendations.map(({ day, slots }) => (
-                      <div key={day} className="rounded-xl bg-muted/30 p-3 ring-1 ring-border/40">
-                        <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                          {day.charAt(0) + day.slice(1).toLowerCase()}
-                        </p>
-                        <div className="space-y-1.5">
-                          {slots.map((slot, i) => (
-                            <div
-                              key={i}
-                              className="flex items-center justify-between rounded-lg bg-background px-3 py-2 ring-1 ring-border/50"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
-                                  <Clock className="h-3.5 w-3.5 text-violet-500" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium">
-                                    {formatTime12(slot.startTime)} – {formatTime12(slot.endTime)}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {slot.freeTrainers.length} trainer
-                                    {slot.freeTrainers.length !== 1 ? 's' : ''} free
-                                    {slot.busyTrainerCount > 0 &&
-                                      ` · ${slot.busyTrainerCount} busy`}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap justify-end gap-1">
-                                {slot.freeTrainers.slice(0, 3).map((t) => (
-                                  <span
-                                    key={t.id}
-                                    className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
-                                  >
-                                    {t.name.split(' ')[0]}
-                                    <span className="ml-1 opacity-60">({t.currentLoad})</span>
-                                  </span>
-                                ))}
-                                {slot.freeTrainers.length > 3 && (
-                                  <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                                    +{slot.freeTrainers.length - 3}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  ))}
-
-                {/* Trainer view results */}
-                {availMode === 'trainer' && availTrainerData && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-4 py-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10">
-                        <User className="h-4 w-4 text-violet-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">{availTrainerData.trainer.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {availTrainerData.trainer.workStart} – {availTrainerData.trainer.workEnd}
-                          {' · '}
-                          {availTrainerData.trainer.totalScheduledSessions} recurring session
-                          {availTrainerData.trainer.totalScheduledSessions !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                    </div>
-                    {availTrainerData.weekView.map((dayView) => (
-                      <div
-                        key={dayView.day}
-                        className={`rounded-xl p-3 ring-1 ${
-                          dayView.isWorkingDay
-                            ? 'bg-muted/30 ring-border/40'
-                            : 'bg-muted/10 ring-border/20 opacity-50'
-                        }`}
-                      >
-                        <div className="mb-2 flex items-center justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            {dayView.day.charAt(0) + dayView.day.slice(1).toLowerCase()}
-                          </p>
-                          {!dayView.isWorkingDay && (
-                            <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                              Day off
-                            </span>
-                          )}
-                        </div>
-                        {dayView.isWorkingDay && (
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {dayView.bookedSlots.length > 0 && (
-                              <div className="space-y-1">
-                                <p className="text-[10px] font-medium uppercase tracking-wide text-red-500/70">
-                                  Booked
-                                </p>
-                                {dayView.bookedSlots.map((s, i) => (
-                                  <div
-                                    key={i}
-                                    className="flex items-center gap-2 rounded-lg bg-red-500/5 px-2.5 py-1.5 ring-1 ring-red-500/10"
-                                  >
-                                    <Clock className="h-3 w-3 shrink-0 text-red-400" />
-                                    <span className="text-xs">
-                                      {formatTime12(s.startTime)}
-                                      <span className="ml-1 text-muted-foreground">
-                                        ({s.durationMin}m)
-                                      </span>
-                                      <span className="ml-1 font-medium">
-                                        {' '}
-                                        · {s.clientName.split(' ')[0]}
-                                      </span>
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {dayView.freeWindows.length > 0 ? (
-                              <div className="space-y-1">
-                                <p className="text-[10px] font-medium uppercase tracking-wide text-emerald-500/70">
-                                  Free
-                                </p>
-                                {dayView.freeWindows.map((w, i) => (
-                                  <div
-                                    key={i}
-                                    className="flex items-center gap-2 rounded-lg bg-emerald-500/5 px-2.5 py-1.5 ring-1 ring-emerald-500/10"
-                                  >
-                                    <Check className="h-3 w-3 shrink-0 text-emerald-400" />
-                                    <span className="text-xs">
-                                      {formatTime12(w.startTime)} – {formatTime12(w.endTime)}
-                                      <span className="ml-1 text-muted-foreground">
-                                        ({w.durationMin}m)
-                                      </span>
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground italic">Fully booked</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Empty state */}
-                {!availLoading && !availSmartData && !availTrainerData && (
-                  <div className="flex flex-col items-center gap-2 py-8 text-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10">
-                      <Activity className="h-5 w-5 text-violet-500" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {availMode === 'smart'
-                        ? 'Click Check to find the best available slots across all trainers'
-                        : 'Select a trainer and click Check to view their weekly schedule'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
+            <Activity className="h-3.5 w-3.5" />
+            <span className="sm:hidden">Availability</span>
+            <span className="hidden sm:inline">Check Trainer Availability</span>
+          </Button>
 
           {/* New Schedule — opens dialog */}
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -1713,6 +1360,14 @@ export default function SchedulingPage() {
       </Dialog>
 
       {ConfirmDialog}
+
+      <TrainerAvailabilityDialog
+        open={availCheckOpen}
+        onOpenChange={setAvailCheckOpen}
+        trainers={trainers
+          .filter((t) => t.trainerProfile)
+          .map((t) => ({ id: t.trainerProfile!.id, name: `${t.firstName} ${t.lastName}` }))}
+      />
     </div>
   );
 }

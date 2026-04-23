@@ -14,6 +14,60 @@ const DAYS_ORDER = [
 ] as const;
 type DayOfWeek = (typeof DAYS_ORDER)[number];
 
+const ENUM_TO_WEEK_OFFSET: Record<DayOfWeek, number> = {
+  MONDAY: 0,
+  TUESDAY: 1,
+  WEDNESDAY: 2,
+  THURSDAY: 3,
+  FRIDAY: 4,
+  SATURDAY: 5,
+  SUNDAY: 6,
+};
+
+/**
+ * Returns the Monday of the week that contains `date`.
+ * Uses noon (12:00) to avoid DST boundary issues.
+ */
+function getMondayOfWeek(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(12, 0, 0, 0);
+  const dow = d.getDay(); // 0 = Sunday
+  const offset = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + offset);
+  return d;
+}
+
+/**
+ * Returns the actual calendar date for a given day within the week whose
+ * Monday is `weekMonday`.
+ */
+function getWeekDateForDay(weekMonday: Date, day: DayOfWeek): Date {
+  const d = new Date(weekMonday);
+  d.setDate(weekMonday.getDate() + ENUM_TO_WEEK_OFFSET[day]);
+  return d;
+}
+
+type ShiftRecord = {
+  startTime: string;
+  endTime: string;
+  days: string[];
+  effectiveFrom: Date;
+  effectiveUntil: Date | null;
+};
+
+/**
+ * Returns the shifts that are active on a specific date for a specific day.
+ * A shift is active if: effectiveFrom <= date < effectiveUntil (or effectiveUntil is null).
+ */
+function getShiftsActiveOnDate(shifts: ShiftRecord[], day: DayOfWeek, date: Date): ShiftRecord[] {
+  return shifts.filter(
+    (s) =>
+      (s.days as string[]).includes(day) &&
+      s.effectiveFrom <= date &&
+      (s.effectiveUntil === null || s.effectiveUntil > date),
+  );
+}
+
 // Generate 30-min slots between two HH:MM times
 function generateSlots(start: string, end: string): string[] {
   const slots: string[] = [];
@@ -56,12 +110,34 @@ export async function GET(req: Request) {
     const durationMin = Math.max(30, parseInt(searchParams.get('durationMin') ?? '60', 10));
     const trainerId = searchParams.get('trainerId');
 
-    // Fetch all active trainers with their shifts
+    // weekOf: the reference date — we resolve shifts for the week containing this date.
+    // Defaults to today so the existing behaviour (next-upcoming-week) is preserved
+    // when no date is supplied.
+    const weekOfParam = searchParams.get('weekOf');
+    const weekOf = weekOfParam ? new Date(weekOfParam) : new Date();
+    const weekMonday = getMondayOfWeek(weekOf);
+
+    // Map each DayOfWeek to its actual calendar date in the selected week.
+    const weekDateByDay = Object.fromEntries(
+      DAYS_ORDER.map((day) => [day, getWeekDateForDay(weekMonday, day)]),
+    ) as Record<DayOfWeek, Date>;
+
+    const now = new Date();
+
+    // Fetch all active trainers with all non-expired shifts as of the selected week's Monday.
+    // Using weekMonday as the expiry boundary so that shifts expiring before the selected
+    // week are excluded, while scheduled future shifts that will be active that week are included.
+    const shiftCutoff = weekMonday < now ? weekMonday : now;
     const trainers = await prisma.trainerProfile.findMany({
       where: { branchId, user: { isActive: true } },
       include: {
         user: { select: { firstName: true, lastName: true } },
-        shifts: true,
+        shifts: {
+          where: {
+            OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: shiftCutoff } }],
+          },
+          orderBy: { effectiveFrom: 'asc' },
+        },
       },
     });
 
@@ -114,30 +190,44 @@ export async function GET(req: Request) {
       const fromMin = (m: number) =>
         `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-      // Derive working days and per-day time windows from shifts
-      // No shifts = all-day available on all days (backward compat)
-      const hasShifts = trainer.shifts.length > 0;
-      const workingDays: DayOfWeek[] = hasShifts
-        ? (DAYS_ORDER.filter((day) =>
-            trainer.shifts.some((shift) => (shift.days as string[]).includes(day)),
-          ) as DayOfWeek[])
+      const hasAnyShifts = trainer.shifts.length > 0;
+
+      // Derive working days by checking which days have an active shift on their next date
+      const workingDays: DayOfWeek[] = hasAnyShifts
+        ? DAYS_ORDER.filter(
+            (day) => getShiftsActiveOnDate(trainer.shifts, day, weekDateByDay[day]).length > 0,
+          )
         : DAYS_ORDER.slice();
 
-      // Overall earliest/latest across all shifts (for trainer summary)
-      const allStarts = hasShifts ? trainer.shifts.map((s) => s.startTime) : ['06:00'];
-      const allEnds = hasShifts ? trainer.shifts.map((s) => s.endTime) : ['22:00'];
+      // Overall earliest/latest across all currently-active shifts (for trainer summary card)
+      const activeNowShifts = trainer.shifts.filter(
+        (s) => s.effectiveFrom <= now && (s.effectiveUntil === null || s.effectiveUntil > now),
+      );
+      const summaryShifts = activeNowShifts.length > 0 ? activeNowShifts : trainer.shifts;
+      const allStarts =
+        summaryShifts.length > 0 ? summaryShifts.map((s) => s.startTime) : ['06:00'];
+      const allEnds = summaryShifts.length > 0 ? summaryShifts.map((s) => s.endTime) : ['22:00'];
       const overallStart = allStarts.reduce((a, b) => (a < b ? a : b));
       const overallEnd = allEnds.reduce((a, b) => (a > b ? a : b));
 
       const dayMap = trainerDaySchedules.get(trainerId)!;
       const weekView = DAYS_ORDER.map((day) => {
-        const isWorkingDay = workingDays.includes(day);
-        if (!isWorkingDay) return { day, isWorkingDay: false, bookedSlots: [], freeWindows: [] };
+        // Resolve shifts active on the next actual date for this day
+        const nextDate = weekDateByDay[day];
+        const dayShifts = hasAnyShifts
+          ? getShiftsActiveOnDate(trainer.shifts, day, nextDate)
+          : [
+              {
+                startTime: '06:00',
+                endTime: '22:00',
+                days: [day],
+                effectiveFrom: now,
+                effectiveUntil: null,
+              },
+            ];
 
-        // Determine shift windows for this day
-        const dayShifts = hasShifts
-          ? trainer.shifts.filter((shift) => (shift.days as string[]).includes(day))
-          : [{ startTime: '06:00', endTime: '22:00' }];
+        const isWorkingDay = dayShifts.length > 0;
+        if (!isWorkingDay) return { day, isWorkingDay: false, bookedSlots: [], freeWindows: [] };
 
         // Use earliest start / latest end for the day's working window
         const workStart = dayShifts.map((s) => s.startTime).reduce((a, b) => (a < b ? a : b));
@@ -234,6 +324,8 @@ export async function GET(req: Request) {
     const results: SlotResult[] = [];
 
     for (const day of DAYS_ORDER) {
+      const nextDate = weekDateByDay[day];
+
       for (const slotStart of allSlots) {
         const [sh, sm] = slotStart.split(':').map(Number);
         const endMin = sh! * 60 + sm! + durationMin;
@@ -245,14 +337,12 @@ export async function GET(req: Request) {
         let busyCount = 0;
 
         for (const trainer of trainers) {
-          // Check if the slot fits within any of the trainer's shifts for this day
-          // Zero shifts = all-day available (backward compat)
+          // Resolve the shifts active for this trainer on the next occurrence of this day.
+          // Zero shifts = all-day available (backward compat).
           if (trainer.shifts.length > 0) {
-            const fitsShift = trainer.shifts.some(
-              (shift) =>
-                (shift.days as string[]).includes(day) &&
-                slotStart >= shift.startTime &&
-                slotEnd <= shift.endTime,
+            const activeShifts = getShiftsActiveOnDate(trainer.shifts, day, nextDate);
+            const fitsShift = activeShifts.some(
+              (shift) => slotStart >= shift.startTime && slotEnd <= shift.endTime,
             );
             if (!fitsShift) continue;
           }
@@ -278,7 +368,6 @@ export async function GET(req: Request) {
         if (freeTrainers.length === 0) continue;
 
         // Score: more free trainers = better; prefer less-loaded trainers
-        // Normalize: freeRatio + avgIdleness bonus
         const freeRatio = freeTrainers.length / Math.max(1, trainers.length);
         const avgLoadScore =
           freeTrainers.reduce((sum, t) => sum + (1 - t.currentLoad / maxLoad), 0) /
@@ -311,7 +400,11 @@ export async function GET(req: Request) {
       return { day, slots };
     }).filter((d) => d.slots.length > 0);
 
-    return NextResponse.json({ durationMin, recommendations });
+    return NextResponse.json({
+      durationMin,
+      weekOf: weekMonday.toISOString().slice(0, 10),
+      recommendations,
+    });
   } catch (error) {
     console.error('[GET /api/admin/availability-check] Error:', error);
     const { error: msg, code, status } = toErrorResponse(error);
