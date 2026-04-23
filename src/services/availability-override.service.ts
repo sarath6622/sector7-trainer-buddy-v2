@@ -80,24 +80,23 @@ export async function isTrainerAvailable(
     };
   }
 
-  // Fall back to static profile
+  // Fall back to shifts
   const trainer = await prisma.trainerProfile.findFirst({
     where: { id: trainerProfileId, branchId },
+    include: { shifts: true },
   });
 
   if (!trainer) {
     return { available: false, startTime: null, endTime: null };
   }
 
-  const dayOfWeek = DAY_NAMES[date.getDay()];
+  const dayOfWeek = DAY_NAMES[date.getDay()]!;
+  // Zero shifts = all-day available (backward compat); otherwise check shift day coverage
   const available =
-    trainer.workingDays.length === 0 || trainer.workingDays.includes(dayOfWeek as never);
+    trainer.shifts.length === 0 ||
+    trainer.shifts.some((shift) => (shift.days as string[]).includes(dayOfWeek));
 
-  return {
-    available,
-    startTime: trainer.workingHoursStart,
-    endTime: trainer.workingHoursEnd,
-  };
+  return { available, startTime: null, endTime: null };
 }
 
 /**

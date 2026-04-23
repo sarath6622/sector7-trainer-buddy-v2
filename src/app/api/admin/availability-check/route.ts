@@ -56,10 +56,13 @@ export async function GET(req: Request) {
     const durationMin = Math.max(30, parseInt(searchParams.get('durationMin') ?? '60', 10));
     const trainerId = searchParams.get('trainerId');
 
-    // Fetch all active trainers
+    // Fetch all active trainers with their shifts
     const trainers = await prisma.trainerProfile.findMany({
       where: { branchId, user: { isActive: true } },
-      include: { user: { select: { firstName: true, lastName: true } } },
+      include: {
+        user: { select: { firstName: true, lastName: true } },
+        shifts: true,
+      },
     });
 
     // Fetch all active schedules
@@ -104,15 +107,41 @@ export async function GET(req: Request) {
         );
       }
 
-      const workStart = trainer.workingHoursStart ?? '06:00';
-      const workEnd = trainer.workingHoursEnd ?? '21:00';
-      const workingDays =
-        trainer.workingDays.length > 0 ? (trainer.workingDays as DayOfWeek[]) : DAYS_ORDER.slice();
+      const toMin = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h! * 60 + m!;
+      };
+      const fromMin = (m: number) =>
+        `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+      // Derive working days and per-day time windows from shifts
+      // No shifts = all-day available on all days (backward compat)
+      const hasShifts = trainer.shifts.length > 0;
+      const workingDays: DayOfWeek[] = hasShifts
+        ? (DAYS_ORDER.filter((day) =>
+            trainer.shifts.some((shift) => (shift.days as string[]).includes(day)),
+          ) as DayOfWeek[])
+        : DAYS_ORDER.slice();
+
+      // Overall earliest/latest across all shifts (for trainer summary)
+      const allStarts = hasShifts ? trainer.shifts.map((s) => s.startTime) : ['06:00'];
+      const allEnds = hasShifts ? trainer.shifts.map((s) => s.endTime) : ['22:00'];
+      const overallStart = allStarts.reduce((a, b) => (a < b ? a : b));
+      const overallEnd = allEnds.reduce((a, b) => (a > b ? a : b));
 
       const dayMap = trainerDaySchedules.get(trainerId)!;
       const weekView = DAYS_ORDER.map((day) => {
         const isWorkingDay = workingDays.includes(day);
         if (!isWorkingDay) return { day, isWorkingDay: false, bookedSlots: [], freeWindows: [] };
+
+        // Determine shift windows for this day
+        const dayShifts = hasShifts
+          ? trainer.shifts.filter((shift) => (shift.days as string[]).includes(day))
+          : [{ startTime: '06:00', endTime: '22:00' }];
+
+        // Use earliest start / latest end for the day's working window
+        const workStart = dayShifts.map((s) => s.startTime).reduce((a, b) => (a < b ? a : b));
+        const workEnd = dayShifts.map((s) => s.endTime).reduce((a, b) => (a > b ? a : b));
 
         const daySched = dayMap.get(day) ?? [];
         const bookedSlots = daySched
@@ -123,44 +152,46 @@ export async function GET(req: Request) {
           }))
           .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-        // Compute free windows within working hours
-        const toMin = (t: string) => {
-          const [h, m] = t.split(':').map(Number);
-          return h! * 60 + m!;
-        };
-        const fromMin = (m: number) =>
-          `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-        const startM = toMin(workStart);
-        const endM = toMin(workEnd);
-
-        const busyIntervals = bookedSlots
-          .map((s) => ({
-            s: toMin(s.startTime),
-            e: toMin(s.startTime) + s.durationMin,
-          }))
-          .sort((a, b) => a.s - b.s);
-
+        // Compute free windows within each shift's span
         const freeWindows: { startTime: string; endTime: string; durationMin: number }[] = [];
-        let cursor = startM;
-        for (const interval of busyIntervals) {
-          if (interval.s > cursor) {
+        for (const shiftWindow of dayShifts) {
+          const startM = toMin(shiftWindow.startTime);
+          const endM = toMin(shiftWindow.endTime);
+
+          const busyIntervals = bookedSlots
+            .map((s) => ({ s: toMin(s.startTime), e: toMin(s.startTime) + s.durationMin }))
+            .filter((i) => i.s < endM && i.e > startM)
+            .sort((a, b) => a.s - b.s);
+
+          let cursor = startM;
+          for (const interval of busyIntervals) {
+            if (interval.s > cursor) {
+              freeWindows.push({
+                startTime: fromMin(cursor),
+                endTime: fromMin(interval.s),
+                durationMin: interval.s - cursor,
+              });
+            }
+            cursor = Math.max(cursor, interval.e);
+          }
+          if (cursor < endM) {
             freeWindows.push({
               startTime: fromMin(cursor),
-              endTime: fromMin(interval.s),
-              durationMin: interval.s - cursor,
+              endTime: fromMin(endM),
+              durationMin: endM - cursor,
             });
           }
-          cursor = Math.max(cursor, interval.e);
-        }
-        if (cursor < endM) {
-          freeWindows.push({
-            startTime: fromMin(cursor),
-            endTime: fromMin(endM),
-            durationMin: endM - cursor,
-          });
         }
 
-        return { day, isWorkingDay: true, workStart, workEnd, bookedSlots, freeWindows };
+        return {
+          day,
+          isWorkingDay: true,
+          workStart,
+          workEnd,
+          shifts: dayShifts.map((s) => ({ startTime: s.startTime, endTime: s.endTime })),
+          bookedSlots,
+          freeWindows,
+        };
       });
 
       const totalSessions = schedules.filter((s) => s.trainerProfileId === trainerId).length;
@@ -169,9 +200,9 @@ export async function GET(req: Request) {
         trainer: {
           id: trainer.id,
           name: `${trainer.user.firstName} ${trainer.user.lastName}`,
-          workingDays: workingDays,
-          workStart,
-          workEnd,
+          workingDays,
+          workStart: overallStart,
+          workEnd: overallEnd,
           totalScheduledSessions: totalSessions,
         },
         weekView,
@@ -214,15 +245,17 @@ export async function GET(req: Request) {
         let busyCount = 0;
 
         for (const trainer of trainers) {
-          // Check trainer works this day
-          const worksThisDay =
-            trainer.workingDays.length === 0 || trainer.workingDays.includes(day as never);
-          if (!worksThisDay) continue;
-
-          // Check slot is within trainer's working hours
-          const wStart = trainer.workingHoursStart ?? GYM_START;
-          const wEnd = trainer.workingHoursEnd ?? GYM_END;
-          if (slotStart < wStart || slotEnd > wEnd) continue;
+          // Check if the slot fits within any of the trainer's shifts for this day
+          // Zero shifts = all-day available (backward compat)
+          if (trainer.shifts.length > 0) {
+            const fitsShift = trainer.shifts.some(
+              (shift) =>
+                (shift.days as string[]).includes(day) &&
+                slotStart >= shift.startTime &&
+                slotEnd <= shift.endTime,
+            );
+            if (!fitsShift) continue;
+          }
 
           // Check for conflicts in their schedule
           const daySchedules = trainerDaySchedules.get(trainer.id)?.get(day) ?? [];

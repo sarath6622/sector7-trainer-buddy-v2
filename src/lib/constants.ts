@@ -15,6 +15,7 @@ import {
   Trophy,
   Flame,
   CalendarClock,
+  Clock,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,6 +29,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Clients', href: '/admin/clients', icon: Users },
   { label: 'Trainers', href: '/admin/trainers', icon: UserCheck },
+  { label: 'Shifts', href: '/admin/shifts', icon: Clock },
   { label: 'Scheduling', href: '/admin/scheduling', icon: Calendar },
   { label: 'Sessions', href: '/admin/sessions', icon: ClipboardList },
   { label: 'Leaves', href: '/admin/leaves', icon: CalendarDays },

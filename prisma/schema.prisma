@@ -150,6 +150,12 @@ enum RescheduleStatus {
   REJECTED
 }
 
+enum SwapStatus {
+  PENDING
+  APPROVED
+  CANCELLED
+}
+
 // ─── BRANCH ──────────────────────────────────────────
 
 model Branch {
@@ -173,6 +179,8 @@ model Branch {
   clientUnavailability         ClientUnavailability[]
   trainerReassignments         TrainerReassignment[]
   trainerAvailabilityOverrides TrainerAvailabilityOverride[]
+  trainerShifts        TrainerShift[]
+  shiftSwaps           ShiftSwap[]
   kickboxingClasses    KickboxingClass[]
   kickboxingEnrollments KickboxingEnrollment[]
   crossfitClasses      CrossfitClass[]
@@ -238,6 +246,7 @@ model User {
   auditLogsAsActor      AuditLog[]        @relation("AuditActor")
   notificationsReceived NotificationLog[] @relation("NotificationRecipient")
   fcmTokens             FcmToken[]
+  shiftSwapRequests     ShiftSwap[]       @relation("SwapRequests")
 
   @@index([branchId])
   @@index([email])
@@ -270,8 +279,11 @@ model TrainerProfile {
   reassignmentsFrom    TrainerReassignment[] @relation("OriginalTrainer")
   reassignmentsTo      TrainerReassignment[] @relation("ReplacementTrainer")
   availabilityOverrides TrainerAvailabilityOverride[]
+  shifts               TrainerShift[]
   kickboxingClasses    KickboxingClass[]
   crossfitClasses      CrossfitClass[]
+  swapsAsA             ShiftSwap[]     @relation("SwapAsA")
+  swapsAsB             ShiftSwap[]     @relation("SwapAsB")
 
   @@index([branchId])
   @@map("trainer_profiles")
@@ -302,6 +314,62 @@ model TrainerAvailabilityOverride {
   @@index([branchId, date])
   @@index([trainerProfileId, date])
   @@map("trainer_availability_overrides")
+}
+
+// ─── TRAINER SHIFTS ──────────────────────────────────
+
+/// A named time window that represents one shift a trainer works.
+/// A trainer can have multiple shifts (e.g. Morning Mon–Wed, Evening Thu–Sat).
+/// A session is bookable if its day+time falls within ANY of the trainer's shifts.
+/// If a trainer has NO shifts configured, they are treated as all-day available (legacy fallback).
+model TrainerShift {
+  id               String      @id @default(cuid())
+  branchId         String
+  trainerProfileId String
+  label            String      // e.g. "Morning", "Evening", "Mid-shift"
+  startTime        String      // "06:00" — 24hr HH:MM
+  endTime          String      // "10:30" — 24hr HH:MM
+  days             DayOfWeek[] // days of week this shift applies to
+  effectiveFrom    DateTime    @default(now()) // when this shift starts applying
+  effectiveUntil   DateTime?                   // null = ongoing; set when replaced by a new shift
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  branch  Branch         @relation(fields: [branchId], references: [id])
+  trainer TrainerProfile @relation(fields: [trainerProfileId], references: [id])
+
+  @@index([branchId, trainerProfileId])
+  @@index([trainerProfileId, effectiveFrom]) // for active-shift lookups
+  @@map("trainer_shifts")
+}
+
+// ─── SHIFT SWAP ──────────────────────────────────────
+
+/// A temporary swap of working windows between two trainers for a date range.
+/// Acts as an overlay — availability checks substitute each trainer's shift windows for the other
+/// during [swapFrom, swapUntil). Does NOT mutate TrainerShift records.
+model ShiftSwap {
+  id                String     @id @default(cuid())
+  branchId          String
+  trainerAProfileId String     // trainer giving up their window
+  trainerBProfileId String     // trainer receiving trainer A's window (and vice-versa)
+  swapFrom          DateTime   // inclusive start date (UTC midnight)
+  swapUntil         DateTime   // exclusive end date (UTC midnight)
+  status            SwapStatus @default(PENDING)
+  requestedByUserId String
+  notes             String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  branch     Branch         @relation(fields: [branchId], references: [id])
+  trainerA   TrainerProfile @relation("SwapAsA", fields: [trainerAProfileId], references: [id])
+  trainerB   TrainerProfile @relation("SwapAsB", fields: [trainerBProfileId], references: [id])
+  requestedBy User          @relation("SwapRequests", fields: [requestedByUserId], references: [id])
+
+  @@index([branchId, swapFrom])
+  @@index([trainerAProfileId, status])
+  @@index([trainerBProfileId, status])
+  @@map("shift_swaps")
 }
 
 // ─── CLIENT PROFILE ──────────────────────────────────

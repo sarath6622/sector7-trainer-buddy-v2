@@ -201,11 +201,15 @@ model TrainerProfile {
   id             String   @id @default(cuid())
   userId         String   @unique
   branchId       String
-  specialties    String[] // e.g., ["strength", "cardio", "rehabilitation"]
+  specialties    String[]
   certifications String[]
   bio            String?
-  workingHoursStart String? // e.g., "06:00"
-  workingHoursEnd   String? // e.g., "20:00"
+  // DEPRECATED (Phase 1 — 2026-04-22): workingHoursStart and workingHoursEnd
+  // are kept as nullable but nulled out by migration. Use TrainerShift instead.
+  workingHoursStart String?
+  workingHoursEnd   String?
+  // workingDays is kept as a derived union of all TrainerShift.days.
+  // Updated by the service layer on every shift add/remove.
   workingDays    DayOfWeek[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -220,10 +224,36 @@ model TrainerProfile {
   leaveRequests        LeaveRequest[]
   reassignmentsFrom    TrainerReassignment[] @relation("OriginalTrainer")
   reassignmentsTo      TrainerReassignment[] @relation("ReplacementTrainer")
+  availabilityOverrides TrainerAvailabilityOverride[]
+  shifts               TrainerShift[]         // ← NEW: multi-shift model
   kickboxingClasses    KickboxingClass[]
+  crossfitClasses      CrossfitClass[]
 
   @@index([branchId])
   @@map("trainer_profiles")
+}
+
+// ─── TRAINER SHIFTS (Phase 1 — 2026-04-22) ──────────
+
+/// Replaces the single workingHoursStart/End window.
+/// A trainer is available for a session if day+time falls within ANY of their shifts.
+/// Zero shifts = all-day available (fallback).
+model TrainerShift {
+  id               String      @id @default(cuid())
+  branchId         String
+  trainerProfileId String
+  label            String      // "Morning", "Evening", or custom
+  startTime        String      // "06:00" (24hr HH:MM)
+  endTime          String      // "10:30" (24hr HH:MM)
+  days             DayOfWeek[] // days this shift covers
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  branch  Branch         @relation(fields: [branchId], references: [id])
+  trainer TrainerProfile @relation(fields: [trainerProfileId], references: [id])
+
+  @@index([branchId, trainerProfileId])
+  @@map("trainer_shifts")
 }
 
 // ─── CLIENT PROFILE ──────────────────────────────────

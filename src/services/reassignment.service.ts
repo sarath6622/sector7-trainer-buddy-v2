@@ -57,6 +57,7 @@ export async function getVacantTrainers({
     },
     include: {
       user: { select: { firstName: true, lastName: true, email: true } },
+      shifts: true,
     },
   });
 
@@ -79,39 +80,36 @@ export async function getVacantTrainers({
   const excludeIds = new Set([...busyTrainerIds, ...onLeaveTrainerIds]);
 
   const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-  const dayOfWeek = dayNames[targetDate.getDay()];
+  const dayOfWeek = dayNames[targetDate.getDay()]!;
 
   return allTrainers.filter((t) => {
     if (excludeIds.has(t.id)) return false;
 
     const override = overrideMap.get(t.id);
 
-    // If there's a date-specific override, it takes precedence over static schedule
+    // If there's a date-specific override, it takes precedence over shifts
     if (override) {
       if (!override.isAvailable) return false;
 
       // Check override-specific hours if defined
-      const effectiveStart = override.startTime ?? t.workingHoursStart;
-      const effectiveEnd = override.endTime ?? t.workingHoursEnd;
-      if (effectiveStart && effectiveEnd) {
-        if (startTime < effectiveStart || endTime > effectiveEnd) {
+      if (override.startTime && override.endTime) {
+        if (startTime < override.startTime || endTime > override.endTime) {
           return false;
         }
       }
       return true;
     }
 
-    // No override — fall back to static working days/hours
-    if (t.workingHoursStart && t.workingHoursEnd) {
-      if (startTime < t.workingHoursStart || endTime > t.workingHoursEnd) {
-        return false;
-      }
-    }
-
-    if (t.workingDays && t.workingDays.length > 0) {
-      if (!t.workingDays.includes(dayOfWeek as never)) {
-        return false;
-      }
+    // No override — fall back to shifts
+    // Zero shifts = all-day available (backward compat)
+    if (t.shifts.length > 0) {
+      const fitsShift = t.shifts.some(
+        (shift) =>
+          (shift.days as string[]).includes(dayOfWeek) &&
+          startTime >= shift.startTime &&
+          endTime <= shift.endTime,
+      );
+      if (!fitsShift) return false;
     }
 
     return true;

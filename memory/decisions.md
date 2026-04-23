@@ -224,3 +224,16 @@
 **Consequences:** No new dependency. The Command component already follows the project's Tailwind + dark/light theme setup. Search is triggered on each keystroke (debounced 300ms) via a client-side fetch to `/api/crossfit/clients/search?q=`.
 
 ---
+
+## ADR-022: Multi-Shift Model Replaces Single Working-Hours Window
+
+**Date:** 2026-04-23
+**Status:** Accepted
+**Context:** `TrainerProfile` had `workingHoursStart`, `workingHoursEnd`, `workingDays` — a single contiguous availability window per trainer per week. This didn't support trainers who work split shifts (e.g., morning 6–10 AND evening 17–21), or trainers whose shift times differ by day.
+**Decision:** Introduce a `TrainerShift` model (`id, branchId, trainerProfileId, label, startTime, endTime, days: DayOfWeek[]`). A trainer can have multiple shifts. `workingHoursStart`/`workingHoursEnd` are deprecated (nulled by migration, kept nullable for one release cycle). `workingDays` is kept as a derived cache (union of all shift days), recomputed on every shift write via `recomputeWorkingDays()`.
+**Zero-shift rule:** A trainer with no `TrainerShift` records is treated as all-day available on all days (backward compatibility). Services enforce this consistently in `isTimeWithinShifts()`.
+**Predefined presets:** Morning (8 variants, 05:00–15:30 range) and Evening (8 variants, 15:30–23:00 range) presets surfaced in the UI. Custom shifts also supported.
+**Admin pages:** `/admin/shifts` is the primary shift management surface (all trainers, all shifts). The trainer edit page (`/admin/trainers/[id]`) shows current shifts read-only and links to `/admin/shifts`. The new trainer page has an inline shift builder (shifts sent as part of `POST /api/admin/users`).
+**Consequences:** Schedule creation, reassignment, availability-check, and availability-override services all use shift-based eligibility checks. The `availability-check` API smart mode and trainer mode both respect shift windows.
+
+---

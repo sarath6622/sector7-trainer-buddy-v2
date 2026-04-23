@@ -138,6 +138,34 @@ GET    /api/admin/analytics/revenue             → ?month → RevenueOverview
 GET    /api/admin/analytics/export              → ?report&month&format=xlsx → Binary (Excel file)
 ```
 
+### Trainer Shifts
+
+```
+GET    /api/admin/shifts                 → ?trainerId → TrainerShift[]
+POST   /api/admin/shifts                 → { trainerProfileId, label, startTime, endTime, days: DayOfWeek[] } → TrainerShift (201)
+DELETE /api/admin/shifts/[id]            → {} → { success: true }
+```
+
+`TrainerShift: { id, branchId, trainerProfileId, label, startTime: "HH:MM", endTime: "HH:MM", days: DayOfWeek[], createdAt, updatedAt, trainer: { user: { firstName, lastName } } }`
+
+Side effect: every write recomputes `TrainerProfile.workingDays` (derived union of all shift days).
+Zero shifts = trainer is all-day available on all days (backward-compat rule).
+
+### Availability Check
+
+```
+GET    /api/admin/availability-check     → ?mode=smart|trainer&durationMin=60&trainerId → AvailabilityResult
+```
+
+**`mode=smart` (default):** Returns top 5 slots per day of the week, scored by free-trainer ratio + average load.
+Response: `{ durationMin: number, recommendations: { day: DayOfWeek, slots: Slot[] }[] }`
+`Slot: { day, startTime, endTime, freeTrainers: { id, name, currentLoad }[], busyTrainerCount, score }`
+
+**`mode=trainer`:** Returns a full week view for one trainer (requires `trainerId`).
+Response: `{ trainer: { id, name, workingDays, workStart, workEnd, totalScheduledSessions }, weekView: DayView[] }`
+`DayView: { day, isWorkingDay, workStart?, workEnd?, shifts?: { startTime, endTime }[], bookedSlots: BookedSlot[], freeWindows: Window[] }`
+`BookedSlot: { startTime, durationMin, clientName }` · `Window: { startTime, endTime, durationMin }`
+
 ### Settings
 
 ```

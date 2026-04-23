@@ -2,20 +2,45 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, KeyRound, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Clock, ExternalLink, KeyRound, Save, Trash2 } from 'lucide-react';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const ROLES = ['TRAINER', 'KICKBOXING_TRAINER', 'CROSSFIT_TRAINER'];
 const ROLE_LABELS: Record<string, string> = {
   TRAINER: 'General Trainer',
   KICKBOXING_TRAINER: 'Kickboxing Trainer',
   CROSSFIT_TRAINER: 'CrossFit Trainer',
 };
+
+const DAYS_ORDER = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const DAY_LABEL: Record<string, string> = {
+  MONDAY: 'Mon',
+  TUESDAY: 'Tue',
+  WEDNESDAY: 'Wed',
+  THURSDAY: 'Thu',
+  FRIDAY: 'Fri',
+  SATURDAY: 'Sat',
+  SUNDAY: 'Sun',
+};
+
+function fmtTime(t: string) {
+  const [h = '0', m = '00'] = t.split(':');
+  const hour = parseInt(h, 10);
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+
+interface TrainerShift {
+  id: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  days: string[];
+}
 
 interface TrainerData {
   id: string;
@@ -30,9 +55,6 @@ interface TrainerData {
     specialties: string[];
     certifications: string[];
     bio: string | null;
-    workingHoursStart: string | null;
-    workingHoursEnd: string | null;
-    workingDays: string[];
   } | null;
 }
 
@@ -74,6 +96,8 @@ export default function TrainerProfilePage() {
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
 
+  const [shifts, setShifts] = useState<TrainerShift[]>([]);
+
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -82,9 +106,6 @@ export default function TrainerProfilePage() {
     specialties: '',
     certifications: '',
     bio: '',
-    workingHoursStart: '',
-    workingHoursEnd: '',
-    workingDays: [] as string[],
   });
 
   const fetchTrainer = useCallback(async () => {
@@ -104,10 +125,16 @@ export default function TrainerProfilePage() {
         specialties: data.trainerProfile?.specialties.join(', ') ?? '',
         certifications: data.trainerProfile?.certifications.join(', ') ?? '',
         bio: data.trainerProfile?.bio ?? '',
-        workingHoursStart: data.trainerProfile?.workingHoursStart ?? '',
-        workingHoursEnd: data.trainerProfile?.workingHoursEnd ?? '',
-        workingDays: data.trainerProfile?.workingDays ?? [],
       });
+
+      // Fetch shifts for this trainer's profile
+      if (data.trainerProfile?.id) {
+        const shiftsRes = await fetch(`/api/admin/shifts?trainerId=${data.trainerProfile.id}`);
+        if (shiftsRes.ok) {
+          const shiftsData = await shiftsRes.json();
+          setShifts(shiftsData.data ?? []);
+        }
+      }
     } catch {
       setError('Failed to load trainer');
     } finally {
@@ -144,9 +171,6 @@ export default function TrainerProfilePage() {
             .map((s) => s.trim())
             .filter(Boolean),
           bio: form.bio || undefined,
-          workingHoursStart: form.workingHoursStart || undefined,
-          workingHoursEnd: form.workingHoursEnd || undefined,
-          workingDays: form.workingDays,
         }),
       });
       if (!res.ok) {
@@ -209,15 +233,6 @@ export default function TrainerProfilePage() {
       roles: prev.roles.includes(role)
         ? prev.roles.filter((r) => r !== role)
         : [...prev.roles, role],
-    }));
-  }
-
-  function toggleDay(day: string) {
-    setForm((prev) => ({
-      ...prev,
-      workingDays: prev.workingDays.includes(day)
-        ? prev.workingDays.filter((d) => d !== day)
-        : [...prev.workingDays, day],
     }));
   }
 
@@ -372,43 +387,52 @@ export default function TrainerProfilePage() {
                 className="h-9 text-xs border-white/[0.08]"
               />
             </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Hours Start">
-                <Input
-                  type="time"
-                  value={form.workingHoursStart}
-                  onChange={(e) => setForm((p) => ({ ...p, workingHoursStart: e.target.value }))}
-                  className="h-9 text-xs border-white/[0.08]"
-                />
-              </Field>
-              <Field label="Hours End">
-                <Input
-                  type="time"
-                  value={form.workingHoursEnd}
-                  onChange={(e) => setForm((p) => ({ ...p, workingHoursEnd: e.target.value }))}
-                  className="h-9 text-xs border-white/[0.08]"
-                />
-              </Field>
-            </div>
-            <Field label="Working Days">
-              <div className="flex flex-wrap gap-1.5">
-                {DAYS.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleDay(day)}
-                    className={cn(
-                      'rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
-                      form.workingDays.includes(day)
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-white/[0.06] text-muted-foreground hover:bg-white/10',
-                    )}
-                  >
-                    {day.slice(0, 3)}
-                  </button>
-                ))}
+          </Section>
+
+          {/* Shifts */}
+          <Section title="Shifts">
+            {shifts.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                No shifts assigned — trainer is all-day available
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {shifts
+                  .slice()
+                  .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                  .map((shift) => (
+                    <div
+                      key={shift.id}
+                      className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium">{shift.label}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {fmtTime(shift.startTime)} – {fmtTime(shift.endTime)}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {DAYS_ORDER.filter((d) => shift.days.includes(d)).map((d) => (
+                          <span
+                            key={d}
+                            className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                          >
+                            {DAY_LABEL[d]}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
               </div>
-            </Field>
+            )}
+            <Link
+              href="/admin/shifts"
+              className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Manage shifts
+              <ExternalLink className="h-3 w-3" />
+            </Link>
           </Section>
 
           {/* Reset Password */}

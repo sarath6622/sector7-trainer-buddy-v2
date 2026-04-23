@@ -3,7 +3,21 @@ import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { timeSlotsOverlap } from '@/services/session-generation.service';
 import { notifyScheduleCreated } from '@/services/notification.service';
-import type { DayOfWeek } from '@prisma/client';
+import type { DayOfWeek, TrainerShift } from '@prisma/client';
+
+/**
+ * Returns true if the given day+startTime falls within at least one of the trainer's shifts.
+ * If shifts array is empty the trainer is treated as all-day available (backward compat).
+ */
+function isTimeWithinShifts(shifts: TrainerShift[], dayOfWeek: string, startTime: string): boolean {
+  if (shifts.length === 0) return true;
+  return shifts.some(
+    (shift) =>
+      (shift.days as string[]).includes(dayOfWeek) &&
+      startTime >= shift.startTime &&
+      startTime < shift.endTime,
+  );
+}
 
 interface CreateScheduleByTrainerInput {
   branchId: string;
@@ -69,29 +83,19 @@ export async function createSchedule(input: CreateScheduleInput) {
   // Verify trainer profile
   const trainer = await prisma.trainerProfile.findFirst({
     where: { id: input.trainerProfileId, branchId: input.branchId },
+    include: { shifts: true },
   });
   if (!trainer) {
     throw new AppError('TRAINER_NOT_FOUND', 'Trainer profile not found', 404);
   }
 
-  // Validate: warn if the day conflicts with trainer's default working days
-  if (trainer.workingDays.length > 0 && !trainer.workingDays.includes(input.dayOfWeek as never)) {
+  // Validate: warn if the day+time is not covered by any of the trainer's shifts
+  if (!isTimeWithinShifts(trainer.shifts, input.dayOfWeek, input.startTime)) {
     throw new AppError(
-      'DAY_OUTSIDE_WORKING_DAYS',
-      `${input.dayOfWeek} is not in this trainer's default working days. Add an availability override for specific dates, or update the trainer's working days first.`,
+      'TIME_OUTSIDE_WORKING_HOURS',
+      `${input.dayOfWeek} at ${input.startTime} is not covered by any of this trainer's shifts.`,
       400,
     );
-  }
-
-  // Validate: warn if the start time is outside trainer's working hours
-  if (trainer.workingHoursStart && trainer.workingHoursEnd) {
-    if (input.startTime < trainer.workingHoursStart || input.startTime >= trainer.workingHoursEnd) {
-      throw new AppError(
-        'TIME_OUTSIDE_WORKING_HOURS',
-        `Start time ${input.startTime} is outside this trainer's working hours (${trainer.workingHoursStart}–${trainer.workingHoursEnd}).`,
-        400,
-      );
-    }
   }
 
   // Check for trainer time conflict on the same day
@@ -336,32 +340,22 @@ export async function createScheduleByTrainer(input: CreateScheduleByTrainerInpu
     );
   }
 
-  // 2. Load trainer profile for working hours / days validation
+  // 2. Load trainer profile for shift validation
   const trainer = await prisma.trainerProfile.findFirst({
     where: { id: input.trainerProfileId, branchId: input.branchId },
+    include: { shifts: true },
   });
   if (!trainer) {
     throw new AppError('TRAINER_NOT_FOUND', 'Trainer profile not found', 404);
   }
 
-  // 3. Validate working day
-  if (trainer.workingDays.length > 0 && !trainer.workingDays.includes(input.dayOfWeek as never)) {
+  // 3 & 4. Validate that the day+time falls within one of the trainer's shifts
+  if (!isTimeWithinShifts(trainer.shifts, input.dayOfWeek, input.startTime)) {
     throw new AppError(
-      'DAY_OUTSIDE_WORKING_DAYS',
-      `${input.dayOfWeek} is not in your default working days. Update your working days in your profile first.`,
+      'TIME_OUTSIDE_WORKING_HOURS',
+      `${input.dayOfWeek} at ${input.startTime} is not covered by any of your shifts.`,
       400,
     );
-  }
-
-  // 4. Validate working hours
-  if (trainer.workingHoursStart && trainer.workingHoursEnd) {
-    if (input.startTime < trainer.workingHoursStart || input.startTime >= trainer.workingHoursEnd) {
-      throw new AppError(
-        'TIME_OUTSIDE_WORKING_HOURS',
-        `Start time ${input.startTime} is outside your working hours (${trainer.workingHoursStart}–${trainer.workingHoursEnd}).`,
-        400,
-      );
-    }
   }
 
   // 5. Trainer conflict check

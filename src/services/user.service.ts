@@ -2,7 +2,22 @@ import { hash } from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
-import type { Prisma, UserRole } from '@prisma/client';
+import type { Prisma, UserRole, DayOfWeek } from '@prisma/client';
+
+interface ShiftInput {
+  label: string;
+  startTime: string;
+  endTime: string;
+  days: string[];
+}
+
+function deriveWorkingDays(shifts: ShiftInput[]): DayOfWeek[] {
+  const days = new Set<string>();
+  for (const shift of shifts) {
+    for (const day of shift.days) days.add(day);
+  }
+  return Array.from(days) as DayOfWeek[];
+}
 
 interface CreateUserInput {
   email: string;
@@ -17,9 +32,7 @@ interface CreateUserInput {
   specialties?: string[];
   certifications?: string[];
   bio?: string;
-  workingHoursStart?: string;
-  workingHoursEnd?: string;
-  workingDays?: string[];
+  shifts?: ShiftInput[];
   // Client fields
   gender?: string;
   dateOfBirth?: string;
@@ -42,9 +55,7 @@ interface UpdateUserInput {
   specialties?: string[];
   certifications?: string[];
   bio?: string;
-  workingHoursStart?: string;
-  workingHoursEnd?: string;
-  workingDays?: string[];
+  shifts?: ShiftInput[];
   // Client fields
   gender?: string;
   dateOfBirth?: string;
@@ -95,19 +106,31 @@ export async function createUser(input: CreateUserInput) {
     roles.includes('CROSSFIT_TRAINER');
 
   if (isTrainer) {
-    await prisma.trainerProfile.create({
+    const trainerProfile = await prisma.trainerProfile.create({
       data: {
         userId: user.id,
         branchId,
         specialties: userData.specialties ?? [],
         certifications: userData.certifications ?? [],
         bio: userData.bio,
-        workingHoursStart: userData.workingHoursStart,
-        workingHoursEnd: userData.workingHoursEnd,
-        workingDays: (userData.workingDays ??
-          []) as Prisma.TrainerProfileCreateInput['workingDays'],
+        workingDays: deriveWorkingDays(
+          userData.shifts ?? [],
+        ) as Prisma.TrainerProfileCreateInput['workingDays'],
       },
     });
+
+    if (userData.shifts && userData.shifts.length > 0) {
+      await prisma.trainerShift.createMany({
+        data: userData.shifts.map((s) => ({
+          branchId,
+          trainerProfileId: trainerProfile.id,
+          label: s.label,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          days: s.days as DayOfWeek[],
+        })),
+      });
+    }
   } else if (roles.includes('CLIENT')) {
     await prisma.clientProfile.create({
       data: {
@@ -165,7 +188,7 @@ export async function getUsers(input: ListUsersInput) {
     prisma.user.findMany({
       where,
       include: {
-        trainerProfile: true,
+        trainerProfile: { include: { shifts: true } },
         clientProfile: {
           include: {
             ptPackages: {
@@ -203,7 +226,7 @@ export async function getUserById(id: string, branchId: string) {
   const user = await prisma.user.findFirst({
     where: { id, branchId, deletedAt: null },
     include: {
-      trainerProfile: true,
+      trainerProfile: { include: { shifts: true } },
       clientProfile: true,
     },
   });
@@ -250,21 +273,36 @@ export async function updateUser(
 
   // Update trainer profile if exists
   if (existingUser.trainerProfile) {
+    const trainerProfileId = existingUser.trainerProfile.id;
     const trainerUpdate: Prisma.TrainerProfileUpdateInput = {};
     if (input.specialties !== undefined) trainerUpdate.specialties = input.specialties;
     if (input.certifications !== undefined) trainerUpdate.certifications = input.certifications;
     if (input.bio !== undefined) trainerUpdate.bio = input.bio;
-    if (input.workingHoursStart !== undefined)
-      trainerUpdate.workingHoursStart = input.workingHoursStart;
-    if (input.workingHoursEnd !== undefined) trainerUpdate.workingHoursEnd = input.workingHoursEnd;
-    if (input.workingDays !== undefined) {
-      trainerUpdate.workingDays =
-        input.workingDays as Prisma.TrainerProfileUpdateInput['workingDays'];
+
+    if (input.shifts !== undefined) {
+      // delete-then-recreate pattern (ADR-015) for idempotent shift writes
+      await prisma.trainerShift.deleteMany({ where: { trainerProfileId, branchId } });
+      if (input.shifts.length > 0) {
+        await prisma.trainerShift.createMany({
+          data: input.shifts.map((s) => ({
+            branchId,
+            trainerProfileId,
+            label: s.label,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            days: s.days as DayOfWeek[],
+          })),
+        });
+      }
+      // keep workingDays in sync as derived union of shift days
+      trainerUpdate.workingDays = deriveWorkingDays(
+        input.shifts,
+      ) as Prisma.TrainerProfileUpdateInput['workingDays'];
     }
 
     if (Object.keys(trainerUpdate).length > 0) {
       await prisma.trainerProfile.update({
-        where: { id: existingUser.trainerProfile.id },
+        where: { id: trainerProfileId },
         data: trainerUpdate,
       });
     }
@@ -300,7 +338,7 @@ export async function updateUser(
 
   const updatedUser = await prisma.user.findUnique({
     where: { id },
-    include: { trainerProfile: true, clientProfile: true },
+    include: { trainerProfile: { include: { shifts: true } }, clientProfile: true },
   });
 
   await auditLog({

@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Loader2, UserPlus } from 'lucide-react';
+import { ArrowLeft, Clock, Loader2, Plus, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const DAYS_ORDER = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const ROLES = ['TRAINER', 'KICKBOXING_TRAINER', 'CROSSFIT_TRAINER'];
 const ROLE_LABELS: Record<string, string> = {
   TRAINER: 'General Trainer',
@@ -26,6 +27,42 @@ const DAY_LABELS: Record<string, string> = {
   SUNDAY: 'Sun',
 };
 
+const MORNING_PRESETS = [
+  { label: 'Morning 5:00–9:30', startTime: '05:00', endTime: '09:30' },
+  { label: 'Morning 6:00–10:30', startTime: '06:00', endTime: '10:30' },
+  { label: 'Morning 6:00–10:00', startTime: '06:00', endTime: '10:00' },
+  { label: 'Morning 6:00–9:00', startTime: '06:00', endTime: '09:00' },
+  { label: 'Morning 5:00–10:00', startTime: '05:00', endTime: '10:00' },
+  { label: 'Morning 6:00–11:00', startTime: '06:00', endTime: '11:00' },
+  { label: 'Morning 5:30–10:30', startTime: '05:30', endTime: '10:30' },
+  { label: 'Morning 6:30–15:30', startTime: '06:30', endTime: '15:30' },
+];
+
+const EVENING_PRESETS = [
+  { label: 'Evening 17:00–21:30', startTime: '17:00', endTime: '21:30' },
+  { label: 'Evening 16:00–21:00', startTime: '16:00', endTime: '21:00' },
+  { label: 'Evening 15:30–21:30', startTime: '15:30', endTime: '21:30' },
+  { label: 'Evening 17:00–21:00', startTime: '17:00', endTime: '21:00' },
+  { label: 'Evening 16:30–20:30', startTime: '16:30', endTime: '20:30' },
+  { label: 'Evening 18:00–22:30', startTime: '18:00', endTime: '22:30' },
+  { label: 'Evening 17:30–23:00', startTime: '17:30', endTime: '23:00' },
+  { label: 'Evening 16:30–21:00', startTime: '16:30', endTime: '21:00' },
+];
+
+function fmtTime(t: string) {
+  const [h = '0', m = '00'] = t.split(':');
+  const hour = parseInt(h, 10);
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+
+interface ShiftDraft {
+  _key: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  days: string[];
+}
+
 export default function NewTrainerPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -41,10 +78,21 @@ export default function NewTrainerPage() {
     specialties: '',
     certifications: '',
     bio: '',
-    workingHoursStart: '06:00',
-    workingHoursEnd: '22:00',
-    workingDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'] as string[],
   });
+
+  // Inline shift builder state
+  const [shifts, setShifts] = useState<ShiftDraft[]>([]);
+  const [shiftTab, setShiftTab] = useState<'morning' | 'evening' | 'custom'>('morning');
+  const [selectedPreset, setSelectedPreset] = useState<{
+    label: string;
+    startTime: string;
+    endTime: string;
+  } | null>(null);
+  const [customLabel, setCustomLabel] = useState('');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [draftDays, setDraftDays] = useState<string[]>([]);
+  const [shiftError, setShiftError] = useState('');
 
   function updateForm(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -59,13 +107,47 @@ export default function NewTrainerPage() {
     }));
   }
 
-  function toggleDay(day: string) {
-    setForm((prev) => ({
+  function toggleDraftDay(day: string) {
+    setDraftDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  }
+
+  function addShift() {
+    const isCustom = shiftTab === 'custom';
+    const label = isCustom ? customLabel.trim() : (selectedPreset?.label ?? '');
+    const startTime = isCustom ? customStart : (selectedPreset?.startTime ?? '');
+    const endTime = isCustom ? customEnd : (selectedPreset?.endTime ?? '');
+
+    if (!label) {
+      setShiftError('Label is required');
+      return;
+    }
+    if (!startTime || !endTime) {
+      setShiftError('Start and end times are required');
+      return;
+    }
+    if (startTime >= endTime) {
+      setShiftError('End time must be after start time');
+      return;
+    }
+    if (draftDays.length === 0) {
+      setShiftError('Select at least one day');
+      return;
+    }
+
+    setShifts((prev) => [
       ...prev,
-      workingDays: prev.workingDays.includes(day)
-        ? prev.workingDays.filter((d) => d !== day)
-        : [...prev.workingDays, day],
-    }));
+      { _key: `${Date.now()}`, label, startTime, endTime, days: [...draftDays] },
+    ]);
+    setShiftError('');
+    setSelectedPreset(null);
+    setCustomLabel('');
+    setCustomStart('');
+    setCustomEnd('');
+    setDraftDays([]);
+  }
+
+  function removeShift(key: string) {
+    setShifts((prev) => prev.filter((s) => s._key !== key));
   }
 
   async function handleCreate() {
@@ -73,10 +155,36 @@ export default function NewTrainerPage() {
       setError('First name, last name, email, and password are required');
       return;
     }
+
     if (form.roles.length === 0) {
       setError('At least one role must be selected');
       return;
     }
+
+    // Build final shift list — auto-include any pending draft the user configured but didn't explicitly add
+    const isCustom = shiftTab === 'custom';
+    const pendingLabel = isCustom ? customLabel.trim() : (selectedPreset?.label ?? '');
+    const pendingStart = isCustom ? customStart : (selectedPreset?.startTime ?? '');
+    const pendingEnd = isCustom ? customEnd : (selectedPreset?.endTime ?? '');
+    const hasPendingDraft =
+      pendingLabel &&
+      pendingStart &&
+      pendingEnd &&
+      pendingStart < pendingEnd &&
+      draftDays.length > 0;
+    const finalShifts: ShiftDraft[] = hasPendingDraft
+      ? [
+          ...shifts,
+          {
+            _key: `${Date.now()}`,
+            label: pendingLabel,
+            startTime: pendingStart,
+            endTime: pendingEnd,
+            days: [...draftDays],
+          },
+        ]
+      : shifts;
+
     setSaving(true);
     setError('');
     try {
@@ -103,9 +211,15 @@ export default function NewTrainerPage() {
                 .filter(Boolean)
             : undefined,
           bio: form.bio || undefined,
-          workingHoursStart: form.workingHoursStart || undefined,
-          workingHoursEnd: form.workingHoursEnd || undefined,
-          workingDays: form.workingDays.length > 0 ? form.workingDays : undefined,
+          shifts:
+            finalShifts.length > 0
+              ? finalShifts.map(({ label, startTime, endTime, days }) => ({
+                  label,
+                  startTime,
+                  endTime,
+                  days,
+                }))
+              : undefined,
         }),
       });
 
@@ -269,43 +383,138 @@ export default function NewTrainerPage() {
         </div>
       </div>
 
-      {/* Working Schedule */}
+      {/* Shifts */}
       <div className="rounded-2xl bg-card ring-1 ring-border/50">
         <div className="flex items-center gap-3 border-b border-border/50 px-5 py-4">
-          <h2 className="text-sm font-semibold">Working Schedule</h2>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+            <Clock className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold">Shifts</h2>
+            <p className="text-xs text-muted-foreground">
+              Optional — add if trainer has fixed shift windows
+            </p>
+          </div>
         </div>
         <div className="space-y-4 px-5 py-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="workStart">Working Hours Start</Label>
-              <Input
-                id="workStart"
-                type="time"
-                value={form.workingHoursStart}
-                onChange={(e) => updateForm('workingHoursStart', e.target.value)}
-              />
+          {/* Added shifts list */}
+          {shifts.length > 0 && (
+            <div className="space-y-2">
+              {shifts.map((shift) => (
+                <div
+                  key={shift._key}
+                  className="flex items-start justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium">{shift.label}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {fmtTime(shift.startTime)} – {fmtTime(shift.endTime)}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {DAYS_ORDER.filter((d) => shift.days.includes(d)).map((d) => (
+                        <span
+                          key={d}
+                          className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                        >
+                          {DAY_LABELS[d]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeShift(shift._key)}
+                    className="shrink-0 rounded p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="workEnd">Working Hours End</Label>
-              <Input
-                id="workEnd"
-                type="time"
-                value={form.workingHoursEnd}
-                onChange={(e) => updateForm('workingHoursEnd', e.target.value)}
-              />
-            </div>
-          </div>
+          )}
+
+          {/* Add shift form */}
+          <Tabs
+            value={shiftTab}
+            onValueChange={(v) => {
+              setShiftTab(v as typeof shiftTab);
+              setSelectedPreset(null);
+            }}
+          >
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="morning">Morning</TabsTrigger>
+              <TabsTrigger value="evening">Evening</TabsTrigger>
+              <TabsTrigger value="custom">Custom</TabsTrigger>
+            </TabsList>
+
+            {(['morning', 'evening'] as const).map((t) => (
+              <TabsContent key={t} value={t} className="mt-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {(t === 'morning' ? MORNING_PRESETS : EVENING_PRESETS).map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setSelectedPreset(preset)}
+                      className={cn(
+                        'rounded-md border px-2 py-2 text-left text-xs transition-colors',
+                        selectedPreset?.label === preset.label
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border hover:border-primary/50 hover:bg-muted',
+                      )}
+                    >
+                      <div className="font-medium">{fmtTime(preset.startTime)}</div>
+                      <div className="text-muted-foreground">to {fmtTime(preset.endTime)}</div>
+                    </button>
+                  ))}
+                </div>
+              </TabsContent>
+            ))}
+
+            <TabsContent value="custom" className="mt-3 space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Label</Label>
+                <Input
+                  placeholder="e.g. Mid-Day Shift"
+                  value={customLabel}
+                  onChange={(e) => setCustomLabel(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Start Time</Label>
+                  <Input
+                    type="time"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">End Time</Label>
+                  <Input
+                    type="time"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {/* Day picker */}
           <div className="space-y-1.5">
-            <Label>Working Days</Label>
+            <Label className="text-xs">Days for this shift</Label>
             <div className="flex flex-wrap gap-2">
-              {DAYS.map((day) => (
+              {DAYS_ORDER.map((day) => (
                 <button
                   key={day}
                   type="button"
-                  onClick={() => toggleDay(day)}
+                  onClick={() => toggleDraftDay(day)}
                   className={cn(
-                    'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ring-1',
-                    form.workingDays.includes(day)
+                    'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ring-1',
+                    draftDays.includes(day)
                       ? 'bg-blue-600 text-white ring-blue-600'
                       : 'bg-muted/40 text-muted-foreground ring-border/50 hover:text-foreground',
                   )}
@@ -315,6 +524,13 @@ export default function NewTrainerPage() {
               ))}
             </div>
           </div>
+
+          {shiftError && <p className="text-xs text-destructive">{shiftError}</p>}
+
+          <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addShift}>
+            <Plus className="h-3.5 w-3.5" />
+            Add Shift
+          </Button>
         </div>
       </div>
 

@@ -47,6 +47,13 @@ export const dayOfWeekSchema = z.enum([
   'SUNDAY',
 ]);
 
+export const trainerShiftSchema = z.object({
+  label: z.string().min(1).max(100),
+  startTime: timeSchema,
+  endTime: timeSchema,
+  days: z.array(dayOfWeekSchema).min(1, 'At least one day is required'),
+});
+
 export const kickboxingClientTypeSchema = z.enum(['GYM_MEMBER', 'EXTERNAL_ONLY']);
 
 export const difficultyLevelSchema = z.enum(['EASY', 'MEDIUM', 'HARD']);
@@ -107,9 +114,7 @@ export const createUserSchema = z.object({
   specialties: z.array(z.string()).optional(),
   certifications: z.array(z.string()).optional(),
   bio: z.string().optional(),
-  workingHoursStart: timeSchema.optional(),
-  workingHoursEnd: timeSchema.optional(),
-  workingDays: z.array(dayOfWeekSchema).optional(),
+  shifts: z.array(trainerShiftSchema).optional(),
   // Client-specific optional fields
   gender: genderSchema.optional(),
   dateOfBirth: z.string().optional(),
@@ -666,8 +671,48 @@ export const listRescheduleRequestsSchema = paginationSchema.extend({
   dateTo: dateSchema.optional(),
 });
 
+// ─── ADMIN: TRAINER SHIFTS ───────────────────────────
+
+export const createTrainerShiftApiSchema = z.object({
+  trainerProfileId: cuidSchema,
+  label: z.string().min(1).max(100),
+  startTime: timeSchema,
+  endTime: timeSchema,
+  days: z.array(dayOfWeekSchema).min(1, 'At least one day is required'),
+  effectiveFrom: z.string().datetime().optional(), // ISO datetime; defaults to now() if omitted
+});
+
+export const editTrainerShiftApiSchema = z.object({
+  label: z.string().min(1).max(100).optional(),
+  startTime: timeSchema.optional(),
+  endTime: timeSchema.optional(),
+  days: z.array(dayOfWeekSchema).min(1).optional(),
+  effectiveFrom: z.string().datetime(), // required — when the replacement shift kicks in
+});
+
+export const listTrainerShiftsSchema = z.object({
+  trainerId: cuidSchema.optional(),
+  includeScheduled: z.coerce.boolean().optional(), // also return future-dated shifts
+  includeExpired: z.coerce.boolean().optional(), // also return already-expired shifts
+});
+
+export const createShiftSwapSchema = z.object({
+  trainerAProfileId: cuidSchema,
+  trainerBProfileId: cuidSchema,
+  swapFrom: z.string().datetime(),
+  swapUntil: z.string().datetime(),
+  notes: z.string().max(500).optional(),
+});
+
+export const listShiftSwapsSchema = z.object({
+  trainerId: cuidSchema.optional(),
+  status: z.enum(['PENDING', 'APPROVED', 'CANCELLED']).optional(),
+});
+
 // ─── TYPE EXPORTS ────────────────────────────────────
 
+export type TrainerShiftInput = z.infer<typeof trainerShiftSchema>;
+export type CreateTrainerShiftApiInput = z.infer<typeof createTrainerShiftApiSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
