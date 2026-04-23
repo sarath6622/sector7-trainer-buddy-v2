@@ -2,17 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
-import {
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Filter,
-  Search,
-  User,
-  Users,
-  X,
-} from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock, Search, User, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -92,6 +82,47 @@ function formatDate(d: string) {
   });
 }
 
+function toISODate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+function getPresetDates(preset: string): { from: string; to: string } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (preset === 'today') {
+    const s = toISODate(today);
+    return { from: s, to: s };
+  }
+  if (preset === 'yesterday') {
+    const y = new Date(today);
+    y.setDate(y.getDate() - 1);
+    const s = toISODate(y);
+    return { from: s, to: s };
+  }
+  if (preset === 'this_week') {
+    const day = today.getDay(); // 0=Sun
+    const mon = new Date(today);
+    mon.setDate(today.getDate() - ((day + 6) % 7)); // Monday
+    return { from: toISODate(mon), to: toISODate(today) };
+  }
+  if (preset === 'this_month') {
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { from: toISODate(first), to: toISODate(today) };
+  }
+  return { from: '', to: '' };
+}
+
+type DatePreset = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'custom';
+
+const DATE_PRESETS: { value: DatePreset; label: string }[] = [
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: 'this_week', label: 'This week' },
+  { value: 'this_month', label: 'This month' },
+  { value: 'custom', label: 'Custom' },
+];
+
 export default function AdminSessionsPage() {
   const [sessions, setSessions] = useState<SessionInstance[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
@@ -103,8 +134,14 @@ export default function AdminSessionsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [dateFilter, setDateFilter] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
+  const [datePreset, setDatePreset] = useState<DatePreset>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
+  const { from: dateFrom, to: dateTo } = useMemo(() => {
+    if (datePreset === 'custom') return { from: customFrom, to: customTo };
+    return getPresetDates(datePreset);
+  }, [datePreset, customFrom, customTo]);
 
   const fetchSessions = useCallback(
     async (page = 1) => {
@@ -114,7 +151,12 @@ export default function AdminSessionsPage() {
         params.set('page', String(page));
         params.set('pageSize', '20');
         if (statusFilter !== 'ALL') params.set('status', statusFilter);
-        if (dateFilter) params.set('date', dateFilter);
+        if (dateFrom && dateTo && dateFrom === dateTo) {
+          params.set('date', dateFrom);
+        } else {
+          if (dateFrom) params.set('dateFrom', dateFrom);
+          if (dateTo) params.set('dateTo', dateTo);
+        }
 
         const res = await fetch(`/api/admin/sessions?${params}`);
         if (res.ok) {
@@ -126,7 +168,7 @@ export default function AdminSessionsPage() {
         setLoading(false);
       }
     },
-    [statusFilter, dateFilter],
+    [statusFilter, dateFrom, dateTo],
   );
 
   useEffect(() => {
@@ -173,7 +215,7 @@ export default function AdminSessionsPage() {
     );
   }
 
-  const hasActiveFilters = statusFilter !== 'ALL' || dateFilter !== '';
+  const hasActiveFilters = statusFilter !== 'ALL' || datePreset !== 'today';
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 pb-8">
@@ -189,85 +231,98 @@ export default function AdminSessionsPage() {
         </div>
       </div>
 
-      {/* Search + Filter bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by client or trainer name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn('gap-1.5', hasActiveFilters && 'border-primary text-primary')}
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          <Filter className="h-3.5 w-3.5" />
-          Filters
-          {hasActiveFilters && (
-            <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
-              {(statusFilter !== 'ALL' ? 1 : 0) + (dateFilter ? 1 : 0)}
-            </span>
-          )}
-        </Button>
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search by client or trainer name..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
       </div>
 
-      {/* Filter panel */}
-      {showFilters && (
-        <div className="flex flex-wrap items-end gap-4 rounded-xl bg-muted/40 px-4 py-3 ring-1 ring-border/50">
-          {/* Status pills */}
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Status</span>
-            <div className="flex flex-wrap gap-1.5">
-              {STATUS_OPTIONS.map((s) => (
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+        {/* Status dropdown */}
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Status</span>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-8 rounded-lg border border-border/50 bg-card px-2.5 pr-7 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s === 'ALL' ? 'All statuses' : s.replace('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Date preset + custom range */}
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Date</span>
+          <div className="flex items-center gap-2">
+            {/* Segmented preset buttons */}
+            <div className="flex rounded-lg bg-muted p-0.5 ring-1 ring-border/40">
+              {DATE_PRESETS.map((p) => (
                 <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
+                  key={p.value}
+                  onClick={() => setDatePreset(p.value)}
                   className={cn(
-                    'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-                    statusFilter === s
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'bg-card text-muted-foreground ring-1 ring-border/50 hover:bg-muted',
+                    'rounded-md px-3 py-1 text-xs font-medium transition-colors',
+                    datePreset === p.value
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {s === 'ALL' ? 'All' : s.replace('_', ' ')}
+                  {p.label}
                 </button>
               ))}
             </div>
-          </div>
 
-          {/* Date filter */}
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Date</span>
-            <Input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="h-8 w-[160px] text-sm"
-            />
+            {/* Custom date inputs */}
+            {datePreset === 'custom' && (
+              <>
+                <Input
+                  type="date"
+                  value={customFrom}
+                  max={customTo || undefined}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="h-8 w-[140px] text-xs"
+                />
+                <span className="text-xs text-muted-foreground">→</span>
+                <Input
+                  type="date"
+                  value={customTo}
+                  min={customFrom || undefined}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="h-8 w-[140px] text-xs"
+                />
+              </>
+            )}
           </div>
-
-          {/* Clear filters */}
-          {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1 text-muted-foreground"
-              onClick={() => {
-                setStatusFilter('ALL');
-                setDateFilter('');
-              }}
-            >
-              <X className="h-3 w-3" />
-              Clear
-            </Button>
-          )}
         </div>
-      )}
+
+        {/* Clear */}
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1 self-end text-muted-foreground"
+            onClick={() => {
+              setStatusFilter('ALL');
+              setDatePreset('today');
+              setCustomFrom('');
+              setCustomTo('');
+            }}
+          >
+            <X className="h-3 w-3" />
+            Reset
+          </Button>
+        )}
+      </div>
 
       {/* Sessions list */}
       {filtered.length === 0 ? (

@@ -2,7 +2,12 @@ import { prisma } from '@/lib/prisma';
 
 // ─── Helpers ────────────────────────────────────────
 
-function getMonthRange(month: string) {
+export interface DateRange {
+  start: Date;
+  end: Date;
+}
+
+export function getMonthRange(month: string): DateRange {
   const [yearStr, monthStr] = month.split('-');
   const year = parseInt(yearStr!, 10);
   const m = parseInt(monthStr!, 10);
@@ -24,10 +29,10 @@ export interface TrainerUtilization {
 
 export async function getTrainerUtilization(
   branchId: string,
-  month: string,
+  range: DateRange,
   trainerId?: string,
 ): Promise<TrainerUtilization[]> {
-  const { start, end } = getMonthRange(month);
+  const { start, end } = range;
 
   const where: Record<string, unknown> = { branchId };
   if (trainerId) where.id = trainerId;
@@ -79,10 +84,10 @@ export interface ClientAttendance {
 
 export async function getClientAttendance(
   branchId: string,
-  month: string,
+  range: DateRange,
   clientId?: string,
 ): Promise<ClientAttendance[]> {
-  const { start, end } = getMonthRange(month);
+  const { start, end } = range;
 
   const where: Record<string, unknown> = { branchId };
   if (clientId) where.id = clientId;
@@ -140,9 +145,9 @@ export interface SessionConsumption {
 
 export async function getSessionConsumption(
   branchId: string,
-  month: string,
+  range: DateRange,
 ): Promise<SessionConsumption[]> {
-  const { start, end } = getMonthRange(month);
+  const { start, end } = range;
 
   const packages = await prisma.ptPackage.findMany({
     where: { branchId, isActive: true },
@@ -202,8 +207,8 @@ export interface NoShowRate {
   noShowPercent: number;
 }
 
-export async function getNoShowRate(branchId: string, month: string): Promise<NoShowRate[]> {
-  const { start, end } = getMonthRange(month);
+export async function getNoShowRate(branchId: string, range: DateRange): Promise<NoShowRate[]> {
+  const { start, end } = range;
 
   const trainers = await prisma.trainerProfile.findMany({
     where: { branchId },
@@ -250,9 +255,9 @@ export interface RevenueOverview {
 
 export async function getRevenueOverview(
   branchId: string,
-  month: string,
+  range: DateRange,
 ): Promise<RevenueOverview> {
-  const { start, end } = getMonthRange(month);
+  const { start, end } = range;
 
   const payments = await prisma.paymentRecord.findMany({
     where: {
@@ -315,9 +320,9 @@ export interface CrossfitAnalytics {
 
 export async function getCrossfitAnalytics(
   branchId: string,
-  month: string,
+  range: DateRange,
 ): Promise<CrossfitAnalytics> {
-  const { start, end } = getMonthRange(month);
+  const { start, end } = range;
 
   const sessions = await prisma.crossfitSession.findMany({
     where: {

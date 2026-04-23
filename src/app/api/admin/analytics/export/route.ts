@@ -3,6 +3,7 @@ import { getServerSession, hasRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import * as XLSX from 'xlsx';
 import * as analyticsService from '@/services/analytics.service';
+import { getMonthRange } from '@/services/analytics.service'; // DateRange conversion helper
 
 /**
  * GET /api/admin/analytics/export?report=<type>&month=YYYY-MM
@@ -27,12 +28,13 @@ export async function GET(req: Request) {
     }
 
     const branchId = session.user.branchId;
+    const range = getMonthRange(month);
     let sheetData: Record<string, unknown>[] = [];
     let sheetName = report;
 
     switch (report) {
       case 'trainer-utilization': {
-        const data = await analyticsService.getTrainerUtilization(branchId, month);
+        const data = await analyticsService.getTrainerUtilization(branchId, range);
         sheetData = data.map((d) => ({
           Trainer: d.trainerName,
           'Total Sessions': d.totalSessions,
@@ -43,7 +45,7 @@ export async function GET(req: Request) {
         break;
       }
       case 'client-attendance': {
-        const data = await analyticsService.getClientAttendance(branchId, month);
+        const data = await analyticsService.getClientAttendance(branchId, range);
         sheetData = data.map((d) => ({
           Client: d.clientName,
           'Total Sessions': d.totalSessions,
@@ -56,7 +58,7 @@ export async function GET(req: Request) {
         break;
       }
       case 'session-consumption': {
-        const data = await analyticsService.getSessionConsumption(branchId, month);
+        const data = await analyticsService.getSessionConsumption(branchId, range);
         sheetData = data.map((d) => ({
           Client: d.clientName,
           'Sessions/Month': d.sessionsPerMonth,
@@ -71,7 +73,7 @@ export async function GET(req: Request) {
         break;
       }
       case 'no-show-rate': {
-        const data = await analyticsService.getNoShowRate(branchId, month);
+        const data = await analyticsService.getNoShowRate(branchId, range);
         sheetData = data.map((d) => ({
           Trainer: d.trainerName,
           'Total Sessions': d.totalSessions,
@@ -82,7 +84,7 @@ export async function GET(req: Request) {
         break;
       }
       case 'revenue': {
-        const data = await analyticsService.getRevenueOverview(branchId, month);
+        const data = await analyticsService.getRevenueOverview(branchId, range);
         sheetData = [
           {
             'Total Revenue': data.totalRevenue,
