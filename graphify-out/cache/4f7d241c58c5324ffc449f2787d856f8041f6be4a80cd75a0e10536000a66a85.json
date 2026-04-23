@@ -1,0 +1,49 @@
+{
+  "nodes": [
+    {
+      "id": "tests_unit_offline_sync_test_ts",
+      "label": "offline-sync.test.ts",
+      "file_type": "code",
+      "source_file": "tests/unit/offline-sync.test.ts",
+      "source_location": "L1"
+    }
+  ],
+  "edges": [
+    {
+      "source": "tests_unit_offline_sync_test_ts",
+      "target": "vitest",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/offline-sync.test.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_offline_sync_test_ts",
+      "target": "auto",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/offline-sync.test.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_offline_sync_test_ts",
+      "target": "offline_db",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/offline-sync.test.ts",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_offline_sync_test_ts",
+      "target": "offline_sync",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/offline-sync.test.ts",
+      "source_location": "L9",
+      "weight": 1.0
+    }
+  ]
+}

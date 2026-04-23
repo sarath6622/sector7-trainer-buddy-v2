@@ -1,0 +1,133 @@
+{
+  "nodes": [
+    {
+      "id": "src_components_layout_notificationbell_tsx",
+      "label": "NotificationBell.tsx",
+      "file_type": "code",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "notificationbell_markread",
+      "label": "markRead()",
+      "file_type": "code",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L77"
+    },
+    {
+      "id": "notificationbell_markallread",
+      "label": "markAllRead()",
+      "file_type": "code",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L91"
+    },
+    {
+      "id": "notificationbell_formattime",
+      "label": "formatTime()",
+      "file_type": "code",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L105"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "lucide_react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "sonner",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "button",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "badge",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "utils",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "dropdown_menu",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "usefcmtoken",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "notificationbell_markread",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L77",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "notificationbell_markallread",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L91",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_notificationbell_tsx",
+      "target": "notificationbell_formattime",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/NotificationBell.tsx",
+      "source_location": "L105",
+      "weight": 1.0
+    }
+  ]
+}

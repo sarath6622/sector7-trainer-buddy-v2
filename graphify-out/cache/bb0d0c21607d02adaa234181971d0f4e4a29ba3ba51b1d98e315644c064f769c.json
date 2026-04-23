@@ -1,0 +1,129 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_pt_package_service_ts",
+      "label": "pt-package.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "pt_package_service_createptpackage",
+      "label": "createPtPackage()",
+      "file_type": "code",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L31"
+    },
+    {
+      "id": "pt_package_service_getptpackages",
+      "label": "getPtPackages()",
+      "file_type": "code",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L133"
+    },
+    {
+      "id": "pt_package_service_getptpackagebyid",
+      "label": "getPtPackageById()",
+      "file_type": "code",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L160"
+    },
+    {
+      "id": "pt_package_service_updateptpackage",
+      "label": "updatePtPackage()",
+      "file_type": "code",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L179"
+    },
+    {
+      "id": "pt_package_service_deleteptpackage",
+      "label": "deletePtPackage()",
+      "file_type": "code",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L235"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_pt_package_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_pt_package_service_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_pt_package_service_ts",
+      "target": "notifications",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_pt_package_service_ts",
+      "target": "errors",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_pt_package_service_ts",
+      "target": "pt_package_service_createptpackage",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L31",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_pt_package_service_ts",
+      "target": "pt_package_service_getptpackages",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L133",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_pt_package_service_ts",
+      "target": "pt_package_service_getptpackagebyid",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L160",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_pt_package_service_ts",
+      "target": "pt_package_service_updateptpackage",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L179",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_pt_package_service_ts",
+      "target": "pt_package_service_deleteptpackage",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/pt-package.service.ts",
+      "source_location": "L235",
+      "weight": 1.0
+    }
+  ]
+}

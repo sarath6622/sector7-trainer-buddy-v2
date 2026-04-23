@@ -1,0 +1,65 @@
+{
+  "nodes": [
+    {
+      "id": "src_components_charts_workoutprogressionpanel_tsx",
+      "label": "WorkoutProgressionPanel.tsx",
+      "file_type": "code",
+      "source_file": "src/components/charts/WorkoutProgressionPanel.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "workoutprogressionpanel_handler",
+      "label": "handler()",
+      "file_type": "code",
+      "source_file": "src/components/charts/WorkoutProgressionPanel.tsx",
+      "source_location": "L44"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_components_charts_workoutprogressionpanel_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/charts/WorkoutProgressionPanel.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_charts_workoutprogressionpanel_tsx",
+      "target": "lucide_react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/charts/WorkoutProgressionPanel.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_charts_workoutprogressionpanel_tsx",
+      "target": "card",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/charts/WorkoutProgressionPanel.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_charts_workoutprogressionpanel_tsx",
+      "target": "src_components_charts_progresslinechart",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/charts/WorkoutProgressionPanel.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_charts_workoutprogressionpanel_tsx",
+      "target": "workoutprogressionpanel_handler",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/charts/WorkoutProgressionPanel.tsx",
+      "source_location": "L44",
+      "weight": 1.0
+    }
+  ]
+}

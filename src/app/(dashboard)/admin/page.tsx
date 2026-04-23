@@ -6,7 +6,6 @@ import { useSession } from 'next-auth/react';
 import type { DateRange as DayPickerRange } from 'react-day-picker';
 import {
   AlertCircle,
-  ArrowLeftRight,
   BarChart3,
   Calendar,
   CalendarDays,
@@ -134,7 +133,6 @@ const QUICK_LINKS = [
   { label: 'Trainers', href: '/admin/trainers', icon: UserCheck },
   { label: 'Scheduling', href: '/admin/scheduling', icon: Calendar },
   { label: 'Leaves', href: '/admin/leaves', icon: CalendarDays },
-  { label: 'Reassignment', href: '/admin/reassignments', icon: ArrowLeftRight },
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { label: 'Audit Log', href: '/admin/audit-log', icon: FileText },
   { label: 'Settings', href: '/admin/settings', icon: Settings },

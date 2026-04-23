@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    {
+      "id": "src_app_dashboard_client_session_id_loading_tsx",
+      "label": "loading.tsx",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/session/[id]/loading.tsx",
+      "source_location": "L1"
+    }
+  ],
+  "edges": []
+}

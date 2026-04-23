@@ -1,0 +1,79 @@
+{
+  "nodes": [
+    {
+      "id": "src_components_layout_offlineindicator_tsx",
+      "label": "OfflineIndicator.tsx",
+      "file_type": "code",
+      "source_file": "src/components/layout/OfflineIndicator.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "offlineindicator_offlineindicator",
+      "label": "OfflineIndicator()",
+      "file_type": "code",
+      "source_file": "src/components/layout/OfflineIndicator.tsx",
+      "source_location": "L6"
+    },
+    {
+      "id": "offlineindicator_handleonline",
+      "label": "handleOnline()",
+      "file_type": "code",
+      "source_file": "src/components/layout/OfflineIndicator.tsx",
+      "source_location": "L40"
+    },
+    {
+      "id": "offlineindicator_handleoffline",
+      "label": "handleOffline()",
+      "file_type": "code",
+      "source_file": "src/components/layout/OfflineIndicator.tsx",
+      "source_location": "L41"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_components_layout_offlineindicator_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/OfflineIndicator.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_offlineindicator_tsx",
+      "target": "lucide_react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/OfflineIndicator.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_offlineindicator_tsx",
+      "target": "offlineindicator_offlineindicator",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/OfflineIndicator.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_offlineindicator_tsx",
+      "target": "offlineindicator_handleonline",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/OfflineIndicator.tsx",
+      "source_location": "L40",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_layout_offlineindicator_tsx",
+      "target": "offlineindicator_handleoffline",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/layout/OfflineIndicator.tsx",
+      "source_location": "L41",
+      "weight": 1.0
+    }
+  ]
+}

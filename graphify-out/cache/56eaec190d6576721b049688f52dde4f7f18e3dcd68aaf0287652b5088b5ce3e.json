@@ -1,0 +1,88 @@
+{
+  "nodes": [
+    {
+      "id": "prisma_seed_demo_ts",
+      "label": "seed-demo.ts",
+      "file_type": "code",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "seed_demo_d",
+      "label": "d()",
+      "file_type": "code",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L26"
+    },
+    {
+      "id": "seed_demo_jitter",
+      "label": "jitter()",
+      "file_type": "code",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L31"
+    },
+    {
+      "id": "seed_demo_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L1442"
+    }
+  ],
+  "edges": [
+    {
+      "source": "prisma_seed_demo_ts",
+      "target": "client",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "prisma_seed_demo_ts",
+      "target": "seed_demo_d",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L26",
+      "weight": 1.0
+    },
+    {
+      "source": "prisma_seed_demo_ts",
+      "target": "seed_demo_jitter",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L31",
+      "weight": 1.0
+    },
+    {
+      "source": "prisma_seed_demo_ts",
+      "target": "seed_demo_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L1442",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_demo_main",
+      "target": "seed_demo_d",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L1525",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_demo_main",
+      "target": "seed_demo_jitter",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "prisma/seed-demo.ts",
+      "source_location": "L1526",
+      "weight": 1.0
+    }
+  ]
+}

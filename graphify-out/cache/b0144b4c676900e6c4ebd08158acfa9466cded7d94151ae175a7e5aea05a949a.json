@@ -1,0 +1,151 @@
+{
+  "nodes": [
+    {
+      "id": "src_app_dashboard_admin_clients_id_page_tsx",
+      "label": "page.tsx",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "page_field",
+      "label": "Field()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L65"
+    },
+    {
+      "id": "page_section",
+      "label": "Section()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L76"
+    },
+    {
+      "id": "page_clientprofilepage",
+      "label": "ClientProfilePage()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L98"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "navigation",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "lucide_react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "utils",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "use_confirm",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "input",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "textarea",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "skeleton",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "select",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "badgegrid",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "page_field",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L65",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "page_section",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L76",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_clients_id_page_tsx",
+      "target": "page_clientprofilepage",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/clients/[id]/page.tsx",
+      "source_location": "L98",
+      "weight": 1.0
+    }
+  ]
+}

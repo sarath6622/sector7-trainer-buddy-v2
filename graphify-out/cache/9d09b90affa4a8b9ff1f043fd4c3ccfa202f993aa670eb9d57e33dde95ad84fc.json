@@ -1,0 +1,145 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_availability_override_service_ts",
+      "label": "availability-override.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "availability_override_service_istraineravailable",
+      "label": "isTrainerAvailable()",
+      "file_type": "code",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L60"
+    },
+    {
+      "id": "availability_override_service_getoverridesmap",
+      "label": "getOverridesMap()",
+      "file_type": "code",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L107"
+    },
+    {
+      "id": "availability_override_service_createoverride",
+      "label": "createOverride()",
+      "file_type": "code",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L130"
+    },
+    {
+      "id": "availability_override_service_bulkcreateoverrides",
+      "label": "bulkCreateOverrides()",
+      "file_type": "code",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L187"
+    },
+    {
+      "id": "availability_override_service_listoverrides",
+      "label": "listOverrides()",
+      "file_type": "code",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L205"
+    },
+    {
+      "id": "availability_override_service_deleteoverride",
+      "label": "deleteOverride()",
+      "file_type": "code",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L228"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_availability_override_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_availability_override_service_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_availability_override_service_ts",
+      "target": "errors",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_availability_override_service_ts",
+      "target": "availability_override_service_istraineravailable",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L60",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_availability_override_service_ts",
+      "target": "availability_override_service_getoverridesmap",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L107",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_availability_override_service_ts",
+      "target": "availability_override_service_createoverride",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L130",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_availability_override_service_ts",
+      "target": "availability_override_service_bulkcreateoverrides",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L187",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_availability_override_service_ts",
+      "target": "availability_override_service_listoverrides",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L205",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_availability_override_service_ts",
+      "target": "availability_override_service_deleteoverride",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L228",
+      "weight": 1.0
+    },
+    {
+      "source": "availability_override_service_bulkcreateoverrides",
+      "target": "availability_override_service_createoverride",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/availability-override.service.ts",
+      "source_location": "L190",
+      "weight": 1.0
+    }
+  ]
+}

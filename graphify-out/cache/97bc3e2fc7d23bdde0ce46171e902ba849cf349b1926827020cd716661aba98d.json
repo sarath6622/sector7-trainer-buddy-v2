@@ -1,0 +1,140 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_session_generation_service_ts",
+      "label": "session-generation.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "session_generation_service_getdatesforday",
+      "label": "getDatesForDay()",
+      "file_type": "code",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L34"
+    },
+    {
+      "id": "session_generation_service_timeslotsoverlap",
+      "label": "timeSlotsOverlap()",
+      "file_type": "code",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L58"
+    },
+    {
+      "id": "session_generation_service_generatesessions",
+      "label": "generateSessions()",
+      "file_type": "code",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L80"
+    },
+    {
+      "id": "session_generation_service_detectconflicts",
+      "label": "detectConflicts()",
+      "file_type": "code",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L484"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_session_generation_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_generation_service_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_generation_service_ts",
+      "target": "notifications",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_generation_service_ts",
+      "target": "client",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_generation_service_ts",
+      "target": "session_generation_service_getdatesforday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L34",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_generation_service_ts",
+      "target": "session_generation_service_timeslotsoverlap",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L58",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_generation_service_ts",
+      "target": "session_generation_service_generatesessions",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L80",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_generation_service_ts",
+      "target": "session_generation_service_detectconflicts",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L484",
+      "weight": 1.0
+    },
+    {
+      "source": "session_generation_service_generatesessions",
+      "target": "session_generation_service_getdatesforday",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L190",
+      "weight": 1.0
+    },
+    {
+      "source": "session_generation_service_generatesessions",
+      "target": "session_generation_service_timeslotsoverlap",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L221",
+      "weight": 1.0
+    },
+    {
+      "source": "session_generation_service_detectconflicts",
+      "target": "session_generation_service_timeslotsoverlap",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session-generation.service.ts",
+      "source_location": "L520",
+      "weight": 1.0
+    }
+  ]
+}

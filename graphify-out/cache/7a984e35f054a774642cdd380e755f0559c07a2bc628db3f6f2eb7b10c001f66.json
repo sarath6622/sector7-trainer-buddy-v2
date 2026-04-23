@@ -1,0 +1,68 @@
+{
+  "nodes": [
+    {
+      "id": "rules_change_mgmt",
+      "label": "Change Management Rules",
+      "file_type": "document",
+      "source_file": "rules/change-management.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "rules_change_mgmt",
+      "target": "memory_schema",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/change-management.md",
+      "source_location": "Memory Files table",
+      "weight": 1.0
+    },
+    {
+      "source": "rules_change_mgmt",
+      "target": "memory_api_contracts",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/change-management.md",
+      "source_location": "Memory Files table",
+      "weight": 1.0
+    },
+    {
+      "source": "rules_change_mgmt",
+      "target": "memory_decisions",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/change-management.md",
+      "source_location": "Memory Files table",
+      "weight": 1.0
+    },
+    {
+      "source": "rules_change_mgmt",
+      "target": "tasks_completed",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/change-management.md",
+      "source_location": "Task Lifecycle section",
+      "weight": 1.0
+    },
+    {
+      "source": "rules_change_mgmt",
+      "target": "tasks_current",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/change-management.md",
+      "source_location": "Current Task File Format",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

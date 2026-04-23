@@ -1,0 +1,172 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_reassignment_service_ts",
+      "label": "reassignment.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "reassignment_service_getvacanttrainers",
+      "label": "getVacantTrainers()",
+      "file_type": "code",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L44"
+    },
+    {
+      "id": "reassignment_service_reassignsession",
+      "label": "reassignSession()",
+      "file_type": "code",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L124"
+    },
+    {
+      "id": "reassignment_service_bulkreassign",
+      "label": "bulkReassign()",
+      "file_type": "code",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L239"
+    },
+    {
+      "id": "reassignment_service_listreassignments",
+      "label": "listReassignments()",
+      "file_type": "code",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L263"
+    },
+    {
+      "id": "reassignment_service_getbusytrainerids",
+      "label": "getBusyTrainerIds()",
+      "file_type": "code",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L300"
+    },
+    {
+      "id": "reassignment_service_getonleavetrainerids",
+      "label": "getOnLeaveTrainerIds()",
+      "file_type": "code",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L335"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "errors",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "notification_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "reassignment_service_getvacanttrainers",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L44",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "reassignment_service_reassignsession",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L124",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "reassignment_service_bulkreassign",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L239",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "reassignment_service_listreassignments",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L263",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "reassignment_service_getbusytrainerids",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L300",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_reassignment_service_ts",
+      "target": "reassignment_service_getonleavetrainerids",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L335",
+      "weight": 1.0
+    },
+    {
+      "source": "reassignment_service_getvacanttrainers",
+      "target": "reassignment_service_getbusytrainerids",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L64",
+      "weight": 1.0
+    },
+    {
+      "source": "reassignment_service_getvacanttrainers",
+      "target": "reassignment_service_getonleavetrainerids",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L67",
+      "weight": 1.0
+    },
+    {
+      "source": "reassignment_service_bulkreassign",
+      "target": "reassignment_service_reassignsession",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/reassignment.service.ts",
+      "source_location": "L248",
+      "weight": 1.0
+    }
+  ]
+}

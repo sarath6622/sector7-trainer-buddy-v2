@@ -1,0 +1,188 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_analytics_service_ts",
+      "label": "analytics.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "analytics_service_getmonthrange",
+      "label": "getMonthRange()",
+      "file_type": "code",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L5"
+    },
+    {
+      "id": "analytics_service_gettrainerutilization",
+      "label": "getTrainerUtilization()",
+      "file_type": "code",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L25"
+    },
+    {
+      "id": "analytics_service_getclientattendance",
+      "label": "getClientAttendance()",
+      "file_type": "code",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L80"
+    },
+    {
+      "id": "analytics_service_getsessionconsumption",
+      "label": "getSessionConsumption()",
+      "file_type": "code",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L141"
+    },
+    {
+      "id": "analytics_service_getnoshowrate",
+      "label": "getNoShowRate()",
+      "file_type": "code",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L205"
+    },
+    {
+      "id": "analytics_service_getrevenueoverview",
+      "label": "getRevenueOverview()",
+      "file_type": "code",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L251"
+    },
+    {
+      "id": "analytics_service_gettraineranalytics",
+      "label": "getTrainerAnalytics()",
+      "file_type": "code",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L306"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_analytics_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_analytics_service_ts",
+      "target": "analytics_service_getmonthrange",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_analytics_service_ts",
+      "target": "analytics_service_gettrainerutilization",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_analytics_service_ts",
+      "target": "analytics_service_getclientattendance",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L80",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_analytics_service_ts",
+      "target": "analytics_service_getsessionconsumption",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L141",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_analytics_service_ts",
+      "target": "analytics_service_getnoshowrate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L205",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_analytics_service_ts",
+      "target": "analytics_service_getrevenueoverview",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L251",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_analytics_service_ts",
+      "target": "analytics_service_gettraineranalytics",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L306",
+      "weight": 1.0
+    },
+    {
+      "source": "analytics_service_gettrainerutilization",
+      "target": "analytics_service_getmonthrange",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L30",
+      "weight": 1.0
+    },
+    {
+      "source": "analytics_service_getclientattendance",
+      "target": "analytics_service_getmonthrange",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L85",
+      "weight": 1.0
+    },
+    {
+      "source": "analytics_service_getsessionconsumption",
+      "target": "analytics_service_getmonthrange",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L145",
+      "weight": 1.0
+    },
+    {
+      "source": "analytics_service_getnoshowrate",
+      "target": "analytics_service_getmonthrange",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L206",
+      "weight": 1.0
+    },
+    {
+      "source": "analytics_service_getrevenueoverview",
+      "target": "analytics_service_getmonthrange",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L255",
+      "weight": 1.0
+    },
+    {
+      "source": "analytics_service_gettraineranalytics",
+      "target": "analytics_service_getmonthrange",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/analytics.service.ts",
+      "source_location": "L312",
+      "weight": 1.0
+    }
+  ]
+}

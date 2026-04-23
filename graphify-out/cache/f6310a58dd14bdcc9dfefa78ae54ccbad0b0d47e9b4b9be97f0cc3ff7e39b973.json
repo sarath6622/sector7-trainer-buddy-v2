@@ -1,0 +1,190 @@
+{
+  "nodes": [
+    {
+      "id": "docs_notification_guide",
+      "label": "Notification Integration Guide",
+      "file_type": "document",
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_whatsapp_api",
+      "label": "WhatsApp Business API",
+      "file_type": "document",
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "WhatsApp Business API Setup",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_fcm",
+      "label": "Firebase Cloud Messaging (FCM)",
+      "file_type": "document",
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Firebase Cloud Messaging Setup",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_notification",
+      "label": "notification.service.ts",
+      "file_type": "code",
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Key files",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "notification_flow",
+      "label": "Notification Flow Architecture",
+      "file_type": "document",
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Current Architecture",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "whatsapp_templates",
+      "label": "WhatsApp Message Templates",
+      "file_type": "document",
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Create Message Templates",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "lib_notifications",
+      "target": "tech_whatsapp_api",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Key files",
+      "weight": 1.0
+    },
+    {
+      "source": "lib_notifications",
+      "target": "tech_fcm",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Key files",
+      "weight": 1.0
+    },
+    {
+      "source": "service_notification",
+      "target": "lib_notifications",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "How notifications flow",
+      "weight": 1.0
+    },
+    {
+      "source": "service_session",
+      "target": "service_notification",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Notification Triggers Reference",
+      "weight": 1.0
+    },
+    {
+      "source": "service_leave",
+      "target": "service_notification",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Notification Triggers Reference",
+      "weight": 1.0
+    },
+    {
+      "source": "service_reassignment",
+      "target": "service_notification",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Notification Triggers Reference",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_notification_guide",
+      "target": "tech_whatsapp_api",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "WhatsApp Business API Setup",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_notification_guide",
+      "target": "tech_fcm",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Firebase Cloud Messaging Setup",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_notification_guide",
+      "target": "whatsapp_templates",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Create Message Templates",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_notification_guide",
+      "target": "notification_flow",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md",
+      "source_location": "Current Architecture",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "notification_stack",
+      "label": "Notification System Stack",
+      "nodes": [
+        "concept_notifications_dual",
+        "tech_whatsapp_api",
+        "tech_fcm",
+        "lib_notifications",
+        "service_notification",
+        "schema_notification_log"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/notification-integration-guide.md"
+    }
+  ]
+}

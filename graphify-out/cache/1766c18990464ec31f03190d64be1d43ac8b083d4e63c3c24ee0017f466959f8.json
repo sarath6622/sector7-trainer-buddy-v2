@@ -1,0 +1,496 @@
+{
+  "nodes": [
+    {
+      "id": "memory_architecture",
+      "label": "Architecture Memory",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_audit_log",
+      "label": "Audit Log (Append-Only)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Audit Logging section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_service_layer",
+      "label": "Service Layer Pattern",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Service Layer Pattern",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_offline_first",
+      "label": "Offline-First Architecture (Dexie + Workbox)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Offline-First for Workout Logging",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_nextjs",
+      "label": "Next.js App Router (v16.2)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_typescript",
+      "label": "TypeScript (Strict Mode)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_postgresql",
+      "label": "PostgreSQL 16",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_prisma",
+      "label": "Prisma ORM (v5.x)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_redis",
+      "label": "Redis 7.x",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_nextauth",
+      "label": "NextAuth.js (Auth.js v4.24)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_tailwind",
+      "label": "Tailwind CSS v4.x",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_shadcn",
+      "label": "shadcn/ui Component Primitives",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_recharts",
+      "label": "Recharts (Charts)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_fullcalendar",
+      "label": "@fullcalendar/react",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_rhf_zod",
+      "label": "React Hook Form + Zod",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_tanstack_table",
+      "label": "TanStack Table v8",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_sheetjs",
+      "label": "SheetJS (Excel Export)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_dexie",
+      "label": "Dexie.js (IndexedDB Wrapper)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_workbox",
+      "label": "Workbox (Background Sync)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_vitest",
+      "label": "Vitest + Testing Library + Supertest",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_playwright",
+      "label": "Playwright (E2E Testing)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_vercel",
+      "label": "Vercel (Deployment)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tech_docker_compose",
+      "label": "Docker Compose (Local Dev)",
+      "file_type": "document",
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "memory_architecture",
+      "target": "tech_nextjs",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_postgresql",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_prisma",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_redis",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_nextauth",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_shadcn",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_recharts",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_dexie",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_workbox",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_vitest",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "tech_vercel",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "concept_service_layer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Service Layer Pattern",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "concept_offline_first",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Offline-First section",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_architecture",
+      "target": "concept_audit_log",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Audit Logging section",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_service_layer",
+      "target": "lib_audit",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Audit Logging section",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_service_layer",
+      "target": "lib_prisma",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "memory/architecture.md",
+      "source_location": "Service Layer Pattern",
+      "weight": 0.9
+    },
+    {
+      "source": "concept_offline_first",
+      "target": "tech_dexie",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Offline-First section",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_offline_first",
+      "target": "tech_workbox",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Offline-First section",
+      "weight": 1.0
+    },
+    {
+      "source": "service_session",
+      "target": "lib_audit",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Audit Logging section",
+      "weight": 1.0
+    },
+    {
+      "source": "lib_middleware",
+      "target": "concept_branch_scoping",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Branch Scoping section",
+      "weight": 1.0
+    },
+    {
+      "source": "lib_middleware",
+      "target": "tech_nextauth",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Branch Scoping section",
+      "weight": 1.0
+    },
+    {
+      "source": "tech_prisma",
+      "target": "tech_postgresql",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md",
+      "source_location": "Tech Stack table",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "offline_workout_stack",
+      "label": "Offline Workout Logging Stack",
+      "nodes": [
+        "concept_offline_first",
+        "tech_dexie",
+        "tech_workbox",
+        "lib_offline",
+        "service_workout"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/architecture.md"
+    }
+  ]
+}

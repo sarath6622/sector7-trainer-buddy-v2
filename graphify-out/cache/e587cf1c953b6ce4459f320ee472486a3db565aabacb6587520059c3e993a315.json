@@ -1,0 +1,404 @@
+{
+  "nodes": [
+    {
+      "id": "src_app_dashboard_admin_scheduling_page_tsx",
+      "label": "page.tsx",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "page_gettrainercolor",
+      "label": "getTrainerColor()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L123"
+    },
+    {
+      "id": "page_buildmonthcalendar",
+      "label": "buildMonthCalendar()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L128"
+    },
+    {
+      "id": "page_slotsoverlap",
+      "label": "slotsOverlap()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L156"
+    },
+    {
+      "id": "page_formattime12",
+      "label": "formatTime12()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L168"
+    },
+    {
+      "id": "page_trainercombobox",
+      "label": "TrainerCombobox()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L176"
+    },
+    {
+      "id": "page_handleclickoutside",
+      "label": "handleClickOutside()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L284"
+    },
+    {
+      "id": "page_fetchavailability",
+      "label": "fetchAvailability()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L471"
+    },
+    {
+      "id": "page_handlebulkcreate",
+      "label": "handleBulkCreate()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L563"
+    },
+    {
+      "id": "page_handlestartedit",
+      "label": "handleStartEdit()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L638"
+    },
+    {
+      "id": "page_handlesaveedit",
+      "label": "handleSaveEdit()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L648"
+    },
+    {
+      "id": "page_handlecancelsession",
+      "label": "handleCancelSession()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L690"
+    },
+    {
+      "id": "page_handledatesset",
+      "label": "handleDatesSet()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L714"
+    },
+    {
+      "id": "page_handleeventclick",
+      "label": "handleEventClick()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L727"
+    },
+    {
+      "id": "page_handledateselect",
+      "label": "handleDateSelect()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L733"
+    },
+    {
+      "id": "page_handlekey",
+      "label": "handleKey()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L746"
+    },
+    {
+      "id": "page_cn",
+      "label": "cn()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L1325"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "button",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "input",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "label",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "badge",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "skeleton",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "dialog",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "sessioncalendar",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "lucide_react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "core",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L37",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "sonner",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L38",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "use_confirm",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L39",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "utils",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L40",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_gettrainercolor",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L123",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_buildmonthcalendar",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L128",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_slotsoverlap",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L156",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_formattime12",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L168",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_trainercombobox",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L176",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_handleclickoutside",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L284",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_fetchavailability",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L471",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_handlebulkcreate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L563",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_handlestartedit",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L638",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_handlesaveedit",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L648",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_handlecancelsession",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L690",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_handledatesset",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L714",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_handleeventclick",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L727",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_handledateselect",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L733",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_handlekey",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L746",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_formattime12",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L962",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_formattime12",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L1070",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_scheduling_page_tsx",
+      "target": "page_cn",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/scheduling/page.tsx",
+      "source_location": "L1325",
+      "weight": 1.0
+    }
+  ]
+}

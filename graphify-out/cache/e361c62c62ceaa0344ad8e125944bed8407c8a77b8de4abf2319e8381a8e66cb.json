@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    {
+      "id": "src_app_dashboard_client_unavailability_loading_tsx",
+      "label": "loading.tsx",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/unavailability/loading.tsx",
+      "source_location": "L1"
+    }
+  ],
+  "edges": []
+}

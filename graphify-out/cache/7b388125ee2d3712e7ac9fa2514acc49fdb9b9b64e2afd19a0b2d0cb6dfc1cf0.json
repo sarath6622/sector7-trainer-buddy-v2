@@ -1,0 +1,83 @@
+{
+  "nodes": [
+    {
+      "id": "src_components_calendar_sessioncalendar_tsx",
+      "label": "SessionCalendar.tsx",
+      "file_type": "code",
+      "source_file": "src/components/calendar/SessionCalendar.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "sessioncalendar_handler",
+      "label": "handler()",
+      "file_type": "code",
+      "source_file": "src/components/calendar/SessionCalendar.tsx",
+      "source_location": "L66"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_components_calendar_sessioncalendar_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/calendar/SessionCalendar.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_calendar_sessioncalendar_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/calendar/SessionCalendar.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_calendar_sessioncalendar_tsx",
+      "target": "daygrid",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/calendar/SessionCalendar.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_calendar_sessioncalendar_tsx",
+      "target": "timegrid",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/calendar/SessionCalendar.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_calendar_sessioncalendar_tsx",
+      "target": "interaction",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/calendar/SessionCalendar.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_calendar_sessioncalendar_tsx",
+      "target": "core",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/calendar/SessionCalendar.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_calendar_sessioncalendar_tsx",
+      "target": "sessioncalendar_handler",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/calendar/SessionCalendar.tsx",
+      "source_location": "L66",
+      "weight": 1.0
+    }
+  ]
+}

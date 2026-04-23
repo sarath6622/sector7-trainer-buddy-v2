@@ -1,0 +1,49 @@
+{
+  "nodes": [
+    {
+      "id": "tests_unit_session_service_test_ts",
+      "label": "session-service.test.ts",
+      "file_type": "code",
+      "source_file": "tests/unit/session-service.test.ts",
+      "source_location": "L1"
+    }
+  ],
+  "edges": [
+    {
+      "source": "tests_unit_session_service_test_ts",
+      "target": "vitest",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/session-service.test.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_session_service_test_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/session-service.test.ts",
+      "source_location": "L19",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_session_service_test_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/session-service.test.ts",
+      "source_location": "L20",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_session_service_test_ts",
+      "target": "session_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/session-service.test.ts",
+      "source_location": "L21",
+      "weight": 1.0
+    }
+  ]
+}

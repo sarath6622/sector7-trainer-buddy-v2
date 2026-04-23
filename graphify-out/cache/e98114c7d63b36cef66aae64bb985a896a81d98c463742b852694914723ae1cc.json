@@ -1,0 +1,70 @@
+{
+  "nodes": [
+    {
+      "id": "src_components_timer_sessiontimer_tsx",
+      "label": "SessionTimer.tsx",
+      "file_type": "code",
+      "source_file": "src/components/timer/SessionTimer.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "sessiontimer_calcelapsed",
+      "label": "calcElapsed()",
+      "file_type": "code",
+      "source_file": "src/components/timer/SessionTimer.tsx",
+      "source_location": "L12"
+    },
+    {
+      "id": "sessiontimer_formattime",
+      "label": "formatTime()",
+      "file_type": "code",
+      "source_file": "src/components/timer/SessionTimer.tsx",
+      "source_location": "L16"
+    },
+    {
+      "id": "sessiontimer_useelapsedtimer",
+      "label": "useElapsedTimer()",
+      "file_type": "code",
+      "source_file": "src/components/timer/SessionTimer.tsx",
+      "source_location": "L27"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_components_timer_sessiontimer_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/timer/SessionTimer.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_timer_sessiontimer_tsx",
+      "target": "sessiontimer_calcelapsed",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/timer/SessionTimer.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_timer_sessiontimer_tsx",
+      "target": "sessiontimer_formattime",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/timer/SessionTimer.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_timer_sessiontimer_tsx",
+      "target": "sessiontimer_useelapsedtimer",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/timer/SessionTimer.tsx",
+      "source_location": "L27",
+      "weight": 1.0
+    }
+  ]
+}

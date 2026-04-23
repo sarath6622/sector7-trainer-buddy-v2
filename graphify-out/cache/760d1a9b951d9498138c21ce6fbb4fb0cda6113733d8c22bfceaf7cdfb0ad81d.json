@@ -1,0 +1,49 @@
+{
+  "nodes": [
+    {
+      "id": "tests_unit_client_unavailability_service_test_ts",
+      "label": "client-unavailability-service.test.ts",
+      "file_type": "code",
+      "source_file": "tests/unit/client-unavailability-service.test.ts",
+      "source_location": "L1"
+    }
+  ],
+  "edges": [
+    {
+      "source": "tests_unit_client_unavailability_service_test_ts",
+      "target": "vitest",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/client-unavailability-service.test.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_client_unavailability_service_test_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/client-unavailability-service.test.ts",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_client_unavailability_service_test_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/client-unavailability-service.test.ts",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_client_unavailability_service_test_ts",
+      "target": "clientunavailability_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/client-unavailability-service.test.ts",
+      "source_location": "L18",
+      "weight": 1.0
+    }
+  ]
+}

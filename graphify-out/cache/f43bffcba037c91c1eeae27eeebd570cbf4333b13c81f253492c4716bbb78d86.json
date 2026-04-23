@@ -1,0 +1,70 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_auditlog_service_ts",
+      "label": "auditlog.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/auditlog.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "auditlog_service_listauditlogs",
+      "label": "listAuditLogs()",
+      "file_type": "code",
+      "source_file": "src/services/auditlog.service.ts",
+      "source_location": "L15"
+    },
+    {
+      "id": "auditlog_service_getdistinctactions",
+      "label": "getDistinctActions()",
+      "file_type": "code",
+      "source_file": "src/services/auditlog.service.ts",
+      "source_location": "L58"
+    },
+    {
+      "id": "auditlog_service_getdistinctsubjecttypes",
+      "label": "getDistinctSubjectTypes()",
+      "file_type": "code",
+      "source_file": "src/services/auditlog.service.ts",
+      "source_location": "L68"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_auditlog_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/auditlog.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_auditlog_service_ts",
+      "target": "auditlog_service_listauditlogs",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/auditlog.service.ts",
+      "source_location": "L15",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_auditlog_service_ts",
+      "target": "auditlog_service_getdistinctactions",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/auditlog.service.ts",
+      "source_location": "L58",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_auditlog_service_ts",
+      "target": "auditlog_service_getdistinctsubjecttypes",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/auditlog.service.ts",
+      "source_location": "L68",
+      "weight": 1.0
+    }
+  ]
+}

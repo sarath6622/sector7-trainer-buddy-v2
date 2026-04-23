@@ -1,0 +1,129 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_progress_service_ts",
+      "label": "progress.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "progress_service_createprogressentry",
+      "label": "createProgressEntry()",
+      "file_type": "code",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L63"
+    },
+    {
+      "id": "progress_service_updateprogressentry",
+      "label": "updateProgressEntry()",
+      "file_type": "code",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L191"
+    },
+    {
+      "id": "progress_service_listprogressentries",
+      "label": "listProgressEntries()",
+      "file_type": "code",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L252"
+    },
+    {
+      "id": "progress_service_getchartdata",
+      "label": "getChartData()",
+      "file_type": "code",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L271"
+    },
+    {
+      "id": "progress_service_listexerciseswithprogressdata",
+      "label": "listExercisesWithProgressData()",
+      "file_type": "code",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L397"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_progress_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_progress_service_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_progress_service_ts",
+      "target": "errors",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_progress_service_ts",
+      "target": "badge_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_progress_service_ts",
+      "target": "progress_service_createprogressentry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L63",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_progress_service_ts",
+      "target": "progress_service_updateprogressentry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L191",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_progress_service_ts",
+      "target": "progress_service_listprogressentries",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L252",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_progress_service_ts",
+      "target": "progress_service_getchartdata",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L271",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_progress_service_ts",
+      "target": "progress_service_listexerciseswithprogressdata",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/progress.service.ts",
+      "source_location": "L397",
+      "weight": 1.0
+    }
+  ]
+}

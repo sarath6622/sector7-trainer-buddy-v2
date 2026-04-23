@@ -1,0 +1,184 @@
+{
+  "nodes": [
+    {
+      "id": "sector7logo_brand",
+      "label": "Sector 7 Brand Identity",
+      "file_type": "image",
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7logo_number7",
+      "label": "Number 7 Visual Mark",
+      "file_type": "image",
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7logo_fitness",
+      "label": "Fitness Tagline",
+      "file_type": "image",
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7logo_gymcrossfit",
+      "label": "Gym Crossfit Descriptor",
+      "file_type": "image",
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7logo_colororange",
+      "label": "Orange Brand Color",
+      "file_type": "image",
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7logo_typographydark",
+      "label": "Dark Grey Geometric Typography",
+      "file_type": "image",
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7logo_wordmark",
+      "label": "SECTOR Wordmark (Outlined Background)",
+      "file_type": "image",
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "sector7logo_brand",
+      "target": "sector7logo_number7",
+      "relation": "has_visual_element",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7logo_brand",
+      "target": "sector7logo_fitness",
+      "relation": "has_tagline",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7logo_brand",
+      "target": "sector7logo_gymcrossfit",
+      "relation": "has_descriptor",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7logo_brand",
+      "target": "sector7logo_colororange",
+      "relation": "uses_brand_color",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7logo_brand",
+      "target": "sector7logo_typographydark",
+      "relation": "uses_typography_style",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7logo_brand",
+      "target": "sector7logo_wordmark",
+      "relation": "has_visual_element",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7logo_number7",
+      "target": "sector7logo_colororange",
+      "relation": "styled_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7logo_gymcrossfit",
+      "target": "sector7logo_fitness",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7logo_wordmark",
+      "target": "sector7logo_typographydark",
+      "relation": "uses_typography_style",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7logo_brand",
+      "target": "sector7logo_gymcrossfit",
+      "relation": "positioned_in_industry",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "sector 7 logo png.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

@@ -1,0 +1,267 @@
+{
+  "nodes": [
+    {
+      "id": "sector7_logo_mobile_brand_identity",
+      "label": "Sector 7 Brand Identity",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7_logo_mobile_numeral_7",
+      "label": "Numeral 7 Logo Mark",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7_logo_mobile_color_orange",
+      "label": "Orange Brand Color (#E84E0F approx)",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7_logo_mobile_color_dark_grey",
+      "label": "Dark Grey Brand Color",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7_logo_mobile_wordmark_fitness",
+      "label": "Fitness Wordmark",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7_logo_mobile_wordmark_gym_crossfit",
+      "label": "Gym Crossfit Wordmark",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7_logo_mobile_typography_wide_tracking",
+      "label": "Wide-Tracked Sans-Serif Typography",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7_logo_mobile_background_white",
+      "label": "White Background",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7_logo_mobile_layout_stacked_vertical",
+      "label": "Stacked Vertical Mobile Layout",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sector7_logo_mobile_geometric_shadow",
+      "label": "Geometric Shadow / Ghost Element Behind 7",
+      "file_type": "image",
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "sector7_logo_mobile_numeral_7",
+      "target": "sector7_logo_mobile_brand_identity",
+      "relation": "is_primary_mark_of",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_color_orange",
+      "target": "sector7_logo_mobile_numeral_7",
+      "relation": "fills",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_color_dark_grey",
+      "target": "sector7_logo_mobile_wordmark_fitness",
+      "relation": "fills",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_color_dark_grey",
+      "target": "sector7_logo_mobile_wordmark_gym_crossfit",
+      "relation": "fills",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_wordmark_fitness",
+      "target": "sector7_logo_mobile_brand_identity",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_wordmark_gym_crossfit",
+      "target": "sector7_logo_mobile_brand_identity",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_typography_wide_tracking",
+      "target": "sector7_logo_mobile_wordmark_gym_crossfit",
+      "relation": "styles",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_typography_wide_tracking",
+      "target": "sector7_logo_mobile_wordmark_fitness",
+      "relation": "styles",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_layout_stacked_vertical",
+      "target": "sector7_logo_mobile_brand_identity",
+      "relation": "defines_composition_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_background_white",
+      "target": "sector7_logo_mobile_brand_identity",
+      "relation": "provides_background_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_geometric_shadow",
+      "target": "sector7_logo_mobile_numeral_7",
+      "relation": "visually_anchors",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_color_orange",
+      "target": "sector7_logo_mobile_brand_identity",
+      "relation": "is_primary_brand_color_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_layout_stacked_vertical",
+      "target": "sector7_logo_mobile_numeral_7",
+      "relation": "positions_above",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_layout_stacked_vertical",
+      "target": "sector7_logo_mobile_wordmark_gym_crossfit",
+      "relation": "positions_below",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sector7_logo_mobile_wordmark_gym_crossfit",
+      "target": "sector7_logo_mobile_wordmark_fitness",
+      "relation": "paired_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/sector 7 logo mobile.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

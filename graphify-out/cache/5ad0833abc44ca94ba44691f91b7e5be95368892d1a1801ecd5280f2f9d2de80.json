@@ -1,0 +1,65 @@
+{
+  "nodes": [
+    {
+      "id": "src_app_api_admin_kickboxing_enrollments_id_route_ts",
+      "label": "route.ts",
+      "file_type": "code",
+      "source_file": "src/app/api/admin/kickboxing/enrollments/[id]/route.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "route_delete",
+      "label": "DELETE()",
+      "file_type": "code",
+      "source_file": "src/app/api/admin/kickboxing/enrollments/[id]/route.ts",
+      "source_location": "L6"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_app_api_admin_kickboxing_enrollments_id_route_ts",
+      "target": "server",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/api/admin/kickboxing/enrollments/[id]/route.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_api_admin_kickboxing_enrollments_id_route_ts",
+      "target": "auth",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/api/admin/kickboxing/enrollments/[id]/route.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_api_admin_kickboxing_enrollments_id_route_ts",
+      "target": "errors",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/api/admin/kickboxing/enrollments/[id]/route.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_api_admin_kickboxing_enrollments_id_route_ts",
+      "target": "kickboxing_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/api/admin/kickboxing/enrollments/[id]/route.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_api_admin_kickboxing_enrollments_id_route_ts",
+      "target": "route_delete",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/api/admin/kickboxing/enrollments/[id]/route.ts",
+      "source_location": "L6",
+      "weight": 1.0
+    }
+  ]
+}

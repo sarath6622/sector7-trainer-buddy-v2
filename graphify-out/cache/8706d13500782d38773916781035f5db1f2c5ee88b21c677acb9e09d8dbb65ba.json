@@ -1,0 +1,438 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_badge_service_ts",
+      "label": "badge.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "badge_service_createbadgedefinition",
+      "label": "createBadgeDefinition()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L28"
+    },
+    {
+      "id": "badge_service_updatebadgedefinition",
+      "label": "updateBadgeDefinition()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L64"
+    },
+    {
+      "id": "badge_service_getbadgedefinitionbyid",
+      "label": "getBadgeDefinitionById()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L112"
+    },
+    {
+      "id": "badge_service_listbadgedefinitions",
+      "label": "listBadgeDefinitions()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L121"
+    },
+    {
+      "id": "badge_service_deletebadgedefinition",
+      "label": "deleteBadgeDefinition()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L151"
+    },
+    {
+      "id": "badge_service_awardbadge",
+      "label": "awardBadge()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L176"
+    },
+    {
+      "id": "badge_service_getgenderfiltereddefinitions",
+      "label": "getGenderFilteredDefinitions()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L221"
+    },
+    {
+      "id": "badge_service_getuserbadges",
+      "label": "getUserBadges()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L239"
+    },
+    {
+      "id": "badge_service_togglebadgedisplay",
+      "label": "toggleBadgeDisplay()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L269"
+    },
+    {
+      "id": "badge_service_getunseenbadges",
+      "label": "getUnseenBadges()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L285"
+    },
+    {
+      "id": "badge_service_markbadgesseen",
+      "label": "markBadgesSeen()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L296"
+    },
+    {
+      "id": "badge_service_evaluatestreakbadges",
+      "label": "evaluateStreakBadges()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L310"
+    },
+    {
+      "id": "badge_service_evaluatesessionmilestonebadges",
+      "label": "evaluateSessionMilestoneBadges()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L357"
+    },
+    {
+      "id": "badge_service_evaluateprbadges",
+      "label": "evaluatePRBadges()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L385"
+    },
+    {
+      "id": "badge_service_evaluatebodycompositionbadges",
+      "label": "evaluateBodyCompositionBadges()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L450"
+    },
+    {
+      "id": "badge_service_evaluateweightliftedbadges",
+      "label": "evaluateWeightLiftedBadges()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L490"
+    },
+    {
+      "id": "badge_service_evaluateexercisemilestonebadges",
+      "label": "evaluateExerciseMilestoneBadges()",
+      "file_type": "code",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L530"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "errors",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "client",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "validators",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_createbadgedefinition",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L28",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_updatebadgedefinition",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L64",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_getbadgedefinitionbyid",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L112",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_listbadgedefinitions",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L121",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_deletebadgedefinition",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L151",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_awardbadge",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L176",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_getgenderfiltereddefinitions",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L221",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_getuserbadges",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L239",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_togglebadgedisplay",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L269",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_getunseenbadges",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L285",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_markbadgesseen",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L296",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_evaluatestreakbadges",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L310",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_evaluatesessionmilestonebadges",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L357",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_evaluateprbadges",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L385",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_evaluatebodycompositionbadges",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L450",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_evaluateweightliftedbadges",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L490",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_badge_service_ts",
+      "target": "badge_service_evaluateexercisemilestonebadges",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L530",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluatestreakbadges",
+      "target": "badge_service_getgenderfiltereddefinitions",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L339",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluatestreakbadges",
+      "target": "badge_service_awardbadge",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L344",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluatesessionmilestonebadges",
+      "target": "badge_service_getgenderfiltereddefinitions",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L366",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluatesessionmilestonebadges",
+      "target": "badge_service_awardbadge",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L371",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluateprbadges",
+      "target": "badge_service_getgenderfiltereddefinitions",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L407",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluateprbadges",
+      "target": "badge_service_awardbadge",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L433",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluatebodycompositionbadges",
+      "target": "badge_service_getgenderfiltereddefinitions",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L471",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluatebodycompositionbadges",
+      "target": "badge_service_awardbadge",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L476",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluateweightliftedbadges",
+      "target": "badge_service_getgenderfiltereddefinitions",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L497",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluateweightliftedbadges",
+      "target": "badge_service_awardbadge",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L505",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluateexercisemilestonebadges",
+      "target": "badge_service_getgenderfiltereddefinitions",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L537",
+      "weight": 1.0
+    },
+    {
+      "source": "badge_service_evaluateexercisemilestonebadges",
+      "target": "badge_service_awardbadge",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/badge.service.ts",
+      "source_location": "L576",
+      "weight": 1.0
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "nodes": [
+    {
+      "id": "src_hooks_useofflineworkout_ts",
+      "label": "useOfflineWorkout.ts",
+      "file_type": "code",
+      "source_file": "src/hooks/useOfflineWorkout.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "useofflineworkout_useofflineworkout",
+      "label": "useOfflineWorkout()",
+      "file_type": "code",
+      "source_file": "src/hooks/useOfflineWorkout.ts",
+      "source_location": "L21"
+    },
+    {
+      "id": "useofflineworkout_useexercisecache",
+      "label": "useExerciseCache()",
+      "file_type": "code",
+      "source_file": "src/hooks/useOfflineWorkout.ts",
+      "source_location": "L118"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_hooks_useofflineworkout_ts",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/hooks/useOfflineWorkout.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_hooks_useofflineworkout_ts",
+      "target": "offline_db",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/hooks/useOfflineWorkout.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_hooks_useofflineworkout_ts",
+      "target": "offline_sync",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/hooks/useOfflineWorkout.ts",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "src_hooks_useofflineworkout_ts",
+      "target": "useofflineworkout_useofflineworkout",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/hooks/useOfflineWorkout.ts",
+      "source_location": "L21",
+      "weight": 1.0
+    },
+    {
+      "source": "src_hooks_useofflineworkout_ts",
+      "target": "useofflineworkout_useexercisecache",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/hooks/useOfflineWorkout.ts",
+      "source_location": "L118",
+      "weight": 1.0
+    }
+  ]
+}

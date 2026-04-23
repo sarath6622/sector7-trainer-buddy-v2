@@ -1,0 +1,583 @@
+{
+  "nodes": [
+    {
+      "id": "claude_sector7_constitution",
+      "label": "Sector 7 AI Agent Constitution (CLAUDE.md)",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": "Sarath Kumar",
+      "contributor": null
+    },
+    {
+      "id": "claude_project_identity",
+      "label": "Sector 7 Project Identity",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "Project Identity section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_agent_roles",
+      "label": "Agent Role System",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "Agent Roles section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_workflow",
+      "label": "Agent Workflow Protocol",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "Workflow Per Task section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_nonneg_rules",
+      "label": "8 Non-Negotiable Rules",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "8 Non-Negotiable Rules section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_repo_structure",
+      "label": "Repository Structure",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_pwa",
+      "label": "Progressive Web Application (PWA)",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "Project Identity",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_session",
+      "label": "session.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_schedule",
+      "label": "schedule.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_leave",
+      "label": "leave.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_attendance",
+      "label": "attendance.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_workout",
+      "label": "workout.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_progress",
+      "label": "progress.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_payment",
+      "label": "payment.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_kickboxing",
+      "label": "kickboxing.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_reassignment",
+      "label": "reassignment.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_exercise",
+      "label": "exercise.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_analytics",
+      "label": "analytics.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "service_user",
+      "label": "user.service.ts",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_prisma",
+      "label": "src/lib/prisma.ts (Prisma Singleton)",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_auth",
+      "label": "src/lib/auth.ts (NextAuth Config)",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_audit",
+      "label": "src/lib/audit.ts (auditLog utility)",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_notifications",
+      "label": "src/lib/notifications.ts (WhatsApp + FCM helpers)",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_offline",
+      "label": "src/lib/offline.ts (IndexedDB + sync utilities)",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_validators",
+      "label": "src/lib/validators.ts (Zod Schemas)",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_constants",
+      "label": "src/lib/constants.ts (App-wide Constants)",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_middleware",
+      "label": "src/middleware.ts (Auth + Branch Scoping)",
+      "file_type": "code",
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "claude_sector7_constitution",
+      "target": "memory_project_context",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Mandatory Pre-Read Protocol",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "memory_architecture",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Mandatory Pre-Read Protocol",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "memory_schema",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Mandatory Pre-Read Protocol",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "memory_api_contracts",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Mandatory Pre-Read Protocol",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "memory_decisions",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Mandatory Pre-Read Protocol",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "rules_engineering",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Mandatory Pre-Read Protocol",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "rules_coding",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Mandatory Pre-Read Protocol",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "rules_change_mgmt",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Mandatory Pre-Read Protocol",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "tasks_current",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Mandatory Pre-Read Protocol",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "claude_agent_roles",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Agent Roles section",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "claude_nonneg_rules",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "8 Non-Negotiable Rules",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sector7_constitution",
+      "target": "claude_workflow",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Workflow Per Task section",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_agent_roles",
+      "target": "agent_architect",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Agent Roles table",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_agent_roles",
+      "target": "agent_backend",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Agent Roles table",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_agent_roles",
+      "target": "agent_ui",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Agent Roles table",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_agent_roles",
+      "target": "agent_qa",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Agent Roles table",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_agent_roles",
+      "target": "agent_devops",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Agent Roles table",
+      "weight": 1.0
+    },
+    {
+      "source": "lib_prisma",
+      "target": "tech_prisma",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "weight": 1.0
+    },
+    {
+      "source": "lib_auth",
+      "target": "tech_nextauth",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Repository Structure",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "mandatory_prereads",
+      "label": "Mandatory Pre-Read Protocol (9 files)",
+      "nodes": [
+        "memory_project_context",
+        "memory_architecture",
+        "memory_schema",
+        "memory_api_contracts",
+        "memory_decisions",
+        "rules_engineering",
+        "rules_coding",
+        "rules_change_mgmt",
+        "tasks_current"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md"
+    },
+    {
+      "id": "five_agent_system",
+      "label": "Five-Agent System (architect, backend, ui, qa, devops)",
+      "nodes": ["agent_architect", "agent_backend", "agent_ui", "agent_qa", "agent_devops"],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md"
+    },
+    {
+      "id": "core_memory_files",
+      "label": "Core Memory Files System",
+      "nodes": [
+        "memory_project_context",
+        "memory_architecture",
+        "memory_schema",
+        "memory_api_contracts",
+        "memory_decisions"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md"
+    },
+    {
+      "id": "service_layer_components",
+      "label": "Service Layer (All Business Logic Services)",
+      "nodes": [
+        "service_session",
+        "service_schedule",
+        "service_leave",
+        "service_attendance",
+        "service_workout",
+        "service_progress",
+        "service_payment",
+        "service_kickboxing",
+        "service_reassignment",
+        "service_exercise",
+        "service_analytics",
+        "service_user",
+        "service_crossfit",
+        "service_notification",
+        "service_community",
+        "service_leaderboard",
+        "service_badge"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md"
+    },
+    {
+      "id": "core_lib_utilities",
+      "label": "Core Library Utilities",
+      "nodes": [
+        "lib_prisma",
+        "lib_auth",
+        "lib_audit",
+        "lib_notifications",
+        "lib_offline",
+        "lib_validators",
+        "lib_constants",
+        "lib_middleware"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "nodes": [
+    {
+      "id": "src_lib_pusher_client_ts",
+      "label": "pusher-client.ts",
+      "file_type": "code",
+      "source_file": "src/lib/pusher-client.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "pusher_client_getpusherclient",
+      "label": "getPusherClient()",
+      "file_type": "code",
+      "source_file": "src/lib/pusher-client.ts",
+      "source_location": "L7"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_lib_pusher_client_ts",
+      "target": "pusher_js",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/pusher-client.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_pusher_client_ts",
+      "target": "pusher_client_getpusherclient",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/pusher-client.ts",
+      "source_location": "L7",
+      "weight": 1.0
+    }
+  ]
+}

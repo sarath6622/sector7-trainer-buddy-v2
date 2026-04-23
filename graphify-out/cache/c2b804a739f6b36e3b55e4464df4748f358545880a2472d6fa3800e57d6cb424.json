@@ -1,0 +1,227 @@
+{
+  "nodes": [
+    {
+      "id": "memory_project_context",
+      "label": "Project Context Memory",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_sector7",
+      "label": "Sector 7 Gym Management Platform",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": "What Is Sector 7",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_branch_scoping",
+      "label": "Branch Scoping (Multi-Tenant)",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": "Multi-Branch Architecture",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_notifications_dual",
+      "label": "Dual-Channel Notifications (WhatsApp + FCM)",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": "Notification Channels",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_carry_forward",
+      "label": "Session Carry-Forward Rules",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": "Carry-Forward Rules",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_session_lifecycle",
+      "label": "PT Session Lifecycle",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": "Session Lifecycle",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "role_admin",
+      "label": "Admin Role (Branch Admin / Super Admin)",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": "Who Uses It - Admin",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "role_trainer",
+      "label": "Trainer Role (PT Trainer)",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": "Who Uses It - Trainer",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "role_client",
+      "label": "Client Role (Gym Member)",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": "Who Uses It - Client",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "role_kickboxing_trainer",
+      "label": "Kickboxing Trainer Role",
+      "file_type": "document",
+      "source_file": "memory/project-context.md",
+      "source_location": "Who Uses It - Kickboxing Trainer",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "memory_project_context",
+      "target": "concept_sector7",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "What Is Sector 7",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_project_context",
+      "target": "role_admin",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Who Uses It - Admin",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_project_context",
+      "target": "role_trainer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Who Uses It - Trainer",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_project_context",
+      "target": "role_client",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Who Uses It - Client",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_project_context",
+      "target": "role_kickboxing_trainer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Who Uses It",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_project_context",
+      "target": "concept_branch_scoping",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Multi-Branch Architecture",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_project_context",
+      "target": "concept_carry_forward",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Carry-Forward Rules",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_project_context",
+      "target": "concept_session_lifecycle",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Session Lifecycle",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_project_context",
+      "target": "concept_notifications_dual",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Notification Channels",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_notifications_dual",
+      "target": "tech_whatsapp_api",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Notification Channels",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_notifications_dual",
+      "target": "tech_fcm",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/project-context.md",
+      "source_location": "Notification Channels",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

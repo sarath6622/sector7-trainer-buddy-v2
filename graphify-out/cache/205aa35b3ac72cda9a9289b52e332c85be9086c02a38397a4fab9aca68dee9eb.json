@@ -1,0 +1,90 @@
+{
+  "nodes": [
+    {
+      "id": "tests_integration_mappings_api_test_ts",
+      "label": "mappings-api.test.ts",
+      "file_type": "code",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "mappings_api_test_mockadminsession",
+      "label": "mockAdminSession()",
+      "file_type": "code",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L37"
+    },
+    {
+      "id": "mappings_api_test_createrequest",
+      "label": "createRequest()",
+      "file_type": "code",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L41"
+    }
+  ],
+  "edges": [
+    {
+      "source": "tests_integration_mappings_api_test_ts",
+      "target": "vitest",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_integration_mappings_api_test_ts",
+      "target": "route",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L24",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_integration_mappings_api_test_ts",
+      "target": "route",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_integration_mappings_api_test_ts",
+      "target": "tests_integration_helpers",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L30",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_integration_mappings_api_test_ts",
+      "target": "errors",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L31",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_integration_mappings_api_test_ts",
+      "target": "mappings_api_test_mockadminsession",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L37",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_integration_mappings_api_test_ts",
+      "target": "mappings_api_test_createrequest",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/integration/mappings-api.test.ts",
+      "source_location": "L41",
+      "weight": 1.0
+    }
+  ]
+}

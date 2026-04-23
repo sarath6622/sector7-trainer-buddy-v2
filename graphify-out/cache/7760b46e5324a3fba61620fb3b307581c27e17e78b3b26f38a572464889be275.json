@@ -1,0 +1,303 @@
+{
+  "nodes": [
+    {
+      "id": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "label": "page.tsx",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "page_opencreateclass",
+      "label": "openCreateClass()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L191"
+    },
+    {
+      "id": "page_openeditclass",
+      "label": "openEditClass()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L203"
+    },
+    {
+      "id": "page_handlesaveclass",
+      "label": "handleSaveClass()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L215"
+    },
+    {
+      "id": "page_toggleclassactive",
+      "label": "toggleClassActive()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L241"
+    },
+    {
+      "id": "page_openenrolldialog",
+      "label": "openEnrollDialog()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L252"
+    },
+    {
+      "id": "page_handleenroll",
+      "label": "handleEnroll()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L263"
+    },
+    {
+      "id": "page_handleremoveenrollment",
+      "label": "handleRemoveEnrollment()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L297"
+    },
+    {
+      "id": "page_formatday",
+      "label": "formatDay()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L312"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "lucide_react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "sonner",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "use_confirm",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "button",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "badge",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "card",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "table",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "select",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "dialog",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "input",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L26",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "label",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L27",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "tabs",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L28",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "skeleton",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L29",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_opencreateclass",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L191",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_openeditclass",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L203",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_handlesaveclass",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L215",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_toggleclassactive",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L241",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_openenrolldialog",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L252",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_handleenroll",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L263",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_handleremoveenrollment",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L297",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_formatday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L312",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_formatday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L364",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_formatday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L421",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_formatday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L473",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_admin_kickboxing_page_tsx",
+      "target": "page_formatday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/admin/kickboxing/page.tsx",
+      "source_location": "L604",
+      "weight": 1.0
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "nodes": [
+    {
+      "id": "src_lib_firebase_admin_ts",
+      "label": "firebase-admin.ts",
+      "file_type": "code",
+      "source_file": "src/lib/firebase-admin.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "firebase_admin_getfirebaseadminapp",
+      "label": "getFirebaseAdminApp()",
+      "file_type": "code",
+      "source_file": "src/lib/firebase-admin.ts",
+      "source_location": "L6"
+    },
+    {
+      "id": "firebase_admin_getfirebasemessagingadmin",
+      "label": "getFirebaseMessagingAdmin()",
+      "file_type": "code",
+      "source_file": "src/lib/firebase-admin.ts",
+      "source_location": "L40"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_lib_firebase_admin_ts",
+      "target": "app",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-admin.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_firebase_admin_ts",
+      "target": "messaging",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-admin.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_firebase_admin_ts",
+      "target": "firebase_admin_getfirebaseadminapp",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-admin.ts",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_firebase_admin_ts",
+      "target": "firebase_admin_getfirebasemessagingadmin",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-admin.ts",
+      "source_location": "L40",
+      "weight": 1.0
+    },
+    {
+      "source": "firebase_admin_getfirebasemessagingadmin",
+      "target": "firebase_admin_getfirebaseadminapp",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-admin.ts",
+      "source_location": "L41",
+      "weight": 1.0
+    }
+  ]
+}

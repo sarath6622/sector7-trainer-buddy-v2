@@ -1,0 +1,48 @@
+{
+  "nodes": [
+    {
+      "id": "agent_devops",
+      "label": "DevOps Agent Definition",
+      "file_type": "document",
+      "source_file": "agents/devops-agent.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "agent_devops",
+      "target": "tech_docker_compose",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/devops-agent.md",
+      "source_location": "You Own",
+      "weight": 1.0
+    },
+    {
+      "source": "agent_devops",
+      "target": "tech_vercel",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/devops-agent.md",
+      "source_location": "Workflow",
+      "weight": 1.0
+    },
+    {
+      "source": "agent_devops",
+      "target": "tech_workbox",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/devops-agent.md",
+      "source_location": "Workflow",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

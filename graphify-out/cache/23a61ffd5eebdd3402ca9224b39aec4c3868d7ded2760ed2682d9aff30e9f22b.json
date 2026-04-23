@@ -1,0 +1,508 @@
+{
+  "nodes": [
+    {
+      "id": "memory_schema",
+      "label": "Schema Memory",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_branch",
+      "label": "Branch Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "Branch model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_user",
+      "label": "User Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "User model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_trainer_profile",
+      "label": "TrainerProfile Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "TrainerProfile model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_client_profile",
+      "label": "ClientProfile Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "ClientProfile model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_pt_package",
+      "label": "PtPackage Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "PtPackage model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_session_schedule",
+      "label": "SessionSchedule Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "SessionSchedule model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_session_instance",
+      "label": "SessionInstance Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "SessionInstance model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_workout_log",
+      "label": "WorkoutLog Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "WorkoutLog model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_workout_set",
+      "label": "WorkoutSet Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "WorkoutSet model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_exercise",
+      "label": "Exercise Model (Global)",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "Exercise model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_progress_entry",
+      "label": "ProgressEntry Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "ProgressEntry model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_leave_request",
+      "label": "LeaveRequest Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "LeaveRequest model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_client_unavailability",
+      "label": "ClientUnavailability Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "ClientUnavailability model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_trainer_reassignment",
+      "label": "TrainerReassignment Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "TrainerReassignment model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_kickboxing_class",
+      "label": "KickboxingClass Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "KickboxingClass model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_kickboxing_enrollment",
+      "label": "KickboxingEnrollment Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "KickboxingEnrollment model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_payment_record",
+      "label": "PaymentRecord Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "PaymentRecord model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_notification_log",
+      "label": "NotificationLog Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "NotificationLog model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_audit_log",
+      "label": "AuditLog Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "AuditLog model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_branch_settings",
+      "label": "BranchSettings Model",
+      "file_type": "document",
+      "source_file": "memory/schema.md",
+      "source_location": "BranchSettings model",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "memory_schema",
+      "target": "schema_branch",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "Branch model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_user",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "User model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_trainer_profile",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "TrainerProfile model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_client_profile",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "ClientProfile model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_pt_package",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "PtPackage model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_session_schedule",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "SessionSchedule model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_session_instance",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "SessionInstance model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_workout_log",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "WorkoutLog model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_exercise",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "Exercise model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_audit_log",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "AuditLog model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_notification_log",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "NotificationLog model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_leave_request",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "LeaveRequest model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_payment_record",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "PaymentRecord model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_kickboxing_class",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "KickboxingClass model",
+      "weight": 1.0
+    },
+    {
+      "source": "memory_schema",
+      "target": "schema_branch_settings",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "BranchSettings model",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_user",
+      "target": "schema_trainer_profile",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "Key Relationships Summary",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_user",
+      "target": "schema_client_profile",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "Key Relationships Summary",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_client_profile",
+      "target": "schema_pt_package",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "Key Relationships Summary",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_session_schedule",
+      "target": "schema_session_instance",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "Key Relationships Summary",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_session_instance",
+      "target": "schema_workout_log",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "WorkoutLog model",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_workout_log",
+      "target": "schema_exercise",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "Key Relationships Summary",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_workout_log",
+      "target": "schema_workout_set",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "WorkoutSet model",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_trainer_profile",
+      "target": "schema_trainer_reassignment",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "TrainerReassignment model",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_kickboxing_class",
+      "target": "schema_kickboxing_enrollment",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "KickboxingEnrollment model",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_branch",
+      "target": "schema_branch_settings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "BranchSettings model",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_audit_log",
+      "target": "concept_audit_log",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "AuditLog model",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_notification_log",
+      "target": "concept_notifications_dual",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "memory/schema.md",
+      "source_location": "NotificationLog model",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

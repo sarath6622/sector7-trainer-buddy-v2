@@ -1,0 +1,72 @@
+{
+  "nodes": [
+    {
+      "id": "src_lib_firebase_client_ts",
+      "label": "firebase-client.ts",
+      "file_type": "code",
+      "source_file": "src/lib/firebase-client.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "firebase_client_getfirebaseapp",
+      "label": "getFirebaseApp()",
+      "file_type": "code",
+      "source_file": "src/lib/firebase-client.ts",
+      "source_location": "L8"
+    },
+    {
+      "id": "firebase_client_getfirebasemessaging",
+      "label": "getFirebaseMessaging()",
+      "file_type": "code",
+      "source_file": "src/lib/firebase-client.ts",
+      "source_location": "L23"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_lib_firebase_client_ts",
+      "target": "app",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-client.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_firebase_client_ts",
+      "target": "messaging",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-client.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_firebase_client_ts",
+      "target": "firebase_client_getfirebaseapp",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-client.ts",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_firebase_client_ts",
+      "target": "firebase_client_getfirebasemessaging",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-client.ts",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "firebase_client_getfirebasemessaging",
+      "target": "firebase_client_getfirebaseapp",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/firebase-client.ts",
+      "source_location": "L28",
+      "weight": 1.0
+    }
+  ]
+}

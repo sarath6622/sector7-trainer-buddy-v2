@@ -1,0 +1,144 @@
+{
+  "nodes": [
+    {
+      "id": "src_app_dashboard_trainer_session_id_page_tsx",
+      "label": "page.tsx",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "page_init",
+      "label": "init()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L321"
+    },
+    {
+      "id": "page_handleend",
+      "label": "handleEnd()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L337"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "navigation",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "lucide_react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "sonner",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "use_confirm",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "sessiontimer",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "workoutlogger",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "badgecelebration",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "useresttimer",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "usepusherchannel",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "pusher",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L13",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "page_init",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L321",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_trainer_session_id_page_tsx",
+      "target": "page_handleend",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/trainer/session/[id]/page.tsx",
+      "source_location": "L337",
+      "weight": 1.0
+    }
+  ]
+}

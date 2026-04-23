@@ -1,0 +1,63 @@
+{
+  "nodes": [
+    {
+      "id": "src_hooks_useresttimer_ts",
+      "label": "useRestTimer.ts",
+      "file_type": "code",
+      "source_file": "src/hooks/useRestTimer.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "useresttimer_calcremaining",
+      "label": "calcRemaining()",
+      "file_type": "code",
+      "source_file": "src/hooks/useRestTimer.ts",
+      "source_location": "L14"
+    },
+    {
+      "id": "useresttimer_useresttimer",
+      "label": "useRestTimer()",
+      "file_type": "code",
+      "source_file": "src/hooks/useRestTimer.ts",
+      "source_location": "L23"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_hooks_useresttimer_ts",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/hooks/useRestTimer.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_hooks_useresttimer_ts",
+      "target": "useresttimer_calcremaining",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/hooks/useRestTimer.ts",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "src_hooks_useresttimer_ts",
+      "target": "useresttimer_useresttimer",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/hooks/useRestTimer.ts",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "useresttimer_useresttimer",
+      "target": "useresttimer_calcremaining",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src/hooks/useRestTimer.ts",
+      "source_location": "L71",
+      "weight": 1.0
+    }
+  ]
+}

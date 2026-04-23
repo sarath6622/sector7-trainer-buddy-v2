@@ -1,0 +1,88 @@
+{
+  "nodes": [
+    {
+      "id": "rules_engineering",
+      "label": "Engineering Principles",
+      "file_type": "document",
+      "source_file": "rules/engineering-principles.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "service_leave",
+      "target": "lib_audit",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "rules/engineering-principles.md",
+      "source_location": "Audit Everything section",
+      "weight": 0.9
+    },
+    {
+      "source": "rules_engineering",
+      "target": "concept_branch_scoping",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/engineering-principles.md",
+      "source_location": "Principle 1",
+      "weight": 1.0
+    },
+    {
+      "source": "rules_engineering",
+      "target": "concept_service_layer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/engineering-principles.md",
+      "source_location": "Principle 2",
+      "weight": 1.0
+    },
+    {
+      "source": "rules_engineering",
+      "target": "concept_audit_log",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/engineering-principles.md",
+      "source_location": "Principle 3",
+      "weight": 1.0
+    },
+    {
+      "source": "rules_engineering",
+      "target": "concept_offline_first",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/engineering-principles.md",
+      "source_location": "Principle 5",
+      "weight": 1.0
+    },
+    {
+      "source": "rules_engineering",
+      "target": "lib_validators",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/engineering-principles.md",
+      "source_location": "Principle 4",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "branch_scoping_enforcement",
+      "label": "Branch Scoping Enforcement Points",
+      "nodes": ["concept_branch_scoping", "lib_middleware", "adr_003", "rules_engineering"],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "rules/engineering-principles.md"
+    }
+  ]
+}

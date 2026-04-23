@@ -1,0 +1,205 @@
+{
+  "nodes": [
+    {
+      "id": "icon512_sector7_logo",
+      "label": "Sector 7 PWA App Icon (512px)",
+      "file_type": "image",
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "icon512_s7_lettermark",
+      "label": "S7 Lettermark",
+      "file_type": "image",
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "icon512_orange_color",
+      "label": "Orange Brand Color (#FF4500)",
+      "file_type": "image",
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "icon512_white_background",
+      "label": "White Background",
+      "file_type": "image",
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "icon512_numeral_7",
+      "label": "Numeral 7 Graphic Element",
+      "file_type": "image",
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "icon512_letter_s",
+      "label": "Letter S Graphic Element",
+      "file_type": "image",
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "icon512_pwa_identity",
+      "label": "PWA Brand Identity Asset",
+      "file_type": "image",
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "icon512_gym_platform",
+      "label": "Sector 7 Gym Management Platform",
+      "file_type": "image",
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "icon512_sector7_logo",
+      "target": "icon512_s7_lettermark",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_s7_lettermark",
+      "target": "icon512_letter_s",
+      "relation": "composed_of",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_s7_lettermark",
+      "target": "icon512_numeral_7",
+      "relation": "composed_of",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_numeral_7",
+      "target": "icon512_orange_color",
+      "relation": "styled_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_letter_s",
+      "target": "icon512_white_background",
+      "relation": "contrasts_against",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_sector7_logo",
+      "target": "icon512_white_background",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_sector7_logo",
+      "target": "icon512_orange_color",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_sector7_logo",
+      "target": "icon512_pwa_identity",
+      "relation": "represents",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_pwa_identity",
+      "target": "icon512_gym_platform",
+      "relation": "belongs_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_orange_color",
+      "target": "icon512_gym_platform",
+      "relation": "brand_color_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "icon512_s7_lettermark",
+      "target": "icon512_gym_platform",
+      "relation": "identifies",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "public/icons/icon-512.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

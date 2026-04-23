@@ -1,0 +1,65 @@
+{
+  "nodes": [
+    {
+      "id": "tests_unit_workout_service_test_ts",
+      "label": "workout-service.test.ts",
+      "file_type": "code",
+      "source_file": "tests/unit/workout-service.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "workout_service_test_workoutlogcreate",
+      "label": "workoutLogCreate()",
+      "file_type": "code",
+      "source_file": "tests/unit/workout-service.test.ts",
+      "source_location": "L6"
+    }
+  ],
+  "edges": [
+    {
+      "source": "tests_unit_workout_service_test_ts",
+      "target": "vitest",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/workout-service.test.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_workout_service_test_ts",
+      "target": "workout_service_test_workoutlogcreate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/workout-service.test.ts",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_workout_service_test_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/workout-service.test.ts",
+      "source_location": "L37",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_workout_service_test_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/workout-service.test.ts",
+      "source_location": "L38",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_workout_service_test_ts",
+      "target": "workout_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/workout-service.test.ts",
+      "source_location": "L39",
+      "weight": 1.0
+    }
+  ]
+}

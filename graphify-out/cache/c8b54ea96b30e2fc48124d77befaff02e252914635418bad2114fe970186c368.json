@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    {
+      "id": "src_app_dashboard_client_progress_loading_tsx",
+      "label": "loading.tsx",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/loading.tsx",
+      "source_location": "L1"
+    }
+  ],
+  "edges": []
+}

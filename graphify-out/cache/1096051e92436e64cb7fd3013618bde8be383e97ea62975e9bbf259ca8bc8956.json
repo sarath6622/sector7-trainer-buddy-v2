@@ -1,0 +1,49 @@
+{
+  "nodes": [
+    {
+      "id": "tests_unit_leave_service_test_ts",
+      "label": "leave-service.test.ts",
+      "file_type": "code",
+      "source_file": "tests/unit/leave-service.test.ts",
+      "source_location": "L1"
+    }
+  ],
+  "edges": [
+    {
+      "source": "tests_unit_leave_service_test_ts",
+      "target": "vitest",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/leave-service.test.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_leave_service_test_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/leave-service.test.ts",
+      "source_location": "L20",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_leave_service_test_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/leave-service.test.ts",
+      "source_location": "L21",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_unit_leave_service_test_ts",
+      "target": "leave_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/unit/leave-service.test.ts",
+      "source_location": "L22",
+      "weight": 1.0
+    }
+  ]
+}

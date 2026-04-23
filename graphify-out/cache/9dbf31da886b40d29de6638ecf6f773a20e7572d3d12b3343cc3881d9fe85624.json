@@ -1,0 +1,138 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_workout_service_ts",
+      "label": "workout.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "workout_service_createworkoutlogs",
+      "label": "createWorkoutLogs()",
+      "file_type": "code",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L60"
+    },
+    {
+      "id": "workout_service_updateworkoutlog",
+      "label": "updateWorkoutLog()",
+      "file_type": "code",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L249"
+    },
+    {
+      "id": "workout_service_deleteworkoutlog",
+      "label": "deleteWorkoutLog()",
+      "file_type": "code",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L323"
+    },
+    {
+      "id": "workout_service_getsessionworkouts",
+      "label": "getSessionWorkouts()",
+      "file_type": "code",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L366"
+    },
+    {
+      "id": "workout_service_getclientworkouts",
+      "label": "getClientWorkouts()",
+      "file_type": "code",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L397"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "errors",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "badge_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "community_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "workout_service_createworkoutlogs",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L60",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "workout_service_updateworkoutlog",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L249",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "workout_service_deleteworkoutlog",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L323",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "workout_service_getsessionworkouts",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L366",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_workout_service_ts",
+      "target": "workout_service_getclientworkouts",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/workout.service.ts",
+      "source_location": "L397",
+      "weight": 1.0
+    }
+  ]
+}

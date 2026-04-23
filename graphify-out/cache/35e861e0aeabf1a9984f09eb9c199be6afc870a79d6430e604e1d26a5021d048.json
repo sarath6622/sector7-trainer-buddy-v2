@@ -1,0 +1,204 @@
+{
+  "nodes": [
+    {
+      "id": "src_services_session_service_ts",
+      "label": "session.service.ts",
+      "file_type": "code",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "session_service_startsession",
+      "label": "startSession()",
+      "file_type": "code",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L63"
+    },
+    {
+      "id": "session_service_endsession",
+      "label": "endSession()",
+      "file_type": "code",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L158"
+    },
+    {
+      "id": "session_service_marknoshow",
+      "label": "markNoShow()",
+      "file_type": "code",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L245"
+    },
+    {
+      "id": "session_service_getsessionbyid",
+      "label": "getSessionById()",
+      "file_type": "code",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L309"
+    },
+    {
+      "id": "session_service_gettrainersessions",
+      "label": "getTrainerSessions()",
+      "file_type": "code",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L354"
+    },
+    {
+      "id": "session_service_getclientsessions",
+      "label": "getClientSessions()",
+      "file_type": "code",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L388"
+    },
+    {
+      "id": "session_service_getsessioncounts",
+      "label": "getSessionCounts()",
+      "file_type": "code",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L419"
+    },
+    {
+      "id": "session_service_getactivesession",
+      "label": "getActiveSession()",
+      "file_type": "code",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L462"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_services_session_service_ts",
+      "target": "prisma",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "audit",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "errors",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "notification_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "badge_service",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "pusher",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "client",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "session_service_startsession",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L63",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "session_service_endsession",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L158",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "session_service_marknoshow",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L245",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "session_service_getsessionbyid",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L309",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "session_service_gettrainersessions",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L354",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "session_service_getclientsessions",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L388",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "session_service_getsessioncounts",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L419",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_session_service_ts",
+      "target": "session_service_getactivesession",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/services/session.service.ts",
+      "source_location": "L462",
+      "weight": 1.0
+    }
+  ]
+}

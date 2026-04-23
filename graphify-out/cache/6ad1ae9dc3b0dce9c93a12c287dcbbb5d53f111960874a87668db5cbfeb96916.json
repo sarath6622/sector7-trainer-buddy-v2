@@ -1,0 +1,88 @@
+{
+  "nodes": [
+    {
+      "id": "agent_ui",
+      "label": "UI Agent Definition",
+      "file_type": "document",
+      "source_file": "agents/ui-agent.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "agent_ui",
+      "target": "tech_shadcn",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/ui-agent.md",
+      "source_location": "Design System",
+      "weight": 1.0
+    },
+    {
+      "source": "agent_ui",
+      "target": "tech_recharts",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/ui-agent.md",
+      "source_location": "Design System",
+      "weight": 1.0
+    },
+    {
+      "source": "agent_ui",
+      "target": "tech_fullcalendar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/ui-agent.md",
+      "source_location": "Design System",
+      "weight": 1.0
+    },
+    {
+      "source": "agent_ui",
+      "target": "tech_rhf_zod",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/ui-agent.md",
+      "source_location": "Design System",
+      "weight": 1.0
+    },
+    {
+      "source": "agent_ui",
+      "target": "tech_tanstack_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/ui-agent.md",
+      "source_location": "Design System",
+      "weight": 1.0
+    },
+    {
+      "source": "agent_ui",
+      "target": "memory_api_contracts",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/ui-agent.md",
+      "source_location": "Workflow",
+      "weight": 1.0
+    },
+    {
+      "source": "agent_ui",
+      "target": "lib_offline",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agents/ui-agent.md",
+      "source_location": "You Own",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

@@ -1,0 +1,245 @@
+{
+  "nodes": [
+    {
+      "id": "src_app_dashboard_client_progress_page_tsx",
+      "label": "page.tsx",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "page_fmt",
+      "label": "fmt()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L69"
+    },
+    {
+      "id": "page_getdelta",
+      "label": "getDelta()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L107"
+    },
+    {
+      "id": "page_deltachip",
+      "label": "DeltaChip()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L112"
+    },
+    {
+      "id": "page_quickinput",
+      "label": "QuickInput()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L137"
+    },
+    {
+      "id": "page_openquicklog",
+      "label": "openQuickLog()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L239"
+    },
+    {
+      "id": "page_submitquicklog",
+      "label": "submitQuickLog()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L249"
+    },
+    {
+      "id": "page_openedit",
+      "label": "openEdit()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L273"
+    },
+    {
+      "id": "page_submitedit",
+      "label": "submitEdit()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L291"
+    },
+    {
+      "id": "page_latestof",
+      "label": "latestOf()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L327"
+    },
+    {
+      "id": "page_previousof",
+      "label": "previousOf()",
+      "file_type": "code",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L330"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "lucide_react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "button",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L20",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "input",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L21",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "tabs",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L22",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "dialog",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "progresslinechart",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L31",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "workoutprogressionpanel",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L32",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_fmt",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L69",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_getdelta",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L107",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_deltachip",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L112",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_quickinput",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L137",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_openquicklog",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L239",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_submitquicklog",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L249",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_openedit",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L273",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_submitedit",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L291",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_latestof",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L327",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_dashboard_client_progress_page_tsx",
+      "target": "page_previousof",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(dashboard)/client/progress/page.tsx",
+      "source_location": "L330",
+      "weight": 1.0
+    }
+  ]
+}

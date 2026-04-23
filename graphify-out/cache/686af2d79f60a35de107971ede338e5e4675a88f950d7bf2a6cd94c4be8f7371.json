@@ -1,0 +1,117 @@
+{
+  "nodes": [
+    {
+      "id": "src_components_workout_workoutlogger_tsx",
+      "label": "WorkoutLogger.tsx",
+      "file_type": "code",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "workoutlogger_workoutlogger",
+      "label": "WorkoutLogger()",
+      "file_type": "code",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L153"
+    },
+    {
+      "id": "workoutlogger_async",
+      "label": "async()",
+      "file_type": "code",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L423"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "framer_motion",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "lucide_react",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "sonner",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L21",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "button",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L22",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "input",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "badgecelebration",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L24",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "recharts",
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "workoutlogger_workoutlogger",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L153",
+      "weight": 1.0
+    },
+    {
+      "source": "src_components_workout_workoutlogger_tsx",
+      "target": "workoutlogger_async",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/workout/WorkoutLogger.tsx",
+      "source_location": "L423",
+      "weight": 1.0
+    }
+  ]
+}
