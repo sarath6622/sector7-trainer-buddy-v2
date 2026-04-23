@@ -6,6 +6,7 @@ import { ArrowLeft, KeyRound, Pencil, Plus, Save, Trash2, X } from 'lucide-react
 import { cn } from '@/lib/utils';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Input } from '@/components/ui/input';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -662,20 +663,18 @@ export default function ClientProfilePage() {
                     />
                   </Field>
                   <Field label="Start Date">
-                    <Input
-                      type="date"
+                    <DatePickerModal
                       value={mappingForm.startDate}
-                      onChange={(e) => setMappingForm((p) => ({ ...p, startDate: e.target.value }))}
-                      className="h-9 text-xs border-white/[0.08]"
+                      onChange={(v) => setMappingForm((p) => ({ ...p, startDate: v }))}
+                      className="h-9 text-xs"
                     />
                   </Field>
                   <Field label="End Date (optional)">
-                    <Input
-                      type="date"
+                    <DatePickerModal
                       value={mappingForm.endDate}
-                      min={mappingForm.startDate}
-                      onChange={(e) => setMappingForm((p) => ({ ...p, endDate: e.target.value }))}
-                      className="h-9 text-xs border-white/[0.08]"
+                      onChange={(v) => setMappingForm((p) => ({ ...p, endDate: v }))}
+                      minDate={mappingForm.startDate}
+                      className="h-9 text-xs"
                     />
                   </Field>
                   <Field label="Session Charge (optional)">
@@ -743,13 +742,10 @@ export default function ClientProfilePage() {
                           />
                         </Field>
                         <Field label="End Date (optional)">
-                          <Input
-                            type="date"
+                          <DatePickerModal
                             value={editForm.endDate}
-                            onChange={(e) =>
-                              setEditForm((p) => ({ ...p, endDate: e.target.value }))
-                            }
-                            className="h-9 text-xs border-white/[0.08]"
+                            onChange={(v) => setEditForm((p) => ({ ...p, endDate: v }))}
+                            className="h-9 text-xs"
                           />
                         </Field>
                       </div>

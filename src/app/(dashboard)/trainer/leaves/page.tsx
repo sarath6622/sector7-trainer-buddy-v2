@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { CalendarDays, Clock, Plus, AlertTriangle, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { CalendarDays, Clock, Plus, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar } from '@/components/ui/calendar';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import {
   Dialog,
   DialogContent,
@@ -106,69 +106,14 @@ function DatePickerField({
   minDate,
 }: {
   label: string;
-  value: string; // yyyy-mm-dd
+  value: string;
   onChange: (v: string) => void;
   minDate?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  // Close on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
-
-  const selected = value ? new Date(value + 'T00:00:00') : undefined;
-  const min = minDate ? new Date(minDate + 'T00:00:00') : undefined;
-
-  const displayLabel = selected
-    ? selected.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-    : 'Pick a date';
-
   return (
-    <div className="space-y-1.5" ref={ref}>
+    <div className="space-y-1.5">
       <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className={`flex h-10 w-full items-center justify-between rounded-lg border px-3 text-sm transition-colors
-            ${open ? 'border-ring ring-3 ring-ring/50' : 'border-input'}
-            bg-transparent dark:bg-input/30 text-left
-            ${!selected ? 'text-muted-foreground' : 'text-foreground'}`}
-        >
-          <span className="flex items-center gap-2">
-            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            {displayLabel}
-          </span>
-          <ChevronDown
-            className={`h-4 w-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
-          />
-        </button>
-
-        {open && (
-          <div className="absolute left-0 top-full z-50 mt-1 rounded-xl border border-border bg-card shadow-xl">
-            <Calendar
-              mode="single"
-              selected={selected}
-              onSelect={(date) => {
-                if (!date) return;
-                const y = date.getFullYear();
-                const m = String(date.getMonth() + 1).padStart(2, '0');
-                const d = String(date.getDate()).padStart(2, '0');
-                onChange(`${y}-${m}-${d}`);
-                setOpen(false);
-              }}
-              disabled={min ? (date) => date < min : undefined}
-              initialFocus
-            />
-          </div>
-        )}
-      </div>
+      <DatePickerModal value={value} onChange={onChange} minDate={minDate} className="h-10" />
     </div>
   );
 }

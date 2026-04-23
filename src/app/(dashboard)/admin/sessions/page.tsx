@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 
 interface SessionInstance {
   id: string;
@@ -285,19 +286,17 @@ export default function AdminSessionsPage() {
             {/* Custom date inputs */}
             {datePreset === 'custom' && (
               <>
-                <Input
-                  type="date"
+                <DatePickerModal
                   value={customFrom}
-                  max={customTo || undefined}
-                  onChange={(e) => setCustomFrom(e.target.value)}
+                  onChange={setCustomFrom}
+                  maxDate={customTo || undefined}
                   className="h-8 w-[140px] text-xs"
                 />
                 <span className="text-xs text-muted-foreground">→</span>
-                <Input
-                  type="date"
+                <DatePickerModal
                   value={customTo}
-                  min={customFrom || undefined}
-                  onChange={(e) => setCustomTo(e.target.value)}
+                  onChange={setCustomTo}
+                  minDate={customFrom || undefined}
                   className="h-8 w-[140px] text-xs"
                 />
               </>

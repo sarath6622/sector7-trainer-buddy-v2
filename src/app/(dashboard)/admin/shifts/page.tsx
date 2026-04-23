@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -255,11 +256,10 @@ function ShiftForm({
       {showApplyFrom && (
         <div className="space-y-2">
           <Label>{applyFromLabel ?? 'Apply from'}</Label>
-          <Input
-            type="date"
-            min={minApplyFrom ?? new Date().toISOString().slice(0, 10)}
+          <DatePickerModal
             value={state.applyFrom}
-            onChange={(e) => set('applyFrom', e.target.value)}
+            onChange={(v) => set('applyFrom', v)}
+            minDate={minApplyFrom ?? new Date().toISOString().slice(0, 10)}
           />
           <p className="text-xs text-muted-foreground">
             {applyFromHint ??
@@ -660,20 +660,18 @@ function SwapDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>From (inclusive)</Label>
-              <Input
-                type="date"
-                min={new Date().toISOString().slice(0, 10)}
+              <DatePickerModal
                 value={swapFrom}
-                onChange={(e) => setSwapFrom(e.target.value)}
+                onChange={setSwapFrom}
+                minDate={new Date().toISOString().slice(0, 10)}
               />
             </div>
             <div className="space-y-2">
               <Label>Until (exclusive)</Label>
-              <Input
-                type="date"
-                min={swapFrom || new Date().toISOString().slice(0, 10)}
+              <DatePickerModal
                 value={swapUntil}
-                onChange={(e) => setSwapUntil(e.target.value)}
+                onChange={setSwapUntil}
+                minDate={swapFrom || new Date().toISOString().slice(0, 10)}
               />
             </div>
           </div>

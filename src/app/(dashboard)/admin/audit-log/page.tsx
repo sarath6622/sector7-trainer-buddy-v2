@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FileText, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -186,18 +186,17 @@ export default function AdminAuditLogPage() {
               </SelectContent>
             </Select>
 
-            <Input
-              type="date"
-              placeholder="From"
+            <DatePickerModal
               value={filters.dateFrom}
-              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+              onChange={(v) => setFilters({ ...filters, dateFrom: v })}
+              placeholder="From"
             />
 
-            <Input
-              type="date"
-              placeholder="To"
+            <DatePickerModal
               value={filters.dateTo}
-              onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              onChange={(v) => setFilters({ ...filters, dateTo: v })}
+              placeholder="To"
+              minDate={filters.dateFrom}
             />
 
             <div className="flex gap-2">

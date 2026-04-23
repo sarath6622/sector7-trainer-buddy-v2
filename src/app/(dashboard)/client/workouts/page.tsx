@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, Dumbbell, Filter, User, X, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import {
   Select,
   SelectContent,
@@ -205,20 +205,15 @@ export default function ClientWorkoutsPage() {
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   From
                 </label>
-                <Input
-                  type="date"
-                  className="rounded-xl"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                />
+                <DatePickerModal value={dateFrom} onChange={setDateFrom} className="rounded-xl" />
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">To</label>
-                <Input
-                  type="date"
-                  className="rounded-xl"
+                <DatePickerModal
                   value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
+                  onChange={setDateTo}
+                  minDate={dateFrom}
+                  className="rounded-xl"
                 />
               </div>
             </div>

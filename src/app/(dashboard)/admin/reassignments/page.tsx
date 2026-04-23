@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -190,12 +191,7 @@ export default function AdminReassignmentsPage() {
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Date</Label>
-              <Input
-                type="date"
-                value={lookupDate}
-                onChange={(e) => setLookupDate(e.target.value)}
-                className="w-[150px]"
-              />
+              <DatePickerModal value={lookupDate} onChange={setLookupDate} className="w-[150px]" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Start Time</Label>
@@ -286,12 +282,11 @@ export default function AdminReassignmentsPage() {
       <div className="space-y-3">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Reassignment History</h2>
-          <Input
-            type="date"
+          <DatePickerModal
             value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="w-[150px]"
+            onChange={setFilterDate}
             placeholder="Filter by date"
+            className="w-[150px]"
           />
         </div>
 

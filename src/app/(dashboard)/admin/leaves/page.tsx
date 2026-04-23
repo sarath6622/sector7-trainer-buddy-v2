@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Calendar, CalendarDayButton } from '@/components/ui/calendar';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -1094,7 +1095,7 @@ export default function AdminLeavesPage() {
             {/* Date */}
             <div className="space-y-1.5">
               <Label className="text-xs">Date</Label>
-              <Input type="date" value={emgDate} onChange={(e) => setEmgDate(e.target.value)} />
+              <DatePickerModal value={emgDate} onChange={setEmgDate} />
             </div>
 
             {/* Emergency quota display */}

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, CheckCircle2, Clock, XCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -387,19 +387,14 @@ export function RescheduleReviewPage({
         </div>
         <div className="flex items-center gap-2">
           <Label className="text-xs text-muted-foreground shrink-0">From</Label>
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="h-8 w-36 text-xs"
-          />
+          <DatePickerModal value={dateFrom} onChange={setDateFrom} className="h-8 w-36 text-xs" />
         </div>
         <div className="flex items-center gap-2">
           <Label className="text-xs text-muted-foreground shrink-0">To</Label>
-          <Input
-            type="date"
+          <DatePickerModal
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={setDateTo}
+            minDate={dateFrom}
             className="h-8 w-36 text-xs"
           />
         </div>

@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -177,13 +178,6 @@ function getMondayIso(dateIso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-function fmtWeekLabel(mondayIso: string): string {
-  const start = new Date(`${mondayIso}T12:00:00`);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  return `${start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-}
-
 export function TrainerAvailabilityDialog({
   open,
   onOpenChange,
@@ -303,29 +297,15 @@ export function TrainerAvailabilityDialog({
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
+            <div className="flex flex-1 items-center gap-2">
+              <DatePickerModal
                 value={selectedDate}
-                onChange={(e) => {
-                  if (!e.target.value) return;
-                  setSelectedDate(e.target.value);
+                onChange={(v) => {
+                  setSelectedDate(v);
                   setDailyData(null);
                 }}
-                className="sr-only"
-                id="avail-date-picker"
+                className="h-8 flex-1 text-xs"
               />
-              <label
-                htmlFor="avail-date-picker"
-                className="cursor-pointer text-xs font-medium text-foreground hover:text-primary transition-colors"
-              >
-                {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-IN', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              </label>
               {selectedDate !== todayIso() && (
                 <button
                   type="button"
@@ -358,26 +338,17 @@ export function TrainerAvailabilityDialog({
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
+            <div className="flex flex-1 items-center gap-2">
+              <DatePickerModal
                 value={weekOf}
-                onChange={(e) => {
-                  if (!e.target.value) return;
-                  const monday = getMondayIso(e.target.value);
+                onChange={(v) => {
+                  const monday = getMondayIso(v);
                   setWeekOf(monday);
                   setSmartData(null);
                   setTrainerData(null);
                 }}
-                className="sr-only"
-                id="avail-week-picker"
+                className="h-8 flex-1 text-xs"
               />
-              <label
-                htmlFor="avail-week-picker"
-                className="cursor-pointer text-xs font-medium text-foreground hover:text-primary transition-colors"
-              >
-                {fmtWeekLabel(weekOf)}
-              </label>
               {weekOf !== getMondayIso(todayIso()) && (
                 <button
                   type="button"

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import {
   Dialog,
   DialogContent,
@@ -142,12 +143,9 @@ export default function ClientUnavailabilityPage() {
               <div className="space-y-2">
                 <Label>Select Dates</Label>
                 <div className="flex gap-2">
-                  <Input
-                    type="date"
-                    value={dateInput}
-                    onChange={(e) => setDateInput(e.target.value)}
-                    className="flex-1"
-                  />
+                  <div className="flex-1">
+                    <DatePickerModal value={dateInput} onChange={setDateInput} />
+                  </div>
                   <Button
                     type="button"
                     size="sm"
