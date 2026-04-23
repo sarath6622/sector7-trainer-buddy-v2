@@ -369,6 +369,39 @@ export async function startCrossfitSession(sessionId: string, branchId: string, 
   return updated;
 }
 
+export async function endCrossfitSession(sessionId: string, branchId: string, actorId: string) {
+  const session = await prisma.crossfitSession.findFirst({ where: { id: sessionId, branchId } });
+  if (!session) {
+    throw new AppError('NOT_FOUND', 'CrossFit session not found', 404);
+  }
+  if (session.status === 'COMPLETED') {
+    return session; // idempotent
+  }
+  if (session.status === 'SCHEDULED') {
+    throw new AppError('CONFLICT', 'Session has not been started yet', 409);
+  }
+
+  const updated = await prisma.crossfitSession.update({
+    where: { id: sessionId },
+    data: {
+      status: 'COMPLETED',
+      endedAt: new Date(),
+    },
+    include: { _count: { select: { attendances: true } } },
+  });
+
+  await auditLog({
+    action: 'CROSSFIT_SESSION_ENDED',
+    actorId,
+    subjectType: 'CrossfitSession',
+    subjectId: sessionId,
+    newValue: { status: 'COMPLETED', endedAt: updated.endedAt },
+    branchId,
+  });
+
+  return updated;
+}
+
 export async function getTodayCrossfitSessionsForTrainer(
   trainerProfileId: string,
   branchId: string,

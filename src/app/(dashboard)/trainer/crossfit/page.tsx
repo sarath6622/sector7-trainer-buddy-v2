@@ -6,6 +6,7 @@ import {
   Search,
   X,
   Play,
+  StopCircle,
   ChevronLeft,
   CheckCircle2,
   Circle,
@@ -138,6 +139,8 @@ export default function CrossfitTrainerPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [endingSession, setEndingSession] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -366,6 +369,23 @@ export default function CrossfitTrainerPage() {
     }
   }
 
+  async function handleEndSession() {
+    if (!sessionId) return;
+    setEndingSession(true);
+    setShowEndConfirm(false);
+    try {
+      const res = await fetch(`/api/crossfit/sessions/${sessionId}/end`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to end session');
+      setSessionStatus('COMPLETED');
+      toast.success('Session ended — attendance locked');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to end session');
+    } finally {
+      setEndingSession(false);
+    }
+  }
+
   // ── Derived ───────────────────────────────────────────────────────────────
 
   // Build lookup maps for both gym members (by clientProfileId) and externals (by externalName)
@@ -584,6 +604,18 @@ export default function CrossfitTrainerPage() {
               </button>
             </div>
           </div>
+
+          {/* End Session button (live only) */}
+          {isLive && (
+            <button
+              onClick={() => setShowEndConfirm(true)}
+              disabled={endingSession}
+              className="flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-500/20 transition-colors disabled:opacity-50 shrink-0"
+            >
+              <StopCircle className="h-3.5 w-3.5" />
+              End
+            </button>
+          )}
 
           {/* Class picker (for historical browsing) */}
           {allClasses.length > 1 && (
@@ -834,6 +866,14 @@ export default function CrossfitTrainerPage() {
           </div>
         )}
 
+        {/* ── Completed banner ── */}
+        {isCompleted && (
+          <div className="mt-4 rounded-2xl bg-muted/40 ring-1 ring-border/50 px-4 py-3 flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-muted-foreground shrink-0" />
+            <p className="text-sm text-muted-foreground">Session ended · Attendance is locked</p>
+          </div>
+        )}
+
         {/* ── Add walk-in ── */}
         {isLive && (
           <div className="mt-4" ref={searchRef}>
@@ -924,6 +964,54 @@ export default function CrossfitTrainerPage() {
           </div>
         )}
       </div>
+
+      {/* ── End Session sticky bottom bar ── */}
+      {isLive && (
+        <div className="sticky bottom-0 px-4 pb-5 pt-3 bg-gradient-to-t from-background via-background/95 to-transparent">
+          <button
+            onClick={() => setShowEndConfirm(true)}
+            disabled={endingSession}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-red-500 py-3.5 text-sm font-semibold text-white hover:bg-red-600 active:scale-[0.98] transition-all disabled:opacity-50"
+          >
+            <StopCircle className="h-4 w-4" />
+            {endingSession ? 'Ending session…' : 'End Session'}
+          </button>
+        </div>
+      )}
+
+      {/* ── End session confirmation modal ── */}
+      {showEndConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-card ring-1 ring-border/60 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-500/10">
+                <StopCircle className="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <p className="font-semibold">End this session?</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {attendance.length} member{attendance.length !== 1 ? 's' : ''} marked present ·
+                  Attendance will be locked
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowEndConfirm(false)}
+                className="flex-1 rounded-xl bg-muted py-2.5 text-sm font-semibold text-muted-foreground hover:bg-muted/80 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEndSession}
+                className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
+              >
+                End Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
