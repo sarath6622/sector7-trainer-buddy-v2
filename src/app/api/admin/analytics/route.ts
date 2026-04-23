@@ -61,6 +61,10 @@ export async function GET(req: Request) {
         const data = await getLeaveBalanceAllTrainers({ branchId, month });
         return NextResponse.json({ data });
       }
+      case 'crossfit-overview': {
+        const data = await analyticsService.getCrossfitAnalytics(branchId, month);
+        return NextResponse.json({ data });
+      }
       default:
         return NextResponse.json(
           { error: `Unknown report type: ${report}`, code: 'VALIDATION_ERROR' },

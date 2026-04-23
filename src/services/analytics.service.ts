@@ -291,6 +291,81 @@ export async function getRevenueOverview(
   };
 }
 
+// ─── CrossFit Analytics ─────────────────────────────
+
+export interface CrossfitSessionStat {
+  sessionId: string;
+  className: string;
+  dayOfWeek: string;
+  startTime: string;
+  date: string; // ISO date string
+  status: string;
+  attendanceCount: number;
+  maxCapacity: number;
+  fillPercent: number;
+}
+
+export interface CrossfitAnalytics {
+  totalSessionsRun: number;
+  totalAttendances: number;
+  avgAttendancePerSession: number;
+  totalEnrollments: number;
+  sessions: CrossfitSessionStat[];
+}
+
+export async function getCrossfitAnalytics(
+  branchId: string,
+  month: string,
+): Promise<CrossfitAnalytics> {
+  const { start, end } = getMonthRange(month);
+
+  const sessions = await prisma.crossfitSession.findMany({
+    where: {
+      branchId,
+      date: { gte: start, lte: end },
+    },
+    include: {
+      class: true,
+      attendances: { select: { id: true } },
+    },
+    orderBy: [{ date: 'asc' }, { class: { startTime: 'asc' } }],
+  });
+
+  const totalEnrollments = await prisma.crossfitEnrollment.count({
+    where: { branchId, isActive: true },
+  });
+
+  const sessionStats: CrossfitSessionStat[] = sessions.map((s) => {
+    const count = s.attendances.length;
+    const fillPercent =
+      s.class.maxCapacity > 0 ? Math.round((count / s.class.maxCapacity) * 100) : 0;
+    return {
+      sessionId: s.id,
+      className: s.class.name,
+      dayOfWeek: s.class.dayOfWeek,
+      startTime: s.class.startTime,
+      date: s.date.toISOString().split('T')[0]!,
+      status: s.status,
+      attendanceCount: count,
+      maxCapacity: s.class.maxCapacity,
+      fillPercent,
+    };
+  });
+
+  const totalSessionsRun = sessions.length;
+  const totalAttendances = sessionStats.reduce((sum, s) => sum + s.attendanceCount, 0);
+  const avgAttendancePerSession =
+    totalSessionsRun > 0 ? Math.round(totalAttendances / totalSessionsRun) : 0;
+
+  return {
+    totalSessionsRun,
+    totalAttendances,
+    avgAttendancePerSession,
+    totalEnrollments,
+    sessions: sessionStats,
+  };
+}
+
 // ─── Trainer Personal Analytics ─────────────────────
 
 export interface TrainerAnalytics {

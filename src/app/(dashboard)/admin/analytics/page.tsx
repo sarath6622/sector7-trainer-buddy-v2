@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, BarChart3, Download, Info, TrendingUp, UserX, Users } from 'lucide-react';
+import {
+  AlertTriangle,
+  BarChart3,
+  Download,
+  Info,
+  TrendingUp,
+  UserX,
+  Users,
+  Dumbbell,
+  CalendarCheck,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +63,26 @@ interface NoShowRate {
   noShowPercent: number;
 }
 
+interface CrossfitSessionStat {
+  sessionId: string;
+  className: string;
+  dayOfWeek: string;
+  startTime: string;
+  date: string;
+  status: string;
+  attendanceCount: number;
+  maxCapacity: number;
+  fillPercent: number;
+}
+
+interface CrossfitAnalytics {
+  totalSessionsRun: number;
+  totalAttendances: number;
+  avgAttendancePerSession: number;
+  totalEnrollments: number;
+  sessions: CrossfitSessionStat[];
+}
+
 interface TrainerLeaveBalance {
   trainerProfileId: string;
   trainerName: string;
@@ -67,6 +97,7 @@ const TABS = [
   { key: 'consumption', label: 'Consumption' },
   { key: 'noshow', label: 'No-Shows' },
   { key: 'leaves', label: 'Leaves' },
+  { key: 'crossfit', label: 'CrossFit' },
 ] as const;
 
 function getCurrentMonth() {
@@ -150,23 +181,26 @@ export default function AnalyticsPage() {
   const [consumption, setConsumption] = useState<SessionConsumption[]>([]);
   const [noShow, setNoShow] = useState<NoShowRate[]>([]);
   const [leaveQuota, setLeaveQuota] = useState<TrainerLeaveBalance[]>([]);
+  const [crossfit, setCrossfit] = useState<CrossfitAnalytics | null>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
       const base = `/api/admin/analytics?month=${month}`;
-      const [u, a, c, n, l] = await Promise.all([
+      const [u, a, c, n, l, cf] = await Promise.all([
         fetch(`${base}&report=trainer-utilization`).then((r) => r.json()),
         fetch(`${base}&report=client-attendance`).then((r) => r.json()),
         fetch(`${base}&report=session-consumption`).then((r) => r.json()),
         fetch(`${base}&report=no-show-rate`).then((r) => r.json()),
         fetch(`${base}&report=leave-quota`).then((r) => r.json()),
+        fetch(`${base}&report=crossfit-overview`).then((r) => r.json()),
       ]);
       setUtilization(u.data ?? []);
       setAttendance(a.data ?? []);
       setConsumption(c.data ?? []);
       setNoShow(n.data ?? []);
       setLeaveQuota(l.data ?? []);
+      setCrossfit(cf.data ?? null);
     } finally {
       setLoading(false);
     }
@@ -353,6 +387,7 @@ export default function AnalyticsPage() {
               consumption: 'session-consumption',
               noshow: 'no-show-rate',
               leaves: 'leave-quota',
+              crossfit: 'crossfit-overview',
             };
             handleExport(reportMap[activeTab]!);
           }}
@@ -719,6 +754,156 @@ export default function AnalyticsPage() {
             </>
           ) : (
             <EmptyState />
+          )}
+        </div>
+      )}
+
+      {activeTab === 'crossfit' && (
+        <div className="space-y-4">
+          {crossfit ? (
+            <>
+              {/* KPI row */}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground">Sessions Run</span>
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/10">
+                      <CalendarCheck className="h-3.5 w-3.5 text-orange-500" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold tabular-nums">{crossfit.totalSessionsRun}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">this month</p>
+                </div>
+                <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Avg Attendance
+                    </span>
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10">
+                      <Users className="h-3.5 w-3.5 text-emerald-500" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold tabular-nums">
+                    {crossfit.avgAttendancePerSession}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">per session</p>
+                </div>
+                <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground">Enrollments</span>
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/10">
+                      <Dumbbell className="h-3.5 w-3.5 text-violet-500" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold tabular-nums">{crossfit.totalEnrollments}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">active members</p>
+                </div>
+              </div>
+
+              {/* Session breakdown */}
+              {crossfit.sessions.length > 0 ? (
+                <>
+                  <div className="flex items-center gap-2 px-0.5">
+                    <p className="text-sm font-medium">Session-by-session attendance</p>
+                    <InfoTooltip content="Each CrossFit session that ran this month. Shows the class name, date, start time, and how many members attended vs the class capacity." />
+                  </div>
+                  <div className="space-y-2">
+                    {crossfit.sessions.map((s) => {
+                      const fillColor =
+                        s.fillPercent >= 80
+                          ? 'bg-emerald-500'
+                          : s.fillPercent >= 50
+                            ? 'bg-amber-500'
+                            : 'bg-red-400';
+                      const textColor =
+                        s.fillPercent >= 80
+                          ? 'text-emerald-400'
+                          : s.fillPercent >= 50
+                            ? 'text-amber-400'
+                            : 'text-red-400';
+                      const badgeBg =
+                        s.fillPercent >= 80
+                          ? 'bg-emerald-500/10'
+                          : s.fillPercent >= 50
+                            ? 'bg-amber-500/10'
+                            : 'bg-red-500/10';
+
+                      // Format date as "Wed, 16 Apr"
+                      const dateObj = new Date(s.date + 'T00:00:00');
+                      const dateLabel = dateObj.toLocaleDateString('en-GB', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                      });
+
+                      // Convert 24hr to 12hr
+                      const [hh, mm] = s.startTime.split(':');
+                      const h = parseInt(hh!, 10);
+                      const timeLabel = `${h % 12 === 0 ? 12 : h % 12}:${mm} ${h < 12 ? 'AM' : 'PM'}`;
+
+                      return (
+                        <div
+                          key={s.sessionId}
+                          className="rounded-xl bg-card ring-1 ring-border/50 px-4 py-3 flex items-center gap-3"
+                        >
+                          {/* Date block */}
+                          <div className="shrink-0 w-16 text-center">
+                            <p className="text-[10px] text-muted-foreground leading-none">
+                              {dateLabel.split(',')[0]}
+                            </p>
+                            <p className="text-sm font-semibold leading-tight">
+                              {dateLabel.split(', ')[1]}
+                            </p>
+                          </div>
+                          {/* Class info + bar */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-2 mb-1.5">
+                              <p className="text-sm font-medium truncate">{s.className}</p>
+                              <span className="text-[10px] text-muted-foreground shrink-0">
+                                {timeLabel}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 flex-1 rounded-full bg-muted/60 overflow-hidden">
+                                <div
+                                  className={cn(
+                                    'h-full rounded-full transition-all duration-500',
+                                    fillColor,
+                                  )}
+                                  style={{
+                                    width:
+                                      s.maxCapacity > 0 ? `${Math.min(s.fillPercent, 100)}%` : '0%',
+                                  }}
+                                />
+                              </div>
+                              <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+                                {s.attendanceCount}/{s.maxCapacity}
+                              </span>
+                            </div>
+                          </div>
+                          {/* Fill % badge */}
+                          <div className="shrink-0">
+                            <span
+                              className={cn(
+                                'text-xs font-bold tabular-nums px-2 py-0.5 rounded-full',
+                                textColor,
+                                badgeBg,
+                              )}
+                            >
+                              {s.maxCapacity > 0 ? `${s.fillPercent}%` : '—'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <EmptyState message="No CrossFit sessions recorded this month" />
+              )}
+            </>
+          ) : (
+            <EmptyState message="No CrossFit data for this month" />
           )}
         </div>
       )}
