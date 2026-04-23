@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Calendar, CalendarDayButton } from '@/components/ui/calendar';
@@ -35,6 +35,7 @@ export function DatePickerModal({
   className,
 }: DatePickerModalProps) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const selected = value ? new Date(value + 'T00:00:00') : undefined;
 
@@ -59,16 +60,29 @@ export function DatePickerModal({
     return false;
   };
 
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
   return (
-    <>
+    <div ref={containerRef} className="relative">
       {/* Trigger */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((v) => !v)}
         className={cn(
           'flex h-9 w-full items-center gap-2 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors',
           'hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring',
           !value && 'text-muted-foreground',
+          open && 'ring-2 ring-ring',
           className,
         )}
       >
@@ -76,41 +90,25 @@ export function DatePickerModal({
         <span className="flex-1 text-left">{displayLabel}</span>
       </button>
 
-      {/* Modal */}
+      {/* Inline dropdown — no backdrop */}
       {open && (
-        <>
-          <div
-            className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
+        <div className="absolute left-0 top-full mt-2 z-50 overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-border/60">
+          <Calendar
+            mode="single"
+            selected={selected}
+            onSelect={(date) => {
+              if (date) {
+                onChange(toISODateStr(date));
+                setOpen(false);
+              }
+            }}
+            disabled={isDisabled}
+            initialFocus
+            components={{ DayButton: CalendarDayButton }}
+            className="p-2 [--cell-size:1.5rem] text-xs"
           />
-          <div className="fixed left-1/2 top-1/2 z-[201] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-border/50">
-            <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
-              <p className="text-sm font-semibold">Pick a Date</p>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                ✕
-              </button>
-            </div>
-            <Calendar
-              mode="single"
-              selected={selected}
-              onSelect={(date) => {
-                if (date) {
-                  onChange(toISODateStr(date));
-                  setOpen(false);
-                }
-              }}
-              disabled={isDisabled}
-              initialFocus
-              components={{ DayButton: CalendarDayButton }}
-              className="p-4 [--cell-size:2.75rem]"
-            />
-          </div>
-        </>
+        </div>
       )}
-    </>
+    </div>
   );
 }

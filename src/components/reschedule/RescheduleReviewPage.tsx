@@ -353,7 +353,7 @@ export function RescheduleReviewPage({
   const pendingCount = requests.filter((r) => r.status === 'PENDING').length;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-8">
+    <div className="mx-auto max-w-7xl space-y-6 pb-8">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -402,8 +402,8 @@ export function RescheduleReviewPage({
 
       {/* List */}
       {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
             <Skeleton key={i} className="h-40 rounded-2xl" />
           ))}
         </div>
@@ -417,7 +417,7 @@ export function RescheduleReviewPage({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {requests.map((r) => (
             <RequestCard
               key={r.id}
