@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/s
 import { Logo } from './Logo';
 import { NotificationBell } from './NotificationBell';
 import type { NavItem } from '@/lib/constants';
+import { groupNavItems } from '@/lib/nav-groups';
 import { cn } from '@/lib/utils';
 
 interface TopNavProps {
@@ -222,7 +223,7 @@ export function TopNav({
             <SheetContent
               side="left"
               showCloseButton={false}
-              className="w-[80vw] max-w-sm border-none bg-gradient-to-b from-[#1a1a1a] to-[#111] p-0"
+              className="w-[80vw] max-w-sm border-none bg-sidebar p-0"
             >
               <div
                 className="flex h-dvh flex-col overflow-hidden"
@@ -230,84 +231,87 @@ export function TopNav({
               >
                 {/* Header — logo + close */}
                 <div className="shrink-0 flex items-center justify-between px-6 pt-6 pb-4">
-                  <Logo className="h-10" variant="dark" />
-                  <SheetClose className="rounded-sm p-1 text-white/60 transition-colors hover:text-white">
+                  <Logo className="h-10" />
+                  <SheetClose className="rounded-sm p-1 text-sidebar-foreground/50 transition-colors hover:text-sidebar-foreground">
                     <X className="h-6 w-6" />
                     <span className="sr-only">Close</span>
                   </SheetClose>
                 </div>
 
                 {/* Nav items */}
-                <nav className="mt-4 flex-1 min-h-0 overflow-y-auto flex flex-col px-6">
-                  {navItems.map((item) => {
-                    const isDashboard =
-                      item.href === '/admin' || item.href === '/trainer' || item.href === '/client';
-                    const isActive = isDashboard
-                      ? pathname === item.href
-                      : pathname === item.href || pathname.startsWith(item.href + '/');
-                    const Icon = item.icon;
-                    return (
-                      <SheetClose
-                        key={item.href}
-                        nativeButton={false}
-                        render={<Link href={item.href} />}
-                      >
-                        <span
-                          className={cn(
-                            'flex items-center gap-4 border-b border-white/10 py-4 px-3 rounded-xl transition-all active:scale-95 active:opacity-70',
-                            isActive
-                              ? 'text-[#E8652C] bg-[#E8652C]/10'
-                              : 'text-white/80 hover:text-white hover:bg-white/5',
-                          )}
-                        >
-                          <Icon
-                            className={cn(
-                              'h-5 w-5 shrink-0',
-                              isActive ? 'text-[#E8652C]' : 'text-white/40',
-                            )}
-                          />
-                          <span className="text-xl font-bold tracking-normal">{item.label}</span>
-                        </span>
-                      </SheetClose>
-                    );
-                  })}
+                <nav className="mt-2 flex-1 min-h-0 overflow-y-auto px-4 pb-2">
+                  {groupNavItems(navItems).map((group, groupIndex) => (
+                    <div key={groupIndex} className={cn(groupIndex > 0 && 'mt-5')}>
+                      {group.label && (
+                        <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+                          {group.label}
+                        </p>
+                      )}
+                      <div>
+                        {group.items.map((item) => {
+                          const isDashboard =
+                            item.href === '/admin' ||
+                            item.href === '/trainer' ||
+                            item.href === '/client';
+                          const isActive = isDashboard
+                            ? pathname === item.href
+                            : pathname === item.href || pathname.startsWith(item.href + '/');
+                          const Icon = item.icon;
+                          return (
+                            <SheetClose
+                              key={item.href}
+                              nativeButton={false}
+                              render={<Link href={item.href} />}
+                            >
+                              <span
+                                className={cn(
+                                  'flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all active:scale-95 active:opacity-70',
+                                  isActive
+                                    ? 'text-primary bg-primary/10'
+                                    : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                                )}
+                              >
+                                <Icon
+                                  className={cn(
+                                    'h-5 w-5 shrink-0',
+                                    isActive ? 'text-primary' : 'text-sidebar-foreground/40',
+                                  )}
+                                />
+                                <span className="text-base font-semibold">{item.label}</span>
+                              </span>
+                            </SheetClose>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </nav>
 
-                {/* Bottom section — theme toggle + user */}
+                {/* Bottom section — user */}
                 <div
-                  className="shrink-0 px-6"
-                  style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
+                  className="shrink-0 px-4"
+                  style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
                 >
-                  <div className="border-t border-white/10 pt-6">
-                    {/* Theme toggle in hamburger */}
-                    <button
-                      onClick={toggleTheme}
-                      className="mb-5 flex items-center gap-3 text-sm text-white/60 transition-colors hover:text-white"
-                    >
-                      <Moon className="h-4 w-4 dark:hidden" />
-                      <Sun className="hidden h-4 w-4 dark:block" />
-                      <span>Switch to {theme === 'dark' ? 'light' : 'dark'} mode</span>
-                    </button>
-
-                    <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/5 px-4 py-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Avatar className="h-10 w-10 border border-white/20 shrink-0">
-                          <AvatarFallback className="bg-[#E8652C]/20 text-[#E8652C] text-sm font-semibold">
+                  <div className="border-t border-sidebar-border pt-3">
+                    <div className="flex items-center justify-between gap-3 rounded-xl bg-sidebar-accent px-3 py-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Avatar className="h-8 w-8 border border-sidebar-border shrink-0">
+                          <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
                             {initials}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-white truncate">
+                          <p className="text-sm font-semibold text-sidebar-foreground truncate">
                             {user.firstName} {user.lastName}
                           </p>
-                          <p className="text-xs text-white/60 uppercase tracking-wide">
+                          <p className="text-xs text-sidebar-foreground/60 uppercase tracking-wide">
                             {roleLabel}
                           </p>
                         </div>
                       </div>
                       <button
                         onClick={onLogout}
-                        className="shrink-0 p-2 rounded-xl text-white/40 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                        className="shrink-0 p-1.5 rounded-lg text-sidebar-foreground/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
                         aria-label="Log out"
                       >
                         <LogOut className="h-4 w-4" />

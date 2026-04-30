@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Logo } from './Logo';
 import type { NavItem } from '@/lib/constants';
+import { groupNavItems } from '@/lib/nav-groups';
 
 interface SidebarProps {
   navItems: NavItem[];
@@ -14,6 +15,7 @@ interface SidebarProps {
 
 export function Sidebar({ navItems, navBadges, className }: SidebarProps) {
   const pathname = usePathname();
+  const groups = groupNavItems(navItems);
 
   return (
     <aside
@@ -25,37 +27,48 @@ export function Sidebar({ navItems, navBadges, className }: SidebarProps) {
         </Link>
       </div>
 
-      <nav className="flex-1 space-y-1 p-2">
-        {navItems.map((item) => {
-          const isDashboard =
-            item.href === '/admin' || item.href === '/trainer' || item.href === '/client';
-          const isActive = isDashboard
-            ? pathname === item.href
-            : pathname === item.href || pathname.startsWith(item.href + '/');
-          const Icon = item.icon;
-          const badge = navBadges?.[item.href];
+      <nav className="flex-1 overflow-y-auto p-2 py-3">
+        {groups.map((group, groupIndex) => (
+          <div key={groupIndex} className={cn(groupIndex > 0 && 'mt-4')}>
+            {group.label && (
+              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                {group.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const isDashboard =
+                  item.href === '/admin' || item.href === '/trainer' || item.href === '/client';
+                const isActive = isDashboard
+                  ? pathname === item.href
+                  : pathname === item.href || pathname.startsWith(item.href + '/');
+                const Icon = item.icon;
+                const badge = navBadges?.[item.href];
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all active:scale-95 active:opacity-70',
-                isActive
-                  ? 'bg-primary/15 text-primary font-semibold'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1">{item.label}</span>
-              {badge != null && badge > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                  {badge > 99 ? '99+' : badge}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all active:scale-95 active:opacity-70',
+                      isActive
+                        ? 'bg-primary/15 text-primary font-semibold'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="flex-1">{item.label}</span>
+                    {badge != null && badge > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
     </aside>
   );
