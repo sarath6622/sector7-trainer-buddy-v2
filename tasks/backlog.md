@@ -421,15 +421,15 @@
 - [~] ~~**S7-BC-03** `src/lib/billing-cycle.ts` anchor-clamp helper.~~ — Obsolete; per-package window model uses `startDate`/`endDate` directly. See ADR-029.
 - [~] ~~**S7-BC-04** Unit-test matrix for billing-cycle helper.~~ — Obsolete (no helper).
 - [~] ~~**S7-BC-05** Refactor `getSessionCounts` to take cycle.~~ — `getPackageWindowCounts` shipped instead (S7-PP-11). The old `getSessionCounts` (calendar-month) is still used by `/api/client/dashboard` and `/api/trainer/clients`; migrate those if/when needed.
-- [ ] **S7-BC-06** | @backend | L | Cycle-end carry-forward processing — when a `PtPackage` window ends, roll up to N unused sessions into the next package. Idempotent. Replaces the old monthly `processMonthEnd` flow.
+- [x] **S7-BC-06** | @backend | L | New `processCycleEndsForPackages(branchId?, actorId)` in `carryforward.service.ts`. Walks expired+unprocessed packages, computes `used = COMPLETED + NO_SHOW + onboardingUsedSessions` across the window, caps `unused` at `pkg.carryForwardLimit ?? branchSettings.carryForwardLimit ?? 3`, writes `carryForwardOutSessions` + `lastProcessedAt`, audits `PT_PACKAGE_CYCLE_PROCESSED`. Idempotent via `lastProcessedAt > endDate` guard.
 - [~] ~~**S7-BC-07** Extend `pt-package.service.ts` writes + audit.~~ — Done as part of S7-PP-11. Audit captures `totalSessions` and `onboardingUsedSessions` changes via existing `PT_PACKAGE_UPDATED` action.
 - [~] ~~**S7-BC-08** Update `getSessionCounts` callers.~~ — Scheduling page already migrated. Client dashboard + trainer clients pages still on calendar-month; defer until they're confirmed broken.
-- [ ] **S7-BC-09** | @backend | M | `/api/cron/process-cycles` (bearer-auth) + `/api/admin/cycles/process` (manual admin trigger).
-- [ ] **S7-BC-10** | @devops | S | Vercel cron config (20:00 UTC daily) + `CRON_SECRET` env var. Document rotation in `memory/architecture.md`.
-- [ ] **S7-BC-11** | @architect+@backend | S | Per-package `carryForwardLimit Int?` override on `PtPackage` (null = inherit branch default).
+- [x] **S7-BC-09** | @backend | M | `POST /api/cron/process-cycles` (bearer-auth, 500 MISCONFIGURED when secret unset, 401 on mismatch, 200 with cycle result on success) + `POST /api/admin/cycles/process` (NextAuth + role guard, scopes to caller branch, forwards actorId).
+- [x] **S7-BC-10** | @devops | S | `vercel.json` with daily cron at `0 20 * * *` (20:00 UTC). `CRON_SECRET` already in `.env.example`. "Secrets & Cron" section added to `memory/architecture.md` documenting format/storage/rotation procedure.
+- [x] **S7-BC-11** | @architect+@backend | S | Added `carryForwardLimit Int?` (override) and `carryForwardOutSessions Int @default(0)` + `lastProcessedAt DateTime?` (cycle-processing bookkeeping) to `PtPackage`. Migrations `20260508140000` and `20260508150000`. Mapping form has carry-forward limit field with "Inherit branch default" placeholder.
 - [~] ~~**S7-BC-12** Mapping card: onboarding banner + cycle label.~~ — Onboarding fields shipped on the form (S7-PP-11). Cycle label not needed (window-counts chip on the scheduling page covers it).
 - [~] ~~**S7-BC-13** Bind client dashboard + trainer client list to `cycle.label`.~~ — Defer; current `getSessionCounts` keeps working until/unless those surfaces are migrated.
-- [ ] **S7-BC-14** | @qa | L | Integration tests for the carry-forward + cron work above.
+- [x] **S7-BC-14** | @qa | L | 22 tests across 2 files: `tests/unit/cycle-end-processing.test.ts` (12 — empty/nominal/expired-overflow/onboarding-counted/over-used/cancelled-excluded/audit/multi-package/branch-cache/branch-scope/cron-mode), `tests/integration/cron-process-cycles-api.test.ts` (10 — secret-missing/header-missing/wrong-secret/wrong-scheme/happy-path/error-passthrough + admin role guards + branch scoping + payload shape).
 - [~] ~~**S7-BC-15** Memory updates for ADR-023/024/025/026.~~ — Superseded by S7-PP-09 (ADR-027/028/029/030 already written). When the carry-forward + cron + per-package limit work lands, write ADRs at the next available number and a "Secrets & Cron" section in `memory/architecture.md`.
 
 ---

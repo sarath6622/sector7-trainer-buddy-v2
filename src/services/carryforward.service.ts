@@ -249,3 +249,150 @@ export async function processMonthEnd(
 
   return result;
 }
+
+// ─── Cycle-End Processing (Phase 24, ADR-029 / ADR-030) ──────────────
+
+interface CycleEndDetail {
+  packageId: string;
+  clientProfileId: string;
+  clientName: string;
+  totalSessions: number;
+  used: number;
+  unused: number;
+  effectiveLimit: number;
+  carryForwardOutSessions: number;
+  expired: number;
+}
+
+interface CycleEndResult {
+  processed: number;
+  totalCarriedForward: number;
+  totalExpired: number;
+  details: CycleEndDetail[];
+}
+
+/**
+ * Walk all active PT packages whose `endDate` is in the past and which haven't
+ * been cycle-processed yet (or whose endDate is newer than the last processing
+ * run). For each such package:
+ *   - used = COMPLETED + NO_SHOW within the window + onboardingUsedSessions
+ *   - unused = max(0, totalSessions - used)
+ *   - effectiveLimit = pkg.carryForwardLimit ?? branchSettings.carryForwardLimit ?? 3
+ *   - carryForwardOutSessions = min(unused, effectiveLimit)
+ *
+ * Re-runs are no-ops thanks to the `lastProcessedAt > endDate` guard. The
+ * carry-forward credit lives on the expiring package; the admin (or a future
+ * `applyCarryForwardCredit` flow) reads it when creating the next mapping.
+ *
+ * Designed for cron use; safe to invoke manually for a single branch.
+ */
+export async function processCycleEndsForPackages(
+  branchId: string | null,
+  actorId: string,
+): Promise<CycleEndResult> {
+  const now = new Date();
+
+  const expiredPackages = await prisma.ptPackage.findMany({
+    where: {
+      ...(branchId ? { branchId } : {}),
+      isActive: true,
+      endDate: { lt: now, not: null },
+      OR: [{ lastProcessedAt: null }, { lastProcessedAt: { lt: prisma.ptPackage.fields.endDate } }],
+    },
+    include: {
+      client: {
+        include: { user: { select: { firstName: true, lastName: true } } },
+      },
+    },
+  });
+
+  // Cache branch carry-forward defaults so we don't re-fetch per package
+  const branchDefaults = new Map<string, number>();
+  async function getBranchDefault(bId: string): Promise<number> {
+    if (branchDefaults.has(bId)) return branchDefaults.get(bId)!;
+    const settings = await prisma.branchSettings.findUnique({
+      where: { branchId: bId },
+      select: { carryForwardLimit: true },
+    });
+    const limit = settings?.carryForwardLimit ?? 3;
+    branchDefaults.set(bId, limit);
+    return limit;
+  }
+
+  const result: CycleEndResult = {
+    processed: 0,
+    totalCarriedForward: 0,
+    totalExpired: 0,
+    details: [],
+  };
+
+  for (const pkg of expiredPackages) {
+    if (!pkg.endDate) continue; // belt-and-braces; query already excludes nulls
+
+    // Count sessions inside the package window
+    const sessions = await prisma.sessionInstance.findMany({
+      where: {
+        branchId: pkg.branchId,
+        clientProfileId: pkg.clientProfileId,
+        scheduledDate: { gte: pkg.startDate, lte: pkg.endDate },
+      },
+      select: { status: true },
+    });
+
+    const completed = sessions.filter((s) => s.status === 'COMPLETED').length;
+    const noShow = sessions.filter((s) => s.status === 'NO_SHOW').length;
+    const used = completed + noShow + pkg.onboardingUsedSessions;
+    const unused = Math.max(0, pkg.totalSessions - used);
+
+    const branchLimit = await getBranchDefault(pkg.branchId);
+    const effectiveLimit = pkg.carryForwardLimit ?? branchLimit;
+    const carryForward = Math.min(unused, effectiveLimit);
+    const expired = unused - carryForward;
+
+    await prisma.ptPackage.update({
+      where: { id: pkg.id },
+      data: {
+        carryForwardOutSessions: carryForward,
+        lastProcessedAt: now,
+      },
+    });
+
+    await auditLog({
+      action: 'PT_PACKAGE_CYCLE_PROCESSED',
+      actorId,
+      subjectType: 'PtPackage',
+      subjectId: pkg.id,
+      branchId: pkg.branchId,
+      newValue: {
+        totalSessions: pkg.totalSessions,
+        used,
+        unused,
+        effectiveLimit,
+        carryForwardOutSessions: carryForward,
+        expired,
+      },
+      metadata: {
+        clientProfileId: pkg.clientProfileId,
+        windowStart: pkg.startDate.toISOString(),
+        windowEnd: pkg.endDate.toISOString(),
+      },
+    });
+
+    result.processed += 1;
+    result.totalCarriedForward += carryForward;
+    result.totalExpired += expired;
+    result.details.push({
+      packageId: pkg.id,
+      clientProfileId: pkg.clientProfileId,
+      clientName: `${pkg.client.user.firstName} ${pkg.client.user.lastName}`,
+      totalSessions: pkg.totalSessions,
+      used,
+      unused,
+      effectiveLimit,
+      carryForwardOutSessions: carryForward,
+      expired,
+    });
+  }
+
+  return result;
+}

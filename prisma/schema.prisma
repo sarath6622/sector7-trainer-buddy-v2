@@ -450,6 +450,16 @@ model PtPackage {
   /// `used` in package-window accounting.
   onboardingUsedSessions Int @default(0)
   onboardingNotes   String?
+  /// Per-package override of `BranchSettings.carryForwardLimit`. Null = inherit
+  /// branch default. Used by the cycle-end cron when rolling unused sessions
+  /// into the next package.
+  carryForwardLimit Int?
+  /// Sessions credited to the next package when this one expired (set by
+  /// `processCycleEndsForPackages`). 0 until cycle-end cron has run.
+  carryForwardOutSessions Int @default(0)
+  /// Set when the cycle-end cron processes this package. Used as the
+  /// idempotency guard so re-running the cron is a no-op.
+  lastProcessedAt DateTime?
   sessionChargeAmount Float?
   isActive          Boolean  @default(true)
   startDate         DateTime

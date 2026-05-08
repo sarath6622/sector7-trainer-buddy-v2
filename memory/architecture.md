@@ -176,4 +176,57 @@ PUSHER_CLUSTER=<cluster>
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NODE_ENV=development
+
+# Cron (Phase 24 — bearer-token auth for /api/cron/* routes)
+CRON_SECRET=<32-byte base64 secret>
 ```
+
+## Secrets & Cron (Phase 24)
+
+### CRON_SECRET
+
+**Format:** ≥ 32-byte random secret. Generate with `openssl rand -base64 32`.
+
+**Storage:**
+
+- Production: Vercel Environment Variables (Production + Preview)
+- Local dev: `.env.local`
+
+**Verification:** every `/api/cron/*` route reads `req.headers.get('authorization')`
+and compares against `` `Bearer ${CRON_SECRET}` ``. Mismatch returns 401 with
+`{ error: 'Unauthorized', code: 'UNAUTHORIZED' }`. Missing env var returns 500 with
+`MISCONFIGURED` so deployments without the secret fail loudly instead of silently
+passing all requests.
+
+**Rotation:**
+
+- Cadence: quarterly, or immediately on suspected exposure.
+- Procedure:
+  1. Generate new secret: `openssl rand -base64 32`
+  2. Update Vercel env var (Production + Preview)
+  3. Trigger a redeploy so the new secret is loaded
+  4. Update local `.env.local` for any developer running cron routes locally
+- No grace-period dual-secret support — the cron caller (Vercel Cron) is single-tenant.
+
+### Vercel Cron
+
+Defined in `vercel.json`:
+
+```json
+{ "crons": [{ "path": "/api/cron/process-cycles", "schedule": "0 20 * * *" }] }
+```
+
+Schedule: `0 20 * * *` = 20:00 UTC daily (01:30 IST). Vercel calls the path with
+the `Authorization: Bearer ${CRON_SECRET}` header automatically when the project's
+`CRON_SECRET` env var is set.
+
+### Cron-callable routes
+
+| Route                            | Purpose                                         | Auth                                            |
+| -------------------------------- | ----------------------------------------------- | ----------------------------------------------- |
+| `POST /api/cron/process-cycles`  | Daily cycle-end processing across all branches  | `Bearer ${CRON_SECRET}`                         |
+| `POST /api/admin/cycles/process` | Manual admin trigger, scoped to caller's branch | NextAuth session, `BRANCH_ADMIN \| SUPER_ADMIN` |
+
+Both call `processCycleEndsForPackages` from `src/services/carryforward.service.ts`.
+The service is idempotent — re-running is a no-op for any package whose
+`lastProcessedAt > endDate`.

@@ -135,6 +135,7 @@ interface PtPackage {
   totalSessions: number;
   onboardingUsedSessions: number;
   onboardingNotes: string | null;
+  carryForwardLimit: number | null;
   sessionChargeAmount: number | null;
   isActive: boolean;
   startDate: string;
@@ -249,6 +250,7 @@ export default function ClientProfilePage() {
     totalSessions: '',
     onboardingUsedSessions: '',
     onboardingNotes: '',
+    carryForwardLimit: '',
     sessionCharge: '',
     startDate: new Date().toISOString().split('T')[0] ?? '',
     endDate: '',
@@ -263,6 +265,7 @@ export default function ClientProfilePage() {
     totalSessions: '',
     onboardingUsedSessions: '',
     onboardingNotes: '',
+    carryForwardLimit: '',
     sessionCharge: '',
     endDate: '',
   });
@@ -525,6 +528,10 @@ export default function ClientProfilePage() {
             ? parseInt(mappingForm.onboardingUsedSessions, 10)
             : undefined,
           onboardingNotes: mappingForm.onboardingNotes.trim() || undefined,
+          carryForwardLimit:
+            mappingForm.carryForwardLimit === ''
+              ? null
+              : parseInt(mappingForm.carryForwardLimit, 10),
           sessionCharge: mappingForm.sessionCharge
             ? parseFloat(mappingForm.sessionCharge)
             : undefined,
@@ -544,6 +551,7 @@ export default function ClientProfilePage() {
           totalSessions: '',
           onboardingUsedSessions: '',
           onboardingNotes: '',
+          carryForwardLimit: '',
           sessionCharge: '',
           startDate: new Date().toISOString().split('T')[0] ?? '',
           endDate: '',
@@ -583,6 +591,7 @@ export default function ClientProfilePage() {
         ? pkg.onboardingUsedSessions.toString()
         : '',
       onboardingNotes: pkg.onboardingNotes ?? '',
+      carryForwardLimit: pkg.carryForwardLimit != null ? pkg.carryForwardLimit.toString() : '',
       sessionCharge: pkg.sessionChargeAmount?.toString() ?? '',
       endDate: pkg.endDate ? pkg.endDate.split('T')[0]! : '',
     });
@@ -605,6 +614,8 @@ export default function ClientProfilePage() {
             ? parseInt(editForm.onboardingUsedSessions, 10)
             : 0,
           onboardingNotes: editForm.onboardingNotes.trim() || null,
+          carryForwardLimit:
+            editForm.carryForwardLimit === '' ? null : parseInt(editForm.carryForwardLimit, 10),
           sessionCharge: editForm.sessionCharge ? parseFloat(editForm.sessionCharge) : undefined,
           endDate: editForm.endDate || null,
         }),
@@ -1054,6 +1065,23 @@ export default function ClientProfilePage() {
                       sessions count as already-used in the package window.
                     </p>
                   </div>
+                  <Field label="Carry-Forward Limit (override)">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="50"
+                      placeholder="Inherit branch default"
+                      value={mappingForm.carryForwardLimit}
+                      onChange={(e) =>
+                        setMappingForm((p) => ({ ...p, carryForwardLimit: e.target.value }))
+                      }
+                      className="h-9 text-xs border-white/[0.08]"
+                    />
+                    <p className="mt-1 text-[10px] text-muted-foreground/70">
+                      Maximum unused sessions that roll into the next package for this client. Leave
+                      blank to inherit the branch default.
+                    </p>
+                  </Field>
                   {isPlanEdited(
                     mappingForm.planId,
                     mappingForm.sessionsPerMonth,
@@ -1180,6 +1208,22 @@ export default function ClientProfilePage() {
                             </Field>
                           </div>
                         </div>
+                        <Field label="Carry-Forward Limit (override)">
+                          <Input
+                            type="number"
+                            min="0"
+                            max="50"
+                            placeholder="Inherit branch default"
+                            value={editForm.carryForwardLimit}
+                            onChange={(e) =>
+                              setEditForm((p) => ({ ...p, carryForwardLimit: e.target.value }))
+                            }
+                            className="h-9 text-xs border-white/[0.08]"
+                          />
+                          <p className="mt-1 text-[10px] text-muted-foreground/70">
+                            Leave blank to inherit the branch default.
+                          </p>
+                        </Field>
                         {isPlanEdited(
                           editForm.planId,
                           editForm.sessionsPerMonth,

@@ -12,6 +12,7 @@ interface CreatePtPackageInput {
   totalSessions?: number;
   onboardingUsedSessions?: number;
   onboardingNotes?: string;
+  carryForwardLimit?: number | null;
   sessionCharge?: number;
   startDate: string;
   endDate?: string;
@@ -24,6 +25,7 @@ interface UpdatePtPackageInput {
   totalSessions?: number;
   onboardingUsedSessions?: number;
   onboardingNotes?: string | null;
+  carryForwardLimit?: number | null;
   sessionCharge?: number;
   endDate?: string | null;
   isActive?: boolean;
@@ -115,6 +117,7 @@ export async function createPtPackage(input: CreatePtPackageInput) {
       totalSessions,
       onboardingUsedSessions: input.onboardingUsedSessions ?? 0,
       onboardingNotes: input.onboardingNotes ?? null,
+      carryForwardLimit: input.carryForwardLimit ?? null,
       sessionChargeAmount: input.sessionCharge ?? null,
       startDate: new Date(input.startDate),
       endDate: input.endDate ? new Date(input.endDate) : null,
@@ -257,6 +260,7 @@ export async function updatePtPackage(
   if (input.onboardingUsedSessions !== undefined)
     data.onboardingUsedSessions = input.onboardingUsedSessions;
   if ('onboardingNotes' in input) data.onboardingNotes = input.onboardingNotes ?? null;
+  if ('carryForwardLimit' in input) data.carryForwardLimit = input.carryForwardLimit;
   if (input.sessionCharge !== undefined) data.sessionChargeAmount = input.sessionCharge;
   if ('endDate' in input) {
     data.endDate = input.endDate ? new Date(input.endDate) : null;
@@ -303,6 +307,7 @@ export async function updatePtPackage(
       sessionsPerMonth: existing.sessionsPerMonth,
       totalSessions: existing.totalSessions,
       onboardingUsedSessions: existing.onboardingUsedSessions,
+      carryForwardLimit: existing.carryForwardLimit,
       sessionChargeAmount: existing.sessionChargeAmount,
       isActive: existing.isActive,
     },
@@ -310,6 +315,7 @@ export async function updatePtPackage(
       sessionsPerMonth: updated.sessionsPerMonth,
       totalSessions: updated.totalSessions,
       onboardingUsedSessions: updated.onboardingUsedSessions,
+      carryForwardLimit: updated.carryForwardLimit,
       sessionChargeAmount: updated.sessionChargeAmount,
       isActive: updated.isActive,
     },
