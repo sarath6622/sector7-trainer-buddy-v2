@@ -371,7 +371,7 @@
 - [x] **S7-CF-07** | @ui | L | Build admin CrossFit page (`/admin/crossfit`) — tabs: Classes + Enrollments, mirrors kickboxing admin page structure
 - [x] **S7-CF-08** | @ui | XL | Build CrossFit Trainer attendance page (`/trainer/crossfit`) — class selector, date picker, shadcn Command combobox for client search, attendance list with remove button
 - [x] **S7-CF-09** | @ui | S | Add CrossFit nav link to sidebar for `CROSSFIT_TRAINER` role and admin sidebar
-- [ ] **S7-CF-10** | @qa | M | Tests: class CRUD (branch scoping), enrollment (capacity check, duplicate), session open (idempotent), attendance mark + remove, client search results
+- [x] **S7-CF-10** | @qa | M | 33 tests in `tests/unit/crossfit-service.test.ts` covering class CRUD (branch scoping + trainer FK), enrollment (program-wide duplicate guard for GYM_MEMBER, name validation for GYM_ONLY/EXTERNAL_ONLY), session open (idempotent + UTC date normalization), session start (idempotent IN_PROGRESS, 409 on COMPLETED), attendance (404/duplicate guard/walk-in path), client search (min-2-char gate, isEnrolled flag with classId).
 
 ---
 
@@ -401,7 +401,7 @@
 - [x] **S7-LB-08** | @ui | L | Leaderboard page (`/community/leaderboard`) — tabs by compound exercise, ranked table with current user highlighted
 - [x] **S7-LB-09** | @ui | M | Add Community nav link to sidebar for CLIENT and TRAINER roles
 - [x] **S7-LB-10** | @ui | S | Auto-post confirmation banner in workout logger — "New PR! Added to community. [Remove]"
-- [ ] **S7-LB-11** | @qa | M | Feed pagination, reaction uniqueness, leaderboard ranking accuracy, auto-post trigger tests
+- [x] **S7-LB-11** | @qa | M | 34 tests across 3 files: `community-service.test.ts` (20 — feed pagination/cursor, branch scope, hidden filter, post CRUD with owner-only delete, reaction uniqueness via toggle, comment owner guard), `leaderboard-service.test.ts` (7 — ranking, dedup-per-client, NUMERIC string→number coercion), `workout-autopost.test.ts` (7 — compound PR triggers post, non-compound skips, ties don't fire, first-ever lift fires, weightless logs skip, community failure doesn't break workout save).
 
 ---
 
