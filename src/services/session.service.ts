@@ -86,23 +86,6 @@ export async function startSession({
     );
   }
 
-  // Check if trainer already has an active session
-  const activeSession = await prisma.sessionInstance.findFirst({
-    where: {
-      branchId,
-      trainerProfileId,
-      status: 'IN_PROGRESS',
-    },
-  });
-
-  if (activeSession) {
-    throw new AppError(
-      'SESSION_ALREADY_ACTIVE',
-      'You already have an active session. End it before starting a new one.',
-      409,
-    );
-  }
-
   const now = new Date();
   const updated = await prisma.sessionInstance.update({
     where: { id: sessionId },

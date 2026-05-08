@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Dumbbell, Square, Timer, BedDouble, Pause, Play, X } from 'lucide-react';
+import { Square, BedDouble, Pause, Play, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
-import { InlineTimer } from '@/components/timer/SessionTimer';
 import { WorkoutLogger } from '@/components/workout/WorkoutLogger';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 import { useRestTimer } from '@/hooks/useRestTimer';
@@ -230,6 +229,7 @@ interface SessionData {
     id: string;
     exerciseId: string;
     orderIndex: number;
+    updatedAt?: string;
     exercise: {
       id: string;
       name: string;
@@ -244,6 +244,7 @@ interface SessionData {
       durationSec: number | null;
       rpe: number | null;
       notes: string | null;
+      createdAt?: string;
     }[];
   }[];
 }
@@ -252,35 +253,91 @@ function initials(first: string, last: string) {
   return `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
 }
 
+function lastActivityMs(s: SessionData | undefined): number | null {
+  if (!s?.startedAt) return null;
+  let latest = new Date(s.startedAt).getTime();
+  for (const log of s.workoutLogs ?? []) {
+    if (log.updatedAt) {
+      const t = new Date(log.updatedAt).getTime();
+      if (t > latest) latest = t;
+    }
+    for (const set of log.sets ?? []) {
+      if (set.createdAt) {
+        const t = new Date(set.createdAt).getTime();
+        if (t > latest) latest = t;
+      }
+    }
+  }
+  return latest;
+}
+
+function formatIdle(ms: number): string {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  const rem = min % 60;
+  return rem === 0 ? `${hr}h` : `${hr}h${rem}m`;
+}
+
+function formatElapsed(startedAt: string, nowMs: number): string {
+  const sec = Math.max(0, Math.floor((nowMs - new Date(startedAt).getTime()) / 1000));
+  const hrs = Math.floor(sec / 3600);
+  const mins = Math.floor((sec % 3600) / 60);
+  const secs = sec % 60;
+  const mm = String(mins).padStart(2, '0');
+  const ss = String(secs).padStart(2, '0');
+  return hrs > 0 ? `${hrs}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function isOvertime(startedAt: string, expectedDurationMin: number, nowMs: number): boolean {
+  return (nowMs - new Date(startedAt).getTime()) / 1000 >= expectedDurationMin * 60;
+}
+
 export default function ActiveSessionPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+  const { id: urlId } = use(params);
   const router = useRouter();
   const { confirm, ConfirmDialog } = useConfirm();
 
-  const [session, setSession] = useState<SessionData | null>(null);
+  const [activeId, setActiveId] = useState(urlId);
+  const [sessionMap, setSessionMap] = useState<Record<string, SessionData>>({});
   const [inProgressSessions, setInProgress] = useState<SessionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [celebrationBadges, setCelebrationBadges] = useState<
     { name: string; icon: string; description?: string }[]
   >([]);
   const [restTimerOpen, setRestTimerOpen] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
-  const restTimer = useRestTimer(id);
+  const [now, setNow] = useState(() => Date.now());
+  const restTimer = useRestTimer(activeId);
 
-  // ── Real-time: subscribe to session channel ───────────────────────────────
-  usePusherChannel(`session-${id}`, {
+  const session = sessionMap[activeId] ?? null;
+
+  // ── Real-time: subscribe to active session channel ────────────────────────
+  usePusherChannel(`session-${activeId}`, {
     SESSION_STARTED: (data) => {
       const payload = data as SessionStartedPayload;
-      setSession((prev) =>
-        prev ? { ...prev, status: 'IN_PROGRESS', startedAt: payload.startedAt } : prev,
-      );
+      setSessionMap((prev) => {
+        const cur = prev[activeId];
+        if (!cur) return prev;
+        return {
+          ...prev,
+          [activeId]: { ...cur, status: 'IN_PROGRESS', startedAt: payload.startedAt },
+        };
+      });
     },
     SESSION_ENDED: (data) => {
       const payload = data as SessionEndedPayload;
       toast.success(`Session ended — ${payload.actualDurationMin} min`);
-      setSession((prev) => (prev ? { ...prev, status: 'COMPLETED' } : prev));
+      setSessionMap((prev) => {
+        const cur = prev[activeId];
+        if (!cur) return prev;
+        return { ...prev, [activeId]: { ...cur, status: 'COMPLETED' } };
+      });
     },
   });
 
@@ -297,42 +354,86 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
     return (data as SessionData[]).filter((s) => s.status === 'IN_PROGRESS');
   }, []);
 
-  const autoStart = useCallback(
-    async (sessionId: string) => {
-      setStarting(true);
-      try {
-        const res = await fetch(`/api/trainer/sessions/${sessionId}/start`, { method: 'POST' });
-        if (res.ok) {
-          const { data } = await res.json();
-          setSession(data.session);
-          setInProgress(await fetchInProgress());
-        } else {
-          const err = await res.json();
-          toast.error(err.error || 'Failed to start session');
-        }
-      } finally {
-        setStarting(false);
-      }
-    },
-    [fetchInProgress],
-  );
-
+  // Initial load: fetch URL session, auto-start if SCHEDULED, then pre-fetch
+  // every other in-progress session so tab switches are instant.
   useEffect(() => {
+    let cancelled = false;
     async function init() {
       setLoading(true);
-      const [sess, active] = await Promise.all([fetchSession(id), fetchInProgress()]);
-      if (!sess) {
+      const initial = await fetchSession(urlId);
+      if (cancelled) return;
+      if (!initial) {
         toast.error('Session not found');
         router.push('/trainer');
         return;
       }
-      setSession(sess);
-      setInProgress(active);
+      setSessionMap((prev) => ({ ...prev, [urlId]: initial }));
       setLoading(false);
-      if (sess.status === 'SCHEDULED') await autoStart(id);
+
+      if (initial.status === 'SCHEDULED') {
+        setStarting(true);
+        try {
+          const res = await fetch(`/api/trainer/sessions/${urlId}/start`, { method: 'POST' });
+          if (cancelled) return;
+          if (!res.ok) {
+            const err = await res.json();
+            toast.error(err.error || 'Failed to start session');
+            return;
+          }
+          const refreshed = await fetchSession(urlId);
+          if (cancelled) return;
+          if (refreshed) setSessionMap((prev) => ({ ...prev, [urlId]: refreshed }));
+        } finally {
+          if (!cancelled) setStarting(false);
+        }
+      }
+
+      const list = await fetchInProgress();
+      if (cancelled) return;
+      setInProgress(list);
+
+      const others = await Promise.all(
+        list.filter((s) => s.id !== urlId).map((s) => fetchSession(s.id)),
+      );
+      if (cancelled) return;
+      setSessionMap((prev) => {
+        const next = { ...prev };
+        others.forEach((s) => {
+          if (s) next[s.id] = s;
+        });
+        return next;
+      });
     }
     void init();
-  }, [id, fetchSession, fetchInProgress, autoStart, router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [urlId, fetchSession, fetchInProgress, router]);
+
+  const switchTab = useCallback(
+    async (newId: string) => {
+      if (newId === activeId) return;
+      if (hasUnsaved) {
+        const ok = await confirm({
+          title: 'Switch session?',
+          description:
+            'You have unsaved workout changes for the current client. They will be lost.',
+          confirmText: 'Switch',
+          variant: 'destructive',
+        });
+        if (!ok) return;
+      }
+      setActiveId(newId);
+      setHasUnsaved(false);
+      window.history.replaceState(null, '', `/trainer/session/${newId}`);
+      // Refresh detail in the background so the workout log is up-to-date
+      setSwitching(true);
+      const fresh = await fetchSession(newId);
+      if (fresh) setSessionMap((prev) => ({ ...prev, [newId]: fresh }));
+      setSwitching(false);
+    },
+    [activeId, hasUnsaved, confirm, fetchSession],
+  );
 
   async function handleEnd() {
     if (!session) return;
@@ -343,20 +444,38 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
       variant: 'destructive',
     });
     if (!ok) return;
+    const endingId = session.id;
     setEnding(true);
     try {
-      const res = await fetch(`/api/trainer/sessions/${session.id}/end`, { method: 'POST' });
+      const res = await fetch(`/api/trainer/sessions/${endingId}/end`, { method: 'POST' });
       if (res.ok) {
         const body = await res.json();
         const newBadges: { name: string; icon: string; description?: string }[] =
           body?.data?.newBadges ?? [];
         if (newBadges.length > 0) {
           setCelebrationBadges(newBadges);
-          // Delay navigation so the celebration plays
           await new Promise((r) => setTimeout(r, newBadges.length * 3500));
         }
         toast.success('Session ended');
-        router.push('/trainer');
+        // If other sessions are still active, hop to the next one instead of
+        // navigating back to the dashboard.
+        const remaining = inProgressSessions.filter((s) => s.id !== endingId);
+        if (remaining.length > 0 && remaining[0]) {
+          const nextId = remaining[0].id;
+          setInProgress(remaining);
+          setSessionMap((prev) => {
+            const next = { ...prev };
+            delete next[endingId];
+            return next;
+          });
+          setActiveId(nextId);
+          setHasUnsaved(false);
+          window.history.replaceState(null, '', `/trainer/session/${nextId}`);
+          const fresh = await fetchSession(nextId);
+          if (fresh) setSessionMap((prev) => ({ ...prev, [nextId]: fresh }));
+        } else {
+          router.push('/trainer');
+        }
       } else {
         const err = await res.json();
         toast.error(err.error || 'Failed to end session');
@@ -366,11 +485,38 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  const tabs = inProgressSessions.some((s) => s.id === id)
+  const tabs = inProgressSessions.some((s) => s.id === activeId)
     ? inProgressSessions
     : session
       ? [session, ...inProgressSessions]
       : inProgressSessions;
+
+  // Tick `now` every second so the elapsed timer in each tab card stays
+  // accurate. Idle counters re-derive from the same value.
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, []);
+
+  // Refresh in-progress session details every 30s so idle time reflects sets
+  // logged in the active tab without requiring a tab switch.
+  useEffect(() => {
+    if (tabs.length <= 1) return;
+    const ids = tabs.map((s) => s.id);
+    const i = setInterval(async () => {
+      const fresh = await Promise.all(ids.map((sid) => fetchSession(sid)));
+      setSessionMap((prev) => {
+        const next = { ...prev };
+        fresh.forEach((s) => {
+          if (s) next[s.id] = s;
+        });
+        return next;
+      });
+    }, 30_000);
+    return () => clearInterval(i);
+    // tabs is derived; key on the joined ids so we don't reset every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs.map((s) => s.id).join(','), fetchSession]);
 
   // ── Loading / starting ──────────────────────────────────────────────────────
   if (loading || starting) {
@@ -379,25 +525,16 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         className="-m-4 md:-m-6 flex flex-col bg-background"
         style={{ height: 'calc(100dvh - 3.5rem - env(safe-area-inset-top))' }}
       >
-        {/* ── Sticky header ── */}
+        {/* ── Sticky tab card placeholder ── */}
         <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-          {/* Top bar: back · avatar · name · timer */}
-          <div className="flex h-14 items-center gap-3 px-4">
-            <div className="h-9 w-9 animate-pulse rounded-xl bg-muted" />
-            <div className="flex flex-1 items-center gap-2 min-w-0">
-              <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />
-              <div className="h-4 w-28 animate-pulse rounded-lg bg-muted" />
+          <div className="px-3 pt-3 pb-3">
+            <div className="flex items-center gap-2.5 rounded-2xl bg-muted/40 px-2.5 py-2">
+              <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="h-3 w-28 animate-pulse rounded bg-muted" />
+                <div className="h-2.5 w-20 animate-pulse rounded bg-muted" />
+              </div>
             </div>
-            {/* Timer pill */}
-            <div className="h-8 w-[4.5rem] animate-pulse rounded-full bg-emerald-500/15" />
-          </div>
-          {/* Meta chips: exercises logged · IN PROGRESS · Rest */}
-          <div className="flex items-center gap-3 px-4 pb-2.5">
-            <div className="h-3 w-28 animate-pulse rounded bg-muted" />
-            <div className="h-3 w-px bg-border" />
-            <div className="h-3 w-20 animate-pulse rounded bg-muted" />
-            <div className="h-3 w-px bg-border" />
-            <div className="h-3 w-10 animate-pulse rounded bg-muted" />
           </div>
         </div>
 
@@ -436,8 +573,6 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
 
   if (!session) return null;
 
-  const clientName = `${session.client.user.firstName} ${session.client.user.lastName}`;
-  const clientInit = initials(session.client.user.firstName, session.client.user.lastName);
   const isActive = session.status === 'IN_PROGRESS' && !!session.startedAt;
 
   return (
@@ -450,108 +585,153 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         <BadgeCelebration badges={celebrationBadges} onDone={() => setCelebrationBadges([])} />
       )}
 
-      {/* ── Sticky header — sticks within main's scroll context ── */}
+      {/* ── Sticky tab strip — active client owns a prominent hero card; the
+          remaining sessions sit beneath as compact chips. This makes "who am I
+          coaching right now" unambiguous and dials down the visual urgency of
+          idle clients (which is often just a trainer focused elsewhere). */}
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-        {/* Top bar */}
-        <div className="flex h-14 items-center gap-3 px-4">
-          <button
-            onClick={async () => {
-              if (isActive && hasUnsaved) {
-                const ok = await confirm({
-                  title: 'Leave session?',
-                  description: 'You have unsaved workout changes. They will be lost if you leave.',
-                  confirmText: 'Leave',
-                  variant: 'destructive',
-                });
-                if (!ok) return;
-              }
-              router.push('/trainer');
-            }}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
+        {(() => {
+          const activeTab = tabs.find((s) => s.id === activeId) ?? tabs[0];
+          const otherTabs = tabs.filter((s) => s.id !== activeId);
+          if (!activeTab) return null;
 
-          {/* Client avatar only */}
-          <div className="flex flex-1 items-center gap-2 min-w-0">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
-              {clientInit}
-            </div>
-            <p className="truncate text-sm font-semibold">{clientName}</p>
-          </div>
-
-          {/* Live timer */}
-          {isActive && session.startedAt ? (
-            <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5">
-              <Timer className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-              <span className="font-mono text-sm font-bold tabular-nums text-emerald-500">
-                <InlineTimer
-                  startedAt={session.startedAt}
-                  expectedDurationMin={session.durationMin}
-                />
-              </span>
-            </div>
-          ) : (
-            <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-semibold text-muted-foreground">
-              {session.status.replace('_', ' ')}
-            </span>
-          )}
-        </div>
-
-        {/* Session meta chips */}
-        <div className="flex items-center gap-3 px-4 pb-2.5">
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Dumbbell className="h-3 w-3" />
-            {session.workoutLogs?.length ?? 0} exercise
-            {(session.workoutLogs?.length ?? 0) !== 1 ? 's' : ''} logged
-          </div>
-          {isActive && (
-            <>
-              <div className="h-3 w-px bg-border" />
-              <span className="text-[10px] font-semibold text-emerald-500">IN PROGRESS</span>
-              <div className="h-3 w-px bg-border" />
-              <button
-                onClick={() => setRestTimerOpen(true)}
-                className="flex items-center gap-1 text-[10px] font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+          const renderActive = () => {
+            const s = activeTab;
+            const detailed = sessionMap[s.id] ?? s;
+            const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
+            const init = initials(s.client.user.firstName, s.client.user.lastName);
+            const startedAt = detailed.startedAt ?? s.startedAt;
+            const overtime =
+              startedAt != null
+                ? isOvertime(startedAt, detailed.durationMin ?? s.durationMin, now)
+                : false;
+            return (
+              <div
+                role="tab"
+                aria-selected
+                aria-label={`${name}, active session`}
+                className="flex items-center gap-3 rounded-2xl bg-emerald-500 px-3 py-3 text-white"
               >
-                <BedDouble className="h-3 w-3" />
-                Rest
-              </button>
-            </>
-          )}
-        </div>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/25 text-sm font-bold">
+                  {init}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-semibold leading-tight">{name}</p>
+                  <div className="mt-1 flex items-center gap-1.5 leading-tight">
+                    <span className="text-[9px] font-semibold uppercase tracking-wider text-emerald-50/70">
+                      Session
+                    </span>
+                    {startedAt && (
+                      <span
+                        className={`font-mono text-xs font-bold tabular-nums ${overtime ? 'text-red-100' : 'text-white'}`}
+                      >
+                        {formatElapsed(startedAt, now)}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-emerald-50/40">·</span>
+                    <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75 animate-ping" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-100" />
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-50">Live</span>
+                  </div>
+                </div>
+              </div>
+            );
+          };
 
-        {/* Client tab bar (multi-session) */}
-        {tabs.length > 1 && (
-          <div className="flex gap-1.5 overflow-x-auto px-4 pb-2 no-scrollbar">
-            {tabs.map((s) => {
-              const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
-              const selected = s.id === id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => router.push(`/trainer/session/${s.id}`)}
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    selected
-                      ? 'bg-emerald-500 text-white'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/70'
-                  }`}
+          const renderChip = (s: SessionData) => {
+            const detailed = sessionMap[s.id] ?? s;
+            const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
+            const init = initials(s.client.user.firstName, s.client.user.lastName);
+            const lastActivity = lastActivityMs(detailed);
+            const idleMs = lastActivity != null ? Math.max(0, now - lastActivity) : null;
+            const idleSec = idleMs != null ? Math.floor(idleMs / 1000) : null;
+            // Softer thresholds: don't escalate just because the trainer is
+            // focused on another client. Warn after 8m, urgent after 20m.
+            const warn = idleSec != null && idleSec >= 480 && idleSec < 1200;
+            const urgent = idleSec != null && idleSec >= 1200;
+            const showStatus = idleMs != null && idleSec != null && idleSec >= 60;
+
+            const containerTone = urgent
+              ? 'bg-red-500/10 ring-1 ring-red-500/40'
+              : warn
+                ? 'bg-amber-500/10 ring-1 ring-amber-500/30'
+                : 'bg-muted/70 ring-1 ring-border';
+            const avatarTone = urgent
+              ? 'bg-red-500/20 text-red-400'
+              : warn
+                ? 'bg-amber-500/20 text-amber-400'
+                : 'bg-primary/15 text-primary';
+            const statusColor = urgent
+              ? 'text-red-400'
+              : warn
+                ? 'text-amber-400'
+                : 'text-muted-foreground';
+            const statusText = urgent
+              ? `${formatIdle(idleMs!)} idle`
+              : warn
+                ? `Resting · ${formatIdle(idleMs!)}`
+                : showStatus
+                  ? `Resting · ${formatIdle(idleMs!)}`
+                  : 'Resting';
+
+            return (
+              <button
+                key={s.id}
+                role="tab"
+                aria-selected={false}
+                aria-label={`Switch to ${name}, ${statusText}`}
+                onClick={() => void switchTab(s.id)}
+                disabled={ending || switching}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors disabled:opacity-50 ${containerTone}`}
+              >
+                <div
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarTone}`}
                 >
-                  {name}
-                </button>
-              );
-            })}
-          </div>
-        )}
+                  {init}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-semibold leading-tight text-foreground max-w-[8rem]">
+                    {name}
+                  </p>
+                  <p className={`truncate text-[10px] tabular-nums leading-tight ${statusColor}`}>
+                    {statusText}
+                  </p>
+                </div>
+                {urgent && (
+                  <span className="relative ml-0.5 flex h-1.5 w-1.5 items-center justify-center">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+                  </span>
+                )}
+              </button>
+            );
+          };
+
+          return (
+            <div role="tablist" aria-label="Active sessions" className="px-3 pt-3 pb-3 space-y-2">
+              {renderActive()}
+              {otherTabs.length > 0 && (
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
+                  {otherTabs.map(renderChip)}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── Workout logger — page owns scroll, button stays pinned to bottom ── */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
         <WorkoutLogger
+          key={session.id}
           sessionInstanceId={session.id}
           clientProfileId={session.client.id}
+          clientName={`${session.client.user.firstName} ${session.client.user.lastName}`}
           existingLogs={session.workoutLogs}
           onUnsavedChange={setHasUnsaved}
+          onRequestRest={isActive ? () => setRestTimerOpen(true) : undefined}
         />
       </div>
 
@@ -574,7 +754,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         <button
           onClick={handleEnd}
           disabled={ending}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 py-4 text-sm font-semibold text-white shadow-xl shadow-red-900/50 transition-colors hover:bg-red-700 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 py-4 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/15 active:bg-red-500/20 disabled:opacity-50"
         >
           <Square className="h-4 w-4" />
           {ending ? 'Ending Session…' : 'End Session'}

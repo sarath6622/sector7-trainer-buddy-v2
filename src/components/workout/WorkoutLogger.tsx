@@ -17,6 +17,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  BedDouble,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -67,7 +68,9 @@ interface ExerciseEntry {
 interface WorkoutLoggerProps {
   sessionInstanceId: string;
   clientProfileId?: string; // when set, enables per-exercise progress modal
+  clientName?: string; // shown in the workout-log header so the trainer always knows whose log this is
   onUnsavedChange?: (hasUnsaved: boolean) => void;
+  onRequestRest?: () => void; // when set, shows a Rest button alongside Add Set
   existingLogs?: {
     id: string;
     exerciseId: string;
@@ -153,7 +156,9 @@ const TYPE_COLS: Record<ExerciseType, ColDef[]> = {
 export function WorkoutLogger({
   sessionInstanceId,
   clientProfileId,
+  clientName,
   onUnsavedChange,
+  onRequestRest,
   existingLogs,
 }: WorkoutLoggerProps) {
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
@@ -435,26 +440,36 @@ export function WorkoutLogger({
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Workout Log
           </span>
+          {clientName && (
+            <>
+              <span className="text-xs text-muted-foreground/50">·</span>
+              <span className="truncate text-xs font-semibold text-foreground">{clientName}</span>
+            </>
+          )}
           {exercises.length > 0 && (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
               {exercises.length}
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowSearch((v) => !v)}
-          className={`flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${
-            showSearch
-              ? 'bg-muted text-muted-foreground'
-              : 'bg-primary/10 text-primary hover:bg-primary/15'
-          }`}
-        >
-          {showSearch ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        </button>
+        {/* Hide the small "+" while the empty state is showing — the big
+            "Add First Exercise" button below already owns that affordance. */}
+        {(exercises.length > 0 || showSearch) && (
+          <button
+            onClick={() => setShowSearch((v) => !v)}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors ${
+              showSearch
+                ? 'bg-muted text-muted-foreground'
+                : 'bg-primary/10 text-primary hover:bg-primary/15'
+            }`}
+          >
+            {showSearch ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+          </button>
+        )}
       </div>
 
       {/* ── Exercise search modal ── */}
@@ -722,14 +737,28 @@ export function WorkoutLogger({
                       ))}
                     </div>
 
-                    {/* Add Set */}
-                    <button
-                      onClick={() => addSet(exIdx)}
-                      className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
+                    {/* Add Set + Rest (Rest only when handler provided) */}
+                    <div
+                      className={`mt-3 grid gap-2 ${onRequestRest ? 'grid-cols-[1fr_auto]' : ''}`}
                     >
-                      <Plus className="h-3.5 w-3.5" />
-                      Add Set
-                    </button>
+                      <button
+                        onClick={() => addSet(exIdx)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Set
+                      </button>
+                      {onRequestRest && (
+                        <button
+                          onClick={onRequestRest}
+                          aria-label="Rest timer"
+                          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-blue-500/40 px-4 py-3 text-xs font-semibold text-blue-400 transition-colors active:bg-blue-500/10"
+                        >
+                          <BedDouble className="h-3.5 w-3.5" />
+                          Rest
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               )}
