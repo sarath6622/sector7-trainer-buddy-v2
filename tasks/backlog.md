@@ -362,15 +362,15 @@
 
 ## Phase 19 — CrossFit Module
 
-- [ ] **S7-CF-01** | @architect | M | Add `CrossfitClass`, `CrossfitEnrollment`, `CrossfitSession`, `CrossfitAttendance` models to Prisma schema. Add `CROSSFIT_TRAINER` to `UserRole` enum. Run migration.
-- [ ] **S7-CF-02** | @backend | M | Implement `crossfit.service.ts` — class CRUD + enrollment CRUD (mirrors kickboxing.service.ts)
-- [ ] **S7-CF-03** | @backend | M | Implement `crossfit.service.ts` — `getOrCreateCrossfitSession()`, `markCrossfitAttendance()`, `removeCrossfitAttendance()`, `getCrossfitAttendance()`, `searchCrossfitClients()`
-- [ ] **S7-CF-04** | @backend | M | Admin API routes: `POST/GET /api/admin/crossfit/classes`, `PUT /api/admin/crossfit/classes/[id]`, `POST/GET /api/admin/crossfit/enrollments`, `DELETE /api/admin/crossfit/enrollments/[id]`
-- [ ] **S7-CF-05** | @backend | M | CrossFit trainer API routes: `GET /api/crossfit/classes`, `POST /api/crossfit/sessions`, `GET|POST /api/crossfit/sessions/[id]/attendance`, `DELETE /api/crossfit/sessions/[id]/attendance/[attendanceId]`, `GET /api/crossfit/clients/search`
-- [ ] **S7-CF-06** | @backend | S | Add crossfit validator schemas to `src/lib/validators.ts`
-- [ ] **S7-CF-07** | @ui | L | Build admin CrossFit page (`/admin/crossfit`) — tabs: Classes + Enrollments, mirrors kickboxing admin page structure
-- [ ] **S7-CF-08** | @ui | XL | Build CrossFit Trainer attendance page (`/trainer/crossfit`) — class selector, date picker, shadcn Command combobox for client search, attendance list with remove button
-- [ ] **S7-CF-09** | @ui | S | Add CrossFit nav link to sidebar for `CROSSFIT_TRAINER` role and admin sidebar
+- [x] **S7-CF-01** | @architect | M | Add `CrossfitClass`, `CrossfitEnrollment`, `CrossfitSession`, `CrossfitAttendance` models to Prisma schema. Add `CROSSFIT_TRAINER` to `UserRole` enum. Run migration.
+- [x] **S7-CF-02** | @backend | M | Implement `crossfit.service.ts` — class CRUD + enrollment CRUD (mirrors kickboxing.service.ts)
+- [x] **S7-CF-03** | @backend | M | Implement `crossfit.service.ts` — `getOrCreateCrossfitSession()`, `markCrossfitAttendance()`, `removeCrossfitAttendance()`, `getCrossfitAttendance()`, `searchCrossfitClients()`
+- [x] **S7-CF-04** | @backend | M | Admin API routes: `POST/GET /api/admin/crossfit/classes`, `PUT /api/admin/crossfit/classes/[id]`, `POST/GET /api/admin/crossfit/enrollments`, `DELETE /api/admin/crossfit/enrollments/[id]`
+- [x] **S7-CF-05** | @backend | M | CrossFit trainer API routes: `GET /api/crossfit/classes`, `POST /api/crossfit/sessions`, `GET|POST /api/crossfit/sessions/[id]/attendance`, `DELETE /api/crossfit/sessions/[id]/attendance/[attendanceId]`, `GET /api/crossfit/clients/search`
+- [x] **S7-CF-06** | @backend | S | Add crossfit validator schemas to `src/lib/validators.ts`
+- [x] **S7-CF-07** | @ui | L | Build admin CrossFit page (`/admin/crossfit`) — tabs: Classes + Enrollments, mirrors kickboxing admin page structure
+- [x] **S7-CF-08** | @ui | XL | Build CrossFit Trainer attendance page (`/trainer/crossfit`) — class selector, date picker, shadcn Command combobox for client search, attendance list with remove button
+- [x] **S7-CF-09** | @ui | S | Add CrossFit nav link to sidebar for `CROSSFIT_TRAINER` role and admin sidebar
 - [ ] **S7-CF-10** | @qa | M | Tests: class CRUD (branch scoping), enrollment (capacity check, duplicate), session open (idempotent), attendance mark + remove, client search results
 
 ---
@@ -402,3 +402,52 @@
 - [x] **S7-LB-09** | @ui | M | Add Community nav link to sidebar for CLIENT and TRAINER roles
 - [x] **S7-LB-10** | @ui | S | Auto-post confirmation banner in workout logger — "New PR! Added to community. [Remove]"
 - [ ] **S7-LB-11** | @qa | M | Feed pagination, reaction uniqueness, leaderboard ranking accuracy, auto-post trigger tests
+
+---
+
+## Phase 24 — Per-Package Billing Cycles & Onboarding Adjustments
+
+> Full plan: [phase-24-billing-cycles.md](./phase-24-billing-cycles.md)
+> Driver: mid-month joiners + onboarding clients who already have used sessions before app went live.
+
+> **Status note (2026-05-08):** Most of Phase 24's intent landed via Phase 25's package-window
+> accounting (ADR-029) and onboarding offset (ADR-030). Items below are revised to reflect
+> what's actually still open. Old `BillingCycleType` / anchored-cycle abstraction is shelved —
+> see ADR-029. The Phase 24 plan doc has not been rewritten yet; do that before picking these
+> up.
+
+- [~] ~~**S7-BC-01** Add `BillingCycleType` enum + 5 columns to `PtPackage`.~~ — Obsolete; replaced by Phase 25 schema (`planId`, `totalSessions`, `onboardingUsedSessions`, `onboardingNotes`). See ADR-029.
+- [~] ~~**S7-BC-02** Extend mapping validators with billing-cycle + onboarding fields.~~ — Done as part of S7-PP-02 / S7-PP-11.
+- [~] ~~**S7-BC-03** `src/lib/billing-cycle.ts` anchor-clamp helper.~~ — Obsolete; per-package window model uses `startDate`/`endDate` directly. See ADR-029.
+- [~] ~~**S7-BC-04** Unit-test matrix for billing-cycle helper.~~ — Obsolete (no helper).
+- [~] ~~**S7-BC-05** Refactor `getSessionCounts` to take cycle.~~ — `getPackageWindowCounts` shipped instead (S7-PP-11). The old `getSessionCounts` (calendar-month) is still used by `/api/client/dashboard` and `/api/trainer/clients`; migrate those if/when needed.
+- [ ] **S7-BC-06** | @backend | L | Cycle-end carry-forward processing — when a `PtPackage` window ends, roll up to N unused sessions into the next package. Idempotent. Replaces the old monthly `processMonthEnd` flow.
+- [~] ~~**S7-BC-07** Extend `pt-package.service.ts` writes + audit.~~ — Done as part of S7-PP-11. Audit captures `totalSessions` and `onboardingUsedSessions` changes via existing `PT_PACKAGE_UPDATED` action.
+- [~] ~~**S7-BC-08** Update `getSessionCounts` callers.~~ — Scheduling page already migrated. Client dashboard + trainer clients pages still on calendar-month; defer until they're confirmed broken.
+- [ ] **S7-BC-09** | @backend | M | `/api/cron/process-cycles` (bearer-auth) + `/api/admin/cycles/process` (manual admin trigger).
+- [ ] **S7-BC-10** | @devops | S | Vercel cron config (20:00 UTC daily) + `CRON_SECRET` env var. Document rotation in `memory/architecture.md`.
+- [ ] **S7-BC-11** | @architect+@backend | S | Per-package `carryForwardLimit Int?` override on `PtPackage` (null = inherit branch default).
+- [~] ~~**S7-BC-12** Mapping card: onboarding banner + cycle label.~~ — Onboarding fields shipped on the form (S7-PP-11). Cycle label not needed (window-counts chip on the scheduling page covers it).
+- [~] ~~**S7-BC-13** Bind client dashboard + trainer client list to `cycle.label`.~~ — Defer; current `getSessionCounts` keeps working until/unless those surfaces are migrated.
+- [ ] **S7-BC-14** | @qa | L | Integration tests for the carry-forward + cron work above.
+- [~] ~~**S7-BC-15** Memory updates for ADR-023/024/025/026.~~ — Superseded by S7-PP-09 (ADR-027/028/029/030 already written). When the carry-forward + cron + per-package limit work lands, write ADRs at the next available number and a "Secrets & Cron" section in `memory/architecture.md`.
+
+---
+
+## Phase 25 — PT Package Plans (Catalog)
+
+> Full plan: [phase-25-package-plans.md](./phase-25-package-plans.md)
+> Driver: admins re-type sessions/month + price for every new client; introduce a per-branch catalog of named plans selectable from a dropdown.
+> **Recommended order:** ship before Phase 24 so the mapping form is built once with the dropdown in place.
+
+- [x] **S7-PP-01** | @architect | M | Add `PtPackagePlan` model + `planId` FK on `PtPackage`. Migration `20260508110000_add_pt_package_plans` (local Docker → Neon).
+- [x] **S7-PP-02** | @architect | S | Validators (`createPackagePlanSchema`, `updatePackagePlanSchema`, `listPackagePlansSchema`); extend `createMappingSchema` with optional `planId`.
+- [x] **S7-PP-03** | @backend | M | `pt-package-plan.service.ts` — CRUD + audit + deactivation guard (409 if active assignments unless `force=true`).
+- [x] **S7-PP-04** | @backend | M | `/api/admin/package-plans` CRUD routes with role guard.
+- [x] **S7-PP-05** | @backend | S | Extend `createPtPackage` to persist `planId`; include `plan: { id, name }` in mapping responses.
+- [x] **S7-PP-06** | @ui | L | Admin settings page `/admin/settings/package-plans` — table + create/edit modal + deactivate.
+- [x] **S7-PP-07** | @ui | M | Mapping form: plan dropdown with `Custom` option + auto-fill + "edited from plan default" badge + plan chip on card.
+- [x] **S7-PP-08** | @qa | M | 50 tests across 5 files (catalog service, window-counts helper, plan-aware createPtPackage, package-plans API, window-counts API). All pass.
+- [x] **S7-PP-09** | @architect | S | Memory updates: `memory/schema.md`, `memory/api-contracts.md`, ADR-027/028/029/030 in `memory/decisions.md` (incl. duration + totalSessions + onboarding follow-ups).
+- [x] **S7-PP-10** | @architect+@ui | M | (Follow-up, 2026-05-08) Plan duration in days for end-date auto-derivation. ADR-028.
+- [x] **S7-PP-11** | @architect+@backend+@ui | L | (Follow-up, 2026-05-08) Per-package `totalSessions`, onboarding backfill (`onboardingUsedSessions`/`onboardingNotes`), package-window counts helper, `GET /api/admin/mappings/[id]/window-counts` endpoint, scheduling modal rewired. ADR-029, ADR-030.

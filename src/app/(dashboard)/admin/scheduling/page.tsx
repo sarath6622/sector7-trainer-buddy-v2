@@ -376,14 +376,22 @@ export default function SchedulingPage() {
   });
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [packageInfo, setPackageInfo] = useState<{
+    packageId: string;
     sessionsPerMonth: number;
+    totalSessions: number;
+    used: number;
+    upcoming: number;
+    remaining: number;
+    daysRemaining: number;
+    windowEnd: string;
+    planName: string | null;
     alreadyScheduled: number;
     alreadyDates: string[];
   } | null>(null);
   const [packageLoading, setPackageLoading] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [clientMappings, setClientMappings] = useState<
-    Array<{ trainerProfileId: string; sessionsPerMonth: number }>
+    Array<{ id: string; trainerProfileId: string; sessionsPerMonth: number }>
   >([]);
   const [mappingsLoading, setMappingsLoading] = useState(false);
 
@@ -473,7 +481,12 @@ export default function SchedulingPage() {
       if (res.ok) {
         const { data } = await res.json();
         const active = (
-          data as Array<{ trainerProfileId: string; sessionsPerMonth: number; isActive: boolean }>
+          data as Array<{
+            id: string;
+            trainerProfileId: string;
+            sessionsPerMonth: number;
+            isActive: boolean;
+          }>
         ).filter((p) => p.isActive);
         setClientMappings(active);
         // Auto-select trainer when only one active mapping exists
@@ -493,24 +506,33 @@ export default function SchedulingPage() {
       setPackageLoading(true);
       setPackageInfo(null);
       try {
+        // First find the active package for this client+trainer pair
+        const mappingRes = await fetch(`/api/admin/mappings?clientId=${clientId}`);
+        if (!mappingRes.ok) return;
+        const { data } = await mappingRes.json();
+        const pkg = (
+          data as Array<{
+            id: string;
+            trainerProfileId: string;
+            sessionsPerMonth: number;
+            isActive: boolean;
+          }>
+        ).find((p) => p.trainerProfileId === trainerId && p.isActive);
+        if (!pkg) return;
+
+        // Get package-window counts (full startDate→endDate scope)
         const [yStr, mStr] = month.split('-');
         const lastDay = new Date(parseInt(yStr!, 10), parseInt(mStr!, 10), 0).getDate();
         const dateFrom = `${month}-01`;
         const dateTo = `${month}-${String(lastDay).padStart(2, '0')}`;
-        const [mappingRes, sessionsRes] = await Promise.all([
-          fetch(`/api/admin/mappings?clientId=${clientId}`),
+        const [windowRes, sessionsRes] = await Promise.all([
+          fetch(`/api/admin/mappings/${pkg.id}/window-counts`),
           fetch(
             `/api/admin/sessions?clientId=${clientId}&trainerId=${trainerId}&dateFrom=${dateFrom}&dateTo=${dateTo}&pageSize=100`,
           ),
         ]);
-        let sessionsPerMonth = 0;
-        if (mappingRes.ok) {
-          const { data } = await mappingRes.json();
-          const pkg = (
-            data as Array<{ trainerProfileId: string; sessionsPerMonth: number; isActive: boolean }>
-          ).find((p) => p.trainerProfileId === trainerId && p.isActive);
-          if (pkg) sessionsPerMonth = pkg.sessionsPerMonth;
-        }
+
+        // alreadyDates is calendar-month scoped — used to gray out picked dates
         const alreadyDates: string[] = [];
         if (sessionsRes.ok) {
           const json = await sessionsRes.json();
@@ -521,7 +543,23 @@ export default function SchedulingPage() {
             }
           }
         }
-        setPackageInfo({ sessionsPerMonth, alreadyScheduled: alreadyDates.length, alreadyDates });
+
+        if (windowRes.ok) {
+          const { data: w } = await windowRes.json();
+          setPackageInfo({
+            packageId: pkg.id,
+            sessionsPerMonth: w.sessionsPerMonth,
+            totalSessions: w.totalSessions,
+            used: w.used,
+            upcoming: w.upcoming,
+            remaining: w.remaining,
+            daysRemaining: w.window.daysRemaining,
+            windowEnd: w.window.end,
+            planName: w.plan?.name ?? null,
+            alreadyScheduled: alreadyDates.length,
+            alreadyDates,
+          });
+        }
       } catch {
         /* ignore */
       } finally {
@@ -928,35 +966,48 @@ export default function SchedulingPage() {
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         Loading package info...
                       </div>
-                    ) : packageInfo && packageInfo.sessionsPerMonth > 0 ? (
+                    ) : packageInfo && packageInfo.totalSessions > 0 ? (
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-muted/40 px-3 py-2 text-xs">
                         <span className="font-medium">
-                          {packageInfo.sessionsPerMonth} sessions/month
+                          {packageInfo.totalSessions} total
+                          {packageInfo.planName && (
+                            <span className="ml-1 text-muted-foreground">
+                              · {packageInfo.planName}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          {packageInfo.used} used
                         </span>
                         <span className="text-muted-foreground">·</span>
                         <span className="text-emerald-600 dark:text-emerald-400">
-                          {packageInfo.alreadyScheduled} scheduled
+                          {packageInfo.upcoming} scheduled
                         </span>
                         <span className="text-muted-foreground">·</span>
                         {(() => {
-                          const rem = Math.max(
-                            0,
-                            packageInfo.sessionsPerMonth -
-                              packageInfo.alreadyScheduled -
-                              selectedDates.size,
-                          );
-                          return (
-                            <span
-                              className={
-                                rem > 0
-                                  ? 'font-semibold text-blue-600 dark:text-blue-400'
-                                  : 'font-semibold text-red-500'
-                              }
-                            >
-                              {rem} remaining
-                            </span>
-                          );
+                          const rem = Math.max(0, packageInfo.remaining - selectedDates.size);
+                          const tone =
+                            rem === 0
+                              ? 'font-semibold text-red-500'
+                              : rem <= 3
+                                ? 'font-semibold text-amber-500'
+                                : 'font-semibold text-blue-600 dark:text-blue-400';
+                          return <span className={tone}>{rem} remaining</span>;
                         })()}
+                        <span className="text-muted-foreground">·</span>
+                        <span
+                          className={
+                            packageInfo.daysRemaining <= 7
+                              ? 'text-red-500'
+                              : packageInfo.daysRemaining <= 14
+                                ? 'text-amber-500'
+                                : 'text-muted-foreground'
+                          }
+                        >
+                          {packageInfo.daysRemaining} day
+                          {packageInfo.daysRemaining === 1 ? '' : 's'} left
+                        </span>
                         {selectedDates.size > 0 && (
                           <>
                             <span className="text-muted-foreground">·</span>
@@ -988,13 +1039,8 @@ export default function SchedulingPage() {
                       {/* Weeks */}
                       {buildMonthCalendar(scheduleMonth).map((week, wi) => {
                         const remaining =
-                          packageInfo && packageInfo.sessionsPerMonth > 0
-                            ? Math.max(
-                                0,
-                                packageInfo.sessionsPerMonth -
-                                  packageInfo.alreadyScheduled -
-                                  selectedDates.size,
-                              )
+                          packageInfo && packageInfo.totalSessions > 0
+                            ? Math.max(0, packageInfo.remaining - selectedDates.size)
                             : Infinity;
                         const todayStr = new Date().toISOString().split('T')[0]!;
                         return (

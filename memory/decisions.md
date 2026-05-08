@@ -237,3 +237,54 @@
 **Consequences:** Schedule creation, reassignment, availability-check, and availability-override services all use shift-based eligibility checks. The `availability-check` API smart mode and trainer mode both respect shift windows.
 
 ---
+
+> **Note on ADR-023 → ADR-026 (reserved by Phase 24 plan):** These numbers are reserved for the
+> per-package billing-cycle work outlined in `tasks/phase-24-billing-cycles.md`. Phase 24 was
+> originally going to introduce `BillingCycleType` (CALENDAR_MONTH vs ANCHORED), an anchor-day
+> clamp helper, idempotent cycle-end cron, and per-package carry-forward override. As of
+> 2026-05-08, much of Phase 24's intent has been absorbed into Phase 25 by switching to
+> per-package window accounting (ADR-029). The remaining Phase 24 work is the carry-forward
+> processing cron and per-package carry-forward limit override, which will fill in 023–026
+> when implemented.
+
+---
+
+## ADR-027: Branch-Scoped PT Package Plans Catalog
+
+**Date:** 2026-05-08
+**Status:** Accepted
+**Context:** Admins were retyping `sessionsPerMonth` + `sessionCharge` for every new client mapping. Same combinations (e.g. 12 sessions / ₹4000 / monthly) recurred across many clients, causing typos and inconsistency. There was no central place to view, edit, or retire offered packages.
+**Decision:** Introduce `PtPackagePlan` — a per-branch catalog of named plans (`name`, `sessionsPerMonth`, `pricePerCycle`, `sessionChargeAmount?`, `durationDays`, `description?`, `isActive`). Mapping carries an optional `planId` FK; selecting a plan in the mapping form auto-fills the relevant fields, but values stay editable per assignment. Plans cannot be hard-deleted — soft-deactivate via `isActive=false`, and `DELETE /api/admin/package-plans/[id]` returns 409 `PLAN_HAS_ACTIVE_ASSIGNMENTS` unless `?force=true` is passed (existing assignments keep their `planId` for historical reference).
+**Consequences:** New admin page `/admin/settings/package-plans` for catalog management. Plan name uniqueness enforced per-branch (`@@unique([branchId, name])`). Mapping responses everywhere include `plan: { id, name } | null` so cards/chips can label assignments. Custom (no-plan) workflow preserved via `Custom (enter manually)` dropdown option.
+
+---
+
+## ADR-028: Plan Duration in Days for End-Date Auto-Derivation
+
+**Date:** 2026-05-08
+**Status:** Accepted
+**Context:** When admin assigned a plan to a client (e.g. "Standard 3 — 90-day quarterly"), they still had to compute and enter the mapping's `endDate` manually. This was friction-heavy and error-prone for non-monthly plans.
+**Decision:** Add `durationDays Int @default(30)` to `PtPackagePlan` (range 1–365). The mapping form auto-fills `endDate = startDate + durationDays` whenever a plan is selected. Recomputes if `startDate` is changed while a plan is selected. Admin can manually override the end date after auto-fill (override sticks until plan or start date changes again). UI surfaces preset chips (Monthly 30 / 60 / Quarterly 90 / 6 months 180 / Annual 365) plus a free number input.
+**Consequences:** `durationDays` becomes the source of truth for "how long is one cycle." Combined with `sessionsPerMonth` it lets us compute `totalSessions` (see ADR-029). Edit-mode does not re-derive end date — start date isn't editable in the edit form, and historical `endDate` values are preserved unless admin explicitly changes the plan.
+
+---
+
+## ADR-029: Package-Window Session Accounting Replaces Calendar-Month Counting (Mapping Surfaces)
+
+**Date:** 2026-05-08
+**Status:** Accepted (supersedes parts of `tasks/phase-24-billing-cycles.md` regarding anchored cycles)
+**Context:** Counting sessions by calendar month broke for any client whose membership cycle didn't align with calendar months — e.g. a 90-day plan starting Apr 23 spans portions of three calendar months, and the legacy "12 remaining this month" chip was meaningless. Phase 24 originally proposed a `BillingCycleType` enum + anchor-day helper to model recurring anchored cycles, but for our actual use case (one package = one finite window with `startDate` / `endDate`) that abstraction was overkill.
+**Decision:** Treat each `PtPackage` as a single finite window. Add `totalSessions Int` to `PtPackage` as the authoritative count for the full window. New helper `getPackageWindowCounts(ptPackageId, branchId)` returns `{ totalSessions, used (= COMPLETED + NO_SHOW + onboardingUsedSessions across the window), upcoming (= SCHEDULED + IN_PROGRESS across the window), remaining (= max(0, total − used − upcoming)) }` plus `window: { start, end, totalDays, daysElapsed, daysRemaining }`. The scheduling modal binds to this helper via `GET /api/admin/mappings/[id]/window-counts`. `totalSessions` is auto-computed at create time as `sessionsPerMonth × round(durationDays / 30)` when a plan is selected; admin can override per assignment.
+**Consequences:** "Remaining" is now package-wide, not month-wide — admins booking sessions for a 90-day plan see "30 remaining" instead of "12 remaining (this calendar month)". `sessionsPerMonth` survives as the rate label but is no longer authoritative. Other surfaces that still use calendar-month counters (`/api/client/dashboard`, `/api/trainer/clients`) are unaffected for now and will be migrated only if/when they need the package-window view; this ADR scopes the change to the scheduling/mapping surfaces. When Phase 24's recurring-cycle cron eventually lands, it will create new `PtPackage` rows for each cycle rollover rather than re-using the same row across multiple cycles — so the per-window model continues to apply.
+
+---
+
+## ADR-030: Onboarding Backfill as Integer Offset on PtPackage (Not Synthetic Session Rows)
+
+**Date:** 2026-05-08
+**Status:** Accepted
+**Context:** Onboarding scenario: a client physically started months ago and has already used some sessions before the app went live. We need to record those used sessions so the remaining-sessions count is accurate, without polluting attendance, workout history, or trainer utilization analytics with fake events.
+**Decision:** Add `onboardingUsedSessions Int @default(0)` and `onboardingNotes String?` to `PtPackage`. The integer counts toward `used` in `getPackageWindowCounts` but creates no `SessionInstance` rows. The mapping form exposes both fields under an "Onboarding adjustment" group on create and edit. Audit log captures every change to these fields (set/edit/clear) via the existing `PT_PACKAGE_UPDATED` audit action with old/new values.
+**Consequences:** No data-pollution side effects on attendance, no-show rates, or workout reports. The offset is per-package and does not auto-clear at cycle end (Phase 24's cron, when it lands, will optionally clear it on rollover). Admin can edit at any time. The amber "Onboarding adjustment" group label on the mapping form keeps the offset visible so it's not forgotten. Once a future cycle starts (by creating a new `PtPackage`), it will not inherit the previous package's onboarding offset.
+
+---

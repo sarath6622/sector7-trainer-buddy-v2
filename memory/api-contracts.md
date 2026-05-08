@@ -41,12 +41,80 @@ DELETE /api/admin/users/[id]             → {} → { success } (soft delete)
 
 ### Trainer-Client Mapping
 
+> Updated 2026-05-08 (Phase 25): mapping carries optional `planId` (catalog reference) plus
+> per-package session totals and onboarding backfill. Mapping responses include `plan: { id, name } | null`.
+
 ```
-POST   /api/admin/mappings               → { clientProfileId, trainerProfileId, sessionsPerMonth, sessionCharge, startDate } → PtPackage
-GET    /api/admin/mappings               → ?trainerId&clientId → PtPackage[]
-PUT    /api/admin/mappings/[id]          → { sessionsPerMonth?, sessionCharge?, isActive? } → PtPackage
+POST   /api/admin/mappings   body: {
+                                clientProfileId, trainerProfileId,
+                                sessionsPerMonth,                       // monthly rate
+                                planId?,                                // optional plan reference
+                                totalSessions?,                         // optional override; auto-computed from plan if absent
+                                onboardingUsedSessions?,                // default 0
+                                onboardingNotes?,
+                                sessionCharge?, startDate, endDate?
+                              } → PtPackage (with plan: { id, name } | null)
+GET    /api/admin/mappings               → ?trainerId&clientId → PtPackage[] (each includes plan: { id, name } | null)
+PUT    /api/admin/mappings/[id]          → { planId?, sessionsPerMonth?, totalSessions?, onboardingUsedSessions?, onboardingNotes?, sessionCharge?, endDate?, isActive? } → PtPackage
 DELETE /api/admin/mappings/[id]          → {} → { success }
+GET    /api/admin/mappings/[id]/window-counts  → {} → PackageWindowCounts
 ```
+
+`PackageWindowCounts` shape (returned by `/window-counts`, used by the scheduling modal):
+
+```typescript
+{
+  packageId: string;
+  plan: { id, name, durationDays } | null;
+  sessionsPerMonth: number;
+  totalSessions: number;
+  onboardingUsedSessions: number;
+  onboardingNotes: string | null;
+  // Counts across the full package window (startDate → endDate inclusive)
+  completed: number;
+  noShow: number;
+  cancelled: number;
+  scheduled: number;
+  inProgress: number;
+  used: number;       // completed + noShow + onboardingUsedSessions
+  upcoming: number;   // scheduled + inProgress
+  remaining: number;  // max(0, totalSessions - used - upcoming)
+  window: {
+    start: string;        // ISO 8601
+    end: string;          // ISO 8601
+    totalDays: number;
+    daysElapsed: number;
+    daysRemaining: number;
+  };
+}
+```
+
+Errors on POST/PUT:
+
+- `PLAN_NOT_FOUND` (404) — `planId` does not belong to this branch
+- `PLAN_INACTIVE` (400) — plan exists but is deactivated
+- `DUPLICATE_MAPPING` (409) — active mapping already exists for this trainer-client pair
+
+### Package Plans (Catalog) — Added 2026-05-08
+
+> Per-branch catalog of named plans. Admin defines once, picks from a dropdown
+> when creating mappings. `BRANCH_ADMIN | SUPER_ADMIN` only.
+
+```
+GET    /api/admin/package-plans            → ?activeOnly=true&page&pageSize → Paginated<PtPackagePlan with _count.packages>
+POST   /api/admin/package-plans            → { name, sessionsPerMonth, pricePerCycle, sessionChargeAmount?, durationDays, description? } → PtPackagePlan (201)
+GET    /api/admin/package-plans/[id]       → {} → PtPackagePlan with _count.packages
+PUT    /api/admin/package-plans/[id]       → { name?, sessionsPerMonth?, pricePerCycle?, sessionChargeAmount?, durationDays?, description?, isActive? } → PtPackagePlan
+DELETE /api/admin/package-plans/[id]       → ?force=true → { success } | 409 PLAN_HAS_ACTIVE_ASSIGNMENTS
+```
+
+`PtPackagePlan` shape: `{ id, branchId, name, sessionsPerMonth, pricePerCycle, sessionChargeAmount, durationDays, description, isActive, createdAt, updatedAt, _count?: { packages } }`
+
+Errors:
+
+- `DUPLICATE_PLAN_NAME` (409) — name already used in this branch (uniqueness scoped per-branch)
+- `PLAN_NOT_FOUND` (404)
+- `PLAN_HAS_ACTIVE_ASSIGNMENTS` (409) — DELETE without `?force=true` when active assignments still reference the plan; with `?force=true`, plan is soft-deactivated and existing assignments keep their `planId` for historical reference
 
 ### Scheduling
 
@@ -312,6 +380,41 @@ GET    /api/crossfit/clients/search              → ?q=string&classId? → [{ i
        classId: optional, marks which results are already enrolled in that class
        Added: 2026-04-04
 ```
+
+## Kickboxing Admin Routes
+
+```
+POST   /api/admin/kickboxing/classes              → { trainerProfileId, name, dayOfWeek, startTime, durationMin?, maxCapacity? } → KickboxingClass
+GET    /api/admin/kickboxing/classes              → {} → KickboxingClass[] (with trainer name + enrollment count)
+PUT    /api/admin/kickboxing/classes/[id]         → { trainerProfileId?, name?, dayOfWeek?, startTime?, durationMin?, maxCapacity?, isActive? } → KickboxingClass
+POST   /api/admin/kickboxing/enrollments          → { classId, clientProfileId?, clientType, externalName?, externalPhone? } → KickboxingEnrollment
+GET    /api/admin/kickboxing/enrollments          → ?classId&clientType → KickboxingEnrollment[]
+DELETE /api/admin/kickboxing/enrollments/[id]     → {} → { success: true }
+```
+
+## Kickboxing Trainer Routes (Phase 23 — Added 2026-04-24)
+
+Auth: `KICKBOXING_TRAINER | TRAINER | SUPER_ADMIN | BRANCH_ADMIN`
+
+```
+GET    /api/kickboxing/classes                              → {} → KickboxingClass[] (trainer's own active classes only)
+GET    /api/kickboxing/sessions/today                       → {} → [{ class: KickboxingClass, session: KickboxingSession | null }]
+POST   /api/kickboxing/sessions                            → { classId, date: "YYYY-MM-DD" } → KickboxingSession (upsert — returns existing if already opened)
+POST   /api/kickboxing/sessions/[id]/start                  → {} → KickboxingSession (status → IN_PROGRESS; idempotent)
+POST   /api/kickboxing/sessions/[id]/end                    → {} → KickboxingSession (status → COMPLETED; idempotent)
+GET    /api/kickboxing/sessions/[id]/attendance             → {} → KickboxingAttendance[] (with client: { firstName, lastName, profileImageUrl })
+POST   /api/kickboxing/sessions/[id]/attendance             → { clientProfileId?, externalName? } → KickboxingAttendance (201)
+DELETE /api/kickboxing/sessions/[id]/attendance/[attendanceId] → {} → { success: true }
+GET    /api/kickboxing/classes/[id]/enrollments             → {} → EnrolledMember[] (per-class; not program-wide)
+GET    /api/kickboxing/clients/search                       → ?q=string&classId? → [{ id, name, isEnrolled, profileImageUrl }]
+```
+
+`KickboxingSession: { id, classId, date, status: SCHEDULED|IN_PROGRESS|COMPLETED, startedAt, endedAt, _count: { attendances } }`
+`KickboxingAttendance: { id, sessionId, clientProfileId, externalName, markedAt, client: { user: { firstName, lastName, profileImageUrl } } | null }`
+`EnrolledMember: { enrollmentId, clientProfileId, externalName, name, profileImageUrl, clientType: GYM_MEMBER|EXTERNAL_ONLY }`
+
+Note: Attendance is locked (POST/DELETE rejected) once session status is `COMPLETED`.
+Note: Kickboxing enrollment is **per-class** (unlike CrossFit which is program-wide).
 
 ---
 

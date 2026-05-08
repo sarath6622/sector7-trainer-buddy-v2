@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Clock, ExternalLink, KeyRound, Save, Trash2 } from 'lucide-react';
 import { useConfirm } from '@/hooks/use-confirm';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -178,6 +179,7 @@ export default function TrainerProfilePage() {
         setError(data.error ?? 'Failed to save');
       } else {
         await fetchTrainer();
+        toast.success('Trainer profile saved successfully');
       }
     } catch {
       setError('Failed to save changes');
@@ -467,7 +469,7 @@ export default function TrainerProfilePage() {
         <div className="flex gap-2">
           <button
             onClick={handleDelete}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-500/10 py-2.5 text-sm font-medium text-red-400 ring-1 ring-red-500/20 transition-colors hover:bg-red-500/15 active:scale-95"
+            className="hidden sm:flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-500/10 py-2.5 text-sm font-medium text-red-400 ring-1 ring-red-500/20 transition-colors hover:bg-red-500/15 active:scale-95"
           >
             <Trash2 className="h-4 w-4" />
             Deactivate

@@ -7,7 +7,11 @@ interface CreatePtPackageInput {
   branchId: string;
   clientProfileId: string;
   trainerProfileId: string;
+  planId?: string;
   sessionsPerMonth: number;
+  totalSessions?: number;
+  onboardingUsedSessions?: number;
+  onboardingNotes?: string;
   sessionCharge?: number;
   startDate: string;
   endDate?: string;
@@ -15,10 +19,22 @@ interface CreatePtPackageInput {
 }
 
 interface UpdatePtPackageInput {
+  planId?: string | null;
   sessionsPerMonth?: number;
+  totalSessions?: number;
+  onboardingUsedSessions?: number;
+  onboardingNotes?: string | null;
   sessionCharge?: number;
   endDate?: string | null;
   isActive?: boolean;
+}
+
+/**
+ * Compute the total number of sessions for a package window from the plan
+ * rate (sessions/month) and duration. Used when admin doesn't override.
+ */
+function computeTotalSessionsFromPlan(sessionsPerMonth: number, durationDays: number): number {
+  return Math.round((sessionsPerMonth * durationDays) / 30);
 }
 
 interface ListPtPackagesInput {
@@ -64,12 +80,41 @@ export async function createPtPackage(input: CreatePtPackageInput) {
     );
   }
 
+  // If planId is provided, verify it belongs to this branch and is active.
+  // Also fetch durationDays so we can auto-compute totalSessions when admin
+  // didn't supply an override.
+  let planDurationDays: number | null = null;
+  if (input.planId) {
+    const plan = await prisma.ptPackagePlan.findFirst({
+      where: { id: input.planId, branchId: input.branchId },
+      select: { isActive: true, durationDays: true },
+    });
+    if (!plan) {
+      throw new AppError('PLAN_NOT_FOUND', 'Selected package plan not found', 404);
+    }
+    if (!plan.isActive) {
+      throw new AppError('PLAN_INACTIVE', 'Selected package plan is no longer active', 400);
+    }
+    planDurationDays = plan.durationDays;
+  }
+
+  // Resolve totalSessions: explicit override > computed from plan > sessionsPerMonth
+  const totalSessions =
+    input.totalSessions ??
+    (planDurationDays != null
+      ? computeTotalSessionsFromPlan(input.sessionsPerMonth, planDurationDays)
+      : input.sessionsPerMonth);
+
   const ptPackage = await prisma.ptPackage.create({
     data: {
       branchId: input.branchId,
       clientProfileId: input.clientProfileId,
       trainerProfileId: input.trainerProfileId,
+      planId: input.planId ?? null,
       sessionsPerMonth: input.sessionsPerMonth,
+      totalSessions,
+      onboardingUsedSessions: input.onboardingUsedSessions ?? 0,
+      onboardingNotes: input.onboardingNotes ?? null,
       sessionChargeAmount: input.sessionCharge ?? null,
       startDate: new Date(input.startDate),
       endDate: input.endDate ? new Date(input.endDate) : null,
@@ -81,6 +126,7 @@ export async function createPtPackage(input: CreatePtPackageInput) {
       trainer: {
         include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
       },
+      plan: { select: { id: true, name: true } },
     },
   });
 
@@ -161,6 +207,7 @@ export async function getPtPackages(input: ListPtPackagesInput) {
     include: {
       client: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
       trainer: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+      plan: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -177,6 +224,7 @@ export async function getPtPackageById(id: string, branchId: string) {
     include: {
       client: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
       trainer: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+      plan: { select: { id: true, name: true } },
     },
   });
 
@@ -205,6 +253,10 @@ export async function updatePtPackage(
 
   const data: Record<string, unknown> = {};
   if (input.sessionsPerMonth !== undefined) data.sessionsPerMonth = input.sessionsPerMonth;
+  if (input.totalSessions !== undefined) data.totalSessions = input.totalSessions;
+  if (input.onboardingUsedSessions !== undefined)
+    data.onboardingUsedSessions = input.onboardingUsedSessions;
+  if ('onboardingNotes' in input) data.onboardingNotes = input.onboardingNotes ?? null;
   if (input.sessionCharge !== undefined) data.sessionChargeAmount = input.sessionCharge;
   if ('endDate' in input) {
     data.endDate = input.endDate ? new Date(input.endDate) : null;
@@ -215,6 +267,21 @@ export async function updatePtPackage(
       data.endDate = new Date();
     }
   }
+  if ('planId' in input) {
+    if (input.planId) {
+      const plan = await prisma.ptPackagePlan.findFirst({
+        where: { id: input.planId, branchId },
+        select: { isActive: true },
+      });
+      if (!plan) {
+        throw new AppError('PLAN_NOT_FOUND', 'Selected package plan not found', 404);
+      }
+      if (!plan.isActive) {
+        throw new AppError('PLAN_INACTIVE', 'Selected package plan is no longer active', 400);
+      }
+    }
+    data.planId = input.planId;
+  }
 
   const updated = await prisma.ptPackage.update({
     where: { id },
@@ -222,6 +289,7 @@ export async function updatePtPackage(
     include: {
       client: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
       trainer: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+      plan: { select: { id: true, name: true } },
     },
   });
 
@@ -233,17 +301,111 @@ export async function updatePtPackage(
     branchId,
     oldValue: {
       sessionsPerMonth: existing.sessionsPerMonth,
+      totalSessions: existing.totalSessions,
+      onboardingUsedSessions: existing.onboardingUsedSessions,
       sessionChargeAmount: existing.sessionChargeAmount,
       isActive: existing.isActive,
     },
     newValue: {
       sessionsPerMonth: updated.sessionsPerMonth,
+      totalSessions: updated.totalSessions,
+      onboardingUsedSessions: updated.onboardingUsedSessions,
       sessionChargeAmount: updated.sessionChargeAmount,
       isActive: updated.isActive,
     },
   });
 
   return updated;
+}
+
+/**
+ * Compute session counts and timing math for the full package window
+ * (`startDate` → `endDate`). Replaces calendar-month-based counters in
+ * surfaces that need to reflect the actual gym membership cycle.
+ *
+ * - used = COMPLETED + NO_SHOW within the window + onboardingUsedSessions
+ * - scheduled = SCHEDULED + IN_PROGRESS within the window
+ * - remaining = totalSessions - used - scheduled
+ */
+export async function getPackageWindowCounts(ptPackageId: string, branchId: string) {
+  const pkg = await prisma.ptPackage.findFirst({
+    where: { id: ptPackageId, branchId },
+    select: {
+      id: true,
+      clientProfileId: true,
+      trainerProfileId: true,
+      sessionsPerMonth: true,
+      totalSessions: true,
+      onboardingUsedSessions: true,
+      onboardingNotes: true,
+      startDate: true,
+      endDate: true,
+      isActive: true,
+      plan: { select: { id: true, name: true, durationDays: true } },
+    },
+  });
+
+  if (!pkg) {
+    throw new AppError('PT_PACKAGE_NOT_FOUND', 'PT package not found', 404);
+  }
+
+  const windowStart = pkg.startDate;
+  const windowEnd = pkg.endDate ?? new Date(windowStart.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  const sessions = await prisma.sessionInstance.findMany({
+    where: {
+      branchId,
+      clientProfileId: pkg.clientProfileId,
+      scheduledDate: { gte: windowStart, lte: windowEnd },
+    },
+    select: { status: true },
+  });
+
+  const completed = sessions.filter((s) => s.status === 'COMPLETED').length;
+  const noShow = sessions.filter((s) => s.status === 'NO_SHOW').length;
+  const cancelled = sessions.filter((s) => s.status === 'CANCELLED').length;
+  const scheduled = sessions.filter((s) => s.status === 'SCHEDULED').length;
+  const inProgress = sessions.filter((s) => s.status === 'IN_PROGRESS').length;
+
+  const used = completed + noShow + pkg.onboardingUsedSessions;
+  const upcoming = scheduled + inProgress;
+  const remaining = Math.max(0, pkg.totalSessions - used - upcoming);
+
+  const now = new Date();
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const totalDays = Math.max(
+    1,
+    Math.round((windowEnd.getTime() - windowStart.getTime()) / msPerDay),
+  );
+  const daysElapsed = Math.max(
+    0,
+    Math.min(totalDays, Math.floor((now.getTime() - windowStart.getTime()) / msPerDay)),
+  );
+  const daysRemaining = Math.max(0, Math.ceil((windowEnd.getTime() - now.getTime()) / msPerDay));
+
+  return {
+    packageId: pkg.id,
+    plan: pkg.plan,
+    sessionsPerMonth: pkg.sessionsPerMonth,
+    totalSessions: pkg.totalSessions,
+    onboardingUsedSessions: pkg.onboardingUsedSessions,
+    onboardingNotes: pkg.onboardingNotes,
+    completed,
+    noShow,
+    cancelled,
+    scheduled,
+    inProgress,
+    used,
+    upcoming,
+    remaining,
+    window: {
+      start: windowStart.toISOString(),
+      end: windowEnd.toISOString(),
+      totalDays,
+      daysElapsed,
+      daysRemaining,
+    },
+  };
 }
 
 /**

@@ -130,7 +130,11 @@ interface ClientData {
 interface PtPackage {
   id: string;
   trainerProfileId: string;
+  planId: string | null;
   sessionsPerMonth: number;
+  totalSessions: number;
+  onboardingUsedSessions: number;
+  onboardingNotes: string | null;
   sessionChargeAmount: number | null;
   isActive: boolean;
   startDate: string;
@@ -139,6 +143,7 @@ interface PtPackage {
     id: string;
     user: { firstName: string; lastName: string; email: string };
   };
+  plan: { id: string; name: string } | null;
 }
 
 interface TrainerOption {
@@ -147,6 +152,24 @@ interface TrainerOption {
   lastName: string;
   email: string;
   trainerProfile: { id: string } | null;
+}
+
+interface PlanOption {
+  id: string;
+  name: string;
+  sessionsPerMonth: number;
+  pricePerCycle: number;
+  sessionChargeAmount: number | null;
+  durationDays: number;
+  isActive: boolean;
+}
+
+function addDaysISO(startDate: string, days: number): string {
+  if (!startDate) return '';
+  const d = new Date(startDate);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0]!;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -217,10 +240,15 @@ export default function ClientProfilePage() {
   const [packages, setPackages] = useState<PtPackage[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
   const [trainers, setTrainers] = useState<TrainerOption[]>([]);
+  const [plans, setPlans] = useState<PlanOption[]>([]);
   const [showAddMapping, setShowAddMapping] = useState(false);
   const [mappingForm, setMappingForm] = useState({
     trainerProfileId: '',
+    planId: '',
     sessionsPerMonth: '12',
+    totalSessions: '',
+    onboardingUsedSessions: '',
+    onboardingNotes: '',
     sessionCharge: '',
     startDate: new Date().toISOString().split('T')[0] ?? '',
     endDate: '',
@@ -230,7 +258,11 @@ export default function ClientProfilePage() {
 
   const [editingPkgId, setEditingPkgId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
+    planId: '',
     sessionsPerMonth: '',
+    totalSessions: '',
+    onboardingUsedSessions: '',
+    onboardingNotes: '',
     sessionCharge: '',
     endDate: '',
   });
@@ -309,6 +341,18 @@ export default function ClientProfilePage() {
     }
   }, []);
 
+  const fetchPlans = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/package-plans?activeOnly=true&pageSize=100');
+      if (res.ok) {
+        const { data } = await res.json();
+        setPlans(data);
+      }
+    } catch {
+      /* silent */
+    }
+  }, []);
+
   const fetchProgress = useCallback(async () => {
     if (!id) return;
     setProgressLoading(true);
@@ -345,7 +389,8 @@ export default function ClientProfilePage() {
   useEffect(() => {
     fetchClient();
     fetchTrainers();
-  }, [fetchClient, fetchTrainers]);
+    fetchPlans();
+  }, [fetchClient, fetchTrainers, fetchPlans]);
   useEffect(() => {
     if (client?.clientProfile?.id) fetchPackages(client.clientProfile.id);
   }, [client?.clientProfile?.id, fetchPackages]);
@@ -471,7 +516,15 @@ export default function ClientProfilePage() {
         body: JSON.stringify({
           clientProfileId: client.clientProfile.id,
           trainerProfileId: mappingForm.trainerProfileId,
+          planId: mappingForm.planId || undefined,
           sessionsPerMonth: parseInt(mappingForm.sessionsPerMonth, 10),
+          totalSessions: mappingForm.totalSessions
+            ? parseInt(mappingForm.totalSessions, 10)
+            : undefined,
+          onboardingUsedSessions: mappingForm.onboardingUsedSessions
+            ? parseInt(mappingForm.onboardingUsedSessions, 10)
+            : undefined,
+          onboardingNotes: mappingForm.onboardingNotes.trim() || undefined,
           sessionCharge: mappingForm.sessionCharge
             ? parseFloat(mappingForm.sessionCharge)
             : undefined,
@@ -486,7 +539,11 @@ export default function ClientProfilePage() {
         setShowAddMapping(false);
         setMappingForm({
           trainerProfileId: '',
+          planId: '',
           sessionsPerMonth: '12',
+          totalSessions: '',
+          onboardingUsedSessions: '',
+          onboardingNotes: '',
           sessionCharge: '',
           startDate: new Date().toISOString().split('T')[0] ?? '',
           endDate: '',
@@ -519,7 +576,13 @@ export default function ClientProfilePage() {
   function startEditing(pkg: PtPackage) {
     setEditingPkgId(pkg.id);
     setEditForm({
+      planId: pkg.planId ?? '',
       sessionsPerMonth: pkg.sessionsPerMonth.toString(),
+      totalSessions: pkg.totalSessions.toString(),
+      onboardingUsedSessions: pkg.onboardingUsedSessions
+        ? pkg.onboardingUsedSessions.toString()
+        : '',
+      onboardingNotes: pkg.onboardingNotes ?? '',
       sessionCharge: pkg.sessionChargeAmount?.toString() ?? '',
       endDate: pkg.endDate ? pkg.endDate.split('T')[0]! : '',
     });
@@ -535,7 +598,13 @@ export default function ClientProfilePage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          planId: editForm.planId || null,
           sessionsPerMonth: parseInt(editForm.sessionsPerMonth, 10),
+          totalSessions: editForm.totalSessions ? parseInt(editForm.totalSessions, 10) : undefined,
+          onboardingUsedSessions: editForm.onboardingUsedSessions
+            ? parseInt(editForm.onboardingUsedSessions, 10)
+            : 0,
+          onboardingNotes: editForm.onboardingNotes.trim() || null,
           sessionCharge: editForm.sessionCharge ? parseFloat(editForm.sessionCharge) : undefined,
           endDate: editForm.endDate || null,
         }),
@@ -556,6 +625,48 @@ export default function ClientProfilePage() {
 
   function f(field: string, value: string) {
     setForm((p) => ({ ...p, [field]: value }));
+  }
+
+  function applyPlanToForm(planId: string, target: 'add' | 'edit') {
+    if (target === 'add') {
+      setMappingForm((prev) => {
+        if (planId === '') return { ...prev, planId: '' };
+        const plan = plans.find((p) => p.id === planId);
+        if (!plan) return { ...prev, planId };
+        const computedTotal = Math.round((plan.sessionsPerMonth * plan.durationDays) / 30);
+        return {
+          ...prev,
+          planId,
+          sessionsPerMonth: plan.sessionsPerMonth.toString(),
+          totalSessions: computedTotal.toString(),
+          sessionCharge: plan.sessionChargeAmount?.toString() ?? '',
+          endDate: addDaysISO(prev.startDate, plan.durationDays),
+        };
+      });
+    } else {
+      setEditForm((prev) => {
+        if (planId === '') return { ...prev, planId: '' };
+        const plan = plans.find((p) => p.id === planId);
+        if (!plan) return { ...prev, planId };
+        const computedTotal = Math.round((plan.sessionsPerMonth * plan.durationDays) / 30);
+        return {
+          ...prev,
+          planId,
+          sessionsPerMonth: plan.sessionsPerMonth.toString(),
+          totalSessions: computedTotal.toString(),
+          sessionCharge: plan.sessionChargeAmount?.toString() ?? '',
+        };
+      });
+    }
+  }
+
+  function isPlanEdited(planId: string, sessionsPerMonth: string, sessionCharge: string) {
+    if (!planId) return false;
+    const plan = plans.find((p) => p.id === planId);
+    if (!plan) return false;
+    const sessionsDiffer = parseInt(sessionsPerMonth, 10) !== plan.sessionsPerMonth;
+    const chargeDiffer = (plan.sessionChargeAmount?.toString() ?? '') !== sessionCharge;
+    return sessionsDiffer || chargeDiffer;
   }
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -810,6 +921,21 @@ export default function ClientProfilePage() {
               {/* Add form */}
               {showAddMapping && (
                 <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 space-y-2.5">
+                  <Field label="Plan">
+                    <select
+                      className="flex h-9 w-full rounded-lg border border-white/[0.08] bg-transparent px-3 text-xs text-foreground focus:outline-none focus:border-primary"
+                      value={mappingForm.planId}
+                      onChange={(e) => applyPlanToForm(e.target.value, 'add')}
+                    >
+                      <option value="">Custom (enter manually)</option>
+                      {plans.map((pl) => (
+                        <option key={pl.id} value={pl.id}>
+                          {pl.name} · {pl.sessionsPerMonth} sessions · ₹
+                          {pl.pricePerCycle.toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="Trainer">
                       <select
@@ -843,7 +969,16 @@ export default function ClientProfilePage() {
                     <Field label="Start Date">
                       <DatePickerModal
                         value={mappingForm.startDate}
-                        onChange={(v) => setMappingForm((p) => ({ ...p, startDate: v }))}
+                        onChange={(v) =>
+                          setMappingForm((p) => {
+                            const plan = p.planId ? plans.find((pl) => pl.id === p.planId) : null;
+                            return {
+                              ...p,
+                              startDate: v,
+                              endDate: plan ? addDaysISO(v, plan.durationDays) : p.endDate,
+                            };
+                          })
+                        }
                         className="h-9 text-xs"
                       />
                     </Field>
@@ -867,7 +1002,67 @@ export default function ClientProfilePage() {
                         className="h-9 text-xs border-white/[0.08]"
                       />
                     </Field>
+                    <Field label="Total Sessions in Package">
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder="Auto from plan"
+                        value={mappingForm.totalSessions}
+                        onChange={(e) =>
+                          setMappingForm((p) => ({ ...p, totalSessions: e.target.value }))
+                        }
+                        className="h-9 text-xs border-white/[0.08]"
+                      />
+                    </Field>
                   </div>
+                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400/80">
+                      Onboarding adjustment (optional)
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Sessions Already Used">
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={mappingForm.onboardingUsedSessions}
+                          onChange={(e) =>
+                            setMappingForm((p) => ({
+                              ...p,
+                              onboardingUsedSessions: e.target.value,
+                            }))
+                          }
+                          className="h-9 text-xs border-white/[0.08]"
+                        />
+                      </Field>
+                      <Field label="Notes">
+                        <Input
+                          placeholder="e.g. confirmed by manager"
+                          value={mappingForm.onboardingNotes}
+                          onChange={(e) =>
+                            setMappingForm((p) => ({
+                              ...p,
+                              onboardingNotes: e.target.value,
+                            }))
+                          }
+                          className="h-9 text-xs border-white/[0.08]"
+                        />
+                      </Field>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/70">
+                      Use only when onboarding clients who started before the app went live. These
+                      sessions count as already-used in the package window.
+                    </p>
+                  </div>
+                  {isPlanEdited(
+                    mappingForm.planId,
+                    mappingForm.sessionsPerMonth,
+                    mappingForm.sessionCharge,
+                  ) && (
+                    <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[10px] text-amber-500">
+                      Edited from plan default — saved values will override the plan.
+                    </p>
+                  )}
                   {mappingError && <p className="text-xs text-destructive">{mappingError}</p>}
                   <button
                     onClick={handleAddMapping}
@@ -895,6 +1090,21 @@ export default function ClientProfilePage() {
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                           Editing — {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
                         </p>
+                        <Field label="Plan">
+                          <select
+                            className="flex h-9 w-full rounded-lg border border-white/[0.08] bg-transparent px-3 text-xs text-foreground focus:outline-none focus:border-primary"
+                            value={editForm.planId}
+                            onChange={(e) => applyPlanToForm(e.target.value, 'edit')}
+                          >
+                            <option value="">Custom (enter manually)</option>
+                            {plans.map((pl) => (
+                              <option key={pl.id} value={pl.id}>
+                                {pl.name} · {pl.sessionsPerMonth} sessions · ₹
+                                {pl.pricePerCycle.toLocaleString()}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
                         <div className="grid grid-cols-3 gap-2">
                           <Field label="Sessions / Month">
                             <Input
@@ -927,6 +1137,58 @@ export default function ClientProfilePage() {
                             />
                           </Field>
                         </div>
+                        <Field label="Total Sessions in Package">
+                          <Input
+                            type="number"
+                            min="1"
+                            value={editForm.totalSessions}
+                            onChange={(e) =>
+                              setEditForm((p) => ({ ...p, totalSessions: e.target.value }))
+                            }
+                            className="h-9 text-xs border-white/[0.08]"
+                          />
+                        </Field>
+                        <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400/80">
+                            Onboarding adjustment
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Field label="Sessions Already Used">
+                              <Input
+                                type="number"
+                                min="0"
+                                placeholder="0"
+                                value={editForm.onboardingUsedSessions}
+                                onChange={(e) =>
+                                  setEditForm((p) => ({
+                                    ...p,
+                                    onboardingUsedSessions: e.target.value,
+                                  }))
+                                }
+                                className="h-9 text-xs border-white/[0.08]"
+                              />
+                            </Field>
+                            <Field label="Notes">
+                              <Input
+                                placeholder="e.g. confirmed by manager"
+                                value={editForm.onboardingNotes}
+                                onChange={(e) =>
+                                  setEditForm((p) => ({ ...p, onboardingNotes: e.target.value }))
+                                }
+                                className="h-9 text-xs border-white/[0.08]"
+                              />
+                            </Field>
+                          </div>
+                        </div>
+                        {isPlanEdited(
+                          editForm.planId,
+                          editForm.sessionsPerMonth,
+                          editForm.sessionCharge,
+                        ) && (
+                          <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[10px] text-amber-500">
+                            Edited from plan default — saved values will override the plan.
+                          </p>
+                        )}
                         {editError && <p className="text-xs text-destructive">{editError}</p>}
                         <div className="flex items-center gap-2">
                           <button
@@ -951,13 +1213,18 @@ export default function ClientProfilePage() {
                         className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2"
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <p className="text-xs font-semibold truncate">
                               {pkg.trainer.user.firstName} {pkg.trainer.user.lastName}
                             </p>
                             <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-px text-[9px] font-semibold text-emerald-400">
                               Active
                             </span>
+                            {pkg.plan && (
+                              <span className="shrink-0 rounded-full bg-blue-500/15 px-1.5 py-px text-[9px] font-semibold text-blue-400">
+                                {pkg.plan.name}
+                              </span>
+                            )}
                           </div>
                           <p className="mt-0.5 text-[10px] text-muted-foreground">
                             {pkg.sessionsPerMonth} sessions/mo

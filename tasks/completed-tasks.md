@@ -4,6 +4,59 @@
 
 ---
 
+## Phase 23 — Kickboxing Sessions & Attendance (2026-04-24)
+
+### S7-KB-01: Schema
+
+- Added `KickboxingSessionStatus` enum (SCHEDULED / IN_PROGRESS / COMPLETED)
+- Added `name String` field to `KickboxingClass`
+- Added `KickboxingSession` model with `@@unique([classId, date])` constraint
+- Added `KickboxingAttendance` model with `@@unique([sessionId, clientProfileId])` constraint
+- Migration applied to local Docker via `docker exec psql` and to Neon via `prisma migrate deploy`
+
+### S7-KB-02: Service Layer
+
+- `getOrCreateKickboxingSession` — upsert session by classId+date (idempotent)
+- `startKickboxingSession` — SCHEDULED → IN_PROGRESS (idempotent if already IN_PROGRESS)
+- `endKickboxingSession` — IN_PROGRESS → COMPLETED (idempotent if already COMPLETED)
+- `getTodayKickboxingSessionsForTrainer` — returns `[{class, session|null}]` for today
+- `markKickboxingAttendance` — locked after COMPLETED, duplicate prevention via DB unique
+- `removeKickboxingAttendance` — hard delete with audit log
+- `getKickboxingAttendance` — list by sessionId
+- `getEnrolledClientsForKickboxingClass` — per-class (differs from CrossFit program-wide)
+- `searchKickboxingClients` — search with `isEnrolled` flag
+
+### S7-KB-03: API Routes (10 routes)
+
+- `GET /api/kickboxing/sessions/today`
+- `POST /api/kickboxing/sessions` (open/upsert)
+- `POST /api/kickboxing/sessions/[id]/start`
+- `POST /api/kickboxing/sessions/[id]/end`
+- `GET /api/kickboxing/sessions/[id]/attendance`
+- `POST /api/kickboxing/sessions/[id]/attendance`
+- `DELETE /api/kickboxing/sessions/[id]/attendance/[attendanceId]`
+- `GET /api/kickboxing/classes/[id]/enrollments`
+- `GET /api/kickboxing/clients/search`
+- All routes: `.safeParse()` for validation (400 on error, not 500)
+
+### S7-KB-04: Admin UI
+
+- `src/app/(dashboard)/admin/kickboxing/page.tsx` — added `name` field to class dialog, table layout with name as primary identifier, enrollment selector shows class name
+
+### S7-KB-05: Trainer UI
+
+- `src/app/(dashboard)/trainer/kickboxing/page.tsx` — full roll-call/attendance page (mirrors CrossFit trainer page)
+- `src/lib/constants.ts` — `KICKBOXING_TRAINER_NAV_ITEMS` pointing to `/trainer/kickboxing` with Activity icon
+
+### S7-KB-06: QA / Tests
+
+- `tests/unit/kickboxing-service-sessions.test.ts` — 20 unit tests for session & attendance service functions
+- `tests/integration/kickboxing-session-api.test.ts` — 27 integration tests for all 7 trainer API routes
+- Bug fix: sessions and attendance routes switched from `.parse()` to `.safeParse()` so validation errors return 400
+- All 59 new tests pass; existing 12 kickboxing class tests still pass
+
+---
+
 ## Phase 21 — Community Leaderboard (2026-04-06)
 
 ### S7-LB-01: Schema — CommunityPost, CommunityReaction, CommunityComment + isCompound on Exercise

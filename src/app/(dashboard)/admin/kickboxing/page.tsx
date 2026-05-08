@@ -37,6 +37,7 @@ interface Trainer {
 
 interface KickboxingClass {
   id: string;
+  name: string;
   trainerProfileId: string;
   dayOfWeek: string;
   startTime: string;
@@ -57,7 +58,7 @@ interface Enrollment {
   client: {
     user: { firstName: string; lastName: string; email: string };
   } | null;
-  class: { dayOfWeek: string; startTime: string; durationMin: number };
+  class: { name: string; dayOfWeek: string; startTime: string; durationMin: number };
 }
 
 interface TrainerOption {
@@ -83,6 +84,7 @@ export default function KickboxingPage() {
   const [classSaving, setClassSaving] = useState(false);
   const [classForm, setClassForm] = useState({
     trainerProfileId: '',
+    name: '',
     dayOfWeek: 'MONDAY',
     startTime: '18:00',
     durationMin: 60,
@@ -130,35 +132,28 @@ export default function KickboxingPage() {
   }, [classFilter, typeFilter]);
 
   const fetchTrainers = useCallback(async () => {
-    const res = await fetch('/api/admin/users?role=KICKBOXING_TRAINER&pageSize=100');
-    if (res.ok) {
+    const [res1, res2] = await Promise.all([
+      fetch('/api/admin/users?role=KICKBOXING_TRAINER&pageSize=100'),
+      fetch('/api/admin/users?role=TRAINER&pageSize=100'),
+    ]);
+    const seen = new Set<string>();
+    const merged: TrainerOption[] = [];
+    for (const res of [res1, res2]) {
+      if (!res.ok) continue;
       const { data } = await res.json();
-      setTrainers(
-        data
-          .map((u: { trainerProfile: TrainerOption; firstName: string; lastName: string }) => ({
-            id: u.trainerProfile?.id,
-            userId: u.trainerProfile?.userId,
+      for (const u of data) {
+        const id = u.trainerProfile?.id;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          merged.push({
+            id,
+            userId: u.trainerProfile.userId,
             user: { firstName: u.firstName, lastName: u.lastName },
-          }))
-          .filter((t: TrainerOption) => t.id),
-      );
+          });
+        }
+      }
     }
-    // Also fetch regular trainers as fallback
-    const res2 = await fetch('/api/admin/users?role=TRAINER&pageSize=100');
-    if (res2.ok) {
-      const { data } = await res2.json();
-      setTrainers((prev) => {
-        const existingIds = new Set(prev.map((t) => t.id));
-        const additional = data
-          .map((u: { trainerProfile: TrainerOption; firstName: string; lastName: string }) => ({
-            id: u.trainerProfile?.id,
-            userId: u.trainerProfile?.userId,
-            user: { firstName: u.firstName, lastName: u.lastName },
-          }))
-          .filter((t: TrainerOption) => t.id && !existingIds.has(t.id));
-        return [...prev, ...additional];
-      });
-    }
+    setTrainers(merged);
   }, []);
 
   const fetchClients = useCallback(async () => {
@@ -186,12 +181,13 @@ export default function KickboxingPage() {
     fetchEnrollments();
   }, [fetchEnrollments]);
 
-  // ─── Class handlers ───────────────────────────────
+  // ─── Class handlers ───────────────────────────────────────────────────────
 
   function openCreateClass() {
     setEditingClass(null);
     setClassForm({
       trainerProfileId: trainers[0]?.id ?? '',
+      name: '',
       dayOfWeek: 'MONDAY',
       startTime: '18:00',
       durationMin: 60,
@@ -204,6 +200,7 @@ export default function KickboxingPage() {
     setEditingClass(cls);
     setClassForm({
       trainerProfileId: cls.trainerProfileId,
+      name: cls.name,
       dayOfWeek: cls.dayOfWeek,
       startTime: cls.startTime,
       durationMin: cls.durationMin,
@@ -213,6 +210,10 @@ export default function KickboxingPage() {
   }
 
   async function handleSaveClass() {
+    if (!classForm.name.trim()) {
+      toast.error('Class name is required');
+      return;
+    }
     setClassSaving(true);
     try {
       const url = editingClass
@@ -227,6 +228,7 @@ export default function KickboxingPage() {
       });
 
       if (res.ok) {
+        toast.success(editingClass ? 'Class updated' : 'Class created');
         setClassDialogOpen(false);
         fetchClasses();
       } else {
@@ -244,14 +246,17 @@ export default function KickboxingPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isActive: !cls.isActive }),
     });
-    if (res.ok) fetchClasses();
+    if (res.ok) {
+      toast.success(cls.isActive ? 'Class deactivated' : 'Class activated');
+      fetchClasses();
+    }
   }
 
-  // ─── Enrollment handlers ──────────────────────────
+  // ─── Enrollment handlers ───────────────────────────────────────────────────
 
   function openEnrollDialog() {
     setEnrollForm({
-      classId: classes[0]?.id ?? '',
+      classId: classes.find((c) => c.isActive)?.id ?? '',
       clientType: 'EXTERNAL_ONLY',
       clientProfileId: '',
       externalName: '',
@@ -282,9 +287,10 @@ export default function KickboxingPage() {
       });
 
       if (res.ok) {
+        toast.success('Enrolled successfully');
         setEnrollDialogOpen(false);
         fetchEnrollments();
-        fetchClasses(); // refresh counts
+        fetchClasses();
       } else {
         const err = await res.json();
         toast.error(err.error || 'Failed to enroll');
@@ -297,13 +303,14 @@ export default function KickboxingPage() {
   async function handleRemoveEnrollment(id: string) {
     const ok = await confirm({
       title: 'Remove Enrollment',
-      description: 'Remove this enrollment?',
+      description: 'Remove this enrollment from the class?',
       confirmText: 'Remove',
       variant: 'destructive',
     });
     if (!ok) return;
     const res = await fetch(`/api/admin/kickboxing/enrollments/${id}`, { method: 'DELETE' });
     if (res.ok) {
+      toast.success('Enrollment removed');
       fetchEnrollments();
       fetchClasses();
     }
@@ -315,7 +322,7 @@ export default function KickboxingPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
         {[...Array(3)].map((_, i) => (
           <Skeleton key={i} className="h-20 w-full" />
         ))}
@@ -324,188 +331,249 @@ export default function KickboxingPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Activity className="h-6 w-6" />
-        <h1 className="text-2xl font-bold">Kickboxing</h1>
+    <div className="p-4 md:p-6 space-y-6">
+      {ConfirmDialog}
+
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-red-500/10">
+          <Activity className="h-5 w-5 text-red-500" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold">Kickboxing</h1>
+          <p className="text-sm text-muted-foreground">Manage classes and enrollments</p>
+        </div>
       </div>
 
       <Tabs defaultValue="classes">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-2 md:w-80">
           <TabsTrigger value="classes">Classes</TabsTrigger>
           <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
         </TabsList>
 
-        {/* ─── Classes Tab ─────────────────────────── */}
-        <TabsContent value="classes" className="space-y-4">
-          <div className="flex justify-end">
-            <Button
-              onClick={openCreateClass}
-              className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Class
-            </Button>
-          </div>
-
-          {classes.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                No kickboxing classes yet. Add one to get started.
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {classes.map((cls) => (
-                <Card key={cls.id} className={!cls.isActive ? 'opacity-60' : ''}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">
-                        {formatDay(cls.dayOfWeek)} — {cls.startTime}
-                      </CardTitle>
-                      <div className="flex gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => openEditClass(cls)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {cls.trainer.user.firstName} {cls.trainer.user.lastName}
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span>
-                          {cls._count.enrollments} / {cls.maxCapacity}
-                        </span>
-                      </div>
-                      <span className="text-muted-foreground">{cls.durationMin} min</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Badge variant={cls.isActive ? 'default' : 'secondary'}>
-                        {cls.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs"
-                        onClick={() => toggleClassActive(cls)}
-                      >
-                        {cls.isActive ? 'Deactivate' : 'Activate'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+        {/* ─── Classes Tab ─────────────────────────────────────────────────── */}
+        <TabsContent value="classes" className="mt-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base">Class Schedule</CardTitle>
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={openCreateClass}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Add Class
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {classes.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                  No kickboxing classes yet. Add one to get started.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Class</TableHead>
+                        <TableHead className="hidden sm:table-cell">Day</TableHead>
+                        <TableHead className="hidden sm:table-cell">Time</TableHead>
+                        <TableHead className="hidden md:table-cell">Duration</TableHead>
+                        <TableHead>
+                          <Users className="h-4 w-4" />
+                        </TableHead>
+                        <TableHead className="hidden md:table-cell">Trainer</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {classes.map((cls) => (
+                        <TableRow key={cls.id}>
+                          <TableCell className="font-medium">{cls.name}</TableCell>
+                          <TableCell className="hidden sm:table-cell">
+                            {formatDay(cls.dayOfWeek)}
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell">{cls.startTime}</TableCell>
+                          <TableCell className="hidden md:table-cell">{cls.durationMin}m</TableCell>
+                          <TableCell>
+                            {cls._count.enrollments}/{cls.maxCapacity}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell text-sm">
+                            {cls.trainer.user.firstName} {cls.trainer.user.lastName}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={
+                                cls.isActive
+                                  ? 'bg-emerald-500/15 text-emerald-600'
+                                  : 'bg-zinc-500/15 text-zinc-500'
+                              }
+                            >
+                              {cls.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openEditClass(cls)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => toggleClassActive(cls)}
+                              >
+                                {cls.isActive ? 'Deactivate' : 'Activate'}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        {/* ─── Enrollments Tab ─────────────────────── */}
-        <TabsContent value="enrollments" className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-3">
-              <Select
-                value={classFilter}
-                onValueChange={(v) => setClassFilter(v === 'all' ? '' : (v ?? ''))}
+        {/* ─── Enrollments Tab ─────────────────────────────────────────────── */}
+        <TabsContent value="enrollments" className="mt-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base">Enrollments</CardTitle>
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={openEnrollDialog}
               >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Filter by class" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Classes</SelectItem>
-                  {classes.map((cls) => (
-                    <SelectItem key={cls.id} value={cls.id}>
-                      {formatDay(cls.dayOfWeek)} {cls.startTime}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={typeFilter}
-                onValueChange={(v) => setTypeFilter(v === 'all' ? '' : (v ?? ''))}
-              >
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="Client type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="GYM_MEMBER">Gym Member</SelectItem>
-                  <SelectItem value="EXTERNAL_ONLY">External</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={openEnrollDialog}>
-              <Plus className="mr-2 h-4 w-4" />
-              Enroll
-            </Button>
-          </div>
+                <Plus className="h-4 w-4 mr-1" /> Enroll Member
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-3 mb-4">
+                <Select
+                  value={classFilter || 'all'}
+                  onValueChange={(v) => setClassFilter(v === 'all' ? '' : (v ?? ''))}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="All classes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Classes</SelectItem>
+                    {classes.map((cls) => (
+                      <SelectItem key={cls.id} value={cls.id}>
+                        {cls.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={typeFilter || 'all'}
+                  onValueChange={(v) => setTypeFilter(v === 'all' ? '' : (v ?? ''))}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="GYM_MEMBER">Gym Member</SelectItem>
+                    <SelectItem value="EXTERNAL_ONLY">External</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          {enrollments.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">No enrollments found.</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Class</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="w-[80px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {enrollments.map((en) => (
-                  <TableRow key={en.id}>
-                    <TableCell className="font-medium">
-                      {en.clientType === 'GYM_MEMBER' && en.client
-                        ? `${en.client.user.firstName} ${en.client.user.lastName}`
-                        : (en.externalName ?? '—')}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={en.clientType === 'GYM_MEMBER' ? 'default' : 'secondary'}>
-                        {en.clientType === 'GYM_MEMBER' ? 'Member' : 'External'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {formatDay(en.class.dayOfWeek)} {en.class.startTime}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {en.clientType === 'GYM_MEMBER' && en.client
-                        ? en.client.user.email
-                        : (en.externalPhone ?? '—')}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleRemoveEnrollment(en.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+              {enrollments.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground text-sm">
+                  No enrollments found.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Member</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead className="hidden sm:table-cell">Class</TableHead>
+                        <TableHead className="hidden md:table-cell">Contact</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {enrollments.map((en) => (
+                        <TableRow key={en.id}>
+                          <TableCell className="font-medium">
+                            {en.clientType === 'GYM_MEMBER' && en.client
+                              ? `${en.client.user.firstName} ${en.client.user.lastName}`
+                              : (en.externalName ?? '—')}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={
+                                en.clientType === 'GYM_MEMBER'
+                                  ? 'bg-blue-500/15 text-blue-600'
+                                  : 'bg-zinc-500/15 text-zinc-500'
+                              }
+                            >
+                              {en.clientType === 'GYM_MEMBER' ? 'Member' : 'External'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                            {en.class.name}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                            {en.clientType === 'GYM_MEMBER' && en.client
+                              ? en.client.user.email
+                              : (en.externalPhone ?? '—')}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => handleRemoveEnrollment(en.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
-      {/* ─── Create/Edit Class Dialog ────────────── */}
+      {/* ─── Create/Edit Class Dialog ─────────────────────────────────────── */}
       <Dialog open={classDialogOpen} onOpenChange={setClassDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editingClass ? 'Edit Class' : 'Add Kickboxing Class'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
+            <div className="space-y-1.5">
+              <Label>Class Name *</Label>
+              <Input
+                placeholder="e.g. Monday 6PM Kickboxing"
+                value={classForm.name}
+                onChange={(e) => setClassForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-1.5">
               <Label>Trainer *</Label>
               <Select
                 value={classForm.trainerProfileId}
-                onValueChange={(v) => setClassForm({ ...classForm, trainerProfileId: v ?? '' })}
+                onValueChange={(v) => setClassForm((f) => ({ ...f, trainerProfileId: v ?? '' }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select trainer" />
@@ -519,12 +587,13 @@ export default function KickboxingPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
                 <Label>Day *</Label>
                 <Select
                   value={classForm.dayOfWeek}
-                  onValueChange={(v) => setClassForm({ ...classForm, dayOfWeek: v ?? 'MONDAY' })}
+                  onValueChange={(v) => setClassForm((f) => ({ ...f, dayOfWeek: v ?? 'MONDAY' }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -538,60 +607,71 @@ export default function KickboxingPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <Label>Start Time *</Label>
                 <Input
                   type="time"
                   value={classForm.startTime}
-                  onChange={(e) => setClassForm({ ...classForm, startTime: e.target.value })}
+                  onChange={(e) => setClassForm((f) => ({ ...f, startTime: e.target.value }))}
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
                 <Label>Duration (min)</Label>
                 <Input
                   type="number"
+                  min={15}
+                  max={180}
                   value={classForm.durationMin}
                   onChange={(e) =>
-                    setClassForm({ ...classForm, durationMin: Number(e.target.value) })
+                    setClassForm((f) => ({ ...f, durationMin: parseInt(e.target.value) || 60 }))
                   }
                 />
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <Label>Max Capacity</Label>
                 <Input
                   type="number"
+                  min={1}
+                  max={100}
                   value={classForm.maxCapacity}
                   onChange={(e) =>
-                    setClassForm({ ...classForm, maxCapacity: Number(e.target.value) })
+                    setClassForm((f) => ({ ...f, maxCapacity: parseInt(e.target.value) || 20 }))
                   }
                 />
               </div>
             </div>
-            <Button
-              className="w-full"
-              onClick={handleSaveClass}
-              disabled={classSaving || !classForm.trainerProfileId}
-            >
-              {classSaving ? 'Saving...' : editingClass ? 'Update Class' : 'Create Class'}
-            </Button>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setClassDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleSaveClass}
+                disabled={classSaving || !classForm.name.trim() || !classForm.trainerProfileId}
+              >
+                {classSaving ? 'Saving…' : editingClass ? 'Save Changes' : 'Create Class'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* ─── Enroll Dialog ───────────────────────── */}
+      {/* ─── Enroll Dialog ────────────────────────────────────────────────── */}
       <Dialog open={enrollDialogOpen} onOpenChange={setEnrollDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Enroll in Kickboxing Class</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
+            <div className="space-y-1.5">
               <Label>Class *</Label>
               <Select
                 value={enrollForm.classId}
-                onValueChange={(v) => setEnrollForm({ ...enrollForm, classId: v ?? '' })}
+                onValueChange={(v) => setEnrollForm((f) => ({ ...f, classId: v ?? '' }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select class" />
@@ -601,40 +681,43 @@ export default function KickboxingPage() {
                     .filter((c) => c.isActive)
                     .map((cls) => (
                       <SelectItem key={cls.id} value={cls.id}>
-                        {formatDay(cls.dayOfWeek)} {cls.startTime} — {cls.trainer.user.firstName}{' '}
-                        {cls.trainer.user.lastName}
+                        {cls.name} — {formatDay(cls.dayOfWeek)} {cls.startTime}
                       </SelectItem>
                     ))}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Client Type *</Label>
+
+            <div className="space-y-1.5">
+              <Label>Member Type *</Label>
               <Select
                 value={enrollForm.clientType}
                 onValueChange={(v) =>
-                  setEnrollForm({
-                    ...enrollForm,
+                  setEnrollForm((f) => ({
+                    ...f,
                     clientType: (v ?? 'EXTERNAL_ONLY') as 'GYM_MEMBER' | 'EXTERNAL_ONLY',
-                  })
+                    clientProfileId: '',
+                    externalName: '',
+                    externalPhone: '',
+                  }))
                 }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="GYM_MEMBER">Gym Member</SelectItem>
-                  <SelectItem value="EXTERNAL_ONLY">External (No Account)</SelectItem>
+                  <SelectItem value="GYM_MEMBER">PT Client (has app account)</SelectItem>
+                  <SelectItem value="EXTERNAL_ONLY">External (no app account)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {enrollForm.clientType === 'GYM_MEMBER' ? (
-              <div>
+              <div className="space-y-1.5">
                 <Label>Client *</Label>
                 <Select
-                  value={enrollForm.clientProfileId}
-                  onValueChange={(v) => setEnrollForm({ ...enrollForm, clientProfileId: v ?? '' })}
+                  value={enrollForm.clientProfileId || null}
+                  onValueChange={(v) => setEnrollForm((f) => ({ ...f, clientProfileId: v ?? '' }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select client" />
@@ -650,44 +733,47 @@ export default function KickboxingPage() {
               </div>
             ) : (
               <>
-                <div>
-                  <Label>Name *</Label>
+                <div className="space-y-1.5">
+                  <Label>Full Name *</Label>
                   <Input
+                    placeholder="Walk-in / external name"
                     value={enrollForm.externalName}
-                    onChange={(e) => setEnrollForm({ ...enrollForm, externalName: e.target.value })}
-                    placeholder="Full name"
+                    onChange={(e) => setEnrollForm((f) => ({ ...f, externalName: e.target.value }))}
                   />
                 </div>
-                <div>
-                  <Label>Phone</Label>
+                <div className="space-y-1.5">
+                  <Label>Phone (optional)</Label>
                   <Input
+                    placeholder="+91..."
                     value={enrollForm.externalPhone}
                     onChange={(e) =>
-                      setEnrollForm({ ...enrollForm, externalPhone: e.target.value })
+                      setEnrollForm((f) => ({ ...f, externalPhone: e.target.value }))
                     }
-                    placeholder="Phone number"
                   />
                 </div>
               </>
             )}
 
-            <Button
-              className="w-full"
-              onClick={handleEnroll}
-              disabled={
-                enrollSaving ||
-                !enrollForm.classId ||
-                (enrollForm.clientType === 'GYM_MEMBER' && !enrollForm.clientProfileId) ||
-                (enrollForm.clientType === 'EXTERNAL_ONLY' && !enrollForm.externalName)
-              }
-            >
-              {enrollSaving ? 'Enrolling...' : 'Enroll'}
-            </Button>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setEnrollDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleEnroll}
+                disabled={
+                  enrollSaving ||
+                  !enrollForm.classId ||
+                  (enrollForm.clientType === 'GYM_MEMBER' && !enrollForm.clientProfileId) ||
+                  (enrollForm.clientType === 'EXTERNAL_ONLY' && !enrollForm.externalName)
+                }
+              >
+                {enrollSaving ? 'Enrolling…' : 'Enroll'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
-
-      {ConfirmDialog}
     </div>
   );
 }

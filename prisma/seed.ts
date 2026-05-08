@@ -924,6 +924,7 @@ async function main() {
         data: {
           branchId: branch.id,
           trainerProfileId: kbProfile.id,
+          name: `${day.charAt(0) + day.slice(1).toLowerCase()} 6PM Kickboxing`,
           dayOfWeek: day,
           startTime: '18:00',
           durationMin: 60,

@@ -20,6 +20,7 @@ export type {
   NotificationLog,
   AuditLog,
   RescheduleRequest,
+  PtPackagePlan,
 } from '@prisma/client';
 
 import type { User, TrainerProfile, ClientProfile } from '@prisma/client';
@@ -91,4 +92,20 @@ export interface RescheduleRequestWithRelations {
       user: { firstName: string; lastName: string };
     };
   };
+}
+
+/** PT package plan with active assignment count (used in admin catalog list view) */
+export interface PtPackagePlanWithCount {
+  id: string;
+  branchId: string;
+  name: string;
+  sessionsPerMonth: number;
+  pricePerCycle: number;
+  sessionChargeAmount: number | null;
+  durationDays: number;
+  description: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  _count: { packages: number };
 }

@@ -15,6 +15,7 @@ import {
   Flame,
   CalendarClock,
   Clock,
+  Package,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -50,6 +51,12 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3, group: 'Insights' },
   { label: 'Audit Log', href: '/admin/audit-log', icon: FileText, group: 'Insights' },
   // System
+  {
+    label: 'Package Plans',
+    href: '/admin/settings/package-plans',
+    icon: Package,
+    group: 'System',
+  },
   { label: 'Settings', href: '/admin/settings', icon: Settings, group: 'System' },
 ];
 

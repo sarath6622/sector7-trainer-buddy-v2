@@ -139,17 +139,47 @@ export const listUsersSchema = paginationSchema.extend({
 export const createMappingSchema = z.object({
   clientProfileId: cuidSchema,
   trainerProfileId: cuidSchema,
+  planId: cuidSchema.optional(),
   sessionsPerMonth: z.number().int().positive(),
+  totalSessions: z.number().int().positive().optional(),
+  onboardingUsedSessions: z.number().int().min(0).optional(),
+  onboardingNotes: z.string().max(500).optional(),
   sessionCharge: z.number().min(0).optional(),
   startDate: dateSchema,
   endDate: dateSchema.optional(),
 });
 
 export const updateMappingSchema = z.object({
+  planId: cuidSchema.nullable().optional(),
   sessionsPerMonth: z.number().int().positive().optional(),
+  totalSessions: z.number().int().positive().optional(),
+  onboardingUsedSessions: z.number().int().min(0).optional(),
+  onboardingNotes: z.string().max(500).nullable().optional(),
   sessionCharge: z.number().min(0).optional(),
   endDate: dateSchema.optional().nullable(),
   isActive: z.boolean().optional(),
+});
+
+// ─── ADMIN: PT PACKAGE PLANS (CATALOG) ───────────────
+
+export const createPackagePlanSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(100),
+  sessionsPerMonth: z.number().int().positive(),
+  pricePerCycle: z.number().min(0),
+  sessionChargeAmount: z.number().min(0).optional(),
+  durationDays: z.number().int().min(1).max(365),
+  description: z.string().max(500).optional(),
+});
+
+export const updatePackagePlanSchema = createPackagePlanSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+export const listPackagePlansSchema = paginationSchema.extend({
+  activeOnly: z
+    .union([z.boolean(), z.enum(['true', 'false'])])
+    .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
+    .optional(),
 });
 
 // ─── ADMIN: SCHEDULING ──────────────────────────────
@@ -303,6 +333,7 @@ export const listPaymentsSchema = paginationSchema.extend({
 
 export const createKickboxingClassSchema = z.object({
   trainerProfileId: cuidSchema,
+  name: z.string().min(1).max(100),
   dayOfWeek: dayOfWeekSchema,
   startTime: timeSchema,
   durationMin: z.number().int().positive().default(60),
@@ -520,6 +551,18 @@ export const openCrossfitSessionSchema = z.object({
 });
 
 export const markCrossfitAttendanceSchema = z.object({
+  clientProfileId: cuidSchema.optional(),
+  externalName: z.string().optional(),
+});
+
+// ─── KICKBOXING TRAINER ───────────────────────────────
+
+export const openKickboxingSessionSchema = z.object({
+  classId: cuidSchema,
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+});
+
+export const markKickboxingAttendanceSchema = z.object({
   clientProfileId: cuidSchema.optional(),
   externalName: z.string().optional(),
 });

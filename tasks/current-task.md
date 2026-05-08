@@ -1,28 +1,58 @@
 # Current Task
 
-## Phase 22 — Trainer Self-Scheduling & Client Reschedule Requests
+## Phase 25 — PT Package Plans (Catalog) + Window Accounting + Onboarding Backfill
 
-**Active as of:** 2026-04-17
-**Operator instruction:** Extend scheduling so trainers can manage their own schedules, and clients can request session rescheduling (routed to admin + trainer for review).
+**Active as of:** 2026-05-08
+**Status:** Backend + UI + memory all shipped. **Only S7-PP-08 (tests) remains.**
+**Full plan:** [phase-25-package-plans.md](./phase-25-package-plans.md)
 
 ---
 
-### Completed
+### Completed in this phase
 
-- [x] **S7-RS-01** | @architect | M | Added `RescheduleStatus` enum + `RescheduleRequest` model to `schema.prisma`. Added `createdByUserId` to `SessionSchedule`. Migration `20260417100000_add_reschedule_request` applied to Neon DB. Prisma client regenerated.
-- [x] **S7-RS-02** | @architect | S | Added Zod validators (`createTrainerScheduleSchema`, `updateTrainerScheduleSchema`, `generateTrainerSessionsSchema`, `submitRescheduleRequestSchema`, `reviewRescheduleRequestSchema`, `listRescheduleRequestsSchema`) and TypeScript types (`RescheduleRequestWithRelations`) to `validators.ts` and `domain.ts`.
+- [x] **S7-PP-01** | @architect | M | `PtPackagePlan` model + `planId` FK on `PtPackage`. Migration `20260508110000_add_pt_package_plans` (local Docker → Neon).
+- [x] **S7-PP-02** | @architect | S | Validators (`createPackagePlanSchema`, `updatePackagePlanSchema`, `listPackagePlansSchema`); `createMappingSchema`/`updateMappingSchema` extended with `planId`, `totalSessions`, `onboardingUsedSessions`, `onboardingNotes`.
+- [x] **S7-PP-03** | @backend | M | `pt-package-plan.service.ts` — CRUD + audit + 409-on-active-assignments deactivation guard.
+- [x] **S7-PP-04** | @backend | M | `/api/admin/package-plans` CRUD routes (BRANCH_ADMIN | SUPER_ADMIN). DELETE supports `?force=true`.
+- [x] **S7-PP-05** | @backend | S | `createPtPackage` / `updatePtPackage` validate + persist `planId`; mapping responses include `plan: { id, name }`.
+- [x] **S7-PP-06** | @ui | L | Admin settings page `/admin/settings/package-plans` (table + create/edit modal + deactivate/reactivate). Sidebar entry.
+- [x] **S7-PP-07** | @ui | M | Mapping form — plan dropdown, auto-fill, "edited from plan default" banner, plan chip on card.
+- [x] **S7-PP-09** | @architect | S | Memory: `schema.md` (Phase 25 additions), `api-contracts.md` (mapping + plan + window-counts routes), ADR-027/028/029/030 in `decisions.md`.
+- [x] **S7-PP-10** | @architect+@ui | M | (Follow-up) `durationDays` on `PtPackagePlan` + end-date auto-derivation in mapping form. ADR-028.
+- [x] **S7-PP-11** | @architect+@backend+@ui | L | (Follow-up) `totalSessions` + onboarding backfill on `PtPackage`, new `getPackageWindowCounts` helper, `GET /api/admin/mappings/[id]/window-counts` endpoint, scheduling modal rebound. ADR-029, ADR-030.
 
 ### Remaining
 
-- [ ] **S7-RS-03** | @backend | L | `schedule.service.ts` — extend with `createScheduleByTrainer()`, assignment check + conflict detection
-- [ ] **S7-RS-04** | @backend | M | Trainer scheduling API routes (`/api/trainer/schedules` CRUD + generate)
-- [ ] **S7-RS-05** | @backend | L | `reschedule.service.ts` — `submitRescheduleRequest()`, `approveReschedule()`, `rejectReschedule()` with auditLog()
-- [ ] **S7-RS-06** | @backend | M | Client reschedule API routes (`/api/client/reschedule-requests`)
-- [ ] **S7-RS-07** | @backend | M | Admin + Trainer reschedule review API routes (approve/reject endpoints)
-- [ ] **S7-RS-08** | @backend | S | Wire notifications: new request → notify admin + trainer; approval/rejection → notify client
-- [ ] **S7-RS-09** | @ui | L | Extend trainer schedule page: editable own-created schedules, "Create Schedule" button + modal
-- [ ] **S7-RS-10** | @ui | M | Trainer schedule creation modal: assigned-client picker, day/time/duration, conflict warning
-- [ ] **S7-RS-11** | @ui | M | Client reschedule request page: upcoming sessions list, "Request Reschedule" per session
-- [ ] **S7-RS-12** | @ui | L | Admin reschedule requests page: full table with approve/reject + notes
-- [ ] **S7-RS-13** | @ui | M | Trainer reschedule requests panel: scoped to their clients only
-- [ ] **S7-RS-14** | @qa | L | Tests: assignment guard (403 on unassigned client), reschedule lifecycle, audit trail, duplicate PENDING guard
+_None — Phase 25 complete._
+
+### Recently completed
+
+- [x] **S7-PP-08** | @qa | M | 50 tests across 5 files, all passing:
+  - `tests/unit/pt-package-plan-service.test.ts` — 14 tests covering catalog CRUD + unique-name guard + deactivation guard (409 vs `?force=true`) + audit calls
+  - `tests/unit/pt-package-window-counts.test.ts` — 9 tests covering window math, used/upcoming/remaining accounting, onboarding offset, cancelled exclusion, fake-timer days math, endDate fallback
+  - `tests/unit/pt-package-with-plan.test.ts` — 7 tests covering totalSessions auto-compute (12 × round(90/30) = 36), explicit override, custom-no-plan fallback, onboarding persistence, PLAN_NOT_FOUND/PLAN_INACTIVE, non-monthly rounding
+  - `tests/integration/package-plans-api.test.ts` — 15 tests covering all 5 routes, role guards, validation, force-flag passthrough
+  - `tests/integration/mappings-window-counts-api.test.ts` — 5 tests covering auth, branch scoping, payload shape, 404
+
+---
+
+## Up next — Phase 24 (Carry-Forward + Cron) — substantially reduced scope
+
+Most of original Phase 24 was absorbed into Phase 25 via per-package window accounting (ADR-029)
+and onboarding backfill (ADR-030). What remains:
+
+- **S7-BC-06** Cycle-end carry-forward (roll unused into next package, idempotent)
+- **S7-BC-09** `/api/cron/process-cycles` route + manual admin trigger
+- **S7-BC-10** Vercel cron config + `CRON_SECRET` rotation docs
+- **S7-BC-11** Per-package `carryForwardLimit` override (`Int?` on `PtPackage`)
+- **S7-BC-14** Integration tests for the above
+
+The original phase-24 plan doc at [phase-24-billing-cycles.md](./phase-24-billing-cycles.md)
+is now partially obsolete — needs a rewrite/trim before this phase resumes.
+
+---
+
+## Notes
+
+- Pre-existing test failures in `tests/unit/pt-package-service.test.ts` (3 cases) — incomplete Prisma mocks from Phase 0-3, unrelated to Phase 25.
+- `current-task.md` will get a fresh task next session.

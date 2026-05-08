@@ -151,6 +151,12 @@ enum RescheduleStatus {
   REJECTED
 }
 
+enum KickboxingSessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+}
+
 enum CrossfitSessionStatus {
   SCHEDULED
   IN_PROGRESS
@@ -180,6 +186,7 @@ model Branch {
   trainerProfiles      TrainerProfile[]
   clientProfiles       ClientProfile[]
   ptPackages           PtPackage[]
+  ptPackagePlans       PtPackagePlan[]
   sessionSchedules     SessionSchedule[]
   sessionInstances     SessionInstance[]
   leaveRequests        LeaveRequest[]
@@ -188,8 +195,10 @@ model Branch {
   trainerAvailabilityOverrides TrainerAvailabilityOverride[]
   trainerShifts        TrainerShift[]
   shiftSwaps           ShiftSwap[]
-  kickboxingClasses    KickboxingClass[]
+  kickboxingClasses     KickboxingClass[]
   kickboxingEnrollments KickboxingEnrollment[]
+  kickboxingSessions    KickboxingSession[]
+  kickboxingAttendances KickboxingAttendance[]
   crossfitClasses       CrossfitClass[]
   crossfitClassTrainers CrossfitClassTrainer[]
   crossfitEnrollments   CrossfitEnrollment[]
@@ -410,9 +419,10 @@ model ClientProfile {
   unavailability        ClientUnavailability[]
   progressEntries       ProgressEntry[]
   paymentRecords        PaymentRecord[]
-  kickboxingEnrollments KickboxingEnrollment[]
-  crossfitEnrollments  CrossfitEnrollment[]
-  crossfitAttendances  CrossfitAttendance[]
+  kickboxingEnrollments  KickboxingEnrollment[]
+  kickboxingAttendances  KickboxingAttendance[]
+  crossfitEnrollments    CrossfitEnrollment[]
+  crossfitAttendances    CrossfitAttendance[]
   userBadges           UserBadge[]
   communityPosts       CommunityPost[]
   communityReactions   CommunityReaction[]
@@ -430,7 +440,16 @@ model PtPackage {
   branchId          String
   clientProfileId   String
   trainerProfileId  String
+  planId            String?
   sessionsPerMonth  Int
+  /// Authoritative total sessions for the full package window
+  /// (`startDate` → `endDate`). Auto-computed from plan when planId is set,
+  /// admin-editable for one-offs/renewals.
+  totalSessions     Int      @default(0)
+  /// Backfill for sessions consumed before the app onboarding. Counts toward
+  /// `used` in package-window accounting.
+  onboardingUsedSessions Int @default(0)
+  onboardingNotes   String?
   sessionChargeAmount Float?
   isActive          Boolean  @default(true)
   startDate         DateTime
@@ -441,10 +460,43 @@ model PtPackage {
   branch   Branch         @relation(fields: [branchId], references: [id])
   client   ClientProfile  @relation(fields: [clientProfileId], references: [id])
   trainer  TrainerProfile @relation(fields: [trainerProfileId], references: [id])
+  plan     PtPackagePlan? @relation(fields: [planId], references: [id])
 
   @@index([branchId, clientProfileId])
   @@index([branchId, trainerProfileId])
+  @@index([branchId, planId])
   @@map("pt_packages")
+}
+
+// ─── PT PACKAGE PLAN (catalog) ───────────────────────
+
+/// Per-branch catalog of named PT package plans (e.g. "Standard 12 — ₹4000").
+/// Admins pick a plan from a dropdown when creating a mapping; values from the
+/// plan auto-fill into the mapping form but remain editable per assignment.
+/// PtPackage.planId records which plan an assignment came from (nullable for
+/// freeform/legacy assignments).
+model PtPackagePlan {
+  id                  String   @id @default(cuid())
+  branchId            String
+  name                String
+  sessionsPerMonth    Int
+  pricePerCycle       Float
+  sessionChargeAmount Float?
+  /// Duration of one cycle in days. Used by the mapping form to auto-derive
+  /// endDate as startDate + durationDays. Common values: 30 (monthly), 60, 90,
+  /// 180, 365.
+  durationDays        Int      @default(30)
+  description         String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  branch   Branch      @relation(fields: [branchId], references: [id])
+  packages PtPackage[]
+
+  @@unique([branchId, name])
+  @@index([branchId, isActive])
+  @@map("pt_package_plans")
 }
 
 // ─── SESSION SCHEDULE (recurring template) ───────────
@@ -710,21 +762,23 @@ model RescheduleRequest {
 // ─── KICKBOXING ──────────────────────────────────────
 
 model KickboxingClass {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   branchId         String
   trainerProfileId String
+  name             String    // e.g. "Monday 6PM Kickboxing", "Beginner KB"
   dayOfWeek        DayOfWeek
-  startTime        String
-  durationMin      Int      @default(60)
-  maxCapacity      Int      @default(20)
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  startTime        String    // "18:00"
+  durationMin      Int       @default(60)
+  maxCapacity      Int       @default(20)
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   branch  Branch         @relation(fields: [branchId], references: [id])
   trainer TrainerProfile @relation(fields: [trainerProfileId], references: [id])
 
   enrollments KickboxingEnrollment[]
+  sessions    KickboxingSession[]
 
   @@index([branchId])
   @@map("kickboxing_classes")
@@ -749,6 +803,46 @@ model KickboxingEnrollment {
 
   @@index([branchId, clientType])
   @@map("kickboxing_enrollments")
+}
+
+model KickboxingSession {
+  id              String                  @id @default(cuid())
+  branchId        String
+  classId         String
+  date            DateTime                // the specific date of this session occurrence
+  status          KickboxingSessionStatus @default(SCHEDULED)
+  startedAt       DateTime?
+  endedAt         DateTime?
+  startedByUserId String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  branch      Branch               @relation(fields: [branchId], references: [id])
+  class       KickboxingClass      @relation(fields: [classId], references: [id])
+  attendances KickboxingAttendance[]
+
+  @@unique([classId, date])
+  @@index([branchId, date])
+  @@index([branchId, status])
+  @@map("kickboxing_sessions")
+}
+
+model KickboxingAttendance {
+  id              String   @id @default(cuid())
+  branchId        String
+  sessionId       String
+  clientProfileId String?  // null for external/walk-in
+  externalName    String?  // for non-enrolled walk-ins
+  markedByUserId  String   // kickboxing trainer's user id
+  markedAt        DateTime @default(now())
+
+  branch  Branch            @relation(fields: [branchId], references: [id])
+  session KickboxingSession @relation(fields: [sessionId], references: [id])
+  client  ClientProfile?    @relation(fields: [clientProfileId], references: [id])
+
+  @@unique([sessionId, clientProfileId])
+  @@index([branchId, sessionId])
+  @@map("kickboxing_attendances")
 }
 
 // ─── CROSSFIT ────────────────────────────────────────

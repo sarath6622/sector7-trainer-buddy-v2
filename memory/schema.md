@@ -709,3 +709,134 @@ model RescheduleRequest {
 ### Migration
 
 - `20260417100000_add_reschedule_request` — applied to Neon DB
+
+---
+
+## Phase 23 Schema Additions (2026-04-24)
+
+### New Enum: KickboxingSessionStatus
+
+```prisma
+enum KickboxingSessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+}
+```
+
+### Altered: KickboxingClass
+
+- Added `name String` — class display name (e.g. "Monday 6PM Kickboxing"). Required. Existing rows default to empty string via migration.
+
+### New Model: KickboxingSession
+
+```prisma
+model KickboxingSession {
+  id              String                  @id @default(cuid())
+  branchId        String
+  classId         String                  // KickboxingClass
+  date            DateTime                // specific occurrence date
+  status          KickboxingSessionStatus @default(SCHEDULED)
+  startedAt       DateTime?
+  endedAt         DateTime?
+  startedByUserId String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([classId, date])
+  @@map("kickboxing_sessions")
+}
+```
+
+### New Model: KickboxingAttendance
+
+```prisma
+model KickboxingAttendance {
+  id              String   @id @default(cuid())
+  branchId        String
+  sessionId       String                  // KickboxingSession
+  clientProfileId String?                 // null for external/walk-in
+  externalName    String?                 // for walk-ins not in the system
+  markedByUserId  String                  // kickboxing trainer user id
+  markedAt        DateTime @default(now())
+
+  @@unique([sessionId, clientProfileId])
+  @@map("kickboxing_attendances")
+}
+```
+
+### Migration
+
+- `20260424100000_add_kickboxing_sessions_attendance` — applied to both local Docker and Neon DB
+
+---
+
+## Phase 25 Schema Additions (2026-05-08)
+
+Phase 25 introduces a per-branch catalog of named PT package plans plus per-package
+session totals and onboarding backfill. See ADR-027, ADR-028, ADR-029, ADR-030.
+
+### New Model: PtPackagePlan
+
+A reusable, per-branch catalog entry. Admin defines once, picks from a dropdown
+when assigning a trainer to a client.
+
+```prisma
+model PtPackagePlan {
+  id                  String   @id @default(cuid())
+  branchId            String
+  name                String
+  sessionsPerMonth    Int      // monthly rate (e.g. 12 sessions/month)
+  pricePerCycle       Float    // total price for one cycle
+  sessionChargeAmount Float?   // optional per-session quote
+  durationDays        Int      @default(30)  // length of one cycle
+  description         String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  branch   Branch      @relation(fields: [branchId], references: [id])
+  packages PtPackage[]
+
+  @@unique([branchId, name])  // unique name per branch
+  @@index([branchId, isActive])
+  @@map("pt_package_plans")
+}
+```
+
+### Altered: PtPackage
+
+```prisma
+model PtPackage {
+  // ... existing fields ...
+  planId                  String?         // nullable — Custom assignments stay null
+  totalSessions           Int      @default(0)  // authoritative count for full window
+  onboardingUsedSessions  Int      @default(0)  // backfill for sessions used pre-onboarding
+  onboardingNotes         String?
+
+  plan PtPackagePlan? @relation(fields: [planId], references: [id])
+
+  @@index([branchId, planId])
+}
+```
+
+- `planId` is set when admin picks a plan from the dropdown; null for "Custom" assignments.
+  Existing assignments remain valid if the plan is later deactivated (FK is `ON DELETE SET NULL` —
+  but plans are soft-deactivated, never hard-deleted, so this rarely fires).
+- `totalSessions` is the source of truth for "how many sessions this client has in this package."
+  At create time it is auto-computed as `sessionsPerMonth × round(durationDays / 30)` when a plan
+  is selected, otherwise defaults to `sessionsPerMonth`. Admin can override per assignment.
+- `onboardingUsedSessions` counts toward `used` in package-window accounting but does NOT
+  create synthetic `SessionInstance` rows (so attendance/workout reports remain truthful).
+- `sessionsPerMonth` is retained as the rate label; it is no longer the authoritative total.
+
+### Migrations
+
+- `20260508110000_add_pt_package_plans` — creates `pt_package_plans` and `pt_packages.planId`
+- `20260508120000_add_plan_duration_days` — adds `pt_package_plans.durationDays` (default 30)
+- `20260508130000_add_package_total_and_onboarding` — adds `pt_packages.totalSessions`,
+  `onboardingUsedSessions`, `onboardingNotes`. Backfills `totalSessions` from
+  `sessionsPerMonth × round(durationDays / 30)` for plan-linked rows; fallback to
+  `sessionsPerMonth` for the rest.
+
+All three applied to local Docker first, then Neon.
