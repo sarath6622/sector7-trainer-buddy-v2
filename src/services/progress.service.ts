@@ -496,3 +496,88 @@ export async function listExercisesWithProgressData({
     }))
     .sort((a, b) => b.sessionCount - a.sessionCount);
 }
+
+/**
+ * List recent workout sessions for a client — each session with its logged
+ * exercises and sets. Used by the trainer's "Workout History" tab.
+ */
+export async function listWorkoutHistory({
+  clientProfileId,
+  branchId,
+  limit = 20,
+}: {
+  clientProfileId: string;
+  branchId: string;
+  limit?: number;
+}) {
+  const client = await prisma.clientProfile.findFirst({
+    where: { id: clientProfileId, branchId },
+    select: { id: true },
+  });
+  if (!client) throw new AppError('CLIENT_NOT_FOUND', 'Client not found', 404);
+
+  const sessions = await prisma.sessionInstance.findMany({
+    where: {
+      clientProfileId,
+      branchId,
+      workoutLogs: { some: {} },
+    },
+    select: {
+      id: true,
+      scheduledDate: true,
+      scheduledTime: true,
+      status: true,
+      actualDurationMin: true,
+      durationMin: true,
+      workoutLogs: {
+        select: {
+          id: true,
+          orderIndex: true,
+          exercise: {
+            select: {
+              id: true,
+              name: true,
+              targetMuscleGroup: true,
+              exerciseType: true,
+            },
+          },
+          sets: {
+            select: {
+              id: true,
+              setNumber: true,
+              reps: true,
+              weightKg: true,
+              durationSec: true,
+              rpe: true,
+            },
+            orderBy: { setNumber: 'asc' },
+          },
+        },
+        orderBy: { orderIndex: 'asc' },
+      },
+    },
+    orderBy: { scheduledDate: 'desc' },
+    take: limit,
+  });
+
+  return sessions.map((s) => ({
+    sessionId: s.id,
+    date: s.scheduledDate.toISOString(),
+    time: s.scheduledTime,
+    status: s.status,
+    durationMin: s.actualDurationMin ?? s.durationMin,
+    exercises: s.workoutLogs.map((log) => ({
+      id: log.id,
+      name: log.exercise.name,
+      targetMuscleGroup: log.exercise.targetMuscleGroup,
+      exerciseType: log.exercise.exerciseType,
+      sets: log.sets.map((set) => ({
+        setNumber: set.setNumber,
+        reps: set.reps,
+        weightKg: set.weightKg,
+        durationSec: set.durationSec,
+        rpe: set.rpe,
+      })),
+    })),
+  }));
+}

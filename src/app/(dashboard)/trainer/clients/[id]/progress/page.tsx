@@ -364,145 +364,31 @@ export default function TrainerClientProgressPage() {
         </div>
       </div>
 
-      {/* Metrics — horizontal scroll strip */}
-      <div className="-mx-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        <div className="flex gap-2 px-4 pb-1">
-          {(
-            [
-              {
-                key: 'weight',
-                icon: <Scale className="h-3.5 w-3.5 text-blue-500" />,
-                iconBg: 'bg-blue-500/10',
-                label: 'Weight',
-                metricKey: 'weightKg' as NumericKey,
-                unit: 'kg',
-                lowerIsBetter: true,
-              },
-              {
-                key: 'bodyFat',
-                icon: <Flame className="h-3.5 w-3.5 text-orange-500" />,
-                iconBg: 'bg-orange-500/10',
-                label: 'Body Fat',
-                metricKey: 'bodyFatPercent' as NumericKey,
-                unit: '%',
-                lowerIsBetter: true,
-              },
-              {
-                key: 'muscleMass',
-                icon: <Dumbbell className="h-3.5 w-3.5 text-emerald-500" />,
-                iconBg: 'bg-emerald-500/10',
-                label: 'Muscle',
-                metricKey: 'muscleMass' as NumericKey,
-                unit: 'kg',
-                lowerIsBetter: false,
-              },
-              {
-                key: 'waist',
-                icon: <Ruler className="h-3.5 w-3.5 text-violet-500" />,
-                iconBg: 'bg-violet-500/10',
-                label: 'Waist',
-                metricKey: 'waist' as NumericKey,
-                unit: 'cm',
-                lowerIsBetter: true,
-              },
-              {
-                key: 'chest',
-                icon: <Heart className="h-3.5 w-3.5 text-pink-500" />,
-                iconBg: 'bg-pink-500/10',
-                label: 'Chest',
-                metricKey: 'chest' as NumericKey,
-                unit: 'cm',
-                lowerIsBetter: false,
-              },
-              {
-                key: 'hips',
-                icon: <MoveHorizontal className="h-3.5 w-3.5 text-amber-500" />,
-                iconBg: 'bg-amber-500/10',
-                label: 'Hips',
-                metricKey: 'hips' as NumericKey,
-                unit: 'cm',
-                lowerIsBetter: false,
-              },
-              {
-                key: 'bicep',
-                icon: <Zap className="h-3.5 w-3.5 text-cyan-500" />,
-                iconBg: 'bg-cyan-500/10',
-                label: 'Bicep',
-                metricKey: 'bicepLeft' as NumericKey,
-                unit: 'cm',
-                lowerIsBetter: false,
-                paired: 'bicepRight' as NumericKey,
-              },
-              {
-                key: 'thigh',
-                icon: <MoveVertical className="h-3.5 w-3.5 text-indigo-500" />,
-                iconBg: 'bg-indigo-500/10',
-                label: 'Thigh',
-                metricKey: 'thighLeft' as NumericKey,
-                unit: 'cm',
-                lowerIsBetter: false,
-                paired: 'thighRight' as NumericKey,
-              },
-            ] as Array<{
-              key: string;
-              icon: React.ReactNode;
-              iconBg: string;
-              label: string;
-              metricKey: NumericKey;
-              unit: string;
-              lowerIsBetter: boolean;
-              paired?: NumericKey;
-            }>
-          ).map((tile) => {
-            const val = latestOf(tile.metricKey);
-            const paired = tile.paired ? latestOf(tile.paired) : null;
-            const displayValue =
-              val != null ? (tile.paired ? `${fmt(val)}/${fmt(paired)}` : fmt(val)) : '—';
-            const delta = getDelta(val, previousOf(tile.metricKey));
-            return (
-              <MetricChip
-                key={tile.key}
-                icon={tile.icon}
-                iconBg={tile.iconBg}
-                label={tile.label}
-                value={displayValue}
-                unit={tile.unit}
-                delta={delta}
-                deltaUnit={tile.unit}
-                lowerIsBetter={tile.lowerIsBetter}
-                hasData={val != null}
-                onLog={() => openQuickLog(tile.key)}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tabs */}
+      {/* Tabs — top-level navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full">
+        <TabsList className="w-full h-11 p-1">
           <TabsTrigger
             value="body"
-            className="flex-1 text-xs focus-visible:ring-0 focus-visible:outline-none"
+            className="flex-1 text-sm font-semibold focus-visible:ring-0 focus-visible:outline-none"
           >
             Body Metrics
           </TabsTrigger>
           <TabsTrigger
             value="workout"
-            className="flex-1 text-xs focus-visible:ring-0 focus-visible:outline-none"
+            className="flex-1 text-sm font-semibold focus-visible:ring-0 focus-visible:outline-none"
           >
-            <Dumbbell className="mr-1 h-3 w-3" />
+            <Dumbbell className="mr-1 h-3.5 w-3.5" />
             Workouts
           </TabsTrigger>
           <TabsTrigger
             value="history"
-            className="flex-1 text-xs focus-visible:ring-0 focus-visible:outline-none"
+            className="flex-1 text-sm font-semibold focus-visible:ring-0 focus-visible:outline-none"
           >
             History
           </TabsTrigger>
           <TabsTrigger
             value="badges"
-            className="flex-1 text-xs focus-visible:ring-0 focus-visible:outline-none"
+            className="flex-1 text-sm font-semibold focus-visible:ring-0 focus-visible:outline-none"
           >
             Badges
           </TabsTrigger>
@@ -510,6 +396,120 @@ export default function TrainerClientProgressPage() {
 
         {/* ── Body Metrics tab ── */}
         <TabsContent value="body" className="mt-4 space-y-3">
+          {/* Stat cards — horizontal scroll strip */}
+          <div className="-mx-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex gap-2 px-4 pb-1">
+              {(
+                [
+                  {
+                    key: 'weight',
+                    icon: <Scale className="h-3.5 w-3.5 text-blue-500" />,
+                    iconBg: 'bg-blue-500/10',
+                    label: 'Weight',
+                    metricKey: 'weightKg' as NumericKey,
+                    unit: 'kg',
+                    lowerIsBetter: true,
+                  },
+                  {
+                    key: 'bodyFat',
+                    icon: <Flame className="h-3.5 w-3.5 text-orange-500" />,
+                    iconBg: 'bg-orange-500/10',
+                    label: 'Body Fat',
+                    metricKey: 'bodyFatPercent' as NumericKey,
+                    unit: '%',
+                    lowerIsBetter: true,
+                  },
+                  {
+                    key: 'muscleMass',
+                    icon: <Dumbbell className="h-3.5 w-3.5 text-emerald-500" />,
+                    iconBg: 'bg-emerald-500/10',
+                    label: 'Muscle',
+                    metricKey: 'muscleMass' as NumericKey,
+                    unit: 'kg',
+                    lowerIsBetter: false,
+                  },
+                  {
+                    key: 'waist',
+                    icon: <Ruler className="h-3.5 w-3.5 text-violet-500" />,
+                    iconBg: 'bg-violet-500/10',
+                    label: 'Waist',
+                    metricKey: 'waist' as NumericKey,
+                    unit: 'cm',
+                    lowerIsBetter: true,
+                  },
+                  {
+                    key: 'chest',
+                    icon: <Heart className="h-3.5 w-3.5 text-pink-500" />,
+                    iconBg: 'bg-pink-500/10',
+                    label: 'Chest',
+                    metricKey: 'chest' as NumericKey,
+                    unit: 'cm',
+                    lowerIsBetter: false,
+                  },
+                  {
+                    key: 'hips',
+                    icon: <MoveHorizontal className="h-3.5 w-3.5 text-amber-500" />,
+                    iconBg: 'bg-amber-500/10',
+                    label: 'Hips',
+                    metricKey: 'hips' as NumericKey,
+                    unit: 'cm',
+                    lowerIsBetter: false,
+                  },
+                  {
+                    key: 'bicep',
+                    icon: <Zap className="h-3.5 w-3.5 text-cyan-500" />,
+                    iconBg: 'bg-cyan-500/10',
+                    label: 'Bicep',
+                    metricKey: 'bicepLeft' as NumericKey,
+                    unit: 'cm',
+                    lowerIsBetter: false,
+                    paired: 'bicepRight' as NumericKey,
+                  },
+                  {
+                    key: 'thigh',
+                    icon: <MoveVertical className="h-3.5 w-3.5 text-indigo-500" />,
+                    iconBg: 'bg-indigo-500/10',
+                    label: 'Thigh',
+                    metricKey: 'thighLeft' as NumericKey,
+                    unit: 'cm',
+                    lowerIsBetter: false,
+                    paired: 'thighRight' as NumericKey,
+                  },
+                ] as Array<{
+                  key: string;
+                  icon: React.ReactNode;
+                  iconBg: string;
+                  label: string;
+                  metricKey: NumericKey;
+                  unit: string;
+                  lowerIsBetter: boolean;
+                  paired?: NumericKey;
+                }>
+              ).map((tile) => {
+                const val = latestOf(tile.metricKey);
+                const paired = tile.paired ? latestOf(tile.paired) : null;
+                const displayValue =
+                  val != null ? (tile.paired ? `${fmt(val)}/${fmt(paired)}` : fmt(val)) : '—';
+                const delta = getDelta(val, previousOf(tile.metricKey));
+                return (
+                  <MetricChip
+                    key={tile.key}
+                    icon={tile.icon}
+                    iconBg={tile.iconBg}
+                    label={tile.label}
+                    value={displayValue}
+                    unit={tile.unit}
+                    delta={delta}
+                    deltaUnit={tile.unit}
+                    lowerIsBetter={tile.lowerIsBetter}
+                    hasData={val != null}
+                    onLog={() => openQuickLog(tile.key)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
           {weightChart.length > 0 && (
             <ChartCard
               title="WEIGHT"
@@ -602,6 +602,7 @@ export default function TrainerClientProgressPage() {
             <WorkoutProgressionPanel
               exercises={exercises}
               chartEndpoint={`${base}/progress/charts`}
+              historyEndpoint={`${base}/workout-history`}
             />
           )}
         </TabsContent>
