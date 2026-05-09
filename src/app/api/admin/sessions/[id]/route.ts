@@ -5,6 +5,24 @@ import { toErrorResponse } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { sendNotification } from '@/lib/notifications';
+import { getSessionById } from '@/services/session.service';
+
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await getServerSession();
+    if (!session || !hasRole(session.user.role, ['SUPER_ADMIN', 'BRANCH_ADMIN'])) {
+      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
+    }
+
+    const { id } = await params;
+    // Branch-scoped, no trainer filter — admins see any session in their branch.
+    const data = await getSessionById({ sessionId: id, branchId: session.user.branchId });
+    return NextResponse.json({ data });
+  } catch (error) {
+    const { error: msg, code, status } = toErrorResponse(error);
+    return NextResponse.json({ error: msg, code }, { status });
+  }
+}
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

@@ -94,37 +94,97 @@ export async function createWorkoutLogs({
     throw new AppError('EXERCISE_NOT_FOUND', `Exercises not found: ${missingIds.join(', ')}`, 404);
   }
 
-  // Replace workout logs atomically: delete all existing for this session, then re-create
+  // Reconcile incoming payload with existing logs, preserving createdAt on
+  // unchanged rows. Auto-save fires every ~800ms, so a naïve delete-and-
+  // recreate would bump every timestamp on every keystroke and destroy the
+  // audit trail (admins need to know "when did the trainer add Bench Press"
+  // and "how long between exercises"). The upsert path keeps WorkoutLog and
+  // WorkoutSet identities stable across saves.
   const workoutLogs = await prisma.$transaction(async (tx) => {
-    // Must delete child sets before parent logs (FK constraint)
     const existingLogs = await tx.workoutLog.findMany({
       where: { sessionInstanceId },
-      select: { id: true },
+      include: { sets: true },
     });
-    const logIds = existingLogs.map((l) => l.id);
-    if (logIds.length > 0) {
-      await tx.workoutSet.deleteMany({ where: { workoutLogId: { in: logIds } } });
-      await tx.workoutLog.deleteMany({ where: { id: { in: logIds } } });
+    const existingByExId = new Map(existingLogs.map((l) => [l.exerciseId, l]));
+    const incomingExIds = new Set(exercises.map((e) => e.exerciseId));
+
+    // Drop logs (and their sets) for exercises the trainer removed since
+    // the last save.
+    const toDeleteLogIds = existingLogs
+      .filter((l) => !incomingExIds.has(l.exerciseId))
+      .map((l) => l.id);
+    if (toDeleteLogIds.length > 0) {
+      await tx.workoutSet.deleteMany({ where: { workoutLogId: { in: toDeleteLogIds } } });
+      await tx.workoutLog.deleteMany({ where: { id: { in: toDeleteLogIds } } });
     }
 
     const results = [];
     for (const entry of exercises) {
-      const log = await tx.workoutLog.create({
-        data: {
-          sessionInstanceId,
-          exerciseId: entry.exerciseId,
-          orderIndex: entry.orderIndex,
-          sets: {
-            create: entry.sets.map((set) => ({
-              setNumber: set.setNumber,
-              reps: set.reps ?? null,
-              weightKg: set.weightKg ?? null,
-              durationSec: set.durationSec ?? null,
-              rpe: set.rpe ?? null,
-              notes: set.notes ?? null,
-            })),
+      const existing = existingByExId.get(entry.exerciseId);
+      let logId: string;
+
+      if (existing) {
+        // Keep the original log row (and createdAt). Just sync orderIndex
+        // and the set children below.
+        if (existing.orderIndex !== entry.orderIndex) {
+          await tx.workoutLog.update({
+            where: { id: existing.id },
+            data: { orderIndex: entry.orderIndex },
+          });
+        }
+        logId = existing.id;
+
+        const existingBySetNum = new Map(existing.sets.map((s) => [s.setNumber, s]));
+        const incomingSetNums = new Set(entry.sets.map((s) => s.setNumber));
+
+        // Drop sets the trainer removed.
+        const setIdsToDelete = existing.sets
+          .filter((s) => !incomingSetNums.has(s.setNumber))
+          .map((s) => s.id);
+        if (setIdsToDelete.length > 0) {
+          await tx.workoutSet.deleteMany({ where: { id: { in: setIdsToDelete } } });
+        }
+
+        for (const set of entry.sets) {
+          const existingSet = existingBySetNum.get(set.setNumber);
+          const data = {
+            reps: set.reps ?? null,
+            weightKg: set.weightKg ?? null,
+            durationSec: set.durationSec ?? null,
+            rpe: set.rpe ?? null,
+            notes: set.notes ?? null,
+          };
+          if (existingSet) {
+            await tx.workoutSet.update({ where: { id: existingSet.id }, data });
+          } else {
+            await tx.workoutSet.create({
+              data: { workoutLogId: logId, setNumber: set.setNumber, ...data },
+            });
+          }
+        }
+      } else {
+        const created = await tx.workoutLog.create({
+          data: {
+            sessionInstanceId,
+            exerciseId: entry.exerciseId,
+            orderIndex: entry.orderIndex,
+            sets: {
+              create: entry.sets.map((set) => ({
+                setNumber: set.setNumber,
+                reps: set.reps ?? null,
+                weightKg: set.weightKg ?? null,
+                durationSec: set.durationSec ?? null,
+                rpe: set.rpe ?? null,
+                notes: set.notes ?? null,
+              })),
+            },
           },
-        },
+        });
+        logId = created.id;
+      }
+
+      const final = await tx.workoutLog.findUnique({
+        where: { id: logId },
         include: {
           exercise: {
             select: {
@@ -138,7 +198,7 @@ export async function createWorkoutLogs({
           sets: { orderBy: { setNumber: 'asc' } },
         },
       });
-      results.push(log);
+      if (final) results.push(final);
     }
     return results;
   });

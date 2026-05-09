@@ -49,6 +49,39 @@ interface SessionInstance {
   trainer: { user: { firstName: string; lastName: string } };
 }
 
+type WorkoutExerciseType = 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+
+interface SessionWorkoutDetail {
+  id: string;
+  status: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  durationMin: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  actualDurationMin: number | null;
+  workoutLogs: Array<{
+    id: string;
+    orderIndex: number;
+    createdAt: string;
+    updatedAt: string;
+    exercise: {
+      id: string;
+      name: string;
+      targetMuscleGroup: string;
+      category: string;
+      exerciseType: WorkoutExerciseType;
+    };
+    sets: Array<{
+      setNumber: number;
+      reps: number | null;
+      weightKg: number | null;
+      durationSec: number | null;
+      rpe: number | null;
+    }>;
+  }>;
+}
+
 interface Conflict {
   sessionA: { id: string; scheduledDate: string; scheduledTime: string; clientName: string };
   sessionB: { id: string; scheduledDate: string; scheduledTime: string; clientName: string };
@@ -350,6 +383,10 @@ export default function SchedulingPage() {
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionInstance | null>(null);
+  // Live workout snapshot for the selected session — populated only when the
+  // session is IN_PROGRESS or COMPLETED, since SCHEDULED has no logs yet.
+  const [sessionDetail, setSessionDetail] = useState<SessionWorkoutDetail | null>(null);
+  const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
   const [selectedTrainer, setSelectedTrainer] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [editingSession, setEditingSession] = useState(false);
@@ -452,6 +489,46 @@ export default function SchedulingPage() {
     // which calls fetchSessions with the correct visible range automatically.
     fetchTrainersAndClients().finally(() => setLoading(false));
   }, [fetchTrainersAndClients]);
+
+  // Pull live workout details when an IN_PROGRESS / COMPLETED session is
+  // selected, and poll while it's IN_PROGRESS so admins watch sets land in
+  // near-real-time. Fires once per status transition; cleans up on close.
+  useEffect(() => {
+    if (!selectedSession) {
+      setSessionDetail(null);
+      setSessionDetailLoading(false);
+      return;
+    }
+    if (selectedSession.status !== 'IN_PROGRESS' && selectedSession.status !== 'COMPLETED') {
+      setSessionDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    const sid = selectedSession.id;
+
+    const load = async (showSpinner: boolean) => {
+      if (showSpinner) setSessionDetailLoading(true);
+      try {
+        const res = await fetch(`/api/admin/sessions/${sid}`);
+        if (!res.ok) return;
+        const body = await res.json();
+        if (cancelled) return;
+        setSessionDetail(body.data as SessionWorkoutDetail);
+      } finally {
+        if (!cancelled && showSpinner) setSessionDetailLoading(false);
+      }
+    };
+
+    void load(true);
+    if (selectedSession.status !== 'IN_PROGRESS') return;
+
+    const interval = setInterval(() => void load(false), 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [selectedSession]);
 
   // Unique trainer names from sessions for filter chips
   const trainerNames = useMemo(() => {
@@ -1377,6 +1454,15 @@ export default function SchedulingPage() {
                 </div>
               </div>
 
+              {(selectedSession.status === 'IN_PROGRESS' ||
+                selectedSession.status === 'COMPLETED') && (
+                <SessionWorkoutPanel
+                  status={selectedSession.status}
+                  detail={sessionDetail}
+                  loading={sessionDetailLoading}
+                />
+              )}
+
               {selectedSession.status === 'SCHEDULED' && (
                 <div className="flex gap-2 border-t pt-3">
                   <Button
@@ -1480,4 +1566,241 @@ export default function SchedulingPage() {
       />
     </div>
   );
+}
+
+// ─── Read-only workout panel for the admin session-detail modal ─────────────
+//
+// Shows what's been logged in an IN_PROGRESS or COMPLETED session so admins
+// can see live progress without bouncing to the trainer's workout view. Polls
+// at the parent level (every 10 s while IN_PROGRESS); this component only
+// renders the snapshot it's given.
+
+function SessionWorkoutPanel({
+  status,
+  detail,
+  loading,
+}: {
+  status: string;
+  detail: SessionWorkoutDetail | null;
+  loading: boolean;
+}) {
+  const isLive = status === 'IN_PROGRESS';
+  // Sort logs chronologically (by createdAt) so per-exercise gaps reflect
+  // actual session flow, not the trainer's drag-reorder.
+  const ordered = useMemo(
+    () => [...(detail?.workoutLogs ?? [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [detail?.workoutLogs],
+  );
+
+  return (
+    <div className="space-y-3 border-t pt-3">
+      {detail && <SessionTimingBlock detail={detail} />}
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity className="h-4 w-4 text-muted-foreground" />
+          <p className="text-sm font-semibold">Workout Log</p>
+          {ordered.length > 0 && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+              {ordered.length}
+            </span>
+          )}
+        </div>
+        {isLive && (
+          <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-500">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+            Live
+          </span>
+        )}
+      </div>
+
+      {loading && !detail ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : ordered.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border/50 bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
+          {isLive ? 'No exercises logged yet' : 'No workout was logged for this session'}
+        </p>
+      ) : (
+        <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+          {ordered.map((log, idx) => (
+            <WorkoutLogCard
+              key={log.id}
+              log={log}
+              previousAt={idx > 0 ? ordered[idx - 1]!.createdAt : null}
+              sessionStartedAt={detail?.startedAt ?? null}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionTimingBlock({ detail }: { detail: SessionWorkoutDetail }) {
+  // Scheduled wall-clock from (date, time-string). Composed locally to avoid
+  // a TZ round-trip — `scheduledTime` is already in the branch's local clock.
+  const scheduledStart = useMemo(() => {
+    const [h, m] = detail.scheduledTime.split(':').map((s) => parseInt(s, 10));
+    const d = new Date(detail.scheduledDate);
+    if (Number.isFinite(h) && Number.isFinite(m)) d.setHours(h!, m!, 0, 0);
+    return d;
+  }, [detail.scheduledDate, detail.scheduledTime]);
+
+  // Tick once a minute so the "X min so far" elapsed counter updates while
+  // the admin keeps the modal open on a live session, without touching
+  // Date.now() during render (impure).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (detail.endedAt) return;
+    const i = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(i);
+  }, [detail.endedAt]);
+
+  const startedAt = detail.startedAt ? new Date(detail.startedAt) : null;
+  const endedAt = detail.endedAt ? new Date(detail.endedAt) : null;
+  const startDelta = startedAt
+    ? Math.round((startedAt.getTime() - scheduledStart.getTime()) / 60000)
+    : null;
+  const elapsed = startedAt && !endedAt ? Math.round((now - startedAt.getTime()) / 60000) : null;
+
+  return (
+    <div className="rounded-lg border border-border/40 bg-muted/10 p-2.5">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Timing
+      </p>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+        <span className="text-muted-foreground">Scheduled</span>
+        <span className="text-right font-medium tabular-nums">
+          {formatTime(scheduledStart)} · {detail.durationMin} min
+        </span>
+
+        <span className="text-muted-foreground">Started</span>
+        <span className="text-right font-medium tabular-nums">
+          {startedAt ? (
+            <>
+              {formatTime(startedAt)}
+              {startDelta != null && (
+                <span
+                  className={`ml-1 text-[10px] ${
+                    startDelta > 5
+                      ? 'text-amber-500'
+                      : startDelta < -5
+                        ? 'text-blue-500'
+                        : 'text-muted-foreground'
+                  }`}
+                >
+                  ({startDelta >= 0 ? '+' : ''}
+                  {startDelta} min)
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </span>
+
+        <span className="text-muted-foreground">Ended</span>
+        <span className="text-right font-medium tabular-nums">
+          {endedAt ? formatTime(endedAt) : <span className="text-muted-foreground">—</span>}
+        </span>
+
+        <span className="text-muted-foreground">Actual duration</span>
+        <span className="text-right font-medium tabular-nums">
+          {detail.actualDurationMin != null ? (
+            `${detail.actualDurationMin} min`
+          ) : elapsed != null ? (
+            <span className="text-emerald-500">{elapsed} min so far</span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function WorkoutLogCard({
+  log,
+  previousAt,
+  sessionStartedAt,
+}: {
+  log: SessionWorkoutDetail['workoutLogs'][number];
+  previousAt: string | null;
+  sessionStartedAt: string | null;
+}) {
+  const type = log.exercise.exerciseType;
+  const addedAt = new Date(log.createdAt);
+  const updatedAt = new Date(log.updatedAt);
+  // Gap from the previous exercise (or from session start for the first one).
+  // Surfaces "rest taken between exercises" so admins can spot rushed sets
+  // or unusually long breaks.
+  const gapAnchor = previousAt ?? sessionStartedAt;
+  const gapMin = gapAnchor
+    ? Math.round((addedAt.getTime() - new Date(gapAnchor).getTime()) / 60000)
+    : null;
+  const isUpdated = updatedAt.getTime() - addedAt.getTime() > 5_000;
+
+  return (
+    <div className="rounded-lg border border-border/40 bg-muted/10 p-2.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="truncate text-sm font-semibold">{log.exercise.name}</p>
+        <span className="shrink-0 text-[10px] text-muted-foreground">
+          {log.exercise.targetMuscleGroup}
+        </span>
+      </div>
+      <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+        <span className="tabular-nums">added {formatTime(addedAt)}</span>
+        {gapMin != null && gapMin >= 0 && (
+          <span
+            className={`rounded-full px-1.5 py-0.5 font-semibold ${
+              gapMin <= 1
+                ? 'bg-amber-500/10 text-amber-500'
+                : gapMin >= 10
+                  ? 'bg-blue-500/10 text-blue-500'
+                  : 'bg-muted text-muted-foreground'
+            }`}
+            title={previousAt ? 'Gap from previous exercise' : 'Gap from session start'}
+          >
+            {gapMin === 0 ? '<1' : `+${gapMin}`} min
+          </span>
+        )}
+        {isUpdated && <span className="tabular-nums">· updated {formatTime(updatedAt)}</span>}
+      </div>
+      <div className="mt-1.5 space-y-0.5">
+        {log.sets.map((s) => (
+          <p key={s.setNumber} className="text-xs tabular-nums text-muted-foreground">
+            <span className="mr-2 inline-block w-5 font-semibold text-foreground">
+              {s.setNumber}.
+            </span>
+            {formatSet(type, s)}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatTime(d: Date): string {
+  return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function formatSet(
+  type: WorkoutExerciseType,
+  s: SessionWorkoutDetail['workoutLogs'][number]['sets'][number],
+): string {
+  // Compose a per-type human summary. Empty rows (everything null) read as
+  // "—" so the admin sees the trainer hasn't filled them in yet.
+  const parts: string[] = [];
+  if (type === 'WEIGHTED') {
+    if (s.weightKg != null) parts.push(`${s.weightKg} kg`);
+    if (s.reps != null) parts.push(`× ${s.reps}`);
+  } else if (type === 'BODYWEIGHT') {
+    if (s.reps != null) parts.push(`${s.reps} reps`);
+  } else if (type === 'DURATION' || type === 'CARDIO') {
+    if (s.durationSec != null) parts.push(`${s.durationSec}s`);
+  }
+  if (s.rpe != null) parts.push(`RPE ${s.rpe}`);
+  return parts.length > 0 ? parts.join(' ') : '—';
 }
