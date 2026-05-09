@@ -313,7 +313,26 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const [restTimerOpen, setRestTimerOpen] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [defaultDurationMin, setDefaultDurationMin] = useState<number | null>(null);
   const restTimer = useRestTimer(activeId);
+
+  // Branch default session duration drives the hero progress ring so the ring
+  // reflects the gym's standard slot length rather than an out-of-band per-row
+  // override (which can be stale on long-lived/carry-over sessions).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch('/api/trainer/settings');
+      if (!res.ok || cancelled) return;
+      const { data } = await res.json();
+      if (!cancelled && typeof data?.defaultSessionDurationMin === 'number') {
+        setDefaultDurationMin(data.defaultSessionDurationMin);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const session = sessionMap[activeId] ?? null;
 
@@ -601,7 +620,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
             const init = initials(s.client.user.firstName, s.client.user.lastName);
             const startedAt = detailed.startedAt ?? s.startedAt;
-            const expectedMin = detailed.durationMin ?? s.durationMin;
+            const expectedMin = defaultDurationMin ?? detailed.durationMin ?? s.durationMin;
             const elapsedSec = startedAt
               ? Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000))
               : 0;
