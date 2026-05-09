@@ -768,3 +768,82 @@ export async function getRecentExercisesByMuscleGroup({
     };
   });
 }
+
+// ─── Last set per exercise ────────────────────────────────────────────────────
+//
+// Lightweight lookup used by the workout logger to populate placeholder hints
+// for empty input rows. Given a set of exerciseIds the trainer is logging in
+// the current session, return the most recent prior set for each one — drawn
+// from any other session for the same client. Caller passes
+// `excludeSessionId` so the current session's own (possibly partial) sets
+// don't shadow the real progression reference.
+
+export async function getLastSetsByExercise({
+  clientProfileId,
+  branchId,
+  exerciseIds,
+  excludeSessionId,
+}: {
+  clientProfileId: string;
+  branchId: string;
+  exerciseIds: string[];
+  excludeSessionId?: string;
+}): Promise<Array<{ exerciseId: string; sets: LastSetSnapshot[] }>> {
+  if (exerciseIds.length === 0) return [];
+
+  const client = await prisma.clientProfile.findFirst({
+    where: { id: clientProfileId, branchId },
+    select: { id: true },
+  });
+  if (!client) throw new AppError('CLIENT_NOT_FOUND', 'Client not found', 404);
+
+  const logs = await prisma.workoutLog.findMany({
+    where: {
+      sessionInstance: {
+        clientProfileId,
+        branchId,
+        ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}),
+      },
+      exerciseId: { in: exerciseIds },
+    },
+    select: {
+      exerciseId: true,
+      createdAt: true,
+      sets: {
+        select: {
+          setNumber: true,
+          reps: true,
+          weightKg: true,
+          durationSec: true,
+          rpe: true,
+          createdAt: true,
+        },
+        orderBy: { setNumber: 'asc' },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const result = new Map<string, LastSetSnapshot[]>();
+  for (const id of exerciseIds) result.set(id, []);
+
+  // Walk newest → oldest, take the first log per exerciseId. Return ALL sets
+  // from that log so the caller can show per-row placeholders (set 1 → prior
+  // set 1, set 2 → prior set 2, …) rather than repeating one snapshot.
+  const seen = new Set<string>();
+  for (const log of logs) {
+    if (seen.has(log.exerciseId)) continue;
+    seen.add(log.exerciseId);
+    const sets: LastSetSnapshot[] = log.sets.map((s) => ({
+      setNumber: s.setNumber,
+      reps: s.reps,
+      weightKg: s.weightKg,
+      durationSec: s.durationSec,
+      rpe: s.rpe,
+      performedAt: (s.createdAt ?? log.createdAt).toISOString(),
+    }));
+    result.set(log.exerciseId, sets);
+  }
+
+  return Array.from(result.entries()).map(([exerciseId, sets]) => ({ exerciseId, sets }));
+}

@@ -62,6 +62,7 @@ interface SetData {
 }
 
 interface LastSetSnapshot {
+  setNumber: number;
   reps: number | null;
   weightKg: number | null;
   durationSec: number | null;
@@ -77,9 +78,6 @@ interface ExerciseEntry {
   exerciseType: ExerciseType;
   sets: SetData[];
   collapsed: boolean;
-  /** Last set logged for this exercise on a prior session — drives input
-   *  placeholders so the trainer sees prior weight/reps as a progression hint. */
-  lastSet?: LastSetSnapshot | null;
 }
 
 type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -152,8 +150,8 @@ type ColDef = { key: keyof SetData; label: string; step?: string; min?: number; 
 
 const TYPE_COLS: Record<ExerciseType, ColDef[]> = {
   WEIGHTED: [
-    { key: 'reps', label: 'Reps' },
     { key: 'weightKg', label: 'kg', step: '0.5' },
+    { key: 'reps', label: 'Reps' },
     { key: 'rpe', label: 'RPE', min: 1, max: 10 },
   ],
   BODYWEIGHT: [
@@ -195,6 +193,13 @@ export function WorkoutLogger({
   const pendingRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Prior-session sets per exercise, keyed by exerciseId. Kept separate from
+  // `exercises` so it survives hydration (parent refetches replace
+  // existingLogs but mustn't wipe placeholders). Empty array = fetched, no
+  // prior data; key absent = not yet fetched.
+  const [lastSetsByExId, setLastSetsByExId] = useState<Map<string, LastSetSnapshot[]>>(
+    () => new Map(),
+  );
   const [celebrationBadges, setCelebrationBadges] = useState<
     { name: string; icon: string; description?: string }[]
   >([]);
@@ -328,6 +333,53 @@ export function WorkoutLogger({
     if (showSearch) setTimeout(() => searchRef.current?.focus(), 50);
   }, [showSearch]);
 
+  // Fetch prior-session lastSet for any exercise we don't already have a
+  // snapshot for (key absent from the map). The picker seeds known IDs at
+  // pick-time, but exercises added via Search or hydrated from existingLogs
+  // need this round-trip to populate placeholder hints. Keyed by a sorted
+  // join of missing IDs so the effect only re-runs when that set actually
+  // changes — keystrokes don't fire spurious aborts.
+  const missingLastSetKey = useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const e of exercises) {
+      if (seen.has(e.exerciseId)) continue;
+      seen.add(e.exerciseId);
+      if (!lastSetsByExId.has(e.exerciseId)) ids.push(e.exerciseId);
+    }
+    return ids.sort().join(',');
+  }, [exercises, lastSetsByExId]);
+
+  useEffect(() => {
+    if (!clientProfileId || !missingLastSetKey) return;
+    const missing = missingLastSetKey.split(',');
+    const ctrl = new AbortController();
+    const url = `/api/trainer/clients/${clientProfileId}/last-sets?exerciseIds=${encodeURIComponent(
+      missing.join(','),
+    )}&excludeSessionId=${encodeURIComponent(sessionInstanceId)}`;
+    fetch(url, { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then(({ data }: { data: Array<{ exerciseId: string; sets: LastSetSnapshot[] }> }) => {
+        setLastSetsByExId((prev) => {
+          const next = new Map(prev);
+          // Mark every requested ID as fetched (empty array = no prior data)
+          // so we don't refetch on the next render.
+          for (const id of missing) {
+            if (!next.has(id)) next.set(id, []);
+          }
+          for (const item of data ?? []) {
+            next.set(item.exerciseId, item.sets ?? []);
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        /* network/abort — leave keys unset so a future render can retry */
+      });
+
+    return () => ctrl.abort();
+  }, [clientProfileId, sessionInstanceId, missingLastSetKey]);
+
   function addExercise(exercise: ExerciseOption) {
     setExercises((prev) => [
       ...prev.map((e) => ({ ...e, collapsed: true })),
@@ -357,6 +409,9 @@ export function WorkoutLogger({
   }
 
   function addExercisesFromPicker(picked: PickedExercise[]) {
+    // No picker-side seed — the on-demand fetch effect populates per-set
+    // priors. The picker only carries one snapshot per exercise, which would
+    // mask the richer per-row hints once the fetch returns.
     setExercises((prev) => {
       const existingIds = new Set(prev.map((e) => e.exerciseId));
       // Skip exercises the trainer already added this session — re-opening
@@ -833,8 +888,22 @@ export function WorkoutLogger({
               borderLeftColor: cfg.accent,
             }}
           >
-            {/* Card header */}
-            <div className="flex items-center gap-3 px-4 py-3">
+            {/* Card header — entire row toggles collapse so the trainer
+                doesn't have to hit a tiny chevron. The action buttons
+                (progress, delete) stop propagation so they keep their own
+                tap targets. */}
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => toggleCollapse(entry.tempId)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleCollapse(entry.tempId);
+                }
+              }}
+              className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors active:bg-muted/30"
+            >
               <div
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
               >
@@ -854,7 +923,8 @@ export function WorkoutLogger({
               <div className="flex shrink-0 items-center gap-0.5">
                 {clientProfileId && (
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       const unit =
                         entry.exerciseType === 'WEIGHTED'
                           ? 'kg'
@@ -875,19 +945,26 @@ export function WorkoutLogger({
                     <TrendingUp className="h-4 w-4" />
                   </button>
                 )}
-                <button
-                  onClick={() => toggleCollapse(entry.tempId)}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition-colors active:bg-muted"
+                {/* Chevron is now decorative — the surrounding row handles the
+                    tap. Kept as a span (not a button) so it doesn't steal a
+                    tap target or nest interactives. */}
+                <span
+                  aria-hidden
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground"
                 >
-                  <motion.div
+                  <motion.span
                     animate={{ rotate: entry.collapsed ? 0 : 180 }}
                     transition={{ duration: 0.2, ease: 'easeInOut' }}
+                    className="flex"
                   >
                     <ChevronDown className="h-4 w-4" />
-                  </motion.div>
-                </button>
+                  </motion.span>
+                </span>
                 <button
-                  onClick={() => removeExercise(entry.tempId)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeExercise(entry.tempId);
+                  }}
                   className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground/60 transition-colors active:bg-destructive/10 active:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -946,7 +1023,10 @@ export function WorkoutLogger({
                               key={col.key as string}
                               type="number"
                               inputMode="decimal"
-                              placeholder={placeholderFor(col.key, entry.lastSet)}
+                              placeholder={placeholderFor(
+                                col.key,
+                                priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
+                              )}
                               step={col.step}
                               min={col.min}
                               max={col.max}
@@ -1110,10 +1190,21 @@ function AutoSaveIndicator({ status, onRetry }: { status: AutoSaveStatus; onRetr
   );
 }
 
-// Drives input placeholders for a fresh set row. When the picker carried over
-// a `lastSet` snapshot, the previous values appear as faint hints — the
-// trainer can copy/adjust for progression without retyping. Falls back to the
-// historical defaults ("1–10" for RPE, "—" for everything else).
+// Maps a current set row (by index) to the corresponding prior-session set.
+// If the trainer adds more sets than the prior session had, fall back to the
+// last prior set so extras still get a useful hint instead of empty.
+function priorSetFor(
+  priorSets: LastSetSnapshot[] | undefined,
+  setIdx: number,
+): LastSetSnapshot | undefined {
+  if (!priorSets || priorSets.length === 0) return undefined;
+  return priorSets[setIdx] ?? priorSets[priorSets.length - 1];
+}
+
+// Drives input placeholders for a fresh set row. The previous session's
+// values appear as faint hints — the trainer can copy/adjust for progression
+// without retyping. Falls back to the historical defaults ("1–10" for RPE,
+// "—" for everything else).
 function placeholderFor(key: keyof SetData, last: LastSetSnapshot | null | undefined): string {
   if (!last) return key === 'rpe' ? '1–10' : '—';
   if (key === 'reps' && last.reps != null) return String(last.reps);
