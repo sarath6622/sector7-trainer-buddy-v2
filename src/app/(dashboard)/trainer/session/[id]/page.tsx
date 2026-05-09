@@ -347,11 +347,10 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   }, []);
 
   const fetchInProgress = useCallback(async () => {
-    const today = new Date().toLocaleDateString('en-CA');
-    const res = await fetch(`/api/trainer/schedule?date=${today}`);
+    const res = await fetch(`/api/trainer/schedule?status=IN_PROGRESS`);
     if (!res.ok) return [];
     const { data } = await res.json();
-    return (data as SessionData[]).filter((s) => s.status === 'IN_PROGRESS');
+    return data as SessionData[];
   }, []);
 
   // Initial load: fetch URL session, auto-start if SCHEDULED, then pre-fetch
@@ -527,13 +526,14 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
       >
         {/* ── Sticky tab card placeholder ── */}
         <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-          <div className="px-3 pt-3 pb-3">
-            <div className="flex items-center gap-2.5 rounded-2xl bg-muted/40 px-2.5 py-2">
-              <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
+          <div className="px-3 pt-2.5 pb-2.5">
+            <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-purple-600/40 to-indigo-700/40 px-3.5 py-2.5">
+              <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-white/15" />
               <div className="min-w-0 flex-1 space-y-1.5">
-                <div className="h-3 w-28 animate-pulse rounded bg-muted" />
-                <div className="h-2.5 w-20 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-28 animate-pulse rounded bg-white/15" />
+                <div className="h-5 w-24 animate-pulse rounded bg-white/15" />
               </div>
+              <div className="h-11 w-11 shrink-0 animate-pulse rounded-full bg-white/15" />
             </div>
           </div>
         </div>
@@ -585,137 +585,165 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         <BadgeCelebration badges={celebrationBadges} onDone={() => setCelebrationBadges([])} />
       )}
 
-      {/* ── Sticky tab strip — active client owns a prominent hero card; the
-          remaining sessions sit beneath as compact chips. This makes "who am I
-          coaching right now" unambiguous and dials down the visual urgency of
-          idle clients (which is often just a trainer focused elsewhere). */}
+      {/* ── Sticky tab strip — active client owns a prominent hero card with
+          progress ring; remaining sessions sit beneath in an "Others in Session"
+          card showing idle time, so the trainer can spot a stalled client at a
+          glance without leaving the active client's workout log. */}
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         {(() => {
           const activeTab = tabs.find((s) => s.id === activeId) ?? tabs[0];
           const otherTabs = tabs.filter((s) => s.id !== activeId);
           if (!activeTab) return null;
 
-          const renderActive = () => {
+          const renderHero = () => {
             const s = activeTab;
             const detailed = sessionMap[s.id] ?? s;
             const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
             const init = initials(s.client.user.firstName, s.client.user.lastName);
             const startedAt = detailed.startedAt ?? s.startedAt;
-            const overtime =
-              startedAt != null
-                ? isOvertime(startedAt, detailed.durationMin ?? s.durationMin, now)
-                : false;
+            const expectedMin = detailed.durationMin ?? s.durationMin;
+            const elapsedSec = startedAt
+              ? Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000))
+              : 0;
+            const expectedSec = Math.max(1, expectedMin * 60);
+            const progress = Math.min(1, elapsedSec / expectedSec);
+            const overtime = startedAt != null ? isOvertime(startedAt, expectedMin, now) : false;
+            const r = 26;
+            const circumference = 2 * Math.PI * r;
+            const ringStroke = overtime ? '#fb7185' : '#c4b5fd';
             return (
               <div
                 role="tab"
                 aria-selected
                 aria-label={`${name}, active session`}
-                className="flex items-center gap-3 rounded-2xl bg-emerald-500 px-3 py-3 text-white"
+                className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 px-3.5 py-2.5 text-white shadow-lg shadow-purple-900/20"
               >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/25 text-sm font-bold">
-                  {init}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-semibold leading-tight">{name}</p>
-                  <div className="mt-1 flex items-center gap-1.5 leading-tight">
-                    <span className="text-[9px] font-semibold uppercase tracking-wider text-emerald-50/70">
-                      Session
-                    </span>
-                    {startedAt && (
-                      <span
-                        className={`font-mono text-xs font-bold tabular-nums ${overtime ? 'text-red-100' : 'text-white'}`}
-                      >
-                        {formatElapsed(startedAt, now)}
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold ring-1 ring-white/20">
+                    {init}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <p className="truncate text-sm font-semibold leading-tight">{name}</p>
+                      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider text-purple-100/70">
+                        Session
                       </span>
-                    )}
-                    <span className="text-[10px] text-emerald-50/40">·</span>
-                    <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75 animate-ping" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-100" />
-                    </span>
-                    <span className="text-[10px] font-semibold text-emerald-50">Live</span>
+                    </div>
+                    <div className="mt-0.5 flex items-end gap-2">
+                      {startedAt && (
+                        <span
+                          className={`font-mono text-xl font-black tabular-nums leading-none ${overtime ? 'text-rose-100' : 'text-white'}`}
+                        >
+                          {formatElapsed(startedAt, now)}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 pb-0.5">
+                        <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                          <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
+                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                        </span>
+                        <span className="text-[10px] font-semibold text-emerald-100">Live</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="relative h-11 w-11 shrink-0">
+                    <svg className="h-full w-full -rotate-90" viewBox="0 0 60 60">
+                      <circle
+                        cx="30"
+                        cy="30"
+                        r={r}
+                        fill="none"
+                        stroke="rgba(255,255,255,0.18)"
+                        strokeWidth="4"
+                      />
+                      <circle
+                        cx="30"
+                        cy="30"
+                        r={r}
+                        fill="none"
+                        stroke={ringStroke}
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={circumference * (1 - progress)}
+                        className="transition-[stroke-dashoffset] duration-500"
+                      />
+                    </svg>
                   </div>
                 </div>
               </div>
             );
           };
 
-          const renderChip = (s: SessionData) => {
+          const renderOthersChip = (s: SessionData) => {
             const detailed = sessionMap[s.id] ?? s;
             const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
             const init = initials(s.client.user.firstName, s.client.user.lastName);
             const lastActivity = lastActivityMs(detailed);
             const idleMs = lastActivity != null ? Math.max(0, now - lastActivity) : null;
             const idleSec = idleMs != null ? Math.floor(idleMs / 1000) : null;
-            // Softer thresholds: don't escalate just because the trainer is
-            // focused on another client. Warn after 8m, urgent after 20m.
+            // Soft thresholds: warn at 8m, urgent at 20m. Don't escalate just
+            // because trainer is focused elsewhere.
             const warn = idleSec != null && idleSec >= 480 && idleSec < 1200;
             const urgent = idleSec != null && idleSec >= 1200;
-            const showStatus = idleMs != null && idleSec != null && idleSec >= 60;
+            const showIdle = idleMs != null && idleSec != null && idleSec >= 60;
 
-            const containerTone = urgent
-              ? 'bg-red-500/10 ring-1 ring-red-500/40'
-              : warn
-                ? 'bg-amber-500/10 ring-1 ring-amber-500/30'
-                : 'bg-muted/70 ring-1 ring-border';
             const avatarTone = urgent
               ? 'bg-red-500/20 text-red-400'
               : warn
                 ? 'bg-amber-500/20 text-amber-400'
                 : 'bg-primary/15 text-primary';
-            const statusColor = urgent
+            const dotTone = urgent
+              ? 'bg-red-500'
+              : warn
+                ? 'bg-amber-500'
+                : 'bg-muted-foreground/40';
+            const idleColor = urgent
               ? 'text-red-400'
               : warn
                 ? 'text-amber-400'
                 : 'text-muted-foreground';
-            const statusText = urgent
-              ? `${formatIdle(idleMs!)} idle`
-              : warn
-                ? `Resting · ${formatIdle(idleMs!)}`
-                : showStatus
-                  ? `Resting · ${formatIdle(idleMs!)}`
-                  : 'Resting';
+            const idleText = showIdle ? `${formatIdle(idleMs!)} idle` : 'Resting';
 
             return (
               <button
                 key={s.id}
                 role="tab"
                 aria-selected={false}
-                aria-label={`Switch to ${name}, ${statusText}`}
+                aria-label={`Switch to ${name}, ${idleText}`}
                 onClick={() => void switchTab(s.id)}
                 disabled={ending || switching}
-                className={`flex shrink-0 items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors disabled:opacity-50 ${containerTone}`}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-muted/40 px-2 py-1.5 ring-1 ring-border/50 transition-colors hover:bg-muted/70 disabled:opacity-50"
               >
                 <div
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarTone}`}
                 >
                   {init}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-[11px] font-semibold leading-tight text-foreground max-w-[8rem]">
-                    {name}
-                  </p>
-                  <p className={`truncate text-[10px] tabular-nums leading-tight ${statusColor}`}>
-                    {statusText}
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
+                      {name}
+                    </p>
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotTone}`} />
+                  </div>
+                  <p className={`truncate text-[10px] tabular-nums leading-tight ${idleColor}`}>
+                    {idleText}
                   </p>
                 </div>
-                {urgent && (
-                  <span className="relative ml-0.5 flex h-1.5 w-1.5 items-center justify-center">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
-                  </span>
-                )}
               </button>
             );
           };
 
           return (
-            <div role="tablist" aria-label="Active sessions" className="px-3 pt-3 pb-3 space-y-2">
-              {renderActive()}
+            <div
+              role="tablist"
+              aria-label="Active sessions"
+              className="px-3 pt-2.5 pb-2.5 space-y-2"
+            >
+              {renderHero()}
               {otherTabs.length > 0 && (
-                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
-                  {otherTabs.map(renderChip)}
-                </div>
+                <div className="flex gap-2 overflow-x-auto">{otherTabs.map(renderOthersChip)}</div>
               )}
             </div>
           );

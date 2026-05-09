@@ -123,7 +123,6 @@ export default function TrainerDashboard() {
   const [staleSessions, setStaleSessions] = useState<SessionData[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<SessionData[]>([]);
   const [monthSessions, setMonthSessions] = useState<SessionData[]>([]);
-  const [activeSession, setActiveSession] = useState<SessionData | null>(null);
   const [crossfitToday, setCrossfitToday] = useState<CrossfitTodayItem[]>([]);
   const [startingCfClassId, setStartingCfClassId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,16 +151,9 @@ export default function TrainerDashboard() {
           fetch('/api/crossfit/sessions/today'),
         ],
       );
-      let todayHasActive = false;
       if (todayRes.ok) {
         const { data } = await todayRes.json();
         setTodaySessions(data);
-        const todayActive = (data as SessionData[]).find((s) => s.status === 'IN_PROGRESS');
-        todayHasActive = !!todayActive;
-        if (todayActive) {
-          const detailRes = await fetch(`/api/trainer/sessions/${todayActive.id}`);
-          setActiveSession(detailRes.ok ? (await detailRes.json()).data : todayActive);
-        }
       }
       // Stale IN_PROGRESS sessions from past days — shown as a separate alert
       if (staleRes.ok) {
@@ -170,11 +162,6 @@ export default function TrainerDashboard() {
           (s) => toLocalDateStr(s.scheduledDate) !== today,
         );
         setStaleSessions(stale);
-        // If no active session today, use the oldest stale one for the banner
-        if (stale.length > 0 && !todayHasActive) {
-          const detailRes = await fetch(`/api/trainer/sessions/${stale[0]!.id}`);
-          setActiveSession(detailRes.ok ? (await detailRes.json()).data : stale[0]!);
-        }
       }
       if (upcomingRes.ok) {
         const { data } = await upcomingRes.json();
@@ -343,33 +330,72 @@ export default function TrainerDashboard() {
       </div>
 
       {/* ── Active session banner ── */}
-      {activeSession && activeSession.startedAt && (
-        <button
-          onClick={() => router.push(`/trainer/session/${activeSession.id}`)}
-          className="w-full rounded-2xl bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 p-4 text-left ring-1 ring-emerald-500/30 transition-colors hover:ring-emerald-500/50"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <div>
-                <p className="text-sm font-semibold text-emerald-400">Session in progress</p>
-                <p className="text-xs text-muted-foreground">
-                  {activeSession.client.user.firstName} {activeSession.client.user.lastName}
-                </p>
+      {(() => {
+        const allActive = [
+          ...todaySessions.filter((s) => s.status === 'IN_PROGRESS' && !!s.startedAt),
+          ...staleSessions.filter((s) => !!s.startedAt),
+        ];
+        const uniqueActive = Array.from(new Map(allActive.map((s) => [s.id, s])).values());
+        if (uniqueActive.length === 0) return null;
+
+        if (uniqueActive.length === 1) {
+          const s = uniqueActive[0]!;
+          return (
+            <button
+              onClick={() => router.push(`/trainer/session/${s.id}`)}
+              className="w-full rounded-2xl bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 p-4 text-left ring-1 ring-emerald-500/30 transition-colors hover:ring-emerald-500/50"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-400">Session in progress</p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.client.user.firstName} {s.client.user.lastName}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-lg font-bold tabular-nums text-emerald-400">
+                    <InlineTimer startedAt={s.startedAt!} expectedDurationMin={s.durationMin} />
+                  </span>
+                  <ExternalLink className="h-4 w-4 text-emerald-500" />
+                </div>
               </div>
+            </button>
+          );
+        }
+
+        return (
+          <div className="overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 ring-1 ring-emerald-500/30">
+            <div className="flex items-center gap-2 px-4 pt-3.5 pb-2.5">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-sm font-semibold text-emerald-400">
+                {uniqueActive.length} sessions in progress
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-lg font-bold tabular-nums text-emerald-400">
-                <InlineTimer
-                  startedAt={activeSession.startedAt}
-                  expectedDurationMin={activeSession.durationMin}
-                />
-              </span>
-              <ExternalLink className="h-4 w-4 text-emerald-500" />
+            <div className="divide-y divide-emerald-500/10">
+              {uniqueActive.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => router.push(`/trainer/session/${s.id}`)}
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-emerald-500/5"
+                >
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {s.client.user.firstName} {s.client.user.lastName}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-bold tabular-nums text-emerald-400">
+                      <InlineTimer startedAt={s.startedAt!} expectedDurationMin={s.durationMin} />
+                    </span>
+                    <ExternalLink className="h-3.5 w-3.5 text-emerald-500" />
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
-        </button>
-      )}
+        );
+      })()}
 
       {/* ── Stale / Incomplete Sessions Alert ── */}
       {staleSessions.length > 0 && (
