@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
@@ -18,11 +18,19 @@ import {
   ArrowDownRight,
   Minus,
   BedDouble,
+  Sparkles,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
+import { MuscleGroupPicker, GROUP_THEME, type PickedExercise } from './MuscleGroupPicker';
+import {
+  CURATED_MUSCLE_GROUPS,
+  curatedGroupOf,
+  type CuratedMuscleGroupId,
+} from '@/lib/muscle-groups';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -53,6 +61,13 @@ interface SetData {
   notes: string;
 }
 
+interface LastSetSnapshot {
+  reps: number | null;
+  weightKg: number | null;
+  durationSec: number | null;
+  rpe: number | null;
+}
+
 interface ExerciseEntry {
   tempId: string;
   exerciseId: string;
@@ -61,9 +76,13 @@ interface ExerciseEntry {
   category: string;
   exerciseType: ExerciseType;
   sets: SetData[];
-  saved: boolean;
   collapsed: boolean;
+  /** Last set logged for this exercise on a prior session — drives input
+   *  placeholders so the trainer sees prior weight/reps as a progression hint. */
+  lastSet?: LastSetSnapshot | null;
 }
+
+type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 interface WorkoutLoggerProps {
   sessionInstanceId: string;
@@ -165,7 +184,17 @@ export function WorkoutLogger({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ExerciseOption[]>([]);
   const [showSearch, setShowSearch] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
+  // Hash of the payload last successfully sent to the server. We compare the
+  // current payload against this to decide whether anything is unsaved —
+  // covers add/edit/remove/reorder uniformly without a per-entry dirty flag.
+  const lastSavedHashRef = useRef<string>('[]');
+  // In-flight tracking so the debounced auto-save never fires concurrent
+  // POSTs (which could race and clobber each other).
+  const inFlightRef = useRef(false);
+  const pendingRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [celebrationBadges, setCelebrationBadges] = useState<
     { name: string; icon: string; description?: string }[]
   >([]);
@@ -175,6 +204,17 @@ export function WorkoutLogger({
     exerciseName: string;
     unit: string;
   } | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // 'groups' opens the standard muscle-group picker; 'suggestions' jumps
+  // straight to the exercise list with all 8 curated groups pre-selected so
+  // the trainer can recall every past exercise without picking again.
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  // Today's focus — the curated muscle groups the trainer has committed to
+  // for this session. Fed by every Continue action in the picker (empty-state
+  // and "By Muscle"), and used as the filter when the trainer hits
+  // "Suggestions" so the recall list matches the day's plan instead of
+  // dumping every past exercise.
+  const [focusGroupIds, setFocusGroupIds] = useState<Set<CuratedMuscleGroupId>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -215,26 +255,51 @@ export function WorkoutLogger({
           sets: [...setMap.values()].sort((a, b) => a.setNumber - b.setNumber),
         }));
 
-      setExercises(
-        deduped.map((log, idx) => ({
-          tempId: log.id,
-          exerciseId: log.exercise.id,
-          exerciseName: log.exercise.name,
-          targetMuscle: log.exercise.targetMuscleGroup,
-          category: log.exercise.category,
-          exerciseType: log.exercise.exerciseType,
-          sets: log.sets.map((s) => ({
+      const initial = deduped.map<ExerciseEntry>((log, idx) => ({
+        tempId: log.id,
+        exerciseId: log.exercise.id,
+        exerciseName: log.exercise.name,
+        targetMuscle: log.exercise.targetMuscleGroup,
+        category: log.exercise.category,
+        exerciseType: log.exercise.exerciseType,
+        sets: log.sets.map((s) => ({
+          setNumber: s.setNumber,
+          reps: s.reps ?? undefined,
+          weightKg: s.weightKg ?? undefined,
+          durationSec: s.durationSec ?? undefined,
+          rpe: s.rpe ?? undefined,
+          notes: s.notes ?? '',
+        })),
+        collapsed: idx !== deduped.length - 1,
+      }));
+      setExercises(initial);
+      // Seed the last-saved hash so auto-save doesn't re-POST the data we
+      // just hydrated from the server. Shape must match the payload built
+      // in `currentPayload` so the comparison is apples-to-apples.
+      lastSavedHashRef.current = JSON.stringify(
+        initial.map((entry, idx) => ({
+          exerciseId: entry.exerciseId,
+          orderIndex: idx,
+          sets: entry.sets.map((s) => ({
             setNumber: s.setNumber,
-            reps: s.reps ?? undefined,
-            weightKg: s.weightKg ?? undefined,
-            durationSec: s.durationSec ?? undefined,
-            rpe: s.rpe ?? undefined,
-            notes: s.notes ?? '',
+            reps: s.reps,
+            weightKg: s.weightKg,
+            durationSec: s.durationSec,
+            rpe: s.rpe,
+            notes: s.notes || undefined,
           })),
-          saved: true,
-          collapsed: idx !== deduped.length - 1,
         })),
       );
+
+      // Bootstrap today's focus from whatever exercises were already logged
+      // before this mount (session resumed or page refreshed). Each exercise's
+      // catalog muscle maps to one curated bucket.
+      const seeded = new Set<CuratedMuscleGroupId>();
+      for (const log of deduped) {
+        const id = curatedGroupOf(log.exercise.targetMuscleGroup);
+        if (id) seeded.add(id);
+      }
+      if (seeded.size > 0) setFocusGroupIds(seeded);
     }
   }, [existingLogs]);
 
@@ -283,13 +348,60 @@ export function WorkoutLogger({
             notes: '',
           },
         ],
-        saved: false,
         collapsed: false,
       },
     ]);
     setShowSearch(false);
     setSearchQuery('');
     setSearchResults([]);
+  }
+
+  function addExercisesFromPicker(picked: PickedExercise[]) {
+    setExercises((prev) => {
+      const existingIds = new Set(prev.map((e) => e.exerciseId));
+      // Skip exercises the trainer already added this session — re-opening
+      // the picker shouldn't quietly duplicate rows.
+      const fresh = picked.filter((p) => !existingIds.has(p.exerciseId));
+      if (fresh.length === 0) {
+        toast('Already added — pick something else');
+        return prev;
+      }
+      if (fresh.length < picked.length) {
+        toast(`Added ${fresh.length} (skipped ${picked.length - fresh.length} already in workout)`);
+      }
+      const collapsed = prev.map((e) => ({ ...e, collapsed: true }));
+      const additions = fresh.map<ExerciseEntry>((p, idx) => ({
+        tempId: `temp-${Date.now()}-${idx}`,
+        exerciseId: p.exerciseId,
+        exerciseName: p.name,
+        targetMuscle: p.targetMuscleGroup,
+        category: p.category,
+        exerciseType: p.exerciseType,
+        sets: [
+          {
+            setNumber: 1,
+            reps: undefined,
+            weightKg: undefined,
+            durationSec: undefined,
+            rpe: undefined,
+            notes: '',
+          },
+        ],
+        // Expand only the last addition so the trainer lands on a fresh card
+        collapsed: idx !== fresh.length - 1,
+        lastSet: p.lastSet
+          ? {
+              reps: p.lastSet.reps,
+              weightKg: p.lastSet.weightKg,
+              durationSec: p.lastSet.durationSec,
+              rpe: p.lastSet.rpe,
+            }
+          : null,
+      }));
+      return [...collapsed, ...additions];
+    });
+    setPickerOpen(false);
+    setSuggestionsOpen(false);
   }
 
   function removeExercise(tempId: string) {
@@ -321,7 +433,6 @@ export function WorkoutLogger({
           notes: '',
         },
       ];
-      entry.saved = false;
       updated[exerciseIndex] = entry;
       return updated;
     });
@@ -334,7 +445,6 @@ export function WorkoutLogger({
       entry.sets = entry.sets
         .filter((_, i) => i !== setIndex)
         .map((s, i) => ({ ...s, setNumber: i + 1 }));
-      entry.saved = false;
       updated[exerciseIndex] = entry;
       return updated;
     });
@@ -354,59 +464,103 @@ export function WorkoutLogger({
         (set as Record<string, unknown>)[field] = isNaN(num) ? undefined : num;
       }
       entry.sets = entry.sets.map((s, i) => (i === setIndex ? set : s));
-      entry.saved = false;
       updated[exerciseIndex] = entry;
       return updated;
     });
   }
 
-  async function saveWorkout() {
-    if (exercises.length === 0) return;
-    setSaving(true);
-    try {
-      const payload = {
-        sessionInstanceId,
-        exercises: exercises.map((entry, idx) => ({
-          exerciseId: entry.exerciseId,
-          orderIndex: idx,
-          sets: entry.sets.map((s) => ({
-            setNumber: s.setNumber,
-            reps: s.reps,
-            weightKg: s.weightKg,
-            durationSec: s.durationSec,
-            rpe: s.rpe,
-            notes: s.notes || undefined,
-          })),
+  // Snapshot of the current state in the exact shape we POST. Memoized so
+  // its identity is stable across renders that don't actually change the
+  // logged workout, which keeps the auto-save effect from churning.
+  const currentPayload = useMemo(
+    () =>
+      exercises.map((entry, idx) => ({
+        exerciseId: entry.exerciseId,
+        orderIndex: idx,
+        sets: entry.sets.map((s) => ({
+          setNumber: s.setNumber,
+          reps: s.reps,
+          weightKg: s.weightKg,
+          durationSec: s.durationSec,
+          rpe: s.rpe,
+          notes: s.notes || undefined,
         })),
-      };
+      })),
+    [exercises],
+  );
+  const currentHash = useMemo(() => JSON.stringify(currentPayload), [currentPayload]);
+  const hasUnsaved = currentHash !== lastSavedHashRef.current;
+
+  // Persist to the server. Idempotent on the backend — every POST atomically
+  // replaces the session's logs with the payload, so calling this on every
+  // keystroke (debounced) is safe. Serialized via inFlight/pending refs so a
+  // mid-save edit doesn't race the in-flight request.
+  const saveWorkout = useCallback(async () => {
+    if (currentPayload.length === 0) return; // schema requires ≥1 exercise
+    if (inFlightRef.current) {
+      pendingRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
+    setAutoSaveStatus('saving');
+    const sentHash = JSON.stringify(currentPayload);
+    try {
       const res = await fetch('/api/trainer/workouts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ sessionInstanceId, exercises: currentPayload }),
       });
       if (res.ok) {
-        setExercises((prev) => prev.map((e) => ({ ...e, saved: true })));
+        lastSavedHashRef.current = sentHash;
         const body = await res.json();
         const newBadges: { name: string; icon: string; description?: string }[] =
           body?.newBadges ?? [];
-        if (newBadges.length > 0) {
-          setCelebrationBadges(newBadges);
-        }
+        if (newBadges.length > 0) setCelebrationBadges(newBadges);
         const postIds: string[] = body?.autoGeneratedPostIds ?? [];
-        if (postIds.length > 0) {
-          setAutoPostIds((prev) => [...prev, ...postIds]);
-        }
-        toast.success('Workout saved');
+        if (postIds.length > 0) setAutoPostIds((prev) => [...prev, ...postIds]);
+        setAutoSaveStatus('saved');
+        if (statusFadeRef.current) clearTimeout(statusFadeRef.current);
+        statusFadeRef.current = setTimeout(() => {
+          setAutoSaveStatus((prev) => (prev === 'saved' ? 'idle' : prev));
+        }, 1500);
       } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to save workout');
+        const err = await res.json().catch(() => ({}));
+        setAutoSaveStatus('error');
+        toast.error(err.error || 'Auto-save failed');
       }
+    } catch {
+      setAutoSaveStatus('error');
     } finally {
-      setSaving(false);
+      inFlightRef.current = false;
+      // If a change came in while the request was in flight, fire another
+      // pass so the latest state lands on the server.
+      if (pendingRef.current) {
+        pendingRef.current = false;
+        setTimeout(() => void saveWorkout(), 50);
+      }
     }
-  }
+  }, [currentPayload, sessionInstanceId]);
 
-  const hasUnsaved = exercises.some((e) => !e.saved);
+  // Debounce: wait for typing to settle, then auto-save. Cancels and resets
+  // on every change so a flurry of keystrokes results in a single POST.
+  useEffect(() => {
+    if (!hasUnsaved) return;
+    if (currentPayload.length === 0) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void saveWorkout();
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [hasUnsaved, currentHash, currentPayload.length, saveWorkout]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (statusFadeRef.current) clearTimeout(statusFadeRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     onUnsavedChange?.(hasUnsaved);
@@ -440,7 +594,7 @@ export function WorkoutLogger({
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 pt-2.5 items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Workout Log
           </span>
@@ -455,6 +609,7 @@ export function WorkoutLogger({
               {exercises.length}
             </span>
           )}
+          <AutoSaveIndicator status={autoSaveStatus} onRetry={() => void saveWorkout()} />
         </div>
         {/* Hide the small "+" while the empty state is showing — the big
             "Add First Exercise" button below already owns that affordance. */}
@@ -471,6 +626,32 @@ export function WorkoutLogger({
           </button>
         )}
       </div>
+
+      {/* ── Today's focus — colored pill row showing the muscle groups the
+          trainer committed to via the picker(s). Drives the "Suggestions"
+          filter and gives the trainer a quick visual reminder of the day's
+          plan when juggling multiple sessions. ── */}
+      {focusGroupIds.size > 0 && (
+        <div className="-mt-1 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Today
+          </span>
+          <span className="shrink-0 text-[10px] text-muted-foreground/40">·</span>
+          {[...focusGroupIds].map((id) => {
+            const group = CURATED_MUSCLE_GROUPS.find((g) => g.id === id);
+            if (!group) return null;
+            const theme = GROUP_THEME[id];
+            return (
+              <span
+                key={id}
+                className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${theme.bg} ${theme.text}`}
+              >
+                {group.label}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Exercise search modal ── */}
       {showSearch && (
@@ -556,8 +737,19 @@ export function WorkoutLogger({
         </>
       )}
 
-      {/* ── Empty state ── */}
-      {exercises.length === 0 && !showSearch && (
+      {/* ── Empty state — show muscle-group picker so the trainer can plan
+          the session by tapping focus cards. Falls back to the dashed
+          "no exercises" card only if we don't know who the client is
+          (clientProfileId is required by the picker to fetch suggestions). */}
+      {exercises.length === 0 && !showSearch && clientProfileId && (
+        <MuscleGroupPicker
+          clientProfileId={clientProfileId}
+          allowCancel={false}
+          onAdd={addExercisesFromPicker}
+          onGroupsPicked={(ids) => setFocusGroupIds(new Set(ids))}
+        />
+      )}
+      {exercises.length === 0 && !showSearch && !clientProfileId && (
         <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
             <Dumbbell className="h-6 w-6 text-muted-foreground" />
@@ -576,6 +768,54 @@ export function WorkoutLogger({
           </button>
         </div>
       )}
+
+      {/* ── Mid-session "By Muscle" picker — bottom sheet so the workout list
+          stays in place underneath. Continues UNION today's focus so adding
+          a new group extends the session plan rather than replacing it.
+          AnimatePresence keeps the picker mounted long enough for the
+          slide-down exit animation to play before the DOM cleanup. ── */}
+      <AnimatePresence>
+        {exercises.length > 0 && pickerOpen && clientProfileId && (
+          <MuscleGroupPicker
+            key="picker-by-muscle"
+            clientProfileId={clientProfileId}
+            allowCancel
+            onCancel={() => setPickerOpen(false)}
+            onAdd={addExercisesFromPicker}
+            onGroupsPicked={(ids) =>
+              setFocusGroupIds((prev) => {
+                const next = new Set(prev);
+                for (const id of ids) next.add(id);
+                return next;
+              })
+            }
+            presentation="sheet"
+            excludeExerciseIds={exercises.map((e) => e.exerciseId)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Suggestions picker — bottom sheet pre-seeded with today's focus
+          so the recall list is filtered to "Chest & Back day" instead of
+          dumping every past exercise. Falls back to all 8 groups when focus
+          is empty. The Back button still lets them widen/narrow on the fly. */}
+      <AnimatePresence>
+        {suggestionsOpen && clientProfileId && (
+          <MuscleGroupPicker
+            key="picker-suggestions"
+            clientProfileId={clientProfileId}
+            allowCancel
+            onCancel={() => setSuggestionsOpen(false)}
+            onAdd={addExercisesFromPicker}
+            initialGroupIds={
+              focusGroupIds.size > 0 ? [...focusGroupIds] : CURATED_MUSCLE_GROUPS.map((g) => g.id)
+            }
+            autoAdvance
+            presentation="sheet"
+            excludeExerciseIds={exercises.map((e) => e.exerciseId)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Exercise cards ── */}
       {exercises.map((entry, exIdx) => {
@@ -609,11 +849,6 @@ export function WorkoutLogger({
                   >
                     {entry.sets.length} {entry.sets.length === 1 ? 'set' : 'sets'}
                   </span>
-                  {!entry.saved && (
-                    <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
-                      unsaved
-                    </span>
-                  )}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
@@ -711,7 +946,7 @@ export function WorkoutLogger({
                               key={col.key as string}
                               type="number"
                               inputMode="decimal"
-                              placeholder={col.key === 'rpe' ? '1–10' : '—'}
+                              placeholder={placeholderFor(col.key, entry.lastSet)}
                               step={col.step}
                               min={col.min}
                               max={col.max}
@@ -767,43 +1002,63 @@ export function WorkoutLogger({
         );
       })}
 
-      {/* ── Add Exercise (bottom CTA) ── */}
+      {/* ── Bottom CTAs — three peers for adding more work to the session:
+          search the catalog, pick by curated muscle group, or recall every
+          past exercise this client has done. Only the search button is
+          shown when we don't have a clientProfileId (legacy callers). ── */}
       {exercises.length > 0 && (
-        <button
-          onClick={() => {
-            setShowSearch((v) => !v);
-            if (!showSearch) setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
-          }}
-          className={`flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed py-4 text-sm font-semibold transition-colors ${
-            showSearch
-              ? 'border-border/40 text-muted-foreground'
-              : 'border-primary/30 text-primary hover:bg-primary/5'
-          }`}
-        >
-          {showSearch ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showSearch ? 'Cancel' : 'Add Exercise'}
-        </button>
-      )}
-
-      {/* ── Bottom save bar (when unsaved changes) ── */}
-      {hasUnsaved && exercises.length > 0 && (
-        <div className="sticky bottom-0 -mx-4 border-t border-border/50 bg-background/95 px-4 py-3 backdrop-blur">
-          <Button
-            className="w-full gap-2 rounded-xl py-2 text-sm font-semibold"
-            onClick={saveWorkout}
-            disabled={saving}
+        <div className={clientProfileId ? 'grid grid-cols-3 gap-2' : ''}>
+          <button
+            onClick={() => {
+              setShowSearch((v) => !v);
+              if (!showSearch)
+                setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
+            }}
+            className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
+              showSearch
+                ? 'border-border/40 text-muted-foreground'
+                : 'border-primary/30 text-primary hover:bg-primary/5'
+            }`}
           >
-            {saving ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                Saving…
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4" /> Save Workout
-              </>
-            )}
-          </Button>
+            {showSearch ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+            {showSearch ? 'Cancel' : 'Search'}
+          </button>
+          {clientProfileId && (
+            <>
+              <button
+                onClick={() => {
+                  setPickerOpen((v) => !v);
+                  setSuggestionsOpen(false);
+                  if (!pickerOpen)
+                    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
+                }}
+                className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
+                  pickerOpen
+                    ? 'border-border/40 text-muted-foreground'
+                    : 'border-violet-500/40 text-violet-400 hover:bg-violet-500/5'
+                }`}
+              >
+                {pickerOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {pickerOpen ? 'Cancel' : 'By Muscle'}
+              </button>
+              <button
+                onClick={() => {
+                  setSuggestionsOpen((v) => !v);
+                  setPickerOpen(false);
+                  if (!suggestionsOpen)
+                    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
+                }}
+                className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
+                  suggestionsOpen
+                    ? 'border-border/40 text-muted-foreground'
+                    : 'border-amber-500/40 text-amber-400 hover:bg-amber-500/5'
+                }`}
+              >
+                {suggestionsOpen ? <X className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                {suggestionsOpen ? 'Cancel' : 'Suggestions'}
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -827,6 +1082,47 @@ function getGridClass(colCount: number) {
   if (cols === 1) return 'grid-cols-[2rem_1fr_2rem]';
   if (cols === 2) return 'grid-cols-[2rem_1fr_1fr_2rem]';
   return 'grid-cols-[2rem_1fr_1fr_1fr_2rem]';
+}
+
+function AutoSaveIndicator({ status, onRetry }: { status: AutoSaveStatus; onRetry: () => void }) {
+  if (status === 'idle') return null;
+  if (status === 'saving') {
+    return (
+      <span className="ml-1 flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Saving
+      </span>
+    );
+  }
+  if (status === 'saved') {
+    return (
+      <span className="ml-1 flex items-center gap-1 text-[10px] font-medium text-emerald-500">
+        <Check className="h-3 w-3" /> Saved
+      </span>
+    );
+  }
+  return (
+    <button
+      onClick={onRetry}
+      className="ml-1 flex items-center gap-1 text-[10px] font-medium text-red-500 underline-offset-2 hover:underline"
+    >
+      <AlertCircle className="h-3 w-3" /> Retry
+    </button>
+  );
+}
+
+// Drives input placeholders for a fresh set row. When the picker carried over
+// a `lastSet` snapshot, the previous values appear as faint hints — the
+// trainer can copy/adjust for progression without retyping. Falls back to the
+// historical defaults ("1–10" for RPE, "—" for everything else).
+function placeholderFor(key: keyof SetData, last: LastSetSnapshot | null | undefined): string {
+  if (!last) return key === 'rpe' ? '1–10' : '—';
+  if (key === 'reps' && last.reps != null) return String(last.reps);
+  if (key === 'weightKg' && last.weightKg != null) {
+    return Number.isInteger(last.weightKg) ? String(last.weightKg) : last.weightKg.toFixed(1);
+  }
+  if (key === 'durationSec' && last.durationSec != null) return String(last.durationSec);
+  if (key === 'rpe' && last.rpe != null) return String(last.rpe);
+  return key === 'rpe' ? '1–10' : '—';
 }
 
 // ─── Exercise Progress Modal ──────────────────────────────────────────────────

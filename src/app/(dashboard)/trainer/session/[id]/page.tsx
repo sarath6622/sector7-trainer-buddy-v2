@@ -755,11 +755,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           };
 
           return (
-            <div
-              role="tablist"
-              aria-label="Active sessions"
-              className="px-3 pt-2.5 pb-2.5 space-y-2"
-            >
+            <div role="tablist" aria-label="Active sessions" className="px-3 pb-2.5 space-y-2">
               {renderHero()}
               {otherTabs.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto">{otherTabs.map(renderOthersChip)}</div>

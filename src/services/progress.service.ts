@@ -2,6 +2,11 @@ import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { evaluateBodyCompositionBadges, type NewBadge } from '@/services/badge.service';
+import {
+  CURATED_MUSCLE_GROUPS,
+  expandCuratedGroups,
+  type CuratedMuscleGroupId,
+} from '@/lib/muscle-groups';
 
 // ─── Input Interfaces ───────────────────────────────
 
@@ -580,4 +585,186 @@ export async function listWorkoutHistory({
       })),
     })),
   }));
+}
+
+// ─── Recent exercises by curated muscle group ────────────────────────────────
+//
+// Powers the trainer's "today's focus" picker. For each curated bucket the
+// trainer selects (Chest, Legs, ...), return the top N exercises this client
+// has performed in that bucket — ordered by recency, with the *last set* of
+// the most recent session attached so the trainer sees prior weight/reps as
+// progression hints.
+
+export interface LastSetSnapshot {
+  setNumber: number;
+  reps: number | null;
+  weightKg: number | null;
+  durationSec: number | null;
+  rpe: number | null;
+  performedAt: string;
+}
+
+export interface RecentExerciseSuggestion {
+  exerciseId: string;
+  name: string;
+  targetMuscleGroup: string;
+  category: string;
+  exerciseType: 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+  /** Most recent set logged for this exercise across all sessions for the client. */
+  lastSet: LastSetSnapshot | null;
+  /** Total sessions in which this exercise appears (for ranking context). */
+  sessionCount: number;
+}
+
+export interface MuscleGroupSuggestions {
+  groupId: CuratedMuscleGroupId;
+  label: string;
+  exercises: RecentExerciseSuggestion[];
+}
+
+export async function getRecentExercisesByMuscleGroup({
+  clientProfileId,
+  branchId,
+  curatedGroupIds,
+  perGroup = 5,
+}: {
+  clientProfileId: string;
+  branchId: string;
+  curatedGroupIds: CuratedMuscleGroupId[];
+  perGroup?: number;
+}): Promise<MuscleGroupSuggestions[]> {
+  const client = await prisma.clientProfile.findFirst({
+    where: { id: clientProfileId, branchId },
+    select: { id: true },
+  });
+  if (!client) throw new AppError('CLIENT_NOT_FOUND', 'Client not found', 404);
+
+  const catalogValues = expandCuratedGroups(curatedGroupIds);
+  if (catalogValues.length === 0) {
+    return curatedGroupIds.map((id) => ({
+      groupId: id,
+      label: CURATED_MUSCLE_GROUPS.find((g) => g.id === id)?.label ?? id,
+      exercises: [],
+    }));
+  }
+
+  // Pull every workout log for this client whose exercise sits in one of the
+  // requested catalog values. Newest first so the first occurrence per
+  // exerciseId is the most recent session.
+  const logs = await prisma.workoutLog.findMany({
+    where: {
+      sessionInstance: { clientProfileId, branchId },
+      exercise: { targetMuscleGroup: { in: catalogValues } },
+    },
+    select: {
+      id: true,
+      createdAt: true,
+      exercise: {
+        select: {
+          id: true,
+          name: true,
+          targetMuscleGroup: true,
+          category: true,
+          exerciseType: true,
+        },
+      },
+      sets: {
+        select: {
+          setNumber: true,
+          reps: true,
+          weightKg: true,
+          durationSec: true,
+          rpe: true,
+          createdAt: true,
+        },
+        orderBy: { setNumber: 'asc' },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  type Acc = {
+    exerciseId: string;
+    name: string;
+    targetMuscleGroup: string;
+    category: string;
+    exerciseType: 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+    lastSet: LastSetSnapshot | null;
+    lastSeenAt: Date;
+    sessionCount: number;
+  };
+
+  // First sweep: aggregate per exerciseId. Because logs are ordered newest →
+  // oldest, the first time we encounter an exercise its `sets` belong to the
+  // most recent session — pick the highest-set-number row that has data as
+  // the canonical "last set" (trainers care about the working set, not a
+  // warmup row).
+  const byExercise = new Map<string, Acc>();
+  for (const log of logs) {
+    const ex = log.exercise;
+    const existing = byExercise.get(ex.id);
+    if (existing) {
+      existing.sessionCount += 1;
+      continue;
+    }
+    const dataSets = log.sets.filter(
+      (s) => s.reps != null || s.weightKg != null || s.durationSec != null || s.rpe != null,
+    );
+    const chosen = dataSets[dataSets.length - 1] ?? log.sets[log.sets.length - 1] ?? null;
+    byExercise.set(ex.id, {
+      exerciseId: ex.id,
+      name: ex.name,
+      targetMuscleGroup: ex.targetMuscleGroup,
+      category: ex.category,
+      exerciseType: ex.exerciseType,
+      lastSet: chosen
+        ? {
+            setNumber: chosen.setNumber,
+            reps: chosen.reps,
+            weightKg: chosen.weightKg,
+            durationSec: chosen.durationSec,
+            rpe: chosen.rpe,
+            performedAt: (chosen.createdAt ?? log.createdAt).toISOString(),
+          }
+        : null,
+      lastSeenAt: log.createdAt,
+      sessionCount: 1,
+    });
+  }
+
+  // Bucket exercises into their curated group. An exercise's catalog
+  // muscle (e.g. "Quadriceps") may map to one curated id (e.g. "legs").
+  const groupOf = (catalogMuscle: string): CuratedMuscleGroupId | null => {
+    for (const g of CURATED_MUSCLE_GROUPS) {
+      if (g.includes.some((v) => v.toLowerCase() === catalogMuscle.toLowerCase())) return g.id;
+    }
+    return null;
+  };
+
+  const buckets = new Map<CuratedMuscleGroupId, Acc[]>();
+  for (const id of curatedGroupIds) buckets.set(id, []);
+  for (const acc of byExercise.values()) {
+    const gid = groupOf(acc.targetMuscleGroup);
+    if (gid && buckets.has(gid)) buckets.get(gid)!.push(acc);
+  }
+
+  return curatedGroupIds.map((id) => {
+    const list = (buckets.get(id) ?? [])
+      .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime())
+      .slice(0, perGroup)
+      .map<RecentExerciseSuggestion>((a) => ({
+        exerciseId: a.exerciseId,
+        name: a.name,
+        targetMuscleGroup: a.targetMuscleGroup,
+        category: a.category,
+        exerciseType: a.exerciseType,
+        lastSet: a.lastSet,
+        sessionCount: a.sessionCount,
+      }));
+    return {
+      groupId: id,
+      label: CURATED_MUSCLE_GROUPS.find((g) => g.id === id)?.label ?? id,
+      exercises: list,
+    };
+  });
 }
