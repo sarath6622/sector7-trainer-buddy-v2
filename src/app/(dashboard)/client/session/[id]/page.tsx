@@ -42,6 +42,7 @@ interface SetData {
   weightKg: number | null;
   durationSec: number | null;
   rpe: number | null;
+  restSec: number | null;
   notes: string | null;
 }
 
@@ -109,15 +110,15 @@ const TYPE_COLS: Record<ExerciseType, ColDef[]> = {
   WEIGHTED: [
     { key: 'reps', label: 'Reps' },
     { key: 'weightKg', label: 'kg' },
-    { key: 'rpe', label: 'RPE' },
+    { key: 'restSec', label: 'Rest' },
   ],
   BODYWEIGHT: [
     { key: 'reps', label: 'Reps' },
-    { key: 'rpe', label: 'RPE' },
+    { key: 'restSec', label: 'Rest' },
   ],
   DURATION: [
     { key: 'durationSec', label: 'sec' },
-    { key: 'rpe', label: 'RPE' },
+    { key: 'restSec', label: 'Rest' },
   ],
   CARDIO: [
     { key: 'durationSec', label: 'sec' },
@@ -145,6 +146,15 @@ function toLocalDateStr(dateStr: string) {
 function formatVal(val: number | string | null | undefined, fallback = '—') {
   if (val === null || val === undefined || val === '') return fallback;
   return String(val);
+}
+
+// Display rest stored as seconds in MM:SS so the client read-only view
+// matches the trainer logger's formatted cell.
+function formatRestSec(sec: number | null | undefined): string {
+  if (sec === null || sec === undefined) return '—';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 // ─── Rest Timer UI ────────────────────────────────────────────────────────────
@@ -686,6 +696,10 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
                           const val =
                             col.key === 'notes' ? set.notes : (set[col.key] as number | null);
                           const filled = val !== null && val !== undefined && val !== '';
+                          const display =
+                            col.key === 'restSec'
+                              ? formatRestSec(val as number | null)
+                              : formatVal(val);
                           return (
                             <div
                               key={col.key as string}
@@ -695,7 +709,7 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
                                   : 'border-border/20 bg-transparent text-muted-foreground/40'
                               }`}
                             >
-                              {formatVal(val)}
+                              {display}
                             </div>
                           );
                         })}

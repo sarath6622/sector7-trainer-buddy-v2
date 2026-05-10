@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, use } from 'react';
+import { useState, useEffect, useCallback, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Square, BedDouble, Pause, Play, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -243,6 +243,7 @@ interface SessionData {
       weightKg: number | null;
       durationSec: number | null;
       rpe: number | null;
+      restSec: number | null;
       notes: string | null;
       createdAt?: string;
     }[];
@@ -315,6 +316,27 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const [now, setNow] = useState(() => Date.now());
   const [defaultDurationMin, setDefaultDurationMin] = useState<number | null>(null);
   const restTimer = useRestTimer(activeId);
+
+  // ── Rest auto-fill plumbing ────────────────────────────────────────────────
+  // Surface the most-recently-active timer's total to the workout logger so
+  // the next Add Set click prefills the restSec column. Tracks the last
+  // non-null `total` we've seen and republishes it whenever the timer
+  // transitions away from active (done OR cleared via Stop). The logger
+  // consumes the value once via `onConsumeRest` so it doesn't bleed into
+  // sets the trainer adds long after the rest is over.
+  const [lastFinishedRestSec, setLastFinishedRestSec] = useState<number | null>(null);
+  const lastTimerTotalRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (restTimer.total !== null) {
+      lastTimerTotalRef.current = restTimer.total;
+    }
+  }, [restTimer.total]);
+  useEffect(() => {
+    const cleared = !restTimer.isRunning && !restTimer.isPaused && restTimer.total === null;
+    if ((restTimer.isDone || cleared) && lastTimerTotalRef.current !== null) {
+      setLastFinishedRestSec(lastTimerTotalRef.current);
+    }
+  }, [restTimer.isDone, restTimer.isRunning, restTimer.isPaused, restTimer.total]);
 
   // Branch default session duration drives the hero progress ring so the ring
   // reflects the gym's standard slot length rather than an out-of-band per-row
@@ -775,6 +797,10 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           existingLogs={session.workoutLogs}
           onUnsavedChange={setHasUnsaved}
           onRequestRest={isActive ? () => setRestTimerOpen(true) : undefined}
+          lastFinishedRestSec={lastFinishedRestSec}
+          onConsumeRest={() => setLastFinishedRestSec(null)}
+          restTimerRemaining={restTimer.remaining}
+          restTimerPaused={restTimer.isPaused}
         />
       </div>
 

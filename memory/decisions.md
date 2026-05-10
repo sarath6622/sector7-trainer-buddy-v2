@@ -288,3 +288,13 @@
 **Consequences:** No data-pollution side effects on attendance, no-show rates, or workout reports. The offset is per-package and does not auto-clear at cycle end (Phase 24's cron, when it lands, will optionally clear it on rollover). Admin can edit at any time. The amber "Onboarding adjustment" group label on the mapping form keeps the offset visible so it's not forgotten. Once a future cycle starts (by creating a new `PtPackage`), it will not inherit the previous package's onboarding offset.
 
 ---
+
+## ADR-031: Rest Timer in Postgres, Not Redis (Recovers from Earlier Redis Choice)
+
+**Date:** 2026-05-10
+**Status:** Accepted (supersedes the brief Phase 1 decision to use Upstash Redis for the rest timer)
+**Context:** The trainer's rest timer started life as an in-process `Map` in a Next.js route handler, which broke under any restart or multi-instance deploy. The fix initially shipped used Upstash Redis with a 2h TTL key per session. After deploying, two issues surfaced: (a) the rest timer must be visible to the **client** as well as the trainer (PT clients log in on their own device during a session and want to see "01:54 remaining" too), which makes it shared state — fine on Redis, but the keepalive + GET-prev-before-PUT pattern was projected to consume ~390K Upstash commands/month at 50 PT clients/day, leaving zero free-tier headroom for growth; (b) Postgres (Neon) is already paid for, the data is small (one row per active session), and a periodic cleanup of `WHERE updatedAt < now() - 1 day` solves the lack of native TTL.
+**Decision:** Store the rest timer in Postgres as a dedicated `RestTimer` model keyed by `sessionInstanceId` (1:1 with `SessionInstance`, `onDelete: Cascade`). Wire format on the API stays the same (ms-since-epoch numbers) so the existing `useRestTimer` hook is unchanged. Pusher (`REST_TIMER_UPDATED` event on `session-{id}`) keeps cross-device sync between trainer and client without polling. Auth: any actor with `assertSessionAccess` (trainer or client of the session, branch-scoped) can read **and** mutate — keeps current UX where the client can also tap Stop on their own pill.
+**Consequences:** Zero recurring cost for rest timer storage. Free Phase-4 analytics path: a future `RestEvent` log table can be added alongside without disturbing the live-state row. Lose the auto-eviction TTL Redis gave us, replaced with a daily cleanup job (or query-time filter). Slightly higher per-write latency (~10ms Postgres vs ~5ms Upstash REST) — irrelevant for the tap-Start UX. Removes Redis as a dependency entirely; `@upstash/redis` uninstalled, `UPSTASH_*` env vars removed.
+
+---

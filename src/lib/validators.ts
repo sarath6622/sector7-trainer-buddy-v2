@@ -435,6 +435,10 @@ export const workoutSetSchema = z.object({
   weightKg: z.number().positive().optional(),
   durationSec: z.number().int().positive().optional(),
   rpe: z.number().int().min(1).max(10).optional(),
+  // Seconds rested before this set. Auto-filled by the workout logger from
+  // the rest timer's total when a set is added right after a rest finishes;
+  // can also be entered manually. Capped at 1h to match restTimerStateSchema.
+  restSec: z.number().int().min(0).max(3600).optional(),
   notes: z.string().optional(),
 });
 
@@ -752,6 +756,23 @@ export const listShiftSwapsSchema = z.object({
   status: z.enum(['PENDING', 'APPROVED', 'CANCELLED']).optional(),
 });
 
+// ─── REST TIMER ──────────────────────────────────────
+// Ephemeral session-scoped countdown. Either running (endTime set) or paused
+// (pausedRemaining set) — never both. Capped at 1h to keep accidental
+// 999999-second timers from sticking around.
+
+const REST_TIMER_MAX_SECONDS = 60 * 60;
+
+export const restTimerStateSchema = z
+  .object({
+    endTime: z.number().int().nullable(),
+    pausedRemaining: z.number().int().min(0).max(REST_TIMER_MAX_SECONDS).nullable(),
+    total: z.number().int().min(1).max(REST_TIMER_MAX_SECONDS).nullable(),
+  })
+  .refine((v) => !(v.endTime !== null && v.pausedRemaining !== null), {
+    message: 'endTime and pausedRemaining are mutually exclusive',
+  });
+
 // ─── TYPE EXPORTS ────────────────────────────────────
 
 export type TrainerShiftInput = z.infer<typeof trainerShiftSchema>;
@@ -794,3 +815,4 @@ export type GenerateTrainerSessionsInput = z.infer<typeof generateTrainerSession
 export type SubmitRescheduleRequestInput = z.infer<typeof submitRescheduleRequestSchema>;
 export type ReviewRescheduleRequestInput = z.infer<typeof reviewRescheduleRequestSchema>;
 export type ListRescheduleRequestsInput = z.infer<typeof listRescheduleRequestsSchema>;
+export type RestTimerStateInput = z.infer<typeof restTimerStateSchema>;

@@ -343,16 +343,37 @@ PUT    /api/notifications/read-all       → {} → { success }
 
 ```
 Channel: session:{sessionInstanceId}
-  → SESSION_STARTED    { sessionId, startedAt, expectedDurationMin }
-  → SESSION_TIMER_TICK { sessionId, elapsedMin }  (every minute)
+  → SESSION_STARTED      { sessionId, startedAt, expectedDurationMin }
+  → SESSION_TIMER_TICK   { sessionId, elapsedMin }  (every minute)
   → SESSION_TIME_COMPLETE { sessionId, message }   (when designated time is up)
-  → SESSION_ENDED      { sessionId, endedAt, actualDurationMin }
+  → SESSION_ENDED        { sessionId, endedAt, actualDurationMin }
+  → REST_TIMER_UPDATED   { endTime, pausedRemaining, total, updatedAt, serverNow }
 
 Channel: user:{userId}
   → NOTIFICATION       { id, title, body, type }
   → LEAVE_STATUS_CHANGED { leaveId, status }
   → TRAINER_REASSIGNED { sessionId, newTrainerName, date, time }
 ```
+
+### Rest Timer (Phase 2 — 2026-05-10)
+
+```
+GET    /api/sessions/[id]/rest-timer  → {} → { data: { endTime, pausedRemaining, total, updatedAt }, serverNow }
+PUT    /api/sessions/[id]/rest-timer  → { endTime, pausedRemaining, total } → { data, serverNow }
+DELETE /api/sessions/[id]/rest-timer  → {} → { data: null }
+```
+
+- All timestamps are **server-clock ms**. Clients track `skew = serverNow - clientNow`
+  to render countdowns consistently across devices with drifted wall clocks.
+- `endTime` and `pausedRemaining` are mutually exclusive (Zod-enforced); `total ≤ 3600`.
+- State is stored in Postgres (`RestTimer` model, 1:1 with `SessionInstance`, see
+  ADR-031). Forgotten rows are reaped by a daily cleanup or `updatedAt` filter.
+- Auth: trainer or client of the session, scoped to their branch (403 otherwise).
+  Both can read and mutate — clients see the same countdown trainers do and can
+  Stop their own pill.
+- Mutations write `auditLog` with action `REST_TIMER_{START|PAUSE|RESUME|STOP|UPDATE}`
+  and broadcast `REST_TIMER_UPDATED` on the session channel — clients subscribe via
+  Pusher instead of polling. A 30s GET keepalive fills in if Pusher is down.
 
 ---
 

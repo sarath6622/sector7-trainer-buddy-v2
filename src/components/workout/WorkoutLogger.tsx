@@ -58,6 +58,7 @@ interface SetData {
   weightKg: number | undefined;
   durationSec: number | undefined;
   rpe: number | undefined;
+  restSec: number | undefined;
   notes: string;
 }
 
@@ -67,6 +68,7 @@ interface LastSetSnapshot {
   weightKg: number | null;
   durationSec: number | null;
   rpe: number | null;
+  restSec: number | null;
 }
 
 interface ExerciseEntry {
@@ -88,6 +90,15 @@ interface WorkoutLoggerProps {
   clientName?: string; // shown in the workout-log header so the trainer always knows whose log this is
   onUnsavedChange?: (hasUnsaved: boolean) => void;
   onRequestRest?: () => void; // when set, shows a Rest button alongside Add Set
+  // Most-recently-finished rest timer total in seconds. When set, the next
+  // Add Set click prefills the new row's `restSec` and the consumer should
+  // clear this via `onConsumeRest` so it isn't reused for subsequent sets.
+  lastFinishedRestSec?: number | null;
+  onConsumeRest?: () => void;
+  // Live rest-timer state. When the active row matches `pendingRestTarget`,
+  // its rest cell renders the live countdown instead of the idle button.
+  restTimerRemaining?: number | null;
+  restTimerPaused?: boolean;
   existingLogs?: {
     id: string;
     exerciseId: string;
@@ -105,6 +116,7 @@ interface WorkoutLoggerProps {
       weightKg: number | null;
       durationSec: number | null;
       rpe: number | null;
+      restSec: number | null;
       notes: string | null;
     }[];
   }[];
@@ -148,19 +160,24 @@ const TYPE_CONFIG: Record<
 
 type ColDef = { key: keyof SetData; label: string; step?: string; min?: number; max?: number };
 
+// Rest column is shown alongside the type-specific work columns. We surface
+// rest taken before the set instead of RPE — the rpe field still exists on
+// the model but is no longer entered here (other surfaces / future trainer
+// modes can bring it back if needed). Capped at 60 min via the rest timer
+// validator; the input accepts seconds for compactness.
 const TYPE_COLS: Record<ExerciseType, ColDef[]> = {
   WEIGHTED: [
     { key: 'weightKg', label: 'kg', step: '0.5' },
     { key: 'reps', label: 'Reps' },
-    { key: 'rpe', label: 'RPE', min: 1, max: 10 },
+    { key: 'restSec', label: 'Rest', min: 0, max: 3600 },
   ],
   BODYWEIGHT: [
     { key: 'reps', label: 'Reps' },
-    { key: 'rpe', label: 'RPE', min: 1, max: 10 },
+    { key: 'restSec', label: 'Rest', min: 0, max: 3600 },
   ],
   DURATION: [
     { key: 'durationSec', label: 'sec' },
-    { key: 'rpe', label: 'RPE', min: 1, max: 10 },
+    { key: 'restSec', label: 'Rest', min: 0, max: 3600 },
   ],
   CARDIO: [
     { key: 'durationSec', label: 'sec' },
@@ -176,6 +193,10 @@ export function WorkoutLogger({
   clientName,
   onUnsavedChange,
   onRequestRest,
+  lastFinishedRestSec,
+  onConsumeRest,
+  restTimerRemaining,
+  restTimerPaused,
   existingLogs,
 }: WorkoutLoggerProps) {
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
@@ -183,6 +204,15 @@ export function WorkoutLogger({
   const [searchResults, setSearchResults] = useState<ExerciseOption[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
+  // When the trainer taps the per-row Rest button, we remember which set
+  // requested it. The next finished/stopped rest writes to that exact set
+  // (covers the edge case where the rest is "after the last set" — Add Set
+  // would never get called there). When unset, the addSet fallback writes
+  // to the previous set instead.
+  const [pendingRestTarget, setPendingRestTarget] = useState<{
+    tempId: string;
+    setNumber: number;
+  } | null>(null);
   // Hash of the payload last successfully sent to the server. We compare the
   // current payload against this to decide whether anything is unsaved —
   // covers add/edit/remove/reorder uniformly without a per-entry dirty flag.
@@ -273,6 +303,7 @@ export function WorkoutLogger({
           weightKg: s.weightKg ?? undefined,
           durationSec: s.durationSec ?? undefined,
           rpe: s.rpe ?? undefined,
+          restSec: s.restSec ?? undefined,
           notes: s.notes ?? '',
         })),
         collapsed: idx !== deduped.length - 1,
@@ -291,6 +322,7 @@ export function WorkoutLogger({
             weightKg: s.weightKg,
             durationSec: s.durationSec,
             rpe: s.rpe,
+            restSec: s.restSec,
             notes: s.notes || undefined,
           })),
         })),
@@ -397,6 +429,7 @@ export function WorkoutLogger({
             weightKg: undefined,
             durationSec: undefined,
             rpe: undefined,
+            restSec: undefined,
             notes: '',
           },
         ],
@@ -439,6 +472,7 @@ export function WorkoutLogger({
             weightKg: undefined,
             durationSec: undefined,
             rpe: undefined,
+            restSec: undefined,
             notes: '',
           },
         ],
@@ -474,24 +508,71 @@ export function WorkoutLogger({
   }
 
   function addSet(exerciseIndex: number) {
+    // Fallback prefill: if a rest just finished and no per-row Rest button
+    // was used to bind it to a specific set, write that rest onto the
+    // *previous* set (rest taken AFTER set N, BEFORE the new set). Skipped
+    // when pendingRestTarget is set because the per-row write effect
+    // already attributed it.
+    const prefillRest =
+      pendingRestTarget === null &&
+      lastFinishedRestSec !== null &&
+      lastFinishedRestSec !== undefined
+        ? lastFinishedRestSec
+        : undefined;
     setExercises((prev) => {
       const updated = [...prev];
       const entry = { ...updated[exerciseIndex]! };
+      let sets = entry.sets;
+      if (prefillRest !== undefined && sets.length > 0) {
+        sets = sets.map((s, i) => (i === sets.length - 1 ? { ...s, restSec: prefillRest } : s));
+      }
       entry.sets = [
-        ...entry.sets,
+        ...sets,
         {
-          setNumber: entry.sets.length + 1,
+          setNumber: sets.length + 1,
           reps: undefined,
           weightKg: undefined,
           durationSec: undefined,
           rpe: undefined,
+          restSec: undefined,
           notes: '',
         },
       ];
       updated[exerciseIndex] = entry;
       return updated;
     });
+    if (prefillRest !== undefined) onConsumeRest?.();
   }
+
+  // ── Per-row rest binding ──────────────────────────────────────────────────
+  // Trainer taps the Rest button next to a specific set → we mark that set as
+  // the target AND open the rest-timer sheet. When the timer eventually ends
+  // (naturally or via Stop), the parent surfaces `lastFinishedRestSec`, which
+  // the effect below writes onto the targeted set.
+  function requestRestForSet(tempId: string, setNumber: number) {
+    setPendingRestTarget({ tempId, setNumber });
+    onRequestRest?.();
+  }
+
+  useEffect(() => {
+    if (lastFinishedRestSec === null || lastFinishedRestSec === undefined) return;
+    if (!pendingRestTarget) return;
+    const target = pendingRestTarget;
+    setExercises((prev) =>
+      prev.map((entry) =>
+        entry.tempId === target.tempId
+          ? {
+              ...entry,
+              sets: entry.sets.map((s) =>
+                s.setNumber === target.setNumber ? { ...s, restSec: lastFinishedRestSec } : s,
+              ),
+            }
+          : entry,
+      ),
+    );
+    setPendingRestTarget(null);
+    onConsumeRest?.();
+  }, [lastFinishedRestSec, pendingRestTarget, onConsumeRest]);
 
   function removeSet(exerciseIndex: number, setIndex: number) {
     setExercises((prev) => {
@@ -538,6 +619,7 @@ export function WorkoutLogger({
           weightKg: s.weightKg,
           durationSec: s.durationSec,
           rpe: s.rpe,
+          restSec: s.restSec,
           notes: s.notes || undefined,
         })),
       })),
@@ -1018,27 +1100,95 @@ export function WorkoutLogger({
                           </div>
 
                           {/* Dynamic fields */}
-                          {cols.map((col) => (
-                            <Input
-                              key={col.key as string}
-                              type="number"
-                              inputMode="decimal"
-                              placeholder={placeholderFor(
-                                col.key,
-                                priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
-                              )}
-                              step={col.step}
-                              min={col.min}
-                              max={col.max}
-                              className="h-11 rounded-xl text-center text-sm font-semibold tabular-nums border border-zinc-700 focus:border-blue-500 focus-visible:ring-0"
-                              value={
-                                col.key === 'notes'
-                                  ? set.notes
-                                  : ((set[col.key] as number | undefined) ?? '')
+                          {cols.map((col) => {
+                            // Rest cell is a 3-state toggle: idle (tap to
+                            // start rest), active (live countdown for the
+                            // row that owns the running timer), done
+                            // (recorded MM:SS value).
+                            if (col.key === 'restSec') {
+                              const isActiveTarget =
+                                pendingRestTarget?.tempId === entry.tempId &&
+                                pendingRestTarget?.setNumber === set.setNumber;
+                              const hasValue = set.restSec !== undefined;
+                              const isActive =
+                                isActiveTarget &&
+                                restTimerRemaining !== undefined &&
+                                restTimerRemaining !== null;
+
+                              if (hasValue) {
+                                return (
+                                  <div
+                                    key={col.key as string}
+                                    className="flex h-11 items-center justify-center rounded-xl border border-zinc-800 bg-muted/20 text-sm font-semibold tabular-nums text-foreground"
+                                  >
+                                    {formatRestSec(set.restSec)}
+                                  </div>
+                                );
                               }
-                              onChange={(e) => updateSet(exIdx, setIdx, col.key, e.target.value)}
-                            />
-                          ))}
+                              if (isActive) {
+                                return (
+                                  <div
+                                    key={col.key as string}
+                                    aria-live="polite"
+                                    className={`flex h-11 items-center justify-center gap-1 rounded-xl border text-sm font-bold tabular-nums ${
+                                      restTimerPaused
+                                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                                        : 'border-blue-500/50 bg-blue-500/15 text-blue-300'
+                                    }`}
+                                  >
+                                    {restTimerPaused && (
+                                      <span className="text-[10px] uppercase opacity-70">||</span>
+                                    )}
+                                    {formatRestSec(restTimerRemaining ?? 0)}
+                                  </div>
+                                );
+                              }
+                              // Idle: only enable the rest button once the
+                              // trainer has logged the work for this set
+                              // (kg + reps for WEIGHTED, reps for
+                              // BODYWEIGHT, duration for DURATION). Resting
+                              // before logging is almost always a mis-tap.
+                              const setLogged = cols
+                                .filter((c) => c.key !== 'restSec' && c.key !== 'notes')
+                                .every((c) => (set[c.key] as number | undefined) !== undefined);
+                              return (
+                                <button
+                                  key={col.key as string}
+                                  onClick={() => requestRestForSet(entry.tempId, set.setNumber)}
+                                  disabled={!setLogged}
+                                  aria-label={
+                                    setLogged
+                                      ? `Start rest after set ${set.setNumber}`
+                                      : `Log this set before starting rest`
+                                  }
+                                  className="flex h-11 items-center justify-center rounded-xl border border-blue-500/30 text-blue-400/70 transition-colors active:bg-blue-500/10 active:text-blue-400 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-muted-foreground/30 disabled:active:bg-transparent"
+                                >
+                                  <BedDouble className="h-4 w-4" />
+                                </button>
+                              );
+                            }
+                            return (
+                              <Input
+                                key={col.key as string}
+                                type="number"
+                                inputMode="decimal"
+                                placeholder={placeholderFor(
+                                  col.key,
+                                  priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
+                                )}
+                                step={col.step}
+                                min={col.min}
+                                max={col.max}
+                                className="h-11 rounded-xl text-center text-sm font-semibold tabular-nums border border-zinc-700 focus:border-blue-500 focus-visible:ring-0"
+                                value={
+                                  col.key === 'notes'
+                                    ? set.notes
+                                    : ((set[col.key] as number | undefined) ?? '')
+                                }
+                                onChange={(e) => updateSet(exIdx, setIdx, col.key, e.target.value)}
+                              />
+                            );
+                          })}
 
                           {/* Remove set */}
                           <button
@@ -1052,10 +1202,10 @@ export function WorkoutLogger({
                       ))}
                     </div>
 
-                    {/* Add Set + Rest (Rest only when handler provided) */}
-                    <div
-                      className={`mt-3 grid gap-2 ${onRequestRest ? 'grid-cols-[1fr_auto]' : ''}`}
-                    >
+                    {/* Add Set — rest is initiated per-row via the cell's
+                        idle button, so the bottom row no longer needs a
+                        separate Rest affordance. */}
+                    <div className="mt-3">
                       <button
                         onClick={() => addSet(exIdx)}
                         className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
@@ -1063,16 +1213,6 @@ export function WorkoutLogger({
                         <Plus className="h-3.5 w-3.5" />
                         Add Set
                       </button>
-                      {onRequestRest && (
-                        <button
-                          onClick={onRequestRest}
-                          aria-label="Rest timer"
-                          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-blue-500/40 px-4 py-3 text-xs font-semibold text-blue-400 transition-colors active:bg-blue-500/10"
-                        >
-                          <BedDouble className="h-3.5 w-3.5" />
-                          Rest
-                        </button>
-                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -1157,10 +1297,11 @@ export function WorkoutLogger({
 }
 
 function getGridClass(colCount: number) {
-  // set-badge + N data cols + remove btn
-  const cols = colCount;
-  if (cols === 1) return 'grid-cols-[2rem_1fr_2rem]';
-  if (cols === 2) return 'grid-cols-[2rem_1fr_1fr_2rem]';
+  // set-badge + N data cols + remove btn. The Rest column is one of the
+  // data cols; it carries its own state-aware control (idle button / live
+  // countdown / done label) so we don't need an extra grid slot for it.
+  if (colCount === 1) return 'grid-cols-[2rem_1fr_2rem]';
+  if (colCount === 2) return 'grid-cols-[2rem_1fr_1fr_2rem]';
   return 'grid-cols-[2rem_1fr_1fr_1fr_2rem]';
 }
 
@@ -1213,7 +1354,17 @@ function placeholderFor(key: keyof SetData, last: LastSetSnapshot | null | undef
   }
   if (key === 'durationSec' && last.durationSec != null) return String(last.durationSec);
   if (key === 'rpe' && last.rpe != null) return String(last.rpe);
+  if (key === 'restSec' && last.restSec != null) return formatRestSec(last.restSec);
   return key === 'rpe' ? '1–10' : '—';
+}
+
+// MM:SS display format for rest values. Stored values stay in seconds; this
+// is purely for the read-only rest cell + placeholder hints.
+function formatRestSec(sec: number | null | undefined): string {
+  if (sec === null || sec === undefined) return '';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 // ─── Exercise Progress Modal ──────────────────────────────────────────────────

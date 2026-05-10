@@ -582,6 +582,50 @@ export async function bookSessionByTrainer({
 }
 
 /**
+ * Assert that the caller (trainer or client) is allowed to read/write
+ * a given session and that the session belongs to their branch. Returns
+ * the lightweight session row on success; throws AppError otherwise.
+ *
+ * Used by ephemeral-state routes (e.g. rest timer) where a 403 must be
+ * raised before any side effect — Rule #2 from CLAUDE.md.
+ */
+export async function assertSessionAccess({
+  sessionId,
+  branchId,
+  trainerProfileId,
+  clientProfileId,
+}: {
+  sessionId: string;
+  branchId: string;
+  trainerProfileId: string | null;
+  clientProfileId: string | null;
+}) {
+  const session = await prisma.sessionInstance.findFirst({
+    where: { id: sessionId, branchId },
+    select: {
+      id: true,
+      branchId: true,
+      trainerProfileId: true,
+      clientProfileId: true,
+      status: true,
+    },
+  });
+
+  if (!session) {
+    throw new AppError('SESSION_NOT_FOUND', 'Session not found', 404);
+  }
+
+  const isTrainer = !!trainerProfileId && session.trainerProfileId === trainerProfileId;
+  const isClient = !!clientProfileId && session.clientProfileId === clientProfileId;
+
+  if (!isTrainer && !isClient) {
+    throw new AppError('SESSION_FORBIDDEN', 'Not allowed to access this session', 403);
+  }
+
+  return session;
+}
+
+/**
  * Get the active (IN_PROGRESS) session for a trainer
  */
 export async function getActiveSession(trainerProfileId: string, branchId: string) {

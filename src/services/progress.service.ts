@@ -601,6 +601,7 @@ export interface LastSetSnapshot {
   weightKg: number | null;
   durationSec: number | null;
   rpe: number | null;
+  restSec: number | null;
   performedAt: string;
 }
 
@@ -675,6 +676,7 @@ export async function getRecentExercisesByMuscleGroup({
           weightKg: true,
           durationSec: true,
           rpe: true,
+          restSec: true,
           createdAt: true,
         },
         orderBy: { setNumber: 'asc' },
@@ -724,6 +726,7 @@ export async function getRecentExercisesByMuscleGroup({
             weightKg: chosen.weightKg,
             durationSec: chosen.durationSec,
             rpe: chosen.rpe,
+            restSec: chosen.restSec,
             performedAt: (chosen.createdAt ?? log.createdAt).toISOString(),
           }
         : null,
@@ -816,6 +819,7 @@ export async function getLastSetsByExercise({
           weightKg: true,
           durationSec: true,
           rpe: true,
+          restSec: true,
           createdAt: true,
         },
         orderBy: { setNumber: 'asc' },
@@ -840,6 +844,7 @@ export async function getLastSetsByExercise({
       weightKg: s.weightKg,
       durationSec: s.durationSec,
       rpe: s.rpe,
+      restSec: s.restSec,
       performedAt: (s.createdAt ?? log.createdAt).toISOString(),
     }));
     result.set(log.exerciseId, sets);

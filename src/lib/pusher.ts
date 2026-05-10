@@ -58,6 +58,14 @@ export interface TrainerReassignedPayload {
   time: string;
 }
 
+export interface RestTimerEventPayload {
+  endTime: number | null;
+  pausedRemaining: number | null;
+  total: number | null;
+  updatedAt: number;
+  serverNow: number;
+}
+
 // ── Trigger helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -75,6 +83,21 @@ export async function triggerSessionEvent(
     console.log(`[Pusher] Triggered ${event} on ${channel}`);
   } catch (err) {
     console.error(`[Pusher] Failed to trigger ${event} on ${channel}:`, err);
+  }
+}
+
+/**
+ * Trigger a rest-timer change on a session channel. Replaces the 1-Hz poll —
+ * subscribers re-render off the pushed payload and run their countdown
+ * locally. Pusher payloads are size-capped (~10KB), so the slim shape here is
+ * deliberate.
+ */
+export async function triggerRestTimerEvent(sessionId: string, payload: RestTimerEventPayload) {
+  const channel: SessionChannel = `session-${sessionId}`;
+  try {
+    await getPusherServer().trigger(channel, 'REST_TIMER_UPDATED', payload);
+  } catch (err) {
+    console.error(`[Pusher] Failed to trigger REST_TIMER_UPDATED on ${channel}:`, err);
   }
 }
 

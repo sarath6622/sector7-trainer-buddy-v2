@@ -206,6 +206,7 @@ model Branch {
   crossfitAttendances   CrossfitAttendance[]
   paymentRecords       PaymentRecord[]
   notificationLogs     NotificationLog[]
+  restTimers           RestTimer[]
   auditLogs            AuditLog[]
   branchSettings       BranchSettings?
   userBadges           UserBadge[]
@@ -573,6 +574,7 @@ model SessionInstance {
   workoutLogs          WorkoutLog[]
   trainerReassignment  TrainerReassignment?
   rescheduleRequests   RescheduleRequest[]
+  restTimer            RestTimer?
 
   @@index([branchId, scheduledDate])
   @@index([branchId, clientProfileId, scheduledDate])
@@ -608,6 +610,10 @@ model WorkoutSet {
   weightKg     Float?
   durationSec  Int?
   rpe          Int?
+  // Rest taken before this set, in seconds. Captured from the rest timer's
+  // `total` (auto-filled when the trainer adds a set right after a rest
+  // finishes) or entered manually. Null = no rest data recorded.
+  restSec      Int?
   notes        String?
   createdAt    DateTime @default(now())
 
@@ -615,6 +621,29 @@ model WorkoutSet {
 
   @@index([workoutLogId])
   @@map("workout_sets")
+}
+
+// ─── REST TIMER ─────────────────────────────────────
+// One ephemeral row per active session. Trainer drives mutations; both
+// trainer and client read it so the countdown stays in sync across devices.
+// Rows are deleted on Stop and have no native TTL — a periodic cleanup job
+// (or `WHERE updatedAt < now() - 1 day`) handles forgotten rows. Total cap
+// of totalSec ≤ 3600 is enforced by the API validator.
+
+model RestTimer {
+  sessionInstanceId  String   @id
+  branchId           String
+  endTime            DateTime?  // null when paused; otherwise countdown target
+  pausedRemainingSec Int?       // null when running; otherwise frozen seconds
+  totalSec           Int
+  startedByUserId    String     // who last issued a write — for audit fan-out
+  updatedAt          DateTime   @updatedAt
+
+  sessionInstance SessionInstance @relation(fields: [sessionInstanceId], references: [id], onDelete: Cascade)
+  branch          Branch          @relation(fields: [branchId], references: [id])
+
+  @@index([branchId, updatedAt])
+  @@map("rest_timers")
 }
 
 // ─── EXERCISE LIBRARY (global) ───────────────────────

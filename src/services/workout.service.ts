@@ -15,6 +15,7 @@ interface WorkoutSetInput {
   weightKg?: number;
   durationSec?: number;
   rpe?: number;
+  restSec?: number;
   notes?: string;
 }
 
@@ -152,6 +153,7 @@ export async function createWorkoutLogs({
             weightKg: set.weightKg ?? null,
             durationSec: set.durationSec ?? null,
             rpe: set.rpe ?? null,
+            restSec: set.restSec ?? null,
             notes: set.notes ?? null,
           };
           if (existingSet) {
@@ -175,6 +177,7 @@ export async function createWorkoutLogs({
                 weightKg: set.weightKg ?? null,
                 durationSec: set.durationSec ?? null,
                 rpe: set.rpe ?? null,
+                restSec: set.restSec ?? null,
                 notes: set.notes ?? null,
               })),
             },
@@ -344,6 +347,7 @@ export async function updateWorkoutLog({
         weightKg: set.weightKg,
         durationSec: set.durationSec,
         rpe: set.rpe,
+        restSec: set.restSec,
         notes: set.notes,
       })),
     });
