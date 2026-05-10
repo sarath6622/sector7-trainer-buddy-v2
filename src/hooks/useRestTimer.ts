@@ -99,8 +99,11 @@ interface PusherUpdatePayload {
 export function useRestTimer(sessionId: string) {
   const [state, setState] = useState<RestTimerState>(EMPTY);
   const [skew, setSkew] = useState(0); // serverNow - clientNow, ms
-  // Renders the countdown at 1Hz while running. Decoupled from `state` so
-  // tick-only re-renders don't run state-staleness checks.
+  // Renders the countdown at 1Hz while running. The interval is only armed
+  // while a timer is active, so `now` would otherwise drift during idle gaps —
+  // start/resume/applyServerState all reseed it before the first render of a
+  // newly-active timer to avoid a one-frame glitch where the previous stale
+  // `now` makes `endTime - now` look minutes too large.
   const [now, setNow] = useState(() => Date.now());
 
   // Keep the latest skew/state accessible from imperative callers (start/
@@ -123,6 +126,7 @@ export function useRestTimer(sessionId: string) {
     if (typeof serverNow === 'number') {
       setSkew(serverNow - Date.now());
     }
+    setNow(Date.now());
     setState((prev) => (next.updatedAt >= prev.updatedAt ? next : prev));
   }, []);
 
@@ -218,6 +222,7 @@ export function useRestTimer(sessionId: string) {
     async (next: Omit<RestTimerState, 'updatedAt'>) => {
       const optimisticAt = Date.now() + skewRef.current;
       const optimistic: RestTimerState = { ...next, updatedAt: optimisticAt };
+      setNow(Date.now());
       setState((prev) => (optimistic.updatedAt >= prev.updatedAt ? optimistic : prev));
       try {
         const res = await fetch(`/api/sessions/${sessionId}/rest-timer`, {
