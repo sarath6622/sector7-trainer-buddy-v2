@@ -296,6 +296,159 @@ function isOvertime(startedAt: string, expectedDurationMin: number, nowMs: numbe
   return (nowMs - new Date(startedAt).getTime()) / 1000 >= expectedDurationMin * 60;
 }
 
+function formatRestRemaining(sec: number | null): string {
+  if (sec === null || sec < 0) return '00:00';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// ── Inactive-tab chip ─────────────────────────────────────────────────────────
+// Lives in its own component so each instance can subscribe to its session's
+// rest-timer via the per-id hook. The hook is muted (`silent: true`) so a
+// peer's rest expiring doesn't buzz the trainer's phone — that cross-session
+// alert is intentionally deferred. Visual states layered on top of the
+// existing idle/warn/urgent escalation:
+//   • running rest  → blue "Resting · MM:SS"
+//   • paused rest   → amber "Rest paused"
+//   • finished rest → emerald "Rest done!" + ping (highest priority alert,
+//                     trainer probably needs to switch back)
+//   • else          → existing idle/active behavior
+function OthersChip({
+  session: s,
+  detailed,
+  now,
+  disabled,
+  onSelect,
+}: {
+  session: SessionData;
+  detailed: SessionData;
+  now: number;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  const rest = useRestTimer(s.id, { silent: true });
+  const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
+  const init = initials(s.client.user.firstName, s.client.user.lastName);
+  const lastActivity = lastActivityMs(detailed);
+  const idleMs = lastActivity != null ? Math.max(0, now - lastActivity) : null;
+  const idleSec = idleMs != null ? Math.floor(idleMs / 1000) : null;
+  const warn = idleSec != null && idleSec >= 480 && idleSec < 1200;
+  const urgent = idleSec != null && idleSec >= 1200;
+  const showIdle = idleMs != null && idleSec != null && idleSec >= 60;
+
+  // Rest state takes priority over the idle counter. A client mid-rest isn't
+  // idle in the trainer's mental model — they're on the clock.
+  type Mode = 'rest-running' | 'rest-paused' | 'rest-done' | 'idle';
+  const mode: Mode = rest.isDone
+    ? 'rest-done'
+    : rest.isRunning
+      ? 'rest-running'
+      : rest.isPaused
+        ? 'rest-paused'
+        : 'idle';
+
+  const avatarTone =
+    mode === 'rest-done'
+      ? 'bg-emerald-500/20 text-emerald-400'
+      : mode === 'rest-running'
+        ? 'bg-blue-500/15 text-blue-400'
+        : mode === 'rest-paused'
+          ? 'bg-amber-500/20 text-amber-400'
+          : urgent
+            ? 'bg-red-500/20 text-red-400'
+            : warn
+              ? 'bg-amber-500/20 text-amber-400'
+              : 'bg-primary/15 text-primary';
+
+  const dotTone =
+    mode === 'rest-done'
+      ? 'bg-emerald-500'
+      : mode === 'rest-running'
+        ? 'bg-blue-500'
+        : mode === 'rest-paused'
+          ? 'bg-amber-500'
+          : urgent
+            ? 'bg-red-500'
+            : warn
+              ? 'bg-amber-500'
+              : 'bg-muted-foreground/40';
+
+  const subColor =
+    mode === 'rest-done'
+      ? 'text-emerald-400'
+      : mode === 'rest-running'
+        ? 'text-blue-400'
+        : mode === 'rest-paused'
+          ? 'text-amber-400'
+          : urgent
+            ? 'text-red-400'
+            : warn
+              ? 'text-amber-400'
+              : 'text-muted-foreground';
+
+  // Ring + chip-pulse: rest-done is the most actionable state, so it pings
+  // even harder than urgent idle. Running/paused rest is calm (just colored).
+  const ringTone =
+    mode === 'rest-done'
+      ? 'ring-emerald-500/50'
+      : mode === 'rest-running'
+        ? 'ring-blue-500/30'
+        : mode === 'rest-paused'
+          ? 'ring-amber-500/30'
+          : urgent
+            ? 'ring-red-500/40'
+            : warn
+              ? 'ring-amber-500/30'
+              : 'ring-border/50';
+
+  const pulseTone =
+    mode === 'rest-done' ? 'bg-emerald-500' : urgent ? 'bg-red-500' : warn ? 'bg-amber-500' : null;
+
+  const chipPulse = mode === 'rest-done' || urgent;
+
+  let subText: string;
+  if (mode === 'rest-running') subText = `Resting · ${formatRestRemaining(rest.remaining)}`;
+  else if (mode === 'rest-paused') subText = `Rest paused · ${formatRestRemaining(rest.remaining)}`;
+  else if (mode === 'rest-done') subText = 'Rest done!';
+  else if (showIdle) subText = `${formatIdle(idleMs!)} idle`;
+  else subText = 'Active';
+
+  return (
+    <button
+      key={s.id}
+      role="tab"
+      aria-selected={false}
+      aria-label={`Switch to ${name}, ${subText}`}
+      onClick={onSelect}
+      disabled={disabled}
+      className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-muted/40 px-2 py-1.5 ring-1 transition-colors hover:bg-muted/70 disabled:opacity-50 ${ringTone} ${
+        chipPulse ? 'animate-pulse' : ''
+      }`}
+    >
+      <div
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarTone}`}
+      >
+        {init}
+      </div>
+      <div className="min-w-0 flex-1 text-left">
+        <div className="flex items-center gap-1.5">
+          <p className="truncate text-[11px] font-semibold leading-tight text-foreground">{name}</p>
+          <span className="relative flex h-1.5 w-1.5 shrink-0 items-center justify-center">
+            {pulseTone && (
+              <span
+                className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${pulseTone}`}
+              />
+            )}
+            <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${dotTone}`} />
+          </span>
+        </div>
+        <p className={`truncate text-[10px] tabular-nums leading-tight ${subColor}`}>{subText}</p>
+      </div>
+    </button>
+  );
+}
+
 export default function ActiveSessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: urlId } = use(params);
   const router = useRouter();
@@ -716,93 +869,22 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             );
           };
 
-          const renderOthersChip = (s: SessionData) => {
-            const detailed = sessionMap[s.id] ?? s;
-            const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
-            const init = initials(s.client.user.firstName, s.client.user.lastName);
-            const lastActivity = lastActivityMs(detailed);
-            const idleMs = lastActivity != null ? Math.max(0, now - lastActivity) : null;
-            const idleSec = idleMs != null ? Math.floor(idleMs / 1000) : null;
-            // Soft thresholds: warn at 8m, urgent at 20m. Don't escalate just
-            // because trainer is focused elsewhere.
-            const warn = idleSec != null && idleSec >= 480 && idleSec < 1200;
-            const urgent = idleSec != null && idleSec >= 1200;
-            const showIdle = idleMs != null && idleSec != null && idleSec >= 60;
-
-            const avatarTone = urgent
-              ? 'bg-red-500/20 text-red-400'
-              : warn
-                ? 'bg-amber-500/20 text-amber-400'
-                : 'bg-primary/15 text-primary';
-            const dotTone = urgent
-              ? 'bg-red-500'
-              : warn
-                ? 'bg-amber-500'
-                : 'bg-muted-foreground/40';
-            const idleColor = urgent
-              ? 'text-red-400'
-              : warn
-                ? 'text-amber-400'
-                : 'text-muted-foreground';
-            const idleText = showIdle ? `${formatIdle(idleMs!)} idle` : 'Resting';
-
-            // Pulse the dot once a chip is in warn/urgent territory so a
-            // stalled client visually breaks the row even when the trainer's
-            // attention is on the hero. The chip's ring also nudges to the
-            // matching tone when urgent — the chip itself becomes the alert.
-            const pulseTone = urgent ? 'bg-red-500' : warn ? 'bg-amber-500' : null;
-            const ringTone = urgent
-              ? 'ring-red-500/40'
-              : warn
-                ? 'ring-amber-500/30'
-                : 'ring-border/50';
-
-            return (
-              <button
-                key={s.id}
-                role="tab"
-                aria-selected={false}
-                aria-label={`Switch to ${name}, ${idleText}`}
-                onClick={() => void switchTab(s.id)}
-                disabled={ending || switching}
-                className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-muted/40 px-2 py-1.5 ring-1 transition-colors hover:bg-muted/70 disabled:opacity-50 ${ringTone} ${
-                  urgent ? 'animate-pulse' : ''
-                }`}
-              >
-                <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarTone}`}
-                >
-                  {init}
-                </div>
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center gap-1.5">
-                    <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
-                      {name}
-                    </p>
-                    <span className="relative flex h-1.5 w-1.5 shrink-0 items-center justify-center">
-                      {pulseTone && (
-                        <span
-                          className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${pulseTone}`}
-                        />
-                      )}
-                      <span
-                        className={`relative inline-flex h-1.5 w-1.5 rounded-full ${dotTone}`}
-                      />
-                    </span>
-                  </div>
-                  <p className={`truncate text-[10px] tabular-nums leading-tight ${idleColor}`}>
-                    {idleText}
-                  </p>
-                </div>
-              </button>
-            );
-          };
-
           return (
             <div role="tablist" aria-label="Active sessions" className="px-3 pb-2.5 space-y-2">
               {renderHero()}
               {otherTabs.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto">{otherTabs.map(renderOthersChip)}</div>
+                <div className="flex gap-2 overflow-x-auto">
+                  {otherTabs.map((s) => (
+                    <OthersChip
+                      key={s.id}
+                      session={s}
+                      detailed={sessionMap[s.id] ?? s}
+                      now={now}
+                      disabled={ending || switching}
+                      onSelect={() => void switchTab(s.id)}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           );

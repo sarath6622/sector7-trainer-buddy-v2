@@ -96,7 +96,16 @@ interface PusherUpdatePayload {
   serverNow: number;
 }
 
-export function useRestTimer(sessionId: string) {
+export interface UseRestTimerOptions {
+  /** Suppresses the rest-done buzz + chime when this hook's countdown
+   *  hits zero. Used for inactive-session chips that visualize peer
+   *  clients' rest state — vibrating the trainer's phone for someone
+   *  else's rest ending is the deferred "cross-session alert" feature. */
+  silent?: boolean;
+}
+
+export function useRestTimer(sessionId: string, options: UseRestTimerOptions = {}) {
+  const { silent = false } = options;
   const [state, setState] = useState<RestTimerState>(EMPTY);
   const [skew, setSkew] = useState(0); // serverNow - clientNow, ms
   // Renders the countdown at 1Hz while running. The interval is only armed
@@ -205,10 +214,10 @@ export function useRestTimer(sessionId: string) {
   useEffect(() => {
     const prev = prevRemainingRef.current;
     prevRemainingRef.current = remaining;
-    if (prev !== null && prev > 0 && remaining === 0 && state.total !== null) {
+    if (prev !== null && prev > 0 && remaining === 0 && state.total !== null && !silent) {
       fireRestDoneAlert();
     }
-  }, [remaining, state.total]);
+  }, [remaining, state.total, silent]);
 
   useEffect(() => {
     prevRemainingRef.current = null;
