@@ -746,6 +746,17 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
                 : 'text-muted-foreground';
             const idleText = showIdle ? `${formatIdle(idleMs!)} idle` : 'Resting';
 
+            // Pulse the dot once a chip is in warn/urgent territory so a
+            // stalled client visually breaks the row even when the trainer's
+            // attention is on the hero. The chip's ring also nudges to the
+            // matching tone when urgent — the chip itself becomes the alert.
+            const pulseTone = urgent ? 'bg-red-500' : warn ? 'bg-amber-500' : null;
+            const ringTone = urgent
+              ? 'ring-red-500/40'
+              : warn
+                ? 'ring-amber-500/30'
+                : 'ring-border/50';
+
             return (
               <button
                 key={s.id}
@@ -754,7 +765,9 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
                 aria-label={`Switch to ${name}, ${idleText}`}
                 onClick={() => void switchTab(s.id)}
                 disabled={ending || switching}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-muted/40 px-2 py-1.5 ring-1 ring-border/50 transition-colors hover:bg-muted/70 disabled:opacity-50"
+                className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-muted/40 px-2 py-1.5 ring-1 transition-colors hover:bg-muted/70 disabled:opacity-50 ${ringTone} ${
+                  urgent ? 'animate-pulse' : ''
+                }`}
               >
                 <div
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarTone}`}
@@ -766,7 +779,16 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
                     <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
                       {name}
                     </p>
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotTone}`} />
+                    <span className="relative flex h-1.5 w-1.5 shrink-0 items-center justify-center">
+                      {pulseTone && (
+                        <span
+                          className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${pulseTone}`}
+                        />
+                      )}
+                      <span
+                        className={`relative inline-flex h-1.5 w-1.5 rounded-full ${dotTone}`}
+                      />
+                    </span>
                   </div>
                   <p className={`truncate text-[10px] tabular-nums leading-tight ${idleColor}`}>
                     {idleText}
