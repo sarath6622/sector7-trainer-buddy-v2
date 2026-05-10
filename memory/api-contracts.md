@@ -375,6 +375,28 @@ DELETE /api/sessions/[id]/rest-timer  → {} → { data: null }
   and broadcast `REST_TIMER_UPDATED` on the session channel — clients subscribe via
   Pusher instead of polling. A 30s GET keepalive fills in if Pusher is down.
 
+### Session Pause (Phase 2 — 2026-05-10)
+
+```
+GET    /api/sessions/[id]/pause  → {} → { data: { pausedAt, accumulatedPausedSec, updatedAt }, serverNow }
+POST   /api/sessions/[id]/pause  → {} → { data, serverNow }   # toggles pause ↔ resume
+```
+
+- `pausedAt` is server-clock ms or null (running). `accumulatedPausedSec` is the total
+  paused seconds across all pause/resume cycles. `updatedAt` is the dedicated
+  `pauseUpdatedAt` column — bumped only on pause/resume so unrelated row updates
+  don't trip the hook's monotonic guard.
+- POST is idempotent: pausing a paused session (or resuming a running one) echoes
+  current state without re-firing audit/Pusher.
+- Auth: trainer or client of the session (same as rest-timer). Either side can
+  pause/resume — the use case is the trainer pausing during a phone call AND the
+  client surfacing the frozen elapsed back to the trainer.
+- Mutations write `auditLog` with action `SESSION_PAUSED` / `SESSION_RESUMED` and
+  broadcast `SESSION_PAUSE_UPDATED` on the session channel.
+- `endSession` finalizes any in-flight pause (`accumulatedPausedSec += now - pausedAt`)
+  and subtracts the total from `actualDurationMin`, so the final duration reflects
+  ACTIVE training time, not wall-clock elapsed.
+
 ---
 
 ## CrossFit Admin Routes

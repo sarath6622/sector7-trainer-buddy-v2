@@ -8,6 +8,7 @@ import { useConfirm } from '@/hooks/use-confirm';
 import { WorkoutLogger } from '@/components/workout/WorkoutLogger';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 import { useRestTimer } from '@/hooks/useRestTimer';
+import { useSessionPause } from '@/hooks/useSessionPause';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
 import type { SessionStartedPayload, SessionEndedPayload } from '@/lib/pusher';
 
@@ -282,18 +283,14 @@ function formatIdle(ms: number): string {
   return rem === 0 ? `${hr}h` : `${hr}h${rem}m`;
 }
 
-function formatElapsed(startedAt: string, nowMs: number): string {
-  const sec = Math.max(0, Math.floor((nowMs - new Date(startedAt).getTime()) / 1000));
-  const hrs = Math.floor(sec / 3600);
-  const mins = Math.floor((sec % 3600) / 60);
-  const secs = sec % 60;
+function formatElapsedFromSec(sec: number): string {
+  const safe = Math.max(0, Math.floor(sec));
+  const hrs = Math.floor(safe / 3600);
+  const mins = Math.floor((safe % 3600) / 60);
+  const secs = safe % 60;
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
   return hrs > 0 ? `${hrs}:${mm}:${ss}` : `${mm}:${ss}`;
-}
-
-function isOvertime(startedAt: string, expectedDurationMin: number, nowMs: number): boolean {
-  return (nowMs - new Date(startedAt).getTime()) / 1000 >= expectedDurationMin * 60;
 }
 
 function formatRestRemaining(sec: number | null): string {
@@ -469,6 +466,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const [now, setNow] = useState(() => Date.now());
   const [defaultDurationMin, setDefaultDurationMin] = useState<number | null>(null);
   const restTimer = useRestTimer(activeId);
+  const sessionPause = useSessionPause(activeId);
 
   // ── Rest auto-fill plumbing ────────────────────────────────────────────────
   // Surface the most-recently-active timer's total to the workout logger so
@@ -761,14 +759,6 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             <div className="h-10 w-40 animate-pulse rounded-xl bg-primary/20" />
           </div>
         </div>
-
-        {/* ── End Session FAB ── */}
-        <div
-          className="shrink-0 px-4 pt-3"
-          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-        >
-          <div className="h-14 w-full animate-pulse rounded-2xl bg-red-600/30" />
-        </div>
       </div>
     );
   }
@@ -804,19 +794,37 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             const init = initials(s.client.user.firstName, s.client.user.lastName);
             const startedAt = detailed.startedAt ?? s.startedAt;
             const expectedMin = defaultDurationMin ?? detailed.durationMin ?? s.durationMin;
+            // Subtract paused time from displayed elapsed — when the session
+            // is paused, the counter freezes and the ring stops advancing.
+            // Both terms are derived from `now` in a single floor() so the
+            // counter doesn't flicker when paused (the page's 1Hz tick and
+            // the hook's 1Hz tick aren't in phase, so two independent
+            // floor()s would jitter ±1s while showing a "frozen" value).
+            const accumulatedPausedMs = sessionPause.accumulatedPausedSec * 1000;
+            const livePausedMs = sessionPause.pausedAt
+              ? Math.max(0, now - sessionPause.pausedAt)
+              : 0;
             const elapsedSec = startedAt
-              ? Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000))
+              ? Math.max(
+                  0,
+                  Math.floor(
+                    (now - new Date(startedAt).getTime() - accumulatedPausedMs - livePausedMs) /
+                      1000,
+                  ),
+                )
               : 0;
             const expectedSec = Math.max(1, expectedMin * 60);
             const progress = Math.min(1, elapsedSec / expectedSec);
-            const overtime = startedAt != null ? isOvertime(startedAt, expectedMin, now) : false;
-            const r = 26;
-            const circumference = 2 * Math.PI * r;
-            const ringStroke = overtime ? '#fb7185' : '#c4b5fd';
+            const overtime = elapsedSec >= expectedSec;
+            const ringStroke = sessionPause.isPaused
+              ? '#fbbf24' // amber while paused
+              : overtime
+                ? '#fb7185'
+                : '#c4b5fd';
 
             // Status pill mirrors OthersChip's logic so the trainer sees the
             // same state vocabulary across the active client and peers.
-            // Priority: live rest state → idle escalation → "Live" default.
+            // Priority: session-paused → live rest state → idle escalation → "Live".
             const lastActivity = lastActivityMs(detailed);
             const idleMs = lastActivity != null ? Math.max(0, now - lastActivity) : null;
             const idleSec = idleMs != null ? Math.floor(idleMs / 1000) : null;
@@ -825,6 +833,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             const showIdle = idleMs != null && idleSec != null && idleSec >= 60;
 
             type HeroStatus =
+              | { kind: 'session-paused'; label: string }
               | { kind: 'rest-running'; label: string }
               | { kind: 'rest-paused'; label: string }
               | { kind: 'rest-done'; label: string }
@@ -832,63 +841,47 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
               | { kind: 'idle-urgent'; label: string }
               | { kind: 'live'; label: string };
 
-            const status: HeroStatus = restTimer.isDone
-              ? { kind: 'rest-done', label: 'Rest done!' }
-              : restTimer.isRunning
-                ? {
-                    kind: 'rest-running',
-                    label: `Resting · ${formatRestRemaining(restTimer.remaining)}`,
-                  }
-                : restTimer.isPaused
+            const status: HeroStatus = sessionPause.isPaused
+              ? { kind: 'session-paused', label: 'Session paused' }
+              : restTimer.isDone
+                ? { kind: 'rest-done', label: 'Rest done!' }
+                : restTimer.isRunning
                   ? {
-                      kind: 'rest-paused',
-                      label: `Rest paused · ${formatRestRemaining(restTimer.remaining)}`,
+                      kind: 'rest-running',
+                      label: `Resting · ${formatRestRemaining(restTimer.remaining)}`,
                     }
-                  : urgent && idleMs != null
-                    ? { kind: 'idle-urgent', label: `${formatIdle(idleMs)} idle` }
-                    : warn && idleMs != null
-                      ? { kind: 'idle-warn', label: `${formatIdle(idleMs)} idle` }
-                      : showIdle && idleMs != null
-                        ? { kind: 'live', label: `${formatIdle(idleMs)} idle` }
-                        : { kind: 'live', label: 'Live' };
+                  : restTimer.isPaused
+                    ? {
+                        kind: 'rest-paused',
+                        label: `Rest paused · ${formatRestRemaining(restTimer.remaining)}`,
+                      }
+                    : urgent && idleMs != null
+                      ? { kind: 'idle-urgent', label: `${formatIdle(idleMs)} idle` }
+                      : warn && idleMs != null
+                        ? { kind: 'idle-warn', label: `${formatIdle(idleMs)} idle` }
+                        : showIdle && idleMs != null
+                          ? { kind: 'live', label: `${formatIdle(idleMs)} idle` }
+                          : { kind: 'live', label: 'Live' };
 
             // Light tones — the hero's purple gradient eats anything dark.
-            const pillStyles: Record<
-              HeroStatus['kind'],
-              { bg: string; text: string; dot: string }
-            > = {
-              'rest-running': {
-                bg: 'bg-blue-400/20 ring-1 ring-blue-300/40',
-                text: 'text-blue-100',
-                dot: 'bg-blue-300',
-              },
-              'rest-paused': {
-                bg: 'bg-amber-400/20 ring-1 ring-amber-300/40',
-                text: 'text-amber-100',
-                dot: 'bg-amber-300',
-              },
-              'rest-done': {
-                bg: 'bg-emerald-400/25 ring-1 ring-emerald-300/50',
-                text: 'text-emerald-100',
-                dot: 'bg-emerald-300',
-              },
-              'idle-warn': {
-                bg: 'bg-amber-400/20 ring-1 ring-amber-300/40',
-                text: 'text-amber-100',
-                dot: 'bg-amber-300',
-              },
-              'idle-urgent': {
-                bg: 'bg-rose-400/25 ring-1 ring-rose-300/50',
-                text: 'text-rose-100',
-                dot: 'bg-rose-300',
-              },
-              live: { bg: '', text: 'text-emerald-100', dot: 'bg-emerald-300' },
+            const pillStyles: Record<HeroStatus['kind'], { text: string; dot: string }> = {
+              'session-paused': { text: 'text-amber-100', dot: 'bg-amber-300' },
+              'rest-running': { text: 'text-blue-100', dot: 'bg-blue-300' },
+              'rest-paused': { text: 'text-amber-100', dot: 'bg-amber-300' },
+              'rest-done': { text: 'text-emerald-100', dot: 'bg-emerald-300' },
+              'idle-warn': { text: 'text-amber-100', dot: 'bg-amber-300' },
+              'idle-urgent': { text: 'text-rose-100', dot: 'bg-rose-300' },
+              live: { text: 'text-emerald-100', dot: 'bg-emerald-300' },
             };
             const pill = pillStyles[status.kind];
             const shouldPing =
               status.kind === 'live' ||
               status.kind === 'rest-done' ||
-              status.kind === 'idle-urgent';
+              status.kind === 'idle-urgent' ||
+              status.kind === 'session-paused';
+
+            const avatarRingR = 22;
+            const avatarRingCircumference = 2 * Math.PI * avatarRingR;
 
             return (
               <div
@@ -898,8 +891,36 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
                 className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 px-3.5 py-2.5 text-white shadow-lg shadow-purple-900/20"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold ring-1 ring-white/20">
-                    {init}
+                  {/* Avatar with story-ring progress: the ring around the
+                      avatar shows how much of the expected session duration
+                      has elapsed, so we don't need a separate progress
+                      slot fighting for space in the action row. */}
+                  <div className="relative h-12 w-12 shrink-0">
+                    <svg className="absolute inset-0 -rotate-90" viewBox="0 0 48 48">
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r={avatarRingR}
+                        fill="none"
+                        stroke="rgba(255,255,255,0.18)"
+                        strokeWidth="2.5"
+                      />
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r={avatarRingR}
+                        fill="none"
+                        stroke={ringStroke}
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeDasharray={avatarRingCircumference}
+                        strokeDashoffset={avatarRingCircumference * (1 - progress)}
+                        className="transition-[stroke-dashoffset] duration-500"
+                      />
+                    </svg>
+                    <div className="absolute inset-[3px] flex items-center justify-center rounded-full bg-white/15 text-xs font-bold ring-1 ring-white/10">
+                      {init}
+                    </div>
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
@@ -908,17 +929,25 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
                         Session
                       </span>
                     </div>
-                    <div className="mt-0.5 flex items-end gap-2">
+                    <div className="mt-0.5 flex flex-col items-start">
                       {startedAt && (
                         <span
-                          className={`font-mono text-xl font-black tabular-nums leading-none ${overtime ? 'text-rose-100' : 'text-white'}`}
+                          className={`font-mono text-xl font-black tabular-nums leading-none ${
+                            sessionPause.isPaused
+                              ? 'text-amber-100/80'
+                              : overtime
+                                ? 'text-rose-100'
+                                : 'text-white'
+                          }`}
                         >
-                          {formatElapsed(startedAt, now)}
+                          {formatElapsedFromSec(elapsedSec)}
                         </span>
                       )}
-                      <span
-                        className={`flex items-center gap-1 pb-0.5 rounded-full px-1.5 ${pill.bg}`}
-                      >
+                      {/* Status label — rendered below the timer as plain
+                          text + dot (no pill background) so the long "Xh Ym
+                          idle" strings fit on a single line and don't fight
+                          the timer for horizontal space. */}
+                      <span className="mt-1 flex items-center gap-1.5">
                         <span className="relative flex h-1.5 w-1.5 items-center justify-center">
                           {shouldPing && (
                             <span
@@ -929,35 +958,45 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
                             className={`relative inline-flex h-1.5 w-1.5 rounded-full ${pill.dot}`}
                           />
                         </span>
-                        <span className={`text-[10px] font-semibold tabular-nums ${pill.text}`}>
+                        <span
+                          className={`text-[10px] font-semibold uppercase tracking-wider tabular-nums ${pill.text}`}
+                        >
                           {status.label}
                         </span>
                       </span>
                     </div>
                   </div>
-                  <div className="relative h-11 w-11 shrink-0">
-                    <svg className="h-full w-full -rotate-90" viewBox="0 0 60 60">
-                      <circle
-                        cx="30"
-                        cy="30"
-                        r={r}
-                        fill="none"
-                        stroke="rgba(255,255,255,0.18)"
-                        strokeWidth="4"
-                      />
-                      <circle
-                        cx="30"
-                        cy="30"
-                        r={r}
-                        fill="none"
-                        stroke={ringStroke}
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={circumference * (1 - progress)}
-                        className="transition-[stroke-dashoffset] duration-500"
-                      />
-                    </svg>
+                  {/* Right action cluster — Pause then End, both 40×40
+                      circular. Destructive (End) on the trailing edge so
+                      the thumb lands on it last. Progress lives in the
+                      avatar ring on the left, freeing this row from the
+                      visual clutter of a third control. */}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void sessionPause.toggle()}
+                      aria-label={sessionPause.isPaused ? 'Resume session' : 'Pause session'}
+                      className={`flex h-10 w-10 items-center justify-center rounded-full ring-1 transition-colors active:scale-95 ${
+                        sessionPause.isPaused
+                          ? 'bg-amber-400/25 text-amber-100 ring-amber-300/50 hover:bg-amber-400/35'
+                          : 'bg-white/15 text-white ring-white/20 hover:bg-white/25'
+                      }`}
+                    >
+                      {sessionPause.isPaused ? (
+                        <Play className="h-4 w-4" />
+                      ) : (
+                        <Pause className="h-4 w-4" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleEnd}
+                      disabled={ending}
+                      aria-label="End session"
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/25 text-rose-100 ring-1 ring-rose-300/50 transition-colors hover:bg-rose-500/35 active:scale-95 disabled:opacity-50"
+                    >
+                      <Square className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1003,31 +1042,23 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         />
       </div>
 
-      {/* ── End Session footer — always visible at bottom, no fixed needed ── */}
-      <div
-        className="shrink-0 px-4 pt-3"
-        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-      >
-        {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
-          <div className="mb-2">
-            <RestTimerPill
-              remaining={restTimer.remaining}
-              isPaused={restTimer.isPaused}
-              isDone={restTimer.isDone}
-              onOpen={() => setRestTimerOpen(true)}
-              onStop={restTimer.stop}
-            />
-          </div>
-        )}
-        <button
-          onClick={handleEnd}
-          disabled={ending}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 py-4 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/15 active:bg-red-500/20 disabled:opacity-50"
+      {/* ── Bottom dock — only the rest-timer pill lives here now. The End
+          Session button moved into the hero to claim back the vertical
+          space; the dock collapses to nothing when no rest is active. ── */}
+      {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
+        <div
+          className="shrink-0 px-4 pt-3"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
         >
-          <Square className="h-4 w-4" />
-          {ending ? 'Ending Session…' : 'End Session'}
-        </button>
-      </div>
+          <RestTimerPill
+            remaining={restTimer.remaining}
+            isPaused={restTimer.isPaused}
+            isDone={restTimer.isDone}
+            onOpen={() => setRestTimerOpen(true)}
+            onStop={restTimer.stop}
+          />
+        </div>
+      )}
 
       {/* Rest timer sheet */}
       {restTimerOpen && (

@@ -555,6 +555,18 @@ model SessionInstance {
   actualDurationMin Int?
   startedByUserId  String?
   endedByUserId    String?
+  // ── Pause tracking (mirrors RestTimer pattern: server-driven, both
+  //    trainer and client subscribe via Pusher to stay in sync). When
+  //    `pausedAt` is non-null the session clock is currently paused.
+  //    `accumulatedPausedSec` is the total time paused across all
+  //    cycles, finalized on resume. `pauseUpdatedAt` is a dedicated
+  //    monotonic stamp the wire payload uses for guard logic — it
+  //    advances ONLY on pause/resume so unrelated row updates don't
+  //    spook the client into a re-fetch.
+  pausedAt              DateTime?
+  accumulatedPausedSec  Int       @default(0)
+  pausedByUserId        String?
+  pauseUpdatedAt        DateTime?
   noShowMarkedAt   DateTime?
   noShowMarkedByUserId String?
   cancelledAt      DateTime?

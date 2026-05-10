@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import { useRestTimer } from '@/hooks/useRestTimer';
+import { useSessionPause } from '@/hooks/useSessionPause';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -392,6 +393,7 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
   } | null>(null);
   const [restTimerOpen, setRestTimerOpen] = useState(false);
   const restTimer = useRestTimer(id);
+  const sessionPause = useSessionPause(id);
 
   const fetchSession = useCallback(async () => {
     const res = await fetch(`/api/client/sessions/${id}`);
@@ -497,13 +499,37 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
           </span>
           {isActive && (
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-              <span className="font-mono text-base font-bold tabular-nums text-emerald-500">
-                <InlineTimer
-                  startedAt={session.startedAt!}
-                  expectedDurationMin={session.durationMin}
-                />
-              </span>
+              {sessionPause.isPaused ? (
+                <>
+                  <Pause className="h-3 w-3 text-amber-500" aria-label="Paused" />
+                  <span
+                    className="font-mono text-base font-bold tabular-nums text-amber-500"
+                    title="Trainer paused the session"
+                  >
+                    <InlineTimer
+                      startedAt={session.startedAt!}
+                      expectedDurationMin={session.durationMin}
+                      pausedAt={sessionPause.pausedAt}
+                      accumulatedPausedSec={sessionPause.accumulatedPausedSec}
+                    />
+                  </span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">
+                    Paused
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                  <span className="font-mono text-base font-bold tabular-nums text-emerald-500">
+                    <InlineTimer
+                      startedAt={session.startedAt!}
+                      expectedDurationMin={session.durationMin}
+                      pausedAt={sessionPause.pausedAt}
+                      accumulatedPausedSec={sessionPause.accumulatedPausedSec}
+                    />
+                  </span>
+                </>
+              )}
             </div>
           )}
         </div>

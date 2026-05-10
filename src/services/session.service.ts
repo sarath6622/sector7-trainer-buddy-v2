@@ -11,7 +11,7 @@ import {
   evaluateSessionMilestoneBadges,
   type NewBadge,
 } from '@/services/badge.service';
-import { triggerSessionEvent } from '@/lib/pusher';
+import { triggerSessionEvent, triggerSessionPauseEvent } from '@/lib/pusher';
 import type { SessionStatus } from '@prisma/client';
 
 interface StartSessionInput {
@@ -163,13 +163,27 @@ export async function endSession({
 
   const now = new Date();
   const startedAt = session.startedAt!;
-  const actualDurationMin = Math.round((now.getTime() - startedAt.getTime()) / 60000);
+
+  // Finalize any in-flight pause so accumulatedPausedSec is current. The
+  // duration formula then subtracts paused time → actualDurationMin reflects
+  // ACTIVE training, not wall-clock elapsed. Matters for billing/streaks.
+  let totalPausedSec = session.accumulatedPausedSec ?? 0;
+  if (session.pausedAt) {
+    totalPausedSec += Math.max(0, Math.floor((now.getTime() - session.pausedAt.getTime()) / 1000));
+  }
+  const elapsedSec = Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000));
+  const activeSec = Math.max(0, elapsedSec - totalPausedSec);
+  const actualDurationMin = Math.round(activeSec / 60);
 
   const updateData: Record<string, unknown> = {
     status: 'COMPLETED',
     endedAt: now,
     endedByUserId: actorId,
     actualDurationMin,
+    // Snapshot pause state at end so the row's a faithful audit record:
+    // pausedAt cleared, accumulator reflects total pause time across cycles.
+    pausedAt: null,
+    accumulatedPausedSec: totalPausedSec,
   };
 
   if (notes !== undefined) {
@@ -224,6 +238,141 @@ export async function endSession({
     actualDurationMin,
     newBadges,
   };
+}
+
+// ─── Session pause / resume ──────────────────────────────────────────────────
+//
+// Mirrors the rest-timer pattern: server-driven state, both trainer and
+// client subscribe to Pusher. Audit log entries fire on every transition so
+// we have a paper trail of who paused when.
+
+export interface SessionPauseSnapshot {
+  pausedAt: Date | null;
+  accumulatedPausedSec: number;
+  pauseUpdatedAt: Date | null;
+}
+
+interface PauseSessionInput {
+  sessionId: string;
+  branchId: string;
+  actorId: string;
+}
+
+export async function getSessionPauseState({
+  sessionId,
+  branchId,
+}: {
+  sessionId: string;
+  branchId: string;
+}): Promise<SessionPauseSnapshot> {
+  const row = await prisma.sessionInstance.findFirst({
+    where: { id: sessionId, branchId },
+    select: { pausedAt: true, accumulatedPausedSec: true, pauseUpdatedAt: true },
+  });
+  if (!row) throw new AppError('SESSION_NOT_FOUND', 'Session not found', 404);
+  return row;
+}
+
+export async function pauseSession({ sessionId, branchId, actorId }: PauseSessionInput) {
+  const session = await prisma.sessionInstance.findFirst({
+    where: { id: sessionId, branchId },
+    select: {
+      id: true,
+      status: true,
+      pausedAt: true,
+      accumulatedPausedSec: true,
+    },
+  });
+  if (!session) throw new AppError('SESSION_NOT_FOUND', 'Session not found', 404);
+  if (session.status !== 'IN_PROGRESS') {
+    throw new AppError('INVALID_STATUS', `Cannot pause a ${session.status} session`, 400);
+  }
+  // Idempotent: pausing an already-paused session is a no-op echo.
+  if (session.pausedAt) {
+    return await getSessionPauseState({ sessionId, branchId });
+  }
+
+  const now = new Date();
+  const updated = await prisma.sessionInstance.update({
+    where: { id: sessionId },
+    data: { pausedAt: now, pausedByUserId: actorId, pauseUpdatedAt: now },
+    select: { pausedAt: true, accumulatedPausedSec: true, pauseUpdatedAt: true },
+  });
+
+  await Promise.all([
+    auditLog({
+      action: 'SESSION_PAUSED',
+      actorId,
+      subjectType: 'SessionInstance',
+      subjectId: sessionId,
+      branchId,
+      newValue: { pausedAt: now.toISOString() },
+    }),
+    triggerSessionPauseEvent(sessionId, {
+      pausedAt: updated.pausedAt!.getTime(),
+      accumulatedPausedSec: updated.accumulatedPausedSec,
+      updatedAt: updated.pauseUpdatedAt!.getTime(),
+      serverNow: Date.now(),
+    }),
+  ]);
+
+  return updated;
+}
+
+export async function resumeSession({ sessionId, branchId, actorId }: PauseSessionInput) {
+  const session = await prisma.sessionInstance.findFirst({
+    where: { id: sessionId, branchId },
+    select: {
+      id: true,
+      status: true,
+      pausedAt: true,
+      accumulatedPausedSec: true,
+    },
+  });
+  if (!session) throw new AppError('SESSION_NOT_FOUND', 'Session not found', 404);
+  if (session.status !== 'IN_PROGRESS') {
+    throw new AppError('INVALID_STATUS', `Cannot resume a ${session.status} session`, 400);
+  }
+  // Idempotent: resuming a non-paused session just echoes current state.
+  if (!session.pausedAt) {
+    return await getSessionPauseState({ sessionId, branchId });
+  }
+
+  const now = new Date();
+  const newAccumulated =
+    session.accumulatedPausedSec +
+    Math.max(0, Math.floor((now.getTime() - session.pausedAt.getTime()) / 1000));
+
+  const updated = await prisma.sessionInstance.update({
+    where: { id: sessionId },
+    data: {
+      pausedAt: null,
+      pausedByUserId: null,
+      accumulatedPausedSec: newAccumulated,
+      pauseUpdatedAt: now,
+    },
+    select: { pausedAt: true, accumulatedPausedSec: true, pauseUpdatedAt: true },
+  });
+
+  await Promise.all([
+    auditLog({
+      action: 'SESSION_RESUMED',
+      actorId,
+      subjectType: 'SessionInstance',
+      subjectId: sessionId,
+      branchId,
+      oldValue: { pausedAt: session.pausedAt.toISOString() },
+      newValue: { accumulatedPausedSec: newAccumulated },
+    }),
+    triggerSessionPauseEvent(sessionId, {
+      pausedAt: null,
+      accumulatedPausedSec: updated.accumulatedPausedSec,
+      updatedAt: updated.pauseUpdatedAt!.getTime(),
+      serverNow: Date.now(),
+    }),
+  ]);
+
+  return updated;
 }
 
 /**

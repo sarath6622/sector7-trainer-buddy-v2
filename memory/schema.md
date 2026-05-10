@@ -366,6 +366,14 @@ model SessionInstance {
   isCarryForward   Boolean       @default(false)
   carryForwardFromMonth DateTime?
   notes            String?
+  // Server-tracked session pause (mirrors RestTimer pattern). Both trainer
+  // and client subscribe to SESSION_PAUSE_UPDATED on the session channel
+  // and see the same frozen elapsed counter. endSession finalizes the
+  // accumulator and subtracts it from actualDurationMin.
+  pausedAt              DateTime?
+  accumulatedPausedSec  Int       @default(0)
+  pausedByUserId        String?
+  pauseUpdatedAt        DateTime? // dedicated monotonic stamp for the wire
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 

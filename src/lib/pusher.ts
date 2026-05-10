@@ -66,6 +66,13 @@ export interface RestTimerEventPayload {
   serverNow: number;
 }
 
+export interface SessionPauseEventPayload {
+  pausedAt: number | null; // ms since epoch — null = currently running
+  accumulatedPausedSec: number;
+  updatedAt: number; // pauseUpdatedAt — dedicated monotonic stamp
+  serverNow: number;
+}
+
 // ── Trigger helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -98,6 +105,23 @@ export async function triggerRestTimerEvent(sessionId: string, payload: RestTime
     await getPusherServer().trigger(channel, 'REST_TIMER_UPDATED', payload);
   } catch (err) {
     console.error(`[Pusher] Failed to trigger REST_TIMER_UPDATED on ${channel}:`, err);
+  }
+}
+
+/**
+ * Broadcast a session pause/resume to the session channel. Both trainer and
+ * client subscribe; whoever's looking at the session sees the same paused
+ * state with the same elapsed offset.
+ */
+export async function triggerSessionPauseEvent(
+  sessionId: string,
+  payload: SessionPauseEventPayload,
+) {
+  const channel: SessionChannel = `session-${sessionId}`;
+  try {
+    await getPusherServer().trigger(channel, 'SESSION_PAUSE_UPDATED', payload);
+  } catch (err) {
+    console.error(`[Pusher] Failed to trigger SESSION_PAUSE_UPDATED on ${channel}:`, err);
   }
 }
 

@@ -7,10 +7,34 @@ interface SessionTimerProps {
   expectedDurationMin: number;
   onTimeComplete?: () => void;
   size?: 'sm' | 'md' | 'lg';
+  /** Server-clock ms when the current pause segment started, or null if
+   *  running. Combined with `accumulatedPausedSec` lets the timer freeze
+   *  while paused without flickering (single floor() on a single Date.now). */
+  pausedAt?: number | null;
+  /** Server-recorded total paused seconds across previous cycles. */
+  accumulatedPausedSec?: number;
 }
 
-function calcElapsed(startedAt: string): number {
-  return Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+function pausedMsAtNow(
+  nowMs: number,
+  pausedAt: number | null | undefined,
+  accumulatedPausedSec: number,
+): number {
+  const live = pausedAt ? Math.max(0, nowMs - pausedAt) : 0;
+  return accumulatedPausedSec * 1000 + live;
+}
+
+function calcElapsed(
+  startedAt: string,
+  pausedAt: number | null | undefined,
+  accumulatedPausedSec: number,
+): number {
+  const nowMs = Date.now();
+  const startMs = new Date(startedAt).getTime();
+  return Math.max(
+    0,
+    Math.floor((nowMs - startMs - pausedMsAtNow(nowMs, pausedAt, accumulatedPausedSec)) / 1000),
+  );
 }
 
 function formatTime(totalSeconds: number): string {
@@ -24,8 +48,16 @@ function formatTime(totalSeconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-function useElapsedTimer(startedAt: string, expectedSec?: number, onTimeComplete?: () => void) {
-  const [elapsedSec, setElapsedSec] = useState(() => calcElapsed(startedAt));
+function useElapsedTimer(
+  startedAt: string,
+  pausedAt: number | null | undefined,
+  accumulatedPausedSec: number,
+  expectedSec?: number,
+  onTimeComplete?: () => void,
+) {
+  const [elapsedSec, setElapsedSec] = useState(() =>
+    calcElapsed(startedAt, pausedAt, accumulatedPausedSec),
+  );
   const notifiedRef = useRef(false);
   const onTimeCompleteRef = useRef(onTimeComplete);
 
@@ -35,7 +67,7 @@ function useElapsedTimer(startedAt: string, expectedSec?: number, onTimeComplete
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const elapsed = calcElapsed(startedAt);
+      const elapsed = calcElapsed(startedAt, pausedAt, accumulatedPausedSec);
       setElapsedSec(elapsed);
 
       if (
@@ -49,7 +81,7 @@ function useElapsedTimer(startedAt: string, expectedSec?: number, onTimeComplete
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [startedAt, expectedSec]);
+  }, [startedAt, pausedAt, accumulatedPausedSec, expectedSec]);
 
   return elapsedSec;
 }
@@ -59,9 +91,17 @@ export function SessionTimer({
   expectedDurationMin,
   onTimeComplete,
   size = 'lg',
+  pausedAt = null,
+  accumulatedPausedSec = 0,
 }: SessionTimerProps) {
   const expectedSec = expectedDurationMin * 60;
-  const elapsedSec = useElapsedTimer(startedAt, expectedSec, onTimeComplete);
+  const elapsedSec = useElapsedTimer(
+    startedAt,
+    pausedAt,
+    accumulatedPausedSec,
+    expectedSec,
+    onTimeComplete,
+  );
 
   const isOvertime = elapsedSec >= expectedSec;
   const progressPercent = Math.min((elapsedSec / expectedSec) * 100, 100);
@@ -143,12 +183,19 @@ export function SessionTimer({
 export function InlineTimer({
   startedAt,
   expectedDurationMin,
+  pausedAt = null,
+  accumulatedPausedSec = 0,
 }: {
   startedAt: string;
   expectedDurationMin: number;
+  /** Server-clock ms of the current pause segment (or null when running).
+   *  Same semantics as SessionTimer's matching prop — combined with
+   *  accumulatedPausedSec lets the timer freeze without flickering. */
+  pausedAt?: number | null;
+  accumulatedPausedSec?: number;
 }) {
   const expectedSec = expectedDurationMin * 60;
-  const elapsedSec = useElapsedTimer(startedAt);
+  const elapsedSec = useElapsedTimer(startedAt, pausedAt, accumulatedPausedSec);
   const isOvertime = elapsedSec >= expectedSec;
 
   return (

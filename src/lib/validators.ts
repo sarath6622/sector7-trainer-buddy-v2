@@ -773,6 +773,11 @@ export const restTimerStateSchema = z
     message: 'endTime and pausedRemaining are mutually exclusive',
   });
 
+// Session-pause action body. PUT toggles pause; the API decides whether to
+// pause or resume based on the current row state, so the client doesn't need
+// to send anything except auth. Schema kept for parity / future extension.
+export const sessionPauseActionSchema = z.object({}).optional();
+
 // ─── TYPE EXPORTS ────────────────────────────────────
 
 export type TrainerShiftInput = z.infer<typeof trainerShiftSchema>;

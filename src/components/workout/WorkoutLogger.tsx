@@ -796,10 +796,10 @@ export function WorkoutLogger({
           {/* "+" only on the Log tab and only when there's already at least
               one exercise (or search is open) — the empty-state Add First
               button owns the cold start. */}
-          {/* {view === 'log' && (exercises.length > 0 || showSearch) && (
+          {view === 'log' && (exercises.length > 0 || showSearch) && (
             <button
               onClick={() => setShowSearch((v) => !v)}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors ${
+              className={`flex h-8 w-8 shrink-0 items-center justify-center mt-2.5 rounded-xl transition-colors ${
                 showSearch
                   ? 'bg-muted text-muted-foreground'
                   : 'bg-primary/10 text-primary hover:bg-primary/15'
@@ -807,7 +807,7 @@ export function WorkoutLogger({
             >
               {showSearch ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
             </button>
-          )} */}
+          )}
         </div>
       </div>
 
