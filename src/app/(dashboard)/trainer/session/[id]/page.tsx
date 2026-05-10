@@ -1007,7 +1007,12 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             <div role="tablist" aria-label="Active sessions" className="px-3 pb-2.5 space-y-2">
               {renderHero()}
               {otherTabs.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto">
+                // -my-1 py-1 / -mx-1 px-1: when overflow-x is auto, browsers
+                // also clip the y-axis, which chops the chips' colored rings
+                // and ping halos at the top/bottom edges. The negative margin
+                // + matching inner padding gives the rings breathing room
+                // without changing the visual spacing of the surrounding row.
+                <div className="-mx-1 -my-1 flex gap-2 overflow-x-auto px-1 py-1">
                   {otherTabs.map((s) => (
                     <OthersChip
                       key={s.id}
