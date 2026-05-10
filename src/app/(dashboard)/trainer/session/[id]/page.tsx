@@ -813,11 +813,88 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             const r = 26;
             const circumference = 2 * Math.PI * r;
             const ringStroke = overtime ? '#fb7185' : '#c4b5fd';
+
+            // Status pill mirrors OthersChip's logic so the trainer sees the
+            // same state vocabulary across the active client and peers.
+            // Priority: live rest state → idle escalation → "Live" default.
+            const lastActivity = lastActivityMs(detailed);
+            const idleMs = lastActivity != null ? Math.max(0, now - lastActivity) : null;
+            const idleSec = idleMs != null ? Math.floor(idleMs / 1000) : null;
+            const warn = idleSec != null && idleSec >= 480 && idleSec < 1200;
+            const urgent = idleSec != null && idleSec >= 1200;
+            const showIdle = idleMs != null && idleSec != null && idleSec >= 60;
+
+            type HeroStatus =
+              | { kind: 'rest-running'; label: string }
+              | { kind: 'rest-paused'; label: string }
+              | { kind: 'rest-done'; label: string }
+              | { kind: 'idle-warn'; label: string }
+              | { kind: 'idle-urgent'; label: string }
+              | { kind: 'live'; label: string };
+
+            const status: HeroStatus = restTimer.isDone
+              ? { kind: 'rest-done', label: 'Rest done!' }
+              : restTimer.isRunning
+                ? {
+                    kind: 'rest-running',
+                    label: `Resting · ${formatRestRemaining(restTimer.remaining)}`,
+                  }
+                : restTimer.isPaused
+                  ? {
+                      kind: 'rest-paused',
+                      label: `Rest paused · ${formatRestRemaining(restTimer.remaining)}`,
+                    }
+                  : urgent && idleMs != null
+                    ? { kind: 'idle-urgent', label: `${formatIdle(idleMs)} idle` }
+                    : warn && idleMs != null
+                      ? { kind: 'idle-warn', label: `${formatIdle(idleMs)} idle` }
+                      : showIdle && idleMs != null
+                        ? { kind: 'live', label: `${formatIdle(idleMs)} idle` }
+                        : { kind: 'live', label: 'Live' };
+
+            // Light tones — the hero's purple gradient eats anything dark.
+            const pillStyles: Record<
+              HeroStatus['kind'],
+              { bg: string; text: string; dot: string }
+            > = {
+              'rest-running': {
+                bg: 'bg-blue-400/20 ring-1 ring-blue-300/40',
+                text: 'text-blue-100',
+                dot: 'bg-blue-300',
+              },
+              'rest-paused': {
+                bg: 'bg-amber-400/20 ring-1 ring-amber-300/40',
+                text: 'text-amber-100',
+                dot: 'bg-amber-300',
+              },
+              'rest-done': {
+                bg: 'bg-emerald-400/25 ring-1 ring-emerald-300/50',
+                text: 'text-emerald-100',
+                dot: 'bg-emerald-300',
+              },
+              'idle-warn': {
+                bg: 'bg-amber-400/20 ring-1 ring-amber-300/40',
+                text: 'text-amber-100',
+                dot: 'bg-amber-300',
+              },
+              'idle-urgent': {
+                bg: 'bg-rose-400/25 ring-1 ring-rose-300/50',
+                text: 'text-rose-100',
+                dot: 'bg-rose-300',
+              },
+              live: { bg: '', text: 'text-emerald-100', dot: 'bg-emerald-300' },
+            };
+            const pill = pillStyles[status.kind];
+            const shouldPing =
+              status.kind === 'live' ||
+              status.kind === 'rest-done' ||
+              status.kind === 'idle-urgent';
+
             return (
               <div
                 role="tab"
                 aria-selected
-                aria-label={`${name}, active session`}
+                aria-label={`${name}, ${status.label}`}
                 className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 px-3.5 py-2.5 text-white shadow-lg shadow-purple-900/20"
               >
                 <div className="flex items-center gap-3">
@@ -839,12 +916,22 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
                           {formatElapsed(startedAt, now)}
                         </span>
                       )}
-                      <span className="flex items-center gap-1 pb-0.5">
+                      <span
+                        className={`flex items-center gap-1 pb-0.5 rounded-full px-1.5 ${pill.bg}`}
+                      >
                         <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                          <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
-                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                          {shouldPing && (
+                            <span
+                              className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${pill.dot}`}
+                            />
+                          )}
+                          <span
+                            className={`relative inline-flex h-1.5 w-1.5 rounded-full ${pill.dot}`}
+                          />
                         </span>
-                        <span className="text-[10px] font-semibold text-emerald-100">Live</span>
+                        <span className={`text-[10px] font-semibold tabular-nums ${pill.text}`}>
+                          {status.label}
+                        </span>
                       </span>
                     </div>
                   </div>
