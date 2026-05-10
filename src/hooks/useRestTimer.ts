@@ -219,7 +219,15 @@ export function useRestTimer(sessionId: string, options: UseRestTimerOptions = {
     }
   }, [remaining, state.total, silent]);
 
+  // Reset everything when the consumer swaps to a different session. Each
+  // session has its own independent `updatedAt` timeline on the server, so
+  // the monotonic guard inside `applyServerState` would otherwise reject
+  // the new session's first hydrate (older timestamp) and the previous
+  // client's timer would stick on screen — exactly the cross-tab clash the
+  // trainer reported.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setState(EMPTY);
     prevRemainingRef.current = null;
   }, [sessionId]);
 

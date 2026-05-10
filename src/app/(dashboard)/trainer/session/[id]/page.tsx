@@ -479,6 +479,14 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   // sets the trainer adds long after the rest is over.
   const [lastFinishedRestSec, setLastFinishedRestSec] = useState<number | null>(null);
   const lastTimerTotalRef = useRef<number | null>(null);
+  // Wipe both the published prefill and the in-memory "last seen total" any
+  // time the trainer flips to a different client's tab. Without this, a 90s
+  // rest that just ended for ClientA would prefill the next set ClientB
+  // adds — which is exactly the cross-client clash the trainer reported.
+  useEffect(() => {
+    setLastFinishedRestSec(null);
+    lastTimerTotalRef.current = null;
+  }, [activeId]);
   useEffect(() => {
     if (restTimer.total !== null) {
       lastTimerTotalRef.current = restTimer.total;
