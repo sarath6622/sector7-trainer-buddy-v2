@@ -4,6 +4,7 @@ import { AppError } from '@/lib/errors';
 import { evaluateBodyCompositionBadges, type NewBadge } from '@/services/badge.service';
 import {
   CURATED_MUSCLE_GROUPS,
+  curatedGroupOf,
   expandCuratedGroups,
   type CuratedMuscleGroupId,
 } from '@/lib/muscle-groups';
@@ -851,4 +852,57 @@ export async function getLastSetsByExercise({
   }
 
   return Array.from(result.entries()).map(([exerciseId, sets]) => ({ exerciseId, sets }));
+}
+
+// ─── Muscle-group recency ────────────────────────────────────────────────────
+//
+// Given a client, return the most recent date each curated muscle group was
+// trained. Powers the "Chest · 3d ago" hint on the muscle-group picker so the
+// trainer can see at a glance what's overdue without leaving the session
+// screen. `excludeSessionId` keeps the in-progress session's own logs from
+// reading as "today" while the trainer is still planning.
+
+export async function getMuscleGroupRecency({
+  clientProfileId,
+  branchId,
+  excludeSessionId,
+}: {
+  clientProfileId: string;
+  branchId: string;
+  excludeSessionId?: string;
+}): Promise<Array<{ groupId: CuratedMuscleGroupId; lastTrainedAt: string | null }>> {
+  const client = await prisma.clientProfile.findFirst({
+    where: { id: clientProfileId, branchId },
+    select: { id: true },
+  });
+  if (!client) throw new AppError('CLIENT_NOT_FOUND', 'Client not found', 404);
+
+  const logs = await prisma.workoutLog.findMany({
+    where: {
+      sessionInstance: {
+        clientProfileId,
+        branchId,
+        ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}),
+      },
+    },
+    select: {
+      createdAt: true,
+      exercise: { select: { targetMuscleGroup: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  // Walk newest → oldest, take the first hit per curated bucket.
+  const found = new Map<CuratedMuscleGroupId, Date>();
+  for (const log of logs) {
+    const gid = curatedGroupOf(log.exercise.targetMuscleGroup);
+    if (!gid || found.has(gid)) continue;
+    found.set(gid, log.createdAt);
+    if (found.size === CURATED_MUSCLE_GROUPS.length) break;
+  }
+
+  return CURATED_MUSCLE_GROUPS.map((g) => ({
+    groupId: g.id,
+    lastTrainedAt: found.get(g.id)?.toISOString() ?? null,
+  }));
 }

@@ -21,11 +21,13 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
+  History as HistoryIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 import { MuscleGroupPicker, GROUP_THEME, type PickedExercise } from './MuscleGroupPicker';
+import { WorkoutHistoryList } from './WorkoutHistoryList';
 import {
   CURATED_MUSCLE_GROUPS,
   curatedGroupOf,
@@ -190,7 +192,7 @@ const TYPE_COLS: Record<ExerciseType, ColDef[]> = {
 export function WorkoutLogger({
   sessionInstanceId,
   clientProfileId,
-  clientName,
+  clientName: _clientName,
   onUnsavedChange,
   onRequestRest,
   lastFinishedRestSec,
@@ -240,6 +242,11 @@ export function WorkoutLogger({
     unit: string;
   } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Top-level view inside the session screen. 'log' is the live workout
+  // logger; 'history' shows past sessions for the same client (read-only).
+  // Switching between them keeps state in WorkoutLogger so auto-save and
+  // pending picker state survive a quick peek at history.
+  const [view, setView] = useState<'log' | 'history'>('log');
   // 'groups' opens the standard muscle-group picker; 'suggestions' jumps
   // straight to the exercise list with all 8 curated groups pre-selected so
   // the trainer can recall every past exercise without picking again.
@@ -730,567 +737,645 @@ export function WorkoutLogger({
       )}
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 pt-2.5 items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Workout Log
           </span>
-          {clientName && (
+          {/* {clientName && (
             <>
               <span className="text-xs text-muted-foreground/50">·</span>
               <span className="truncate text-xs font-semibold text-foreground">{clientName}</span>
             </>
-          )}
-          {exercises.length > 0 && (
+          )} */}
+          {view === 'log' && exercises.length > 0 && (
             <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
               {exercises.length}
             </span>
           )}
-          <AutoSaveIndicator status={autoSaveStatus} onRetry={() => void saveWorkout()} />
+          {view === 'log' && (
+            <AutoSaveIndicator status={autoSaveStatus} onRetry={() => void saveWorkout()} />
+          )}
         </div>
-        {/* Hide the small "+" while the empty state is showing — the big
-            "Add First Exercise" button below already owns that affordance. */}
-        {(exercises.length > 0 || showSearch) && (
-          <button
-            onClick={() => setShowSearch((v) => !v)}
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors ${
-              showSearch
-                ? 'bg-muted text-muted-foreground'
-                : 'bg-primary/10 text-primary hover:bg-primary/15'
-            }`}
-          >
-            {showSearch ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Log/History tab strip — flips the body between the live logger
+              and the read-only history list. Both tabs sit to the left of the
+              "+" so the trainer reaches History without losing the add-
+              exercise affordance for the active session. */}
+          <div className="flex items-center rounded-xl bg-muted/40 p-0.5 mt-2.5 ring-1 ring-border/50">
+            <button
+              type="button"
+              onClick={() => setView('log')}
+              aria-pressed={view === 'log'}
+              className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
+                view === 'log'
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Dumbbell className="h-3 w-3" />
+              Log
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setView('history');
+                setShowSearch(false);
+              }}
+              aria-pressed={view === 'history'}
+              className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
+                view === 'history'
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <HistoryIcon className="h-3 w-3" />
+              History
+            </button>
+          </div>
+          {/* "+" only on the Log tab and only when there's already at least
+              one exercise (or search is open) — the empty-state Add First
+              button owns the cold start. */}
+          {/* {view === 'log' && (exercises.length > 0 || showSearch) && (
+            <button
+              onClick={() => setShowSearch((v) => !v)}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                showSearch
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-primary/10 text-primary hover:bg-primary/15'
+              }`}
+            >
+              {showSearch ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+            </button>
+          )} */}
+        </div>
       </div>
 
-      {/* ── Today's focus — colored pill row showing the muscle groups the
-          trainer committed to via the picker(s). Drives the "Suggestions"
-          filter and gives the trainer a quick visual reminder of the day's
-          plan when juggling multiple sessions. ── */}
-      {focusGroupIds.size > 0 && (
-        <div className="-mt-1 flex items-center gap-1.5 overflow-x-auto pb-0.5">
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Today
-          </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground/40">·</span>
-          {[...focusGroupIds].map((id) => {
-            const group = CURATED_MUSCLE_GROUPS.find((g) => g.id === id);
-            if (!group) return null;
-            const theme = GROUP_THEME[id];
-            return (
-              <span
-                key={id}
-                className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${theme.bg} ${theme.text}`}
-              >
-                {group.label}
-              </span>
-            );
-          })}
+      {/* ── History view ── */}
+      {view === 'history' && clientProfileId && (
+        <WorkoutHistoryList
+          historyEndpoint={`/api/trainer/clients/${clientProfileId}/workout-history`}
+          activeSessionId={sessionInstanceId}
+        />
+      )}
+      {view === 'history' && !clientProfileId && (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
+          <HistoryIcon className="h-7 w-7 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            History is unavailable — client profile is missing.
+          </p>
         </div>
       )}
 
-      {/* ── Exercise search modal ── */}
-      {showSearch && (
+      {/* ── Log view body — every block below is gated so the History tab
+          renders nothing but the read-only history list. Wrapped in a single
+          guarded fragment to keep the diff small and the indentation flat. */}
+      {view === 'log' && (
         <>
-          <div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-            onClick={() => {
-              setShowSearch(false);
-              setSearchQuery('');
-              setSearchResults([]);
-            }}
-          />
-          <div className="fixed left-4 right-4 top-24 z-50 rounded-2xl border bg-card shadow-2xl overflow-hidden">
-            <div className="flex items-center gap-2 border-b px-3 py-2.5">
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <input
-                ref={searchRef}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                placeholder="Search exercises…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setShowSearch(false);
-                    setSearchQuery('');
-                  }
-                }}
-              />
-              <button
+          {/* ── Today's focus — colored pill row showing the muscle groups the
+          trainer committed to via the picker(s). Drives the "Suggestions"
+          filter and gives the trainer a quick visual reminder of the day's
+          plan when juggling multiple sessions. ── */}
+          {focusGroupIds.size > 0 && (
+            <div className="-mt-1 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Today
+              </span>
+              <span className="shrink-0 text-[10px] text-muted-foreground/40">·</span>
+              {[...focusGroupIds].map((id) => {
+                const group = CURATED_MUSCLE_GROUPS.find((g) => g.id === id);
+                if (!group) return null;
+                const theme = GROUP_THEME[id];
+                return (
+                  <span
+                    key={id}
+                    className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${theme.bg} ${theme.text}`}
+                  >
+                    {group.label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Exercise search modal ── */}
+          {showSearch && (
+            <>
+              <div
+                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
                 onClick={() => {
                   setShowSearch(false);
                   setSearchQuery('');
                   setSearchResults([]);
                 }}
-                className="rounded-md p-1 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
+              />
+              <div className="fixed left-4 right-4 top-24 z-50 rounded-2xl border bg-card shadow-2xl overflow-hidden">
+                <div className="flex items-center gap-2 border-b px-3 py-2.5">
+                  <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <input
+                    ref={searchRef}
+                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    placeholder="Search exercises…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setShowSearch(false);
+                        setSearchQuery('');
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      setShowSearch(false);
+                      setSearchQuery('');
+                      setSearchResults([]);
+                    }}
+                    className="rounded-md p-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
 
-            {searchResults.length > 0 ? (
-              <div className="max-h-72 overflow-y-auto divide-y divide-border/50">
-                {searchResults.map((ex) => {
-                  const cfg = TYPE_CONFIG[ex.exerciseType];
-                  const Icon = cfg.icon;
-                  return (
-                    <button
-                      key={ex.id}
-                      onClick={() => addExercise(ex)}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-muted/60"
-                    >
-                      <div
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
-                      >
-                        <Icon className={`h-4 w-4 ${cfg.text}`} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{ex.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {ex.targetMuscleGroup}
-                          {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
-                      >
-                        {cfg.label}
-                      </span>
-                    </button>
-                  );
-                })}
+                {searchResults.length > 0 ? (
+                  <div className="max-h-72 overflow-y-auto divide-y divide-border/50">
+                    {searchResults.map((ex) => {
+                      const cfg = TYPE_CONFIG[ex.exerciseType];
+                      const Icon = cfg.icon;
+                      return (
+                        <button
+                          key={ex.id}
+                          onClick={() => addExercise(ex)}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-muted/60"
+                        >
+                          <div
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
+                          >
+                            <Icon className={`h-4 w-4 ${cfg.text}`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{ex.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {ex.targetMuscleGroup}
+                              {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
+                            </p>
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
+                          >
+                            {cfg.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : searchQuery.trim() ? (
+                  <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                    No exercises found
+                  </p>
+                ) : (
+                  <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                    Start typing to search…
+                  </p>
+                )}
               </div>
-            ) : searchQuery.trim() ? (
-              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-                No exercises found
-              </p>
-            ) : (
-              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-                Start typing to search…
-              </p>
-            )}
-          </div>
-        </>
-      )}
+            </>
+          )}
 
-      {/* ── Empty state — show muscle-group picker so the trainer can plan
+          {/* ── Empty state — show muscle-group picker so the trainer can plan
           the session by tapping focus cards. Falls back to the dashed
           "no exercises" card only if we don't know who the client is
           (clientProfileId is required by the picker to fetch suggestions). */}
-      {exercises.length === 0 && !showSearch && clientProfileId && (
-        <MuscleGroupPicker
-          clientProfileId={clientProfileId}
-          allowCancel={false}
-          onAdd={addExercisesFromPicker}
-          onGroupsPicked={(ids) => setFocusGroupIds(new Set(ids))}
-        />
-      )}
-      {exercises.length === 0 && !showSearch && !clientProfileId && (
-        <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-            <Dumbbell className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div className="space-y-1">
-            <p className="text-base font-semibold">No exercises yet</p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Tap &ldquo;Add Exercise&rdquo; below to start logging
-            </p>
-          </div>
-          <button
-            onClick={() => setShowSearch(true)}
-            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
-          >
-            <Plus className="h-4 w-4" /> Add First Exercise
-          </button>
-        </div>
-      )}
+          {exercises.length === 0 && !showSearch && clientProfileId && (
+            <MuscleGroupPicker
+              clientProfileId={clientProfileId}
+              sessionInstanceId={sessionInstanceId}
+              allowCancel={false}
+              onAdd={addExercisesFromPicker}
+              onGroupsPicked={(ids) => setFocusGroupIds(new Set(ids))}
+            />
+          )}
+          {exercises.length === 0 && !showSearch && !clientProfileId && (
+            <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                <Dumbbell className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-base font-semibold">No exercises yet</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Tap &ldquo;Add Exercise&rdquo; below to start logging
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSearch(true)}
+                className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+              >
+                <Plus className="h-4 w-4" /> Add First Exercise
+              </button>
+            </div>
+          )}
 
-      {/* ── Mid-session "By Muscle" picker — bottom sheet so the workout list
+          {/* ── Mid-session "By Muscle" picker — bottom sheet so the workout list
           stays in place underneath. Continues UNION today's focus so adding
           a new group extends the session plan rather than replacing it.
           AnimatePresence keeps the picker mounted long enough for the
           slide-down exit animation to play before the DOM cleanup. ── */}
-      <AnimatePresence>
-        {exercises.length > 0 && pickerOpen && clientProfileId && (
-          <MuscleGroupPicker
-            key="picker-by-muscle"
-            clientProfileId={clientProfileId}
-            allowCancel
-            onCancel={() => setPickerOpen(false)}
-            onAdd={addExercisesFromPicker}
-            onGroupsPicked={(ids) =>
-              setFocusGroupIds((prev) => {
-                const next = new Set(prev);
-                for (const id of ids) next.add(id);
-                return next;
-              })
-            }
-            presentation="sheet"
-            excludeExerciseIds={exercises.map((e) => e.exerciseId)}
-          />
-        )}
-      </AnimatePresence>
+          <AnimatePresence>
+            {exercises.length > 0 && pickerOpen && clientProfileId && (
+              <MuscleGroupPicker
+                key="picker-by-muscle"
+                clientProfileId={clientProfileId}
+                sessionInstanceId={sessionInstanceId}
+                allowCancel
+                onCancel={() => setPickerOpen(false)}
+                onAdd={addExercisesFromPicker}
+                onGroupsPicked={(ids) =>
+                  setFocusGroupIds((prev) => {
+                    const next = new Set(prev);
+                    for (const id of ids) next.add(id);
+                    return next;
+                  })
+                }
+                presentation="sheet"
+                excludeExerciseIds={exercises.map((e) => e.exerciseId)}
+              />
+            )}
+          </AnimatePresence>
 
-      {/* ── Suggestions picker — bottom sheet pre-seeded with today's focus
+          {/* ── Suggestions picker — bottom sheet pre-seeded with today's focus
           so the recall list is filtered to "Chest & Back day" instead of
           dumping every past exercise. Falls back to all 8 groups when focus
           is empty. The Back button still lets them widen/narrow on the fly. */}
-      <AnimatePresence>
-        {suggestionsOpen && clientProfileId && (
-          <MuscleGroupPicker
-            key="picker-suggestions"
-            clientProfileId={clientProfileId}
-            allowCancel
-            onCancel={() => setSuggestionsOpen(false)}
-            onAdd={addExercisesFromPicker}
-            initialGroupIds={
-              focusGroupIds.size > 0 ? [...focusGroupIds] : CURATED_MUSCLE_GROUPS.map((g) => g.id)
-            }
-            autoAdvance
-            presentation="sheet"
-            excludeExerciseIds={exercises.map((e) => e.exerciseId)}
-          />
-        )}
-      </AnimatePresence>
+          <AnimatePresence>
+            {suggestionsOpen && clientProfileId && (
+              <MuscleGroupPicker
+                key="picker-suggestions"
+                clientProfileId={clientProfileId}
+                sessionInstanceId={sessionInstanceId}
+                allowCancel
+                onCancel={() => setSuggestionsOpen(false)}
+                onAdd={addExercisesFromPicker}
+                initialGroupIds={
+                  focusGroupIds.size > 0
+                    ? [...focusGroupIds]
+                    : CURATED_MUSCLE_GROUPS.map((g) => g.id)
+                }
+                autoAdvance
+                presentation="sheet"
+                excludeExerciseIds={exercises.map((e) => e.exerciseId)}
+              />
+            )}
+          </AnimatePresence>
 
-      {/* ── Exercise cards ── */}
-      {exercises.map((entry, exIdx) => {
-        const cfg = TYPE_CONFIG[entry.exerciseType] ?? TYPE_CONFIG.WEIGHTED;
-        const Icon = cfg.icon;
-        const cols = TYPE_COLS[entry.exerciseType] ?? TYPE_COLS.WEIGHTED;
+          {/* ── Exercise cards ── */}
+          {exercises.map((entry, exIdx) => {
+            const cfg = TYPE_CONFIG[entry.exerciseType] ?? TYPE_CONFIG.WEIGHTED;
+            const Icon = cfg.icon;
+            const cols = TYPE_COLS[entry.exerciseType] ?? TYPE_COLS.WEIGHTED;
 
-        return (
-          <div
-            key={entry.tempId}
-            className="overflow-hidden rounded-2xl bg-card shadow-sm"
-            style={{
-              border: '1px solid rgba(255,255,255,0.06)',
-              borderLeftWidth: 3,
-              borderLeftColor: cfg.accent,
-            }}
-          >
-            {/* Card header — entire row toggles collapse so the trainer
+            return (
+              <div
+                key={entry.tempId}
+                className="overflow-hidden rounded-2xl bg-card shadow-sm"
+                style={{
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderLeftWidth: 3,
+                  borderLeftColor: cfg.accent,
+                }}
+              >
+                {/* Card header — entire row toggles collapse so the trainer
                 doesn't have to hit a tiny chevron. The action buttons
                 (progress, delete) stop propagation so they keep their own
                 tap targets. */}
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => toggleCollapse(entry.tempId)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  toggleCollapse(entry.tempId);
-                }
-              }}
-              className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors active:bg-muted/30"
-            >
-              <div
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
-              >
-                <Icon className={`h-4 w-4 ${cfg.text}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold leading-tight">{entry.exerciseName}</p>
-                <div className="mt-0.5 flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground">{entry.targetMuscle}</span>
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
-                  >
-                    {entry.sets.length} {entry.sets.length === 1 ? 'set' : 'sets'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-0.5">
-                {clientProfileId && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const unit =
-                        entry.exerciseType === 'WEIGHTED'
-                          ? 'kg'
-                          : entry.exerciseType === 'CARDIO'
-                            ? 'km'
-                            : entry.exerciseType === 'DURATION'
-                              ? 'sec'
-                              : 'reps';
-                      setProgressModal({
-                        exerciseId: entry.exerciseId,
-                        exerciseName: entry.exerciseName,
-                        unit,
-                      });
-                    }}
-                    className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition-colors active:bg-primary/10 active:text-primary"
-                    title="View progress"
-                  >
-                    <TrendingUp className="h-4 w-4" />
-                  </button>
-                )}
-                {/* Chevron is now decorative — the surrounding row handles the
-                    tap. Kept as a span (not a button) so it doesn't steal a
-                    tap target or nest interactives. */}
-                <span
-                  aria-hidden
-                  className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground"
-                >
-                  <motion.span
-                    animate={{ rotate: entry.collapsed ? 0 : 180 }}
-                    transition={{ duration: 0.2, ease: 'easeInOut' }}
-                    className="flex"
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </motion.span>
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeExercise(entry.tempId);
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleCollapse(entry.tempId)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleCollapse(entry.tempId);
+                    }
                   }}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground/60 transition-colors active:bg-destructive/10 active:text-destructive"
+                  className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors active:bg-muted/30"
                 >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Set table (collapsible) */}
-            <AnimatePresence initial={false}>
-              {!entry.collapsed && (
-                <motion.div
-                  key="content"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  style={{ overflow: 'hidden' }}
-                >
-                  <div className="border-t border-border/40 px-4 pb-4 pt-3">
-                    {/* Column header row */}
-                    <div className={`mb-2 grid items-center gap-2 ${getGridClass(cols.length)}`}>
-                      <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        #
+                  <div
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
+                  >
+                    <Icon className={`h-4 w-4 ${cfg.text}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold leading-tight">
+                      {entry.exerciseName}
+                    </p>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">
+                        {entry.targetMuscle}
                       </span>
-                      {cols.map((col) => (
-                        <span
-                          key={col.key as string}
-                          className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                        >
-                          {col.label}
-                        </span>
-                      ))}
-                      <span />
-                    </div>
-
-                    {/* Set rows */}
-                    <div className="space-y-2">
-                      {entry.sets.map((set, setIdx) => (
-                        <div
-                          key={setIdx}
-                          className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
-                        >
-                          {/* Set number badge */}
-                          <div className="flex items-center justify-center">
-                            <span
-                              className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-                              style={{ backgroundColor: cfg.accent + '22', color: cfg.accent }}
-                            >
-                              {set.setNumber}
-                            </span>
-                          </div>
-
-                          {/* Dynamic fields */}
-                          {cols.map((col) => {
-                            // Rest cell is a 3-state toggle: idle (tap to
-                            // start rest), active (live countdown for the
-                            // row that owns the running timer), done
-                            // (recorded MM:SS value).
-                            if (col.key === 'restSec') {
-                              const isActiveTarget =
-                                pendingRestTarget?.tempId === entry.tempId &&
-                                pendingRestTarget?.setNumber === set.setNumber;
-                              const hasValue = set.restSec !== undefined;
-                              const isActive =
-                                isActiveTarget &&
-                                restTimerRemaining !== undefined &&
-                                restTimerRemaining !== null;
-
-                              if (hasValue) {
-                                return (
-                                  <div
-                                    key={col.key as string}
-                                    className="flex h-11 items-center justify-center rounded-xl border border-zinc-800 bg-muted/20 text-sm font-semibold tabular-nums text-foreground"
-                                  >
-                                    {formatRestSec(set.restSec)}
-                                  </div>
-                                );
-                              }
-                              if (isActive) {
-                                return (
-                                  <div
-                                    key={col.key as string}
-                                    aria-live="polite"
-                                    className={`flex h-11 items-center justify-center gap-1 rounded-xl border text-sm font-bold tabular-nums ${
-                                      restTimerPaused
-                                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                                        : 'border-blue-500/50 bg-blue-500/15 text-blue-300'
-                                    }`}
-                                  >
-                                    {restTimerPaused && (
-                                      <span className="text-[10px] uppercase opacity-70">||</span>
-                                    )}
-                                    {formatRestSec(restTimerRemaining ?? 0)}
-                                  </div>
-                                );
-                              }
-                              // Idle: only enable the rest button once the
-                              // trainer has logged the work for this set
-                              // (kg + reps for WEIGHTED, reps for
-                              // BODYWEIGHT, duration for DURATION). Resting
-                              // before logging is almost always a mis-tap.
-                              const setLogged = cols
-                                .filter((c) => c.key !== 'restSec' && c.key !== 'notes')
-                                .every((c) => (set[c.key] as number | undefined) !== undefined);
-                              return (
-                                <button
-                                  key={col.key as string}
-                                  onClick={() => requestRestForSet(entry.tempId, set.setNumber)}
-                                  disabled={!setLogged}
-                                  aria-label={
-                                    setLogged
-                                      ? `Start rest after set ${set.setNumber}`
-                                      : `Log this set before starting rest`
-                                  }
-                                  className="flex h-11 items-center justify-center rounded-xl border border-blue-500/30 text-blue-400/70 transition-colors active:bg-blue-500/10 active:text-blue-400 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-muted-foreground/30 disabled:active:bg-transparent"
-                                >
-                                  <BedDouble className="h-4 w-4" />
-                                </button>
-                              );
-                            }
-                            return (
-                              <Input
-                                key={col.key as string}
-                                type="number"
-                                inputMode="decimal"
-                                placeholder={placeholderFor(
-                                  col.key,
-                                  priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
-                                )}
-                                step={col.step}
-                                min={col.min}
-                                max={col.max}
-                                className="h-11 rounded-xl text-center text-sm font-semibold tabular-nums border border-zinc-700 focus:border-blue-500 focus-visible:ring-0"
-                                value={
-                                  col.key === 'notes'
-                                    ? set.notes
-                                    : ((set[col.key] as number | undefined) ?? '')
-                                }
-                                onChange={(e) => updateSet(exIdx, setIdx, col.key, e.target.value)}
-                              />
-                            );
-                          })}
-
-                          {/* Remove set */}
-                          <button
-                            onClick={() => removeSet(exIdx, setIdx)}
-                            disabled={entry.sets.length <= 1}
-                            className="flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground/40 transition-colors active:bg-destructive/10 active:text-destructive disabled:pointer-events-none disabled:opacity-20"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Add Set — rest is initiated per-row via the cell's
-                        idle button, so the bottom row no longer needs a
-                        separate Rest affordance. */}
-                    <div className="mt-3">
-                      <button
-                        onClick={() => addSet(exIdx)}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
                       >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add Set
-                      </button>
+                        {entry.sets.length} {entry.sets.length === 1 ? 'set' : 'sets'}
+                      </span>
                     </div>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        );
-      })}
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {clientProfileId && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const unit =
+                            entry.exerciseType === 'WEIGHTED'
+                              ? 'kg'
+                              : entry.exerciseType === 'CARDIO'
+                                ? 'km'
+                                : entry.exerciseType === 'DURATION'
+                                  ? 'sec'
+                                  : 'reps';
+                          setProgressModal({
+                            exerciseId: entry.exerciseId,
+                            exerciseName: entry.exerciseName,
+                            unit,
+                          });
+                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition-colors active:bg-primary/10 active:text-primary"
+                        title="View progress"
+                      >
+                        <TrendingUp className="h-4 w-4" />
+                      </button>
+                    )}
+                    {/* Chevron is now decorative — the surrounding row handles the
+                    tap. Kept as a span (not a button) so it doesn't steal a
+                    tap target or nest interactives. */}
+                    <span
+                      aria-hidden
+                      className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground"
+                    >
+                      <motion.span
+                        animate={{ rotate: entry.collapsed ? 0 : 180 }}
+                        transition={{ duration: 0.2, ease: 'easeInOut' }}
+                        className="flex"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </motion.span>
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeExercise(entry.tempId);
+                      }}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground/60 transition-colors active:bg-destructive/10 active:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
 
-      {/* ── Bottom CTAs — three peers for adding more work to the session:
+                {/* Set table (collapsible) */}
+                <AnimatePresence initial={false}>
+                  {!entry.collapsed && (
+                    <motion.div
+                      key="content"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25, ease: 'easeInOut' }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      <div className="border-t border-border/40 px-4 pb-4 pt-3">
+                        {/* Column header row */}
+                        <div
+                          className={`mb-2 grid items-center gap-2 ${getGridClass(cols.length)}`}
+                        >
+                          <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            #
+                          </span>
+                          {cols.map((col) => (
+                            <span
+                              key={col.key as string}
+                              className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                            >
+                              {col.label}
+                            </span>
+                          ))}
+                          <span />
+                        </div>
+
+                        {/* Set rows */}
+                        <div className="space-y-2">
+                          {entry.sets.map((set, setIdx) => (
+                            <div
+                              key={setIdx}
+                              className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
+                            >
+                              {/* Set number badge */}
+                              <div className="flex items-center justify-center">
+                                <span
+                                  className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
+                                  style={{ backgroundColor: cfg.accent + '22', color: cfg.accent }}
+                                >
+                                  {set.setNumber}
+                                </span>
+                              </div>
+
+                              {/* Dynamic fields */}
+                              {cols.map((col) => {
+                                // Rest cell is a 3-state toggle: idle (tap to
+                                // start rest), active (live countdown for the
+                                // row that owns the running timer), done
+                                // (recorded MM:SS value).
+                                if (col.key === 'restSec') {
+                                  const isActiveTarget =
+                                    pendingRestTarget?.tempId === entry.tempId &&
+                                    pendingRestTarget?.setNumber === set.setNumber;
+                                  const hasValue = set.restSec !== undefined;
+                                  const isActive =
+                                    isActiveTarget &&
+                                    restTimerRemaining !== undefined &&
+                                    restTimerRemaining !== null;
+
+                                  if (hasValue) {
+                                    return (
+                                      <div
+                                        key={col.key as string}
+                                        className="flex h-11 items-center justify-center rounded-xl border border-zinc-800 bg-muted/20 text-sm font-semibold tabular-nums text-foreground"
+                                      >
+                                        {formatRestSec(set.restSec)}
+                                      </div>
+                                    );
+                                  }
+                                  if (isActive) {
+                                    return (
+                                      <div
+                                        key={col.key as string}
+                                        aria-live="polite"
+                                        className={`flex h-11 items-center justify-center gap-1 rounded-xl border text-sm font-bold tabular-nums ${
+                                          restTimerPaused
+                                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                                            : 'border-blue-500/50 bg-blue-500/15 text-blue-300'
+                                        }`}
+                                      >
+                                        {restTimerPaused && (
+                                          <span className="text-[10px] uppercase opacity-70">
+                                            ||
+                                          </span>
+                                        )}
+                                        {formatRestSec(restTimerRemaining ?? 0)}
+                                      </div>
+                                    );
+                                  }
+                                  // Idle: only enable the rest button once the
+                                  // trainer has logged the work for this set
+                                  // (kg + reps for WEIGHTED, reps for
+                                  // BODYWEIGHT, duration for DURATION). Resting
+                                  // before logging is almost always a mis-tap.
+                                  const setLogged = cols
+                                    .filter((c) => c.key !== 'restSec' && c.key !== 'notes')
+                                    .every((c) => (set[c.key] as number | undefined) !== undefined);
+                                  return (
+                                    <button
+                                      key={col.key as string}
+                                      onClick={() => requestRestForSet(entry.tempId, set.setNumber)}
+                                      disabled={!setLogged}
+                                      aria-label={
+                                        setLogged
+                                          ? `Start rest after set ${set.setNumber}`
+                                          : `Log this set before starting rest`
+                                      }
+                                      className="flex h-11 items-center justify-center rounded-xl border border-blue-500/30 text-blue-400/70 transition-colors active:bg-blue-500/10 active:text-blue-400 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-muted-foreground/30 disabled:active:bg-transparent"
+                                    >
+                                      <BedDouble className="h-4 w-4" />
+                                    </button>
+                                  );
+                                }
+                                return (
+                                  <Input
+                                    key={col.key as string}
+                                    type="number"
+                                    inputMode="decimal"
+                                    placeholder={placeholderFor(
+                                      col.key,
+                                      priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
+                                    )}
+                                    step={col.step}
+                                    min={col.min}
+                                    max={col.max}
+                                    className="h-11 rounded-xl text-center text-sm font-semibold tabular-nums border border-zinc-700 focus:border-blue-500 focus-visible:ring-0"
+                                    value={
+                                      col.key === 'notes'
+                                        ? set.notes
+                                        : ((set[col.key] as number | undefined) ?? '')
+                                    }
+                                    onChange={(e) =>
+                                      updateSet(exIdx, setIdx, col.key, e.target.value)
+                                    }
+                                  />
+                                );
+                              })}
+
+                              {/* Remove set */}
+                              <button
+                                onClick={() => removeSet(exIdx, setIdx)}
+                                disabled={entry.sets.length <= 1}
+                                className="flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground/40 transition-colors active:bg-destructive/10 active:text-destructive disabled:pointer-events-none disabled:opacity-20"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Add Set — rest is initiated per-row via the cell's
+                        idle button, so the bottom row no longer needs a
+                        separate Rest affordance. */}
+                        <div className="mt-3">
+                          <button
+                            onClick={() => addSet(exIdx)}
+                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add Set
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
+
+          {/* ── Bottom CTAs — three peers for adding more work to the session:
           search the catalog, pick by curated muscle group, or recall every
           past exercise this client has done. Only the search button is
           shown when we don't have a clientProfileId (legacy callers). ── */}
-      {exercises.length > 0 && (
-        <div className={clientProfileId ? 'grid grid-cols-3 gap-2' : ''}>
-          <button
-            onClick={() => {
-              setShowSearch((v) => !v);
-              if (!showSearch)
-                setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
-            }}
-            className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
-              showSearch
-                ? 'border-border/40 text-muted-foreground'
-                : 'border-primary/30 text-primary hover:bg-primary/5'
-            }`}
-          >
-            {showSearch ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-            {showSearch ? 'Cancel' : 'Search'}
-          </button>
-          {clientProfileId && (
-            <>
+          {exercises.length > 0 && (
+            <div className={clientProfileId ? 'grid grid-cols-3 gap-2' : ''}>
               <button
                 onClick={() => {
-                  setPickerOpen((v) => !v);
-                  setSuggestionsOpen(false);
-                  if (!pickerOpen)
+                  setShowSearch((v) => !v);
+                  if (!showSearch)
                     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
                 }}
                 className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
-                  pickerOpen
+                  showSearch
                     ? 'border-border/40 text-muted-foreground'
-                    : 'border-violet-500/40 text-violet-400 hover:bg-violet-500/5'
+                    : 'border-primary/30 text-primary hover:bg-primary/5'
                 }`}
               >
-                {pickerOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                {pickerOpen ? 'Cancel' : 'By Muscle'}
+                {showSearch ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+                {showSearch ? 'Cancel' : 'Search'}
               </button>
-              <button
-                onClick={() => {
-                  setSuggestionsOpen((v) => !v);
-                  setPickerOpen(false);
-                  if (!suggestionsOpen)
-                    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
-                }}
-                className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
-                  suggestionsOpen
-                    ? 'border-border/40 text-muted-foreground'
-                    : 'border-amber-500/40 text-amber-400 hover:bg-amber-500/5'
-                }`}
-              >
-                {suggestionsOpen ? <X className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                {suggestionsOpen ? 'Cancel' : 'Suggestions'}
-              </button>
-            </>
+              {clientProfileId && (
+                <>
+                  <button
+                    onClick={() => {
+                      setPickerOpen((v) => !v);
+                      setSuggestionsOpen(false);
+                      if (!pickerOpen)
+                        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
+                    }}
+                    className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
+                      pickerOpen
+                        ? 'border-border/40 text-muted-foreground'
+                        : 'border-violet-500/40 text-violet-400 hover:bg-violet-500/5'
+                    }`}
+                  >
+                    {pickerOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    {pickerOpen ? 'Cancel' : 'By Muscle'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSuggestionsOpen((v) => !v);
+                      setPickerOpen(false);
+                      if (!suggestionsOpen)
+                        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
+                    }}
+                    className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
+                      suggestionsOpen
+                        ? 'border-border/40 text-muted-foreground'
+                        : 'border-amber-500/40 text-amber-400 hover:bg-amber-500/5'
+                    }`}
+                  >
+                    {suggestionsOpen ? <X className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                    {suggestionsOpen ? 'Cancel' : 'Suggestions'}
+                  </button>
+                </>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      {/* ── Exercise Progress Modal ── */}
-      {progressModal && clientProfileId && (
-        <ExerciseProgressModal
-          clientProfileId={clientProfileId}
-          exerciseId={progressModal.exerciseId}
-          exerciseName={progressModal.exerciseName}
-          unit={progressModal.unit}
-          onClose={() => setProgressModal(null)}
-        />
+          {/* ── Exercise Progress Modal ── */}
+          {progressModal && clientProfileId && (
+            <ExerciseProgressModal
+              clientProfileId={clientProfileId}
+              exerciseId={progressModal.exerciseId}
+              exerciseName={progressModal.exerciseName}
+              unit={progressModal.unit}
+              onClose={() => setProgressModal(null)}
+            />
+          )}
+        </>
       )}
     </div>
   );

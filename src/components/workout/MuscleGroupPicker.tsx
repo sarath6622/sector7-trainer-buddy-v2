@@ -124,6 +124,10 @@ interface MuscleGroupPickerProps {
    *  suggestion list so the trainer doesn't see Bench Press recommended again
    *  after just adding it. Empty/omitted means show everything. */
   excludeExerciseIds?: string[];
+  /** Current session being logged — when set, its own logs are excluded from
+   *  the muscle-group recency hint so a half-logged "chest" session doesn't
+   *  read as "today" while the trainer is still picking groups. */
+  sessionInstanceId?: string;
 }
 
 export function MuscleGroupPicker({
@@ -136,6 +140,7 @@ export function MuscleGroupPicker({
   onGroupsPicked,
   presentation = 'inline',
   excludeExerciseIds,
+  sessionInstanceId,
 }: MuscleGroupPickerProps) {
   const [step, setStep] = useState<'groups' | 'exercises'>('groups');
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<CuratedMuscleGroupId>>(
@@ -145,6 +150,42 @@ export function MuscleGroupPicker({
   const [loading, setLoading] = useState(false);
   const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<string>>(new Set());
   const autoAdvanceRan = useRef(false);
+  // Per-group last-trained timestamps. Fetched once when the groups step is
+  // visible so each card can show "3d ago". `null` value = never trained;
+  // missing key (before fetch resolves) renders a faint shimmer.
+  const [recencyByGroup, setRecencyByGroup] = useState<Map<CuratedMuscleGroupId, string | null>>(
+    () => new Map(),
+  );
+  const [recencyLoading, setRecencyLoading] = useState(false);
+
+  // Skip the fetch when autoAdvance is on — that flow lands the trainer
+  // straight on step 2, so the recency hints would never be seen.
+  useEffect(() => {
+    if (autoAdvance) return;
+    const ctrl = new AbortController();
+    const url = sessionInstanceId
+      ? `/api/trainer/clients/${clientProfileId}/muscle-group-recency?excludeSessionId=${encodeURIComponent(sessionInstanceId)}`
+      : `/api/trainer/clients/${clientProfileId}/muscle-group-recency`;
+    setRecencyLoading(true);
+    fetch(url, { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then(
+        ({
+          data,
+        }: {
+          data: Array<{ groupId: CuratedMuscleGroupId; lastTrainedAt: string | null }>;
+        }) => {
+          const next = new Map<CuratedMuscleGroupId, string | null>();
+          for (const item of data ?? []) next.set(item.groupId, item.lastTrainedAt);
+          setRecencyByGroup(next);
+        },
+      )
+      .catch(() => {
+        /* network/abort — leave the cards hint-less rather than blocking */
+      })
+      .finally(() => setRecencyLoading(false));
+    return () => ctrl.abort();
+  }, [clientProfileId, sessionInstanceId, autoAdvance]);
 
   function toggleGroup(id: CuratedMuscleGroupId) {
     setSelectedGroupIds((prev) => {
@@ -260,6 +301,8 @@ export function MuscleGroupPicker({
         void fetchSuggestions();
       }}
       loading={loading}
+      recencyByGroup={recencyByGroup}
+      recencyLoading={recencyLoading}
     />
   ) : (
     <ExercisesStep
@@ -358,12 +401,16 @@ function GroupsStep({
   onCancel,
   onContinue,
   loading,
+  recencyByGroup,
+  recencyLoading,
 }: {
   selected: Set<CuratedMuscleGroupId>;
   onToggle: (id: CuratedMuscleGroupId) => void;
   onCancel?: () => void;
   onContinue: () => void;
   loading: boolean;
+  recencyByGroup: Map<CuratedMuscleGroupId, string | null>;
+  recencyLoading: boolean;
 }) {
   const count = selected.size;
   return (
@@ -393,6 +440,18 @@ function GroupsStep({
         {CURATED_MUSCLE_GROUPS.map((g) => {
           const isOn = selected.has(g.id);
           const theme = GROUP_THEME[g.id];
+          const hasRecency = recencyByGroup.has(g.id);
+          const lastTrainedAt = recencyByGroup.get(g.id) ?? null;
+          // Recency line replaces the redundant "Selected" label (selection is
+          // already conveyed by the ring + check). Shows "3d ago" / "today" /
+          // "new" so the trainer can spot which muscle group is overdue.
+          const recencyLabel = hasRecency
+            ? lastTrainedAt
+              ? formatAgo(lastTrainedAt)
+              : 'new'
+            : recencyLoading
+              ? null
+              : null;
           return (
             <button
               key={g.id}
@@ -411,9 +470,17 @@ function GroupsStep({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold leading-tight">{g.label}</p>
-                {isOn && (
-                  <p className={`mt-0.5 text-[10px] font-semibold ${theme.text}`}>Selected</p>
-                )}
+                {recencyLabel ? (
+                  <p
+                    className={`mt-0.5 truncate text-[10px] font-medium ${
+                      lastTrainedAt ? 'text-muted-foreground' : theme.text
+                    }`}
+                  >
+                    {recencyLabel}
+                  </p>
+                ) : recencyLoading ? (
+                  <span className="mt-1 block h-2 w-10 animate-pulse rounded bg-muted" />
+                ) : null}
               </div>
               {isOn && (
                 <div
