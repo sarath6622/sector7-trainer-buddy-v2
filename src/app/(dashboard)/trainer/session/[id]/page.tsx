@@ -334,80 +334,130 @@ function OthersChip({
   const urgent = idleSec != null && idleSec >= 1200;
   const showIdle = idleMs != null && idleSec != null && idleSec >= 60;
 
-  // Rest state takes priority over the idle counter. A client mid-rest isn't
-  // idle in the trainer's mental model — they're on the clock.
-  type Mode = 'rest-running' | 'rest-paused' | 'rest-done' | 'idle';
-  const mode: Mode = rest.isDone
-    ? 'rest-done'
-    : rest.isRunning
-      ? 'rest-running'
-      : rest.isPaused
-        ? 'rest-paused'
-        : 'idle';
+  // How long has the rest timer been done? Used to escalate the "Rest done"
+  // state — fresh for the first 2 min (trainer just needs to come back),
+  // amber after 2 min (needs attention), red after 5 min (urgent — client
+  // has been waiting unattended). The thresholds are tighter than activity-
+  // idle thresholds because the rest timer hitting zero is an explicit
+  // "ready for the next set" signal.
+  const restDoneSec =
+    rest.isDone && rest.endTime != null ? Math.max(0, Math.floor((now - rest.endTime) / 1000)) : 0;
+  const restDoneWarn = rest.isDone && restDoneSec >= 120 && restDoneSec < 300;
+  const restDoneUrgent = rest.isDone && restDoneSec >= 300;
+  const restDoneFresh = rest.isDone && restDoneSec < 120;
+
+  // Rest state takes priority over the activity-idle counter. A client mid-
+  // rest isn't idle in the trainer's mental model — they're on the clock.
+  type Mode =
+    | 'rest-running'
+    | 'rest-paused'
+    | 'rest-done-fresh'
+    | 'rest-done-warn'
+    | 'rest-done-urgent'
+    | 'idle';
+  const mode: Mode = restDoneUrgent
+    ? 'rest-done-urgent'
+    : restDoneWarn
+      ? 'rest-done-warn'
+      : restDoneFresh
+        ? 'rest-done-fresh'
+        : rest.isRunning
+          ? 'rest-running'
+          : rest.isPaused
+            ? 'rest-paused'
+            : 'idle';
 
   const avatarTone =
-    mode === 'rest-done'
+    mode === 'rest-done-fresh'
       ? 'bg-emerald-500/20 text-emerald-400'
-      : mode === 'rest-running'
-        ? 'bg-blue-500/15 text-blue-400'
-        : mode === 'rest-paused'
-          ? 'bg-amber-500/20 text-amber-400'
-          : urgent
-            ? 'bg-red-500/20 text-red-400'
-            : warn
+      : mode === 'rest-done-warn'
+        ? 'bg-amber-500/20 text-amber-400'
+        : mode === 'rest-done-urgent'
+          ? 'bg-red-500/20 text-red-400'
+          : mode === 'rest-running'
+            ? 'bg-blue-500/15 text-blue-400'
+            : mode === 'rest-paused'
               ? 'bg-amber-500/20 text-amber-400'
-              : 'bg-primary/15 text-primary';
+              : urgent
+                ? 'bg-red-500/20 text-red-400'
+                : warn
+                  ? 'bg-amber-500/20 text-amber-400'
+                  : 'bg-primary/15 text-primary';
 
   const dotTone =
-    mode === 'rest-done'
+    mode === 'rest-done-fresh'
       ? 'bg-emerald-500'
-      : mode === 'rest-running'
-        ? 'bg-blue-500'
-        : mode === 'rest-paused'
-          ? 'bg-amber-500'
-          : urgent
-            ? 'bg-red-500'
-            : warn
+      : mode === 'rest-done-warn'
+        ? 'bg-amber-500'
+        : mode === 'rest-done-urgent'
+          ? 'bg-red-500'
+          : mode === 'rest-running'
+            ? 'bg-blue-500'
+            : mode === 'rest-paused'
               ? 'bg-amber-500'
-              : 'bg-muted-foreground/40';
+              : urgent
+                ? 'bg-red-500'
+                : warn
+                  ? 'bg-amber-500'
+                  : 'bg-muted-foreground/40';
 
   const subColor =
-    mode === 'rest-done'
+    mode === 'rest-done-fresh'
       ? 'text-emerald-400'
-      : mode === 'rest-running'
-        ? 'text-blue-400'
-        : mode === 'rest-paused'
-          ? 'text-amber-400'
-          : urgent
-            ? 'text-red-400'
-            : warn
+      : mode === 'rest-done-warn'
+        ? 'text-amber-400'
+        : mode === 'rest-done-urgent'
+          ? 'text-red-400'
+          : mode === 'rest-running'
+            ? 'text-blue-400'
+            : mode === 'rest-paused'
               ? 'text-amber-400'
-              : 'text-muted-foreground';
+              : urgent
+                ? 'text-red-400'
+                : warn
+                  ? 'text-amber-400'
+                  : 'text-muted-foreground';
 
-  // Ring + chip-pulse: rest-done is the most actionable state, so it pings
-  // even harder than urgent idle. Running/paused rest is calm (just colored).
+  // Ring + chip-pulse: rest-done escalates as the wait grows. Fresh = calm
+  // emerald ping, warn/urgent ping in their respective tones. Running/
+  // paused rest is calm (just colored, no animation).
   const ringTone =
-    mode === 'rest-done'
+    mode === 'rest-done-fresh'
       ? 'ring-emerald-500/50'
-      : mode === 'rest-running'
-        ? 'ring-blue-500/30'
-        : mode === 'rest-paused'
-          ? 'ring-amber-500/30'
-          : urgent
-            ? 'ring-red-500/40'
-            : warn
+      : mode === 'rest-done-warn'
+        ? 'ring-amber-500/40'
+        : mode === 'rest-done-urgent'
+          ? 'ring-red-500/50'
+          : mode === 'rest-running'
+            ? 'ring-blue-500/30'
+            : mode === 'rest-paused'
               ? 'ring-amber-500/30'
-              : 'ring-border/50';
+              : urgent
+                ? 'ring-red-500/40'
+                : warn
+                  ? 'ring-amber-500/30'
+                  : 'ring-border/50';
 
   const pulseTone =
-    mode === 'rest-done' ? 'bg-emerald-500' : urgent ? 'bg-red-500' : warn ? 'bg-amber-500' : null;
+    mode === 'rest-done-fresh'
+      ? 'bg-emerald-500'
+      : mode === 'rest-done-warn'
+        ? 'bg-amber-500'
+        : mode === 'rest-done-urgent' || urgent
+          ? 'bg-red-500'
+          : warn
+            ? 'bg-amber-500'
+            : null;
 
-  const chipPulse = mode === 'rest-done' || urgent;
+  // Chip-level pulse only at the strongest urgency states.
+  const chipPulse = mode === 'rest-done-urgent' || urgent;
 
   let subText: string;
   if (mode === 'rest-running') subText = `Resting · ${formatRestRemaining(rest.remaining)}`;
   else if (mode === 'rest-paused') subText = `Rest paused · ${formatRestRemaining(rest.remaining)}`;
-  else if (mode === 'rest-done') subText = 'Rest done!';
+  else if (mode === 'rest-done-fresh') subText = 'Rest done!';
+  else if (mode === 'rest-done-warn' || mode === 'rest-done-urgent')
+    subText = `Rest done · ${formatIdle(restDoneSec * 1000)}`;
   else if (showIdle) subText = `${formatIdle(idleMs!)} idle`;
   else subText = 'Active';
 
@@ -832,43 +882,69 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             const urgent = idleSec != null && idleSec >= 1200;
             const showIdle = idleMs != null && idleSec != null && idleSec >= 60;
 
+            // Same escalation as OthersChip: rest-done is fresh for 2 min,
+            // amber for 2-5 min, red beyond 5 min. Keeps the hero's status
+            // vocabulary in lockstep with the inactive chips so trainers
+            // read consistent meaning across the row.
+            const restDoneSec =
+              restTimer.isDone && restTimer.endTime != null
+                ? Math.max(0, Math.floor((now - restTimer.endTime) / 1000))
+                : 0;
+            const restDoneFresh = restTimer.isDone && restDoneSec < 120;
+            const restDoneWarn = restTimer.isDone && restDoneSec >= 120 && restDoneSec < 300;
+            const restDoneUrgent = restTimer.isDone && restDoneSec >= 300;
+
             type HeroStatus =
               | { kind: 'session-paused'; label: string }
               | { kind: 'rest-running'; label: string }
               | { kind: 'rest-paused'; label: string }
-              | { kind: 'rest-done'; label: string }
+              | { kind: 'rest-done-fresh'; label: string }
+              | { kind: 'rest-done-warn'; label: string }
+              | { kind: 'rest-done-urgent'; label: string }
               | { kind: 'idle-warn'; label: string }
               | { kind: 'idle-urgent'; label: string }
               | { kind: 'live'; label: string };
 
             const status: HeroStatus = sessionPause.isPaused
               ? { kind: 'session-paused', label: 'Session paused' }
-              : restTimer.isDone
-                ? { kind: 'rest-done', label: 'Rest done!' }
-                : restTimer.isRunning
+              : restDoneUrgent
+                ? {
+                    kind: 'rest-done-urgent',
+                    label: `Rest done · ${formatIdle(restDoneSec * 1000)}`,
+                  }
+                : restDoneWarn
                   ? {
-                      kind: 'rest-running',
-                      label: `Resting · ${formatRestRemaining(restTimer.remaining)}`,
+                      kind: 'rest-done-warn',
+                      label: `Rest done · ${formatIdle(restDoneSec * 1000)}`,
                     }
-                  : restTimer.isPaused
-                    ? {
-                        kind: 'rest-paused',
-                        label: `Rest paused · ${formatRestRemaining(restTimer.remaining)}`,
-                      }
-                    : urgent && idleMs != null
-                      ? { kind: 'idle-urgent', label: `${formatIdle(idleMs)} idle` }
-                      : warn && idleMs != null
-                        ? { kind: 'idle-warn', label: `${formatIdle(idleMs)} idle` }
-                        : showIdle && idleMs != null
-                          ? { kind: 'live', label: `${formatIdle(idleMs)} idle` }
-                          : { kind: 'live', label: 'Live' };
+                  : restDoneFresh
+                    ? { kind: 'rest-done-fresh', label: 'Rest done!' }
+                    : restTimer.isRunning
+                      ? {
+                          kind: 'rest-running',
+                          label: `Resting · ${formatRestRemaining(restTimer.remaining)}`,
+                        }
+                      : restTimer.isPaused
+                        ? {
+                            kind: 'rest-paused',
+                            label: `Rest paused · ${formatRestRemaining(restTimer.remaining)}`,
+                          }
+                        : urgent && idleMs != null
+                          ? { kind: 'idle-urgent', label: `${formatIdle(idleMs)} idle` }
+                          : warn && idleMs != null
+                            ? { kind: 'idle-warn', label: `${formatIdle(idleMs)} idle` }
+                            : showIdle && idleMs != null
+                              ? { kind: 'live', label: `${formatIdle(idleMs)} idle` }
+                              : { kind: 'live', label: 'Live' };
 
             // Light tones — the hero's purple gradient eats anything dark.
             const pillStyles: Record<HeroStatus['kind'], { text: string; dot: string }> = {
               'session-paused': { text: 'text-amber-100', dot: 'bg-amber-300' },
               'rest-running': { text: 'text-blue-100', dot: 'bg-blue-300' },
               'rest-paused': { text: 'text-amber-100', dot: 'bg-amber-300' },
-              'rest-done': { text: 'text-emerald-100', dot: 'bg-emerald-300' },
+              'rest-done-fresh': { text: 'text-emerald-100', dot: 'bg-emerald-300' },
+              'rest-done-warn': { text: 'text-amber-100', dot: 'bg-amber-300' },
+              'rest-done-urgent': { text: 'text-rose-100', dot: 'bg-rose-300' },
               'idle-warn': { text: 'text-amber-100', dot: 'bg-amber-300' },
               'idle-urgent': { text: 'text-rose-100', dot: 'bg-rose-300' },
               live: { text: 'text-emerald-100', dot: 'bg-emerald-300' },
@@ -876,7 +952,9 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
             const pill = pillStyles[status.kind];
             const shouldPing =
               status.kind === 'live' ||
-              status.kind === 'rest-done' ||
+              status.kind === 'rest-done-fresh' ||
+              status.kind === 'rest-done-warn' ||
+              status.kind === 'rest-done-urgent' ||
               status.kind === 'idle-urgent' ||
               status.kind === 'session-paused';
 

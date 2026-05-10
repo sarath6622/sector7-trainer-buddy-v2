@@ -311,6 +311,11 @@ export function useRestTimer(sessionId: string, options: UseRestTimerOptions = {
     isDone,
     progress,
     total: state.total,
+    /** Server-clock ms when the countdown was scheduled to hit zero. When
+     *  `isDone` is true this is in the past — consumers can use it to
+     *  compute "how long ago did the rest end" and escalate visual urgency
+     *  as the trainer leaves the client unattended. */
+    endTime: state.endTime,
     start,
     pause,
     resume,
