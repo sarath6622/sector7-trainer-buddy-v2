@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
+import { RoleTabBar } from '@/components/layout/RoleTabBar';
 import { NAV_BY_ROLE, type NavItem } from '@/lib/constants';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
 import type { NotificationPayload, LeaveStatusChangedPayload } from '@/lib/pusher';
@@ -176,21 +177,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-dvh max-h-dvh overflow-hidden">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
         <Sidebar navItems={navItems} navBadges={navBadges} />
       </div>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopNav user={user} navItems={navItems} onLogout={handleLogout} />
-        <main
-          className="flex-1 overflow-y-auto p-4 md:p-6"
-          style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
-        >
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] md:p-6 lg:pb-6">
           {children}
         </main>
+        <RoleTabBar role={role} navItems={navItems} navBadges={navBadges} />
       </div>
     </div>
   );
