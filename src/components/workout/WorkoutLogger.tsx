@@ -205,6 +205,17 @@ export function WorkoutLogger({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ExerciseOption[]>([]);
   const [showSearch, setShowSearch] = useState(false);
+  // Filter chips inside the search modal. Either filter alone (no query)
+  // still triggers a fetch so trainers can browse "all chest" without typing.
+  const [searchMuscleGroups, setSearchMuscleGroups] = useState<Set<CuratedMuscleGroupId>>(
+    new Set(),
+  );
+  const [searchExerciseType, setSearchExerciseType] = useState<ExerciseType | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  // Multi-select cart inside the search modal. Tapping a row toggles its ID
+  // in this set; the footer "Add N to workout" button commits the batch via
+  // `addExercisesFromPicker` so we reuse the existing dedupe + collapse logic.
+  const [searchSelectedIds, setSearchSelectedIds] = useState<Set<string>>(new Set());
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
   // When the trainer taps the per-row Rest button, we remember which set
   // requested it. The next finished/stopped rest writes to that exact set
@@ -347,26 +358,52 @@ export function WorkoutLogger({
     }
   }, [existingLogs]);
 
-  const searchExercises = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/exercises?search=${encodeURIComponent(query)}&pageSize=10`);
-      if (res.ok) {
-        const r = await res.json();
-        setSearchResults(r.data);
+  const searchExercises = useCallback(
+    async (
+      query: string,
+      groupIds: CuratedMuscleGroupId[],
+      type: ExerciseType | null,
+      signal?: AbortSignal,
+    ) => {
+      // Empty modal — show the prompt state, not a 500-row dump of the catalog.
+      if (!query.trim() && groupIds.length === 0 && !type) {
+        setSearchResults([]);
+        setSearchLoading(false);
+        return;
       }
-    } catch {
-      /* silent */
-    }
-  }, []);
+      const params = new URLSearchParams();
+      if (query.trim()) params.set('search', query.trim());
+      if (groupIds.length > 0) params.set('muscleGroups', groupIds.join(','));
+      if (type) params.set('exerciseType', type);
+      params.set('pageSize', '20');
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`/api/exercises?${params.toString()}`, { signal });
+        if (res.ok) {
+          const r = await res.json();
+          setSearchResults(r.data);
+        }
+      } catch {
+        /* silent — abort or network */
+      } finally {
+        setSearchLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    const t = setTimeout(() => searchExercises(searchQuery), 300);
-    return () => clearTimeout(t);
-  }, [searchQuery, searchExercises]);
+    const ctrl = new AbortController();
+    const groupIds = [...searchMuscleGroups];
+    const t = setTimeout(
+      () => searchExercises(searchQuery, groupIds, searchExerciseType, ctrl.signal),
+      300,
+    );
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [searchQuery, searchMuscleGroups, searchExerciseType, searchExercises]);
 
   useEffect(() => {
     if (showSearch) setTimeout(() => searchRef.current?.focus(), 50);
@@ -419,33 +456,14 @@ export function WorkoutLogger({
     return () => ctrl.abort();
   }, [clientProfileId, sessionInstanceId, missingLastSetKey]);
 
-  function addExercise(exercise: ExerciseOption) {
-    setExercises((prev) => [
-      ...prev.map((e) => ({ ...e, collapsed: true })),
-      {
-        tempId: `temp-${Date.now()}`,
-        exerciseId: exercise.id,
-        exerciseName: exercise.name,
-        targetMuscle: exercise.targetMuscleGroup,
-        category: exercise.category,
-        exerciseType: exercise.exerciseType,
-        sets: [
-          {
-            setNumber: 1,
-            reps: undefined,
-            weightKg: undefined,
-            durationSec: undefined,
-            rpe: undefined,
-            restSec: undefined,
-            notes: '',
-          },
-        ],
-        collapsed: false,
-      },
-    ]);
-    setShowSearch(false);
-    setSearchQuery('');
-    setSearchResults([]);
+  // Opening the search modal pre-seeds the muscle-group chips from today's
+  // focus — if the trainer already said "Chest day", they shouldn't have to
+  // re-tap Chest inside search to filter the catalog. Multiple focus groups
+  // all carry over.
+  function openSearch() {
+    setSearchMuscleGroups(new Set(focusGroupIds));
+    setShowSearch(true);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
   }
 
   function addExercisesFromPicker(picked: PickedExercise[]) {
@@ -798,7 +816,7 @@ export function WorkoutLogger({
               button owns the cold start. */}
           {view === 'log' && (exercises.length > 0 || showSearch) && (
             <button
-              onClick={() => setShowSearch((v) => !v)}
+              onClick={() => (showSearch ? setShowSearch(false) : openSearch())}
               className={`flex h-8 w-8 shrink-0 items-center justify-center mt-2.5 rounded-xl transition-colors ${
                 showSearch
                   ? 'bg-muted text-muted-foreground'
@@ -858,89 +876,286 @@ export function WorkoutLogger({
             </div>
           )}
 
-          {/* ── Exercise search modal ── */}
-          {showSearch && (
-            <>
-              <div
-                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-                onClick={() => {
-                  setShowSearch(false);
-                  setSearchQuery('');
-                  setSearchResults([]);
-                }}
-              />
-              <div className="fixed left-4 right-4 top-24 z-50 rounded-2xl border bg-card shadow-2xl overflow-hidden">
-                <div className="flex items-center gap-2 border-b px-3 py-2.5">
-                  <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <input
-                    ref={searchRef}
-                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                    placeholder="Search exercises…"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        setShowSearch(false);
-                        setSearchQuery('');
-                      }
-                    }}
+          {/* ── Exercise search modal ──
+              Two-zone layout: sticky header with input + filter chips,
+              scrollable result body. Filters fire independently of the query
+              so trainers can browse "all chest" without typing — important
+              for new clients with no history. */}
+          {showSearch &&
+            (() => {
+              const closeSearch = () => {
+                setShowSearch(false);
+                setSearchQuery('');
+                setSearchResults([]);
+                setSearchMuscleGroups(new Set());
+                setSearchExerciseType(null);
+                setSearchSelectedIds(new Set());
+              };
+              const hasFilter =
+                searchMuscleGroups.size > 0 || searchExerciseType !== null || !!searchQuery.trim();
+              const clearFilters = () => {
+                setSearchMuscleGroups(new Set());
+                setSearchExerciseType(null);
+              };
+              const toggleGroupChip = (id: CuratedMuscleGroupId) => {
+                setSearchMuscleGroups((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                });
+              };
+              const toggleResult = (id: string) => {
+                setSearchSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                });
+              };
+              const commitSelection = () => {
+                const picked = searchResults
+                  .filter((ex) => searchSelectedIds.has(ex.id))
+                  .map<PickedExercise>((ex) => ({
+                    exerciseId: ex.id,
+                    name: ex.name,
+                    targetMuscleGroup: ex.targetMuscleGroup,
+                    category: ex.category,
+                    exerciseType: ex.exerciseType,
+                    lastSet: null,
+                  }));
+                if (picked.length === 0) return;
+                addExercisesFromPicker(picked);
+                closeSearch();
+              };
+              // Hide rows that are already in the current workout — the
+              // trainer can't usefully re-add them (the dedupe in
+              // `addExercisesFromPicker` would silently drop them anyway) and
+              // showing them clutters the catalog. Filter client-side so a
+              // single result page is the source of truth.
+              const loggedExerciseIds = new Set(exercises.map((e) => e.exerciseId));
+              const visibleResults = searchResults.filter((ex) => !loggedExerciseIds.has(ex.id));
+              const allHiddenByLog = searchResults.length > 0 && visibleResults.length === 0;
+              return (
+                <>
+                  <div
+                    className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+                    onClick={closeSearch}
                   />
-                  <button
-                    onClick={() => {
-                      setShowSearch(false);
-                      setSearchQuery('');
-                      setSearchResults([]);
-                    }}
-                    className="rounded-md p-1 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                {searchResults.length > 0 ? (
-                  <div className="max-h-72 overflow-y-auto divide-y divide-border/50">
-                    {searchResults.map((ex) => {
-                      const cfg = TYPE_CONFIG[ex.exerciseType];
-                      const Icon = cfg.icon;
-                      return (
+                  <div className="fixed left-4 right-4 top-20 z-50 flex max-h-[80vh] flex-col rounded-2xl border bg-card shadow-2xl overflow-hidden">
+                    {/* ── Header: input + close ── */}
+                    <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
+                      <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <input
+                        ref={searchRef}
+                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        placeholder="Search exercises…"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') closeSearch();
+                        }}
+                      />
+                      {searchQuery && (
                         <button
-                          key={ex.id}
-                          onClick={() => addExercise(ex)}
-                          className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-muted/60"
+                          onClick={() => setSearchQuery('')}
+                          aria-label="Clear search"
+                          className="rounded-md p-1 text-muted-foreground hover:text-foreground"
                         >
-                          <div
-                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={closeSearch}
+                        aria-label="Close search"
+                        className="rounded-md bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                      >
+                        Done
+                      </button>
+                    </div>
+
+                    {/* ── Filter strip ──
+                        Each filter (label + chips) is its own block with tight
+                        internal spacing; the two blocks sit farther apart so
+                        the eye groups them correctly. */}
+                    <div className="border-b border-border/50 px-3 pt-3 pb-3.5 space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Muscle group
+                          </p>
+                          {(searchMuscleGroups.size > 0 || searchExerciseType) && (
+                            <button
+                              onClick={clearFilters}
+                              className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                        <div className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
+                          {CURATED_MUSCLE_GROUPS.map((g) => {
+                            const isOn = searchMuscleGroups.has(g.id);
+                            const theme = GROUP_THEME[g.id];
+                            return (
+                              <button
+                                key={g.id}
+                                onClick={() => toggleGroupChip(g.id)}
+                                aria-pressed={isOn}
+                                className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                                  isOn
+                                    ? `${theme.bg} ${theme.text} ring-1 ${theme.ring.split(' ')[0]}`
+                                    : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
+                                }`}
+                              >
+                                {g.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Type
+                        </p>
+                        <div className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
+                          <button
+                            onClick={() => setSearchExerciseType(null)}
+                            aria-pressed={searchExerciseType === null}
+                            className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                              searchExerciseType === null
+                                ? 'bg-foreground text-background'
+                                : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
+                            }`}
                           >
-                            <Icon className={`h-4 w-4 ${cfg.text}`} />
+                            All
+                          </button>
+                          {(['WEIGHTED', 'BODYWEIGHT', 'DURATION', 'CARDIO'] as ExerciseType[]).map(
+                            (t) => {
+                              const cfg = TYPE_CONFIG[t];
+                              const isOn = searchExerciseType === t;
+                              return (
+                                <button
+                                  key={t}
+                                  onClick={() => setSearchExerciseType(isOn ? null : t)}
+                                  aria-pressed={isOn}
+                                  className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                                    isOn
+                                      ? `${cfg.bg} ${cfg.text} ring-1 ring-current/40`
+                                      : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
+                                  }`}
+                                >
+                                  {cfg.label}
+                                </button>
+                              );
+                            },
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Results body ── */}
+                    <div className="flex-1 overflow-y-auto">
+                      {searchLoading ? (
+                        <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Searching…
+                        </div>
+                      ) : visibleResults.length > 0 ? (
+                        <div className="divide-y divide-border/50">
+                          {visibleResults.map((ex) => {
+                            const cfg = TYPE_CONFIG[ex.exerciseType];
+                            const Icon = cfg.icon;
+                            const isSelected = searchSelectedIds.has(ex.id);
+                            return (
+                              <button
+                                key={ex.id}
+                                onClick={() => toggleResult(ex.id)}
+                                aria-pressed={isSelected}
+                                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                                  isSelected ? 'bg-primary/5' : 'active:bg-muted/60'
+                                }`}
+                              >
+                                <div
+                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
+                                >
+                                  <Icon className={`h-4 w-4 ${cfg.text}`} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-medium">{ex.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {ex.targetMuscleGroup}
+                                    {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
+                                    {` · ${cfg.label}`}
+                                  </p>
+                                </div>
+                                <div
+                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
+                                    isSelected
+                                      ? 'bg-primary text-primary-foreground'
+                                      : 'bg-muted text-muted-foreground'
+                                  }`}
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : allHiddenByLog ? (
+                        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15">
+                            <Check className="h-4 w-4 text-emerald-400" />
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{ex.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {ex.targetMuscleGroup}
-                              {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
-                            </p>
+                          <p className="text-sm font-medium">Already in this workout</p>
+                          <p className="text-xs text-muted-foreground">
+                            Every match is already logged — try a different filter.
+                          </p>
+                        </div>
+                      ) : hasFilter ? (
+                        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted">
+                            <Search className="h-4 w-4 text-muted-foreground" />
                           </div>
-                          <span
-                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
-                          >
-                            {cfg.label}
+                          <p className="text-sm font-medium">No exercises match</p>
+                          <p className="text-xs text-muted-foreground">
+                            Try a different filter or clear them all.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted">
+                            <Sparkles className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <p className="text-sm font-medium">Filter or search the catalog</p>
+                          <p className="text-xs text-muted-foreground">
+                            Pick a muscle group above to browse, or start typing.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Sticky footer: commit the current multi-select. Only
+                        renders when something is checked so the result list
+                        keeps its full height in the common "still browsing"
+                        state. */}
+                    {searchSelectedIds.size > 0 && (
+                      <div className="border-t border-border/50 bg-card px-3 py-2.5">
+                        <button
+                          onClick={commitSelection}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+                        >
+                          Add {searchSelectedIds.size} to workout
+                          <span className="rounded-full bg-primary-foreground/20 px-2 py-0.5 text-[10px] font-bold">
+                            {searchSelectedIds.size}
                           </span>
                         </button>
-                      );
-                    })}
+                      </div>
+                    )}
                   </div>
-                ) : searchQuery.trim() ? (
-                  <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-                    No exercises found
-                  </p>
-                ) : (
-                  <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-                    Start typing to search…
-                  </p>
-                )}
-              </div>
-            </>
-          )}
+                </>
+              );
+            })()}
 
           {/* ── Empty state — show muscle-group picker so the trainer can plan
           the session by tapping focus cards. Falls back to the dashed
@@ -953,6 +1168,10 @@ export function WorkoutLogger({
               allowCancel={false}
               onAdd={addExercisesFromPicker}
               onGroupsPicked={(ids) => setFocusGroupIds(new Set(ids))}
+              onRequestSearch={(ids) => {
+                setSearchMuscleGroups(new Set(ids));
+                setShowSearch(true);
+              }}
             />
           )}
           {exercises.length === 0 && !showSearch && !clientProfileId && (
@@ -998,6 +1217,7 @@ export function WorkoutLogger({
                 }
                 presentation="sheet"
                 excludeExerciseIds={exercises.map((e) => e.exerciseId)}
+                initialGroupIds={focusGroupIds.size > 0 ? [...focusGroupIds] : undefined}
               />
             )}
           </AnimatePresence>
@@ -1312,11 +1532,7 @@ export function WorkoutLogger({
           {exercises.length > 0 && (
             <div className={clientProfileId ? 'grid grid-cols-3 gap-2' : ''}>
               <button
-                onClick={() => {
-                  setShowSearch((v) => !v);
-                  if (!showSearch)
-                    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
-                }}
+                onClick={() => (showSearch ? setShowSearch(false) : openSearch())}
                 className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
                   showSearch
                     ? 'border-border/40 text-muted-foreground'

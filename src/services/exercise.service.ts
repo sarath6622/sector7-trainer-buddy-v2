@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { auditLog } from '@/lib/audit';
+import { expandCuratedGroups } from '@/lib/muscle-groups';
 import type { ExerciseCategory, DifficultyLevel, ExerciseType } from '@prisma/client';
 
 interface CreateExerciseInput {
@@ -40,7 +41,13 @@ interface UpdateExerciseInput {
 interface ListExercisesInput {
   search?: string;
   muscleGroup?: string;
+  /** Curated group IDs (comma-separated upstream). Expanded server-side into
+   *  the union of catalog `targetMuscleGroup` values via `expandCuratedGroups`
+   *  and matched with `IN (...)` — preferred over `muscleGroup` substring
+   *  match because it covers aliases like Lats / Lower Back under "back". */
+  muscleGroups?: string;
   category?: ExerciseCategory;
+  exerciseType?: ExerciseType;
   page: number;
   pageSize: number;
 }
@@ -157,7 +164,9 @@ export async function getExerciseById(exerciseId: string) {
 export async function listExercises({
   search,
   muscleGroup,
+  muscleGroups,
   category,
+  exerciseType,
   page,
   pageSize,
 }: ListExercisesInput) {
@@ -171,12 +180,29 @@ export async function listExercises({
     ];
   }
 
-  if (muscleGroup) {
+  // Prefer the curated-groups expansion when provided — it pulls in aliases
+  // (e.g. "back" → Back, Lats, Lower Back) that the old substring match on
+  // `muscleGroup` would miss.
+  const expandedGroups = muscleGroups
+    ? expandCuratedGroups(
+        muscleGroups
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      )
+    : [];
+  if (expandedGroups.length > 0) {
+    where.targetMuscleGroup = { in: expandedGroups };
+  } else if (muscleGroup) {
     where.targetMuscleGroup = { contains: muscleGroup, mode: 'insensitive' };
   }
 
   if (category) {
     where.category = category;
+  }
+
+  if (exerciseType) {
+    where.exerciseType = exerciseType;
   }
 
   const [exercises, total] = await Promise.all([

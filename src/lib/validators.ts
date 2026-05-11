@@ -378,7 +378,9 @@ export const updateExerciseSchema = createExerciseSchema.partial();
 export const listExercisesSchema = paginationSchema.extend({
   search: z.string().optional(),
   muscleGroup: z.string().optional(),
+  muscleGroups: z.string().optional(),
   category: exerciseCategorySchema.optional(),
+  exerciseType: exerciseTypeSchema.optional(),
 });
 
 export const bulkImportExercisesSchema = z.object({

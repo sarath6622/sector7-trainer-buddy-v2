@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Check, ChevronRight, Dumbbell, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Dumbbell, Search, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   CURATED_MUSCLE_GROUPS,
@@ -128,6 +128,12 @@ interface MuscleGroupPickerProps {
    *  the muscle-group recency hint so a half-logged "chest" session doesn't
    *  read as "today" while the trainer is still picking groups. */
   sessionInstanceId?: string;
+  /** When set, the "no history yet for these groups" empty state renders a
+   *  CTA that calls this — used by the cold-start flow so a brand-new client
+   *  isn't trapped in a picker with no suggestions. The currently picked
+   *  groups are forwarded so the search modal can pre-seed its filter chips
+   *  and the trainer doesn't have to re-tap "Chest". */
+  onRequestSearch?: (groupIds: CuratedMuscleGroupId[]) => void;
 }
 
 export function MuscleGroupPicker({
@@ -141,6 +147,7 @@ export function MuscleGroupPicker({
   presentation = 'inline',
   excludeExerciseIds,
   sessionInstanceId,
+  onRequestSearch,
 }: MuscleGroupPickerProps) {
   const [step, setStep] = useState<'groups' | 'exercises'>('groups');
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<CuratedMuscleGroupId>>(
@@ -311,6 +318,7 @@ export function MuscleGroupPicker({
       onToggle={toggleExercise}
       onBack={() => setStep('groups')}
       onCommit={commit}
+      onRequestSearch={onRequestSearch ? () => onRequestSearch([...selectedGroupIds]) : undefined}
     />
   );
 
@@ -534,12 +542,14 @@ function ExercisesStep({
   onToggle,
   onBack,
   onCommit,
+  onRequestSearch,
 }: {
   buckets: GroupBucket[];
   selected: Set<string>;
   onToggle: (id: string) => void;
   onBack: () => void;
   onCommit: () => void;
+  onRequestSearch?: () => void;
 }) {
   const totalAvailable = useMemo(
     () => buckets.reduce((sum, b) => sum + b.exercises.length, 0),
@@ -596,6 +606,15 @@ function ExercisesStep({
                 : 'Go back and pick another group, or add an exercise manually from the search.'}
             </p>
           </div>
+          {onRequestSearch && (
+            <button
+              onClick={onRequestSearch}
+              className="mt-1 flex items-center gap-2 rounded-xl bg-primary/10 px-4 py-2 text-xs font-semibold text-primary transition-colors active:bg-primary/15"
+            >
+              <Search className="h-3.5 w-3.5" />
+              Search exercise catalog
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-5">

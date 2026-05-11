@@ -18,7 +18,9 @@ export async function GET(req: Request) {
     const input = listExercisesSchema.parse({
       search: searchParams.get('search') ?? undefined,
       muscleGroup: searchParams.get('muscleGroup') ?? undefined,
+      muscleGroups: searchParams.get('muscleGroups') ?? undefined,
       category: searchParams.get('category') ?? undefined,
+      exerciseType: searchParams.get('exerciseType') ?? undefined,
       page: searchParams.get('page') ?? 1,
       pageSize: searchParams.get('pageSize') ?? 20,
     });
