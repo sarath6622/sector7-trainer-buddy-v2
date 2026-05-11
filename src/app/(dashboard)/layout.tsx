@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
@@ -14,6 +14,8 @@ import type { NotificationPayload, LeaveStatusChangedPayload } from '@/lib/pushe
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const hideTabBar = /\/session\/[^/]+/.test(pathname);
 
   const role = session?.user?.role ?? '';
   const roles = session?.user?.roles ?? [role];
@@ -186,10 +188,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopNav user={user} navItems={navItems} onLogout={handleLogout} />
-        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] md:p-6 lg:pb-6">
+        <main
+          className={
+            hideTabBar
+              ? 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6'
+              : 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] md:p-6 lg:pb-6'
+          }
+        >
           {children}
         </main>
-        <RoleTabBar role={role} navItems={navItems} navBadges={navBadges} />
+        {!hideTabBar && <RoleTabBar role={role} navItems={navItems} navBadges={navBadges} />}
       </div>
     </div>
   );
