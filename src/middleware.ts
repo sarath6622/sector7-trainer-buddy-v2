@@ -2,8 +2,24 @@ import { getToken } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-/** Public paths that don't require authentication */
-const PUBLIC_PATHS = ['/login', '/api/auth'];
+/**
+ * Public paths that don't require a NextAuth session at the middleware layer.
+ *
+ * - `/login`, `/api/auth` — NextAuth's own flow.
+ * - `/tv` — the gym TV display page, authenticated with a bearer token in
+ *   localStorage/URL. The page renders a "no token" message when missing.
+ * - `/api/admin/tv/dashboard`, `/api/admin/tv/live` — bearer-token API routes
+ *   for the TV. Route handlers enforce auth via `assertTvOrAdmin` (bearer OR
+ *   admin session). Other `/api/admin/tv/*` routes (devices, tv-control) stay
+ *   gated by the session middleware because they require an admin session.
+ */
+const PUBLIC_PATHS = [
+  '/login',
+  '/api/auth',
+  '/tv',
+  '/api/admin/tv/dashboard',
+  '/api/admin/tv/live',
+];
 
 /** Role-to-path prefix mapping for route protection */
 const ROLE_PATH_MAP: Record<string, string[]> = {

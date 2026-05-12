@@ -17,6 +17,7 @@ enum UserRole {
   KICKBOXING_TRAINER
   CROSSFIT_TRAINER
   CLIENT
+  TV_DISPLAY
 }
 
 enum SessionStatus {
@@ -212,6 +213,8 @@ model Branch {
   userBadges           UserBadge[]
   communityPosts       CommunityPost[]
   rescheduleRequests   RescheduleRequest[]
+  tvDevices            TvDevice[]
+  tvControlState       TvControlState?
 
   @@map("branches")
 }
@@ -407,6 +410,10 @@ model ClientProfile {
   fitnessGoals           String?
   sessionDurationOverrideMin Int?
   paymentStatus          PaymentStatus @default(PENDING)
+  /// Opt-in flag for the gym TV leaderboard. When false, this client is excluded
+  /// from name/photo panels and live PR/badge takeovers, but still contributes
+  /// to anonymous aggregates (total volume, attendance counts).
+  showOnTv               Boolean   @default(false)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -1187,4 +1194,47 @@ model AuditLog {
   @@index([branchId, actorId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ─── TV DASHBOARD ────────────────────────────────────
+
+/// A physical TV display registered against a branch. Each device has a
+/// long-lived bearer token used to authenticate `/api/admin/tv/*` reads from
+/// the unattended TV. Token is stored hashed; the plaintext is returned only
+/// once on creation. Pair with a User row whose `roles` includes `TV_DISPLAY`
+/// if you need session-based auth — most deployments will use the bearer.
+model TvDevice {
+  id          String    @id @default(cuid())
+  branchId    String
+  name        String    // human label, e.g. "Main Floor TV"
+  tokenHash   String    @unique // bcrypt hash of the bearer token
+  lastSeenAt  DateTime?
+  revokedAt   DateTime?
+  createdByUserId String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@index([branchId])
+  @@map("tv_devices")
+}
+
+/// Singleton row per branch holding admin-driven overrides for the TV display
+/// rotation. `pinnedPanel` freezes the rotation on one panel (null = auto).
+/// `shoutout` is a transient banner shown for `shoutoutExpiresAt - now` seconds.
+/// Mutations broadcast `TV_PIN_CHANGED` / `TV_SHOUTOUT` on `branch-{branchId}`.
+model TvControlState {
+  id                String   @id @default(cuid())
+  branchId          String   @unique
+  pinnedPanel       String?
+  shoutout          String?
+  shoutoutExpiresAt DateTime?
+  updatedByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("tv_control_state")
 }

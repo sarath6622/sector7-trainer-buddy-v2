@@ -298,3 +298,58 @@
 **Consequences:** Zero recurring cost for rest timer storage. Free Phase-4 analytics path: a future `RestEvent` log table can be added alongside without disturbing the live-state row. Lose the auto-eviction TTL Redis gave us, replaced with a daily cleanup job (or query-time filter). Slightly higher per-write latency (~10ms Postgres vs ~5ms Upstash REST) — irrelevant for the tap-Start UX. Removes Redis as a dependency entirely; `@upstash/redis` uninstalled, `UPSTASH_*` env vars removed.
 
 ---
+
+## ADR-032: Admin TV Leaderboard Dashboard — Device Bearer Auth + Opt-In Display + Branch-Scoped Pusher
+
+**Date:** 2026-05-11
+**Status:** Accepted
+**Context:** Gym wants a wall-mounted TV that rotates motivational panels — top lifters this month, attendance streaks, badges unlocked, latest PRs, live "now training" status — to differentiate from neighbouring gyms. The TV is unattended, mounted high (so text must be large), and shows the same client data the app already collects. Three design questions had to be resolved together before any code: (a) how does an unattended device authenticate without a username/password, (b) what's the consent posture for displaying a member's name/photo/PR on a public wall, and (c) how do we celebrate fresh PRs in real time without rewiring the existing `session-{id}` / `user-{id}` Pusher channels.
+
+**Decision:**
+
+- **New role + new auth surface.** Add `TV_DISPLAY` to `UserRole`. The TV authenticates with a long-lived bearer token from a new `TvDevice` row keyed to a branch (registered by `BRANCH_ADMIN`). Tokens are stored as bcrypt hashes; plaintext is returned exactly once on creation. The role has read-only access to `/api/admin/tv/*` and is branch-scoped — it cannot read any other admin surface, can never see PII for opted-out clients, and never mutates. This pattern lets us tighten the role's data access independently of the BRANCH_ADMIN persona.
+- **Opt-in display.** Add `ClientProfile.showOnTv Boolean @default(false)`. Clients with `showOnTv=false` are excluded from name/photo panels and live PR/badge takeovers, but still count toward anonymous aggregates (total volume, attendance counts). Default-off is the conservative choice — putting someone's name and weight loss on a public TV without consent is exactly the kind of thing that erodes trust, and the marginal cost of a one-tap opt-in is low. Client-facing toggle lives at `PUT /api/client/profile/tv-opt-in`.
+- **Branch-scoped Pusher channel.** New channel `branch-{branchId}` carries five events: `PR_ACHIEVED`, `BADGE_UNLOCKED`, `SESSION_STARTED_TV`, `TV_PIN_CHANGED`, `TV_SHOUTOUT`. `PR_ACHIEVED` triggers a 10-second full-screen confetti takeover and is **only** fired for compound-PR detections (squat / bench / deadlift / OHP, matching the existing `Exercise.isCompound` flag) — not every badge unlock, because frequent takeovers fatigue viewers. Existing `session-{id}` / `user-{id}` channels are untouched.
+- **Admin pin / shoutout from phone.** New `TvControlState` singleton per branch. Admin hits `POST /api/admin/tv-control` from `/admin/tv-control` on their phone to freeze the rotation on one panel (`pinnedPanel`) or push a transient banner (`shoutout` with `shoutoutExpiresAt`). Pusher broadcasts the change to the TV so it reacts within a couple of seconds.
+- **Strict calendar month window.** All month-scoped aggregates use the calendar month (Asia/Kolkata). A trailing-30d fallback for day-1 (when month-counts are sparse) is explicitly punted to v2.
+- **Server-side caching.** `GET /api/admin/tv/dashboard` is 60s-cached per branch; `GET /api/admin/tv/live` is 10s-cached. TVs hit the dashboard once a minute and rely on Pusher for fresh PR events between refreshes.
+- **15-second panel rotation, gendered lift / volume panels.** Per operator preference: enough time to read at 10ft. Lift and volume leaderboards return `{ male: [...], female: [...] }` shaped payloads; streaks / attendance / live-now panels stay flat (unisex metrics).
+
+**Consequences:**
+
+- Three new audit actions registered: `TV_DEVICE_REGISTERED` / `TV_DEVICE_REVOKED`, `TV_PIN_SET`, `TV_SHOUTOUT_BROADCAST`, plus `CLIENT_TV_OPT_IN_TOGGLED` for the client toggle.
+- All existing role checks in services and middleware must include `TV_DISPLAY` in their negative lists (it can NEVER appear in a write path) and in the positive list for the new `/api/admin/tv/*` read paths.
+- `workout.service` and `badge.service` gain a one-line hook to fire the new Pusher events when the actor has `showOnTv=true`. Hooks are best-effort (try/catch with log) — never block the underlying write on Pusher failure.
+- Token storage as bcrypt means we cannot show the token after creation; ops needs to record it during device pairing or revoke and re-issue.
+- v2 panels (body transformations, class champions, hardest workers, exercise milestones, new members, praise board) are deliberately out of scope for this phase; the dashboard payload shape leaves room to add them without contract breaks.
+- Future option: a `TvDevice.allowedPanels String[]` field could let different TVs in the same branch show different subsets — not built now, but the schema accommodates it as a low-friction addition.
+
+---
+
+## ADR-033: TV Display Uses Polling, Not Pusher (Supersedes the Pusher Transport Decision in ADR-032)
+
+**Date:** 2026-05-12
+**Status:** Accepted (supersedes the Pusher-transport parts of ADR-032; the auth, role, opt-in, and pin/shoutout decisions in ADR-032 stand unchanged)
+
+**Context:** ADR-032 specified a new `branch-{branchId}` Pusher channel as the transport for fresh PR celebrations, badge unlocks, live-now updates, and admin pin/shoutout broadcasts to the gym TV. The motivation was "instant" UI updates. After building it end-to-end, the picture changed: the TV is an unattended, wall-mounted display with no user input. A 5–10 second lag between a workout being logged and the confetti firing is not visible to anyone — by the time someone looks up at the TV, polling will have caught the event. Pusher was buying us "instant" rather than "≤10s" at the cost of: an additional always-on service dependency, env-var sprawl, a silent-failure mode (a dropped Pusher connection looks identical to "no PRs happening"), and operational complexity for what is fundamentally a one-way display.
+
+**Decision:** Remove the `branch-{branchId}` Pusher channel and all its event types (`PR_ACHIEVED`, `BADGE_UNLOCKED`, `SESSION_STARTED_TV`, `TV_PIN_CHANGED`, `TV_SHOUTOUT`). The TV display fetches everything via two HTTP polls:
+
+- `GET /api/admin/tv/dashboard` every **60s** — the heavy aggregates (compound leaderboards, volume kings, streaks, badges this month, perfect attendance).
+- `GET /api/admin/tv/live` every **10s** — `liveNow` sessions, `latestPRs` (last 7 days), AND the current `control` block (`pinnedPanel`, `shoutout`). The `control` block was moved into this faster cadence so pin/shoutout reactions feel responsive (≤10s) without speeding the heavy dashboard call.
+
+Confetti detection: the TV client keeps a `lastSeenPrAt` watermark (ref, not state). On the first successful payload it sets the watermark to the newest existing PR's `achievedAt`, suppressing replay. On subsequent payloads, any PR with `achievedAt > watermark` is queued for a 10-second full-screen takeover (oldest first if multiple) and the watermark advances. Both `/dashboard` and `/live` feed the same diff function — they can return the same PR and the watermark check de-dupes.
+
+Removed code: `triggerBranchEvent` and its payload types from `src/lib/pusher.ts`; the hook in `workout.service.ts` after compound-PR detection; the hook in `badge.service.ts` `awardBadge`; the `SESSION_STARTED_TV` fire in `session.service.ts` `startSession`; the Pusher fanout in `tv-control.service.ts` `updateTvControlState`. Pusher dependencies for trainer/client real-time (`session-{id}` rest timer + pause, `user-{id}` notifications) are untouched.
+
+**Consequences:**
+
+- Confetti, pin reactions, and shoutout banner all lag up to **10 seconds** behind the underlying event. Live-now session count lags up to 10s. Badge feed and other heavy panels lag up to 60s. All acceptable for a wall display.
+- Removes a class of silent failures. If a poll fails, the next poll in 10s retries; the TV self-heals. Pusher would have shown a stale screen until manually reset.
+- One fewer thing to provision for new deployments — TVs work as long as the device can reach the dashboard host. No new Pusher app, no new env vars, no NEXT_PUBLIC_PUSHER_KEY needed on the TV side.
+- Bandwidth cost increases mildly: one extra `/live` call every 10s per TV. The payload is ~5KB, so 30KB/min/TV — negligible.
+- The TV display's load on Pusher is now zero. The existing Pusher quota is reserved entirely for trainer/client session sync, which genuinely needs sub-second updates and won't be diluted by branch-wide fanout.
+- ADR-032's other decisions (`TV_DISPLAY` role, `TvDevice` bearer auth, `ClientProfile.showOnTv` opt-in, gendered leaderboards, 15s rotation, admin pin from phone, strict-month window) all stand unchanged. Only the transport layer flipped.
+- The `branch-{branchId}` channel name is now retired and should not be reused for unrelated purposes — naming consistency for any future broadcast feature is better than recycling.
+
+---

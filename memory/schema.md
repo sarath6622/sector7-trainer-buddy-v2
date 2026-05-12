@@ -848,3 +848,97 @@ model PtPackage {
   `sessionsPerMonth` for the rest.
 
 All three applied to local Docker first, then Neon.
+
+---
+
+## Phase 26 Schema Additions — TV Dashboard (2026-05-11)
+
+Phase 26 introduces the admin-only gym TV leaderboard surface. See ADR-032.
+All changes are additive; existing rows are preserved.
+
+### Altered: UserRole
+
+```prisma
+enum UserRole {
+  ...
+  TV_DISPLAY  // read-only, branch-scoped role for the unattended gym TV
+}
+```
+
+### Altered: ClientProfile
+
+```prisma
+model ClientProfile {
+  ...
+  showOnTv Boolean @default(false)
+}
+```
+
+Opt-in flag for the TV leaderboard. When `false` the client is excluded from
+name/photo panels and live PR/badge takeovers. Anonymous aggregates (total
+volume, attendance counts, etc.) still include the client.
+
+### New Model: TvDevice
+
+Physical TVs registered against a branch. Bearer token is stored as a bcrypt
+hash; plaintext is returned only on creation.
+
+```prisma
+model TvDevice {
+  id              String    @id @default(cuid())
+  branchId        String
+  name            String    // human label, e.g. "Main Floor TV"
+  tokenHash       String    @unique
+  lastSeenAt      DateTime?
+  revokedAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@index([branchId])
+  @@map("tv_devices")
+}
+```
+
+### New Model: TvControlState
+
+Singleton row per branch holding admin-driven overrides for the TV display
+rotation. `pinnedPanel` freezes rotation on one panel (null = auto). `shoutout`
+is a transient banner shown until `shoutoutExpiresAt`. Mutations broadcast
+`TV_PIN_CHANGED` / `TV_SHOUTOUT` on the new `branch-{branchId}` Pusher channel.
+
+```prisma
+model TvControlState {
+  id                String   @id @default(cuid())
+  branchId          String   @unique
+  pinnedPanel       String?
+  shoutout          String?
+  shoutoutExpiresAt DateTime?
+  updatedByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("tv_control_state")
+}
+```
+
+### Audit Actions Registered
+
+- `TV_DEVICE_REGISTERED` / `TV_DEVICE_REVOKED`
+- `TV_PIN_SET` (pin / unpin a panel)
+- `TV_SHOUTOUT_BROADCAST`
+- `CLIENT_TV_OPT_IN_TOGGLED`
+
+### Migrations
+
+- `20260511181814_add_tv_display_role_and_devices` — adds `TV_DISPLAY` enum value + `tv_devices` table.
+- `20260511181903_add_tv_dashboard_phase_1` — adds `client_profiles.showOnTv` column (NOT NULL DEFAULT false) + `tv_control_state` table.
+
+Both applied to local Docker first, then Neon. Pre/post row counts on Neon
+verified identical for all existing tables (`client_profiles`, `users`,
+`session_instances`, `workout_logs`, `workout_sets`, `progress_entries`,
+`community_posts`, `user_badges`, `audit_logs`).

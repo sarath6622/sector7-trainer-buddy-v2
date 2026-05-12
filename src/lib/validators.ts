@@ -21,6 +21,7 @@ export const userRoleSchema = z.enum([
   'KICKBOXING_TRAINER',
   'CROSSFIT_TRAINER',
   'CLIENT',
+  'TV_DISPLAY',
 ]);
 
 export const sessionStatusSchema = z.enum([
@@ -780,6 +781,33 @@ export const restTimerStateSchema = z
 // to send anything except auth. Schema kept for parity / future extension.
 export const sessionPauseActionSchema = z.object({}).optional();
 
+// ─── TV DASHBOARD ────────────────────────────────────
+
+export const tvDashboardQuerySchema = z.object({
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, 'Must be YYYY-MM format')
+    .optional(),
+});
+
+export const createTvDeviceSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(100),
+});
+
+export const updateTvControlSchema = z
+  .object({
+    pinnedPanel: z.string().max(100).nullable().optional(),
+    shoutout: z.string().max(500).nullable().optional(),
+    shoutoutTtlSec: z.number().int().min(5).max(600).optional(),
+  })
+  .refine((v) => v.pinnedPanel !== undefined || v.shoutout !== undefined, {
+    message: 'At least one of pinnedPanel or shoutout must be provided',
+  });
+
+export const tvOptInSchema = z.object({
+  showOnTv: z.boolean(),
+});
+
 // ─── TYPE EXPORTS ────────────────────────────────────
 
 export type TrainerShiftInput = z.infer<typeof trainerShiftSchema>;
@@ -823,3 +851,7 @@ export type SubmitRescheduleRequestInput = z.infer<typeof submitRescheduleReques
 export type ReviewRescheduleRequestInput = z.infer<typeof reviewRescheduleRequestSchema>;
 export type ListRescheduleRequestsInput = z.infer<typeof listRescheduleRequestsSchema>;
 export type RestTimerStateInput = z.infer<typeof restTimerStateSchema>;
+export type TvDashboardQueryInput = z.infer<typeof tvDashboardQuerySchema>;
+export type CreateTvDeviceInput = z.infer<typeof createTvDeviceSchema>;
+export type UpdateTvControlInput = z.infer<typeof updateTvControlSchema>;
+export type TvOptInInput = z.infer<typeof tvOptInSchema>;

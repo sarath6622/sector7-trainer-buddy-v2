@@ -16,6 +16,7 @@ import {
   CalendarClock,
   Clock,
   Package,
+  Monitor,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -55,6 +56,13 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
     label: 'Package Plans',
     href: '/admin/settings/package-plans',
     icon: Package,
+    group: 'System',
+  },
+  { label: 'TV Control', href: '/admin/tv-control', icon: Monitor, group: 'System' },
+  {
+    label: 'TV Devices',
+    href: '/admin/settings/tv-devices',
+    icon: Monitor,
     group: 'System',
   },
   { label: 'Settings', href: '/admin/settings', icon: Settings, group: 'System' },
@@ -101,6 +109,8 @@ export const CLIENT_NAV_ITEMS: NavItem[] = [
   },
   // Community
   { label: 'Community', href: '/community', icon: Flame, group: 'Community' },
+  // Account
+  { label: 'Settings', href: '/client/settings', icon: Settings, group: 'Account' },
 ];
 
 export const CROSSFIT_TRAINER_NAV_ITEMS: NavItem[] = [
