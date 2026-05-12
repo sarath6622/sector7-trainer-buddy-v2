@@ -477,7 +477,7 @@ async function getLiveNow(branchId: string): Promise<{
 
   const count = live.length;
   const sessions: LiveSessionRow[] = live
-    .filter((s) => s.client.showOnTv && s.startedAt)
+    .filter((s) => s.startedAt)
     .map((s) => ({
       trainerName: fullName(s.trainer.user.firstName, s.trainer.user.lastName),
       clientName: fullName(s.client.user.firstName, s.client.user.lastName),
