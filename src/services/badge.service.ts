@@ -389,12 +389,20 @@ export async function evaluatePRBadges(
   exerciseName: string,
   currentWeightKg: number,
   actorId: string,
+  currentSessionInstanceId?: string,
 ): Promise<NewBadge[]> {
+  // Exclude the current session from the lookup — badge evaluation runs after
+  // the workout sets have been committed, so without this exclusion the
+  // just-saved sets would be part of `prevMax` and the PR would never trigger.
   const previousMax = await prisma.workoutSet.aggregate({
     where: {
       workoutLog: {
         exercise: { id: exerciseId },
-        sessionInstance: { clientProfileId, branchId },
+        sessionInstance: {
+          clientProfileId,
+          branchId,
+          ...(currentSessionInstanceId && { id: { not: currentSessionInstanceId } }),
+        },
       },
       weightKg: { not: null },
     },

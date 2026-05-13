@@ -942,3 +942,75 @@ Both applied to local Docker first, then Neon. Pre/post row counts on Neon
 verified identical for all existing tables (`client_profiles`, `users`,
 `session_instances`, `workout_logs`, `workout_sets`, `progress_entries`,
 `community_posts`, `user_badges`, `audit_logs`).
+
+## TV Schema Additions — Announcements + Events (2026-05-12 → 2026-05-13)
+
+### New Model: TvAnnouncement (2026-05-12)
+
+Multi-slide announcement deck — each active, non-expired row becomes one
+full-screen slide in the TV rotation. Admins manage from `/admin/tv-control`.
+
+```prisma
+model TvAnnouncement {
+  id              String    @id @default(cuid())
+  branchId        String
+  title           String
+  body            String
+  icon            String?   // emoji or short label
+  sortOrder       Int       @default(0)
+  isActive        Boolean   @default(true)
+  expiresAt       DateTime?
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@index([branchId, isActive])
+  @@map("tv_announcements")
+}
+```
+
+### New Model: TvEvent (2026-05-13)
+
+Upcoming gym events (beach workouts, fun runs, charity WODs, etc.) shown as a
+single "Coming Up" board in the TV rotation. Past events auto-hide via the
+`eventAt >= now` filter at query time — no manual cleanup. Unlike announcements
+(one slide per row), all active future-dated events collapse into one slide
+showing the next 5.
+
+```prisma
+model TvEvent {
+  id              String   @id @default(cuid())
+  branchId        String
+  title           String
+  description     String?
+  location        String?
+  icon            String?
+  eventAt         DateTime
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@index([branchId, isActive, eventAt])
+  @@map("tv_events")
+}
+```
+
+### Audit Actions Registered
+
+- `TV_ANNOUNCEMENT_CREATED` / `TV_ANNOUNCEMENT_UPDATED` / `TV_ANNOUNCEMENT_DELETED`
+- `TV_EVENT_CREATED` / `TV_EVENT_UPDATED` / `TV_EVENT_DELETED`
+
+### Migrations
+
+- `20260512063036_add_tv_announcements` — adds `tv_announcements` table.
+- `20260512203603_add_tv_events` — adds `tv_events` table.
+
+Applied to both local Docker and Neon. Both tables are leaf nodes (no existing
+data depends on them) so the migrations are purely additive — no row counts
+needed for verification.

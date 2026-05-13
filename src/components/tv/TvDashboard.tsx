@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Maximize, Megaphone, Minimize } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { CalendarDays, Clock, Dumbbell, Maximize, Megaphone, Minimize, Zap } from 'lucide-react';
 import { TvPanel } from '@/components/tv/TvPanel';
 import { PrTakeover, type TakeoverPr } from '@/components/tv/PrTakeover';
 
@@ -55,6 +55,27 @@ interface CompoundSlot {
   female: LeaderRow[];
 }
 
+export interface AnnouncementSlide {
+  id: string;
+  title: string;
+  body: string;
+  icon: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  expiresAt: string | null;
+}
+
+export interface UpcomingEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  icon: string | null;
+  eventAt: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 export interface TvDashboardPayload {
   generatedAt: string;
   month: string;
@@ -73,6 +94,8 @@ export interface TvDashboardPayload {
     latestPRs: PrFeedRow[];
     perfectAttendance: AttendanceRow[];
     liveNow: { count: number; sessions: LiveSessionRow[] };
+    announcements: AnnouncementSlide[];
+    upcomingEvents: UpcomingEvent[];
   };
   control: {
     pinnedPanel: string | null;
@@ -81,36 +104,78 @@ export interface TvDashboardPayload {
 }
 
 // ─── Panel deck (rotation order) ───────────────────────────────────────────
+//
+// TV only shows compound leaderboards + latest PRs + announcements. Announcements
+// expand into one slot per live slide so each gets its own equal share of screen
+// time in the rotation.
 
-type PanelKey =
-  | 'liveNow'
-  | 'bench'
-  | 'squat'
-  | 'deadlift'
-  | 'ohp'
-  | 'volume'
-  | 'streaks'
-  | 'latestPRs'
-  | 'badges'
-  | 'perfect';
+type LeaderboardPanelKey = 'bench' | 'squat' | 'deadlift' | 'ohp' | 'latestPRs' | 'events';
 
-const PANEL_ORDER: PanelKey[] = [
-  'liveNow',
+const LEADERBOARD_ORDER: LeaderboardPanelKey[] = [
   'bench',
   'squat',
   'deadlift',
-  'ohp',
-  'volume',
-  'streaks',
   'latestPRs',
-  'badges',
-  'perfect',
+  'events',
 ];
+
+// Effective deck slot — either a fixed leaderboard panel or an announcement slide.
+type DeckSlot =
+  | { kind: 'panel'; key: LeaderboardPanelKey }
+  | { kind: 'announcement'; slide: AnnouncementSlide };
 
 const ROTATION_MS = 15_000;
 const DASHBOARD_REFRESH_MS = 60_000;
 const LIVE_REFRESH_MS = 10_000;
 const PR_TAKEOVER_MS = 10_000;
+
+// Per-panel title/subtitle/icon shown in the dashboard header. Keeping these here
+// (rather than inside each TvPanel) lets the header own the title slot and the
+// panels render the data grid only — matches the mockup layout.
+interface PanelMeta {
+  title: string;
+  subtitle: string;
+  icon: ReactNode;
+}
+
+const PANEL_META: Record<LeaderboardPanelKey, PanelMeta> = {
+  bench: {
+    title: 'Bench Press',
+    subtitle: 'Top lifters this month',
+    icon: <Dumbbell className="h-12 w-12 text-orange-400" />,
+  },
+  squat: {
+    title: 'Squat',
+    subtitle: 'Top lifters this month',
+    icon: <Dumbbell className="h-12 w-12 text-orange-400" />,
+  },
+  deadlift: {
+    title: 'Deadlift',
+    subtitle: 'Top lifters this month',
+    icon: <Dumbbell className="h-12 w-12 text-orange-400" />,
+  },
+  ohp: {
+    title: 'Overhead Press',
+    subtitle: 'Top lifters this month',
+    icon: <Dumbbell className="h-12 w-12 text-orange-400" />,
+  },
+  latestPRs: {
+    title: 'Latest PRs',
+    subtitle: 'Last 7 days',
+    icon: <Zap className="h-12 w-12 text-yellow-300" />,
+  },
+  events: {
+    title: 'Coming Up',
+    subtitle: 'Upcoming gym events',
+    icon: <CalendarDays className="h-12 w-12 text-sky-400" />,
+  },
+};
+
+const ANNOUNCEMENT_META: PanelMeta = {
+  title: 'Announcement',
+  subtitle: 'From the gym',
+  icon: <Megaphone className="h-12 w-12 text-yellow-300" />,
+};
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -202,6 +267,8 @@ export function TvDashboard({ token }: { token: string }) {
         data: {
           liveNow: { count: number; sessions: LiveSessionRow[] };
           latestPRs: PrFeedRow[];
+          announcements: AnnouncementSlide[];
+          upcomingEvents: UpcomingEvent[];
           control: TvDashboardPayload['control'];
         };
       };
@@ -213,6 +280,8 @@ export function TvDashboard({ token }: { token: string }) {
                 ...prev.panels,
                 liveNow: json.data.liveNow,
                 latestPRs: json.data.latestPRs,
+                announcements: json.data.announcements,
+                upcomingEvents: json.data.upcomingEvents,
               },
               control: json.data.control,
             }
@@ -237,27 +306,54 @@ export function TvDashboard({ token }: { token: string }) {
     return () => clearInterval(t);
   }, [fetchLive]);
 
+  // ── Build the effective panel deck ──────────────────────────────────────
+  // Leaderboards always render; announcements expand into one slot per slide.
+  // The 'events' slot is hidden when no upcoming events are configured so we
+  // don't show an empty "Coming Up" board.
+  const deck: DeckSlot[] = (() => {
+    const hasEvents = (data?.panels.upcomingEvents ?? []).length > 0;
+    const base: DeckSlot[] = LEADERBOARD_ORDER.filter((key) =>
+      key === 'events' ? hasEvents : true,
+    ).map((key) => ({ kind: 'panel', key }));
+    const slides = data?.panels.announcements ?? [];
+    const slots: DeckSlot[] = slides.map((slide) => ({ kind: 'announcement', slide }));
+    return [...base, ...slots];
+  })();
+
   // ── Panel rotation (paused while pinned, paused during PR takeover) ──────
   const pinnedPanel = data?.control.pinnedPanel ?? null;
-  const isPinned = pinnedPanel != null && PANEL_ORDER.includes(pinnedPanel as PanelKey);
+  const pinnedIndex = pinnedPanel
+    ? deck.findIndex((s) => s.kind === 'panel' && s.key === pinnedPanel)
+    : -1;
+  const isPinned = pinnedIndex >= 0;
   const hasTakeover = prQueue.length > 0;
 
+  // Keep panelIndex in range when the deck size changes (announcements added/removed).
   useEffect(() => {
-    if (isPinned || hasTakeover) return;
+    if (deck.length === 0) return;
+    if (panelIndex >= deck.length) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPanelIndex(0);
+    }
+  }, [deck.length, panelIndex]);
+
+  // Re-run on panelIndex change so a manual click (pip) resets the dwell timer —
+  // whoever just navigated gets a full ROTATION_MS to read the slide they picked.
+  useEffect(() => {
+    if (isPinned || hasTakeover || deck.length === 0) return;
     const t = setInterval(() => {
-      setPanelIndex((i) => (i + 1) % PANEL_ORDER.length);
+      setPanelIndex((i) => (i + 1) % deck.length);
     }, ROTATION_MS);
     return () => clearInterval(t);
-  }, [isPinned, hasTakeover]);
+  }, [isPinned, hasTakeover, deck.length, panelIndex]);
 
   // When a pin lands, snap to it immediately
   useEffect(() => {
-    if (isPinned && pinnedPanel) {
-      const idx = PANEL_ORDER.indexOf(pinnedPanel as PanelKey);
+    if (isPinned) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (idx >= 0) setPanelIndex(idx);
+      setPanelIndex(pinnedIndex);
     }
-  }, [isPinned, pinnedPanel]);
+  }, [isPinned, pinnedIndex]);
 
   // ── PR takeover queue: show one for 10s, then move on ────────────────────
   useEffect(() => {
@@ -287,20 +383,45 @@ export function TvDashboard({ token }: { token: string }) {
     );
   }
 
-  const currentPanel = PANEL_ORDER[panelIndex] ?? PANEL_ORDER[0]!;
+  const safeIndex = deck.length > 0 ? Math.min(panelIndex, deck.length - 1) : 0;
+  const currentSlot: DeckSlot = deck[safeIndex] ?? { kind: 'panel', key: LEADERBOARD_ORDER[0]! };
+  const meta: PanelMeta =
+    currentSlot.kind === 'panel' ? PANEL_META[currentSlot.key] : ANNOUNCEMENT_META;
   const shoutoutLive =
     data.control.shoutout && new Date(data.control.shoutout.expiresAt).getTime() > now;
 
   return (
     <div className="relative flex h-full w-full flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between px-10 pt-8 pb-4">
-        <div className="flex items-center gap-4">
-          <img src="/sector7-logo-full.png" alt="Sector 7" className="h-40 w-auto object-contain" />
+      {/* Header: logo · centered panel title · clock card */}
+      <header className="grid grid-cols-3 items-center gap-6 px-10 pt-6 pb-4">
+        <div className="flex items-center justify-start">
+          <img src="/sector7-logo-full.png" alt="Sector 7" className="h-14 w-auto object-contain" />
         </div>
-        <div className="flex items-center gap-6 text-zinc-400">
-          <span className="text-2xl">{formatMonth(data.month)}</span>
-          <span className="text-2xl tabular-nums">{formatClock(now)}</span>
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-4">
+            {meta.icon}
+            <h1 className="text-6xl font-extrabold uppercase tracking-tight text-white">
+              {meta.title}
+            </h1>
+          </div>
+          <div className="mt-1 flex items-center gap-3 text-base uppercase tracking-[0.3em] text-zinc-500">
+            <span className="text-orange-500">·</span>
+            {meta.subtitle}
+            <span className="text-orange-500">·</span>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center gap-3 rounded-2xl bg-zinc-900/70 px-5 py-3 ring-1 ring-white/5">
+            <Clock className="h-7 w-7 text-zinc-400" />
+            <div className="flex flex-col leading-tight">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                {formatMonthShort(data.month)}
+              </span>
+              <span className="text-2xl font-bold tabular-nums text-zinc-100">
+                {formatClock(now)}
+              </span>
+            </div>
+          </div>
           <button
             type="button"
             onClick={toggleFullscreen}
@@ -325,19 +446,36 @@ export function TvDashboard({ token }: { token: string }) {
 
       {/* Panel area */}
       <main className="relative flex flex-1 min-h-0 px-10 pb-10">
-        <TvPanel panelKey={currentPanel} data={data} now={now} />
+        {currentSlot.kind === 'panel' ? (
+          <TvPanel panelKey={currentSlot.key} data={data} now={now} />
+        ) : (
+          <TvPanel panelKey="announcement" data={data} now={now} announcement={currentSlot.slide} />
+        )}
       </main>
 
-      {/* Footer pip indicator */}
+      {/* Footer pip indicator — click to jump to that slide */}
       <footer className="absolute bottom-3 left-0 right-0 flex justify-center gap-2">
-        {PANEL_ORDER.map((p, i) => (
-          <span
-            key={p}
-            className={`h-2 rounded-full transition-all ${
-              i === panelIndex ? 'w-8 bg-orange-500' : 'w-2 bg-zinc-700'
-            }`}
-          />
-        ))}
+        {deck.map((slot, i) => {
+          const key = slot.kind === 'panel' ? `p-${slot.key}` : `a-${slot.slide.id}`;
+          const isAnnouncement = slot.kind === 'announcement';
+          const active = i === safeIndex;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setPanelIndex(i)}
+              aria-label={`Go to slide ${i + 1}`}
+              aria-current={active ? 'true' : undefined}
+              className={`h-2 cursor-pointer rounded-full transition-all hover:opacity-80 ${
+                active
+                  ? isAnnouncement
+                    ? 'w-8 bg-yellow-400'
+                    : 'w-8 bg-orange-500'
+                  : 'w-2 bg-zinc-700 hover:bg-zinc-500'
+              }`}
+            />
+          );
+        })}
       </footer>
 
       {/* PR takeover */}
@@ -348,11 +486,11 @@ export function TvDashboard({ token }: { token: string }) {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function formatMonth(yyyymm: string): string {
+function formatMonthShort(yyyymm: string): string {
   const [y, m] = yyyymm.split('-').map(Number);
   if (!y || !m) return yyyymm;
   const d = new Date(y, m - 1, 1);
-  return d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  return d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }).toUpperCase();
 }
 
 function formatClock(ms: number): string {

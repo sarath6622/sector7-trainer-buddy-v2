@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getTvControlState } from '@/services/tv-control.service';
+import { listLiveAnnouncements, type TvAnnouncementRow } from '@/services/tv-announcement.service';
+import { listUpcomingEvents, type TvEventRow } from '@/services/tv-event.service';
 
 // ─── Types ────────────────────────────────────────────
 
@@ -72,6 +74,8 @@ export interface TvDashboardPayload {
     latestPRs: PrFeedRow[];
     perfectAttendance: AttendanceRow[];
     liveNow: { count: number; sessions: LiveSessionRow[] };
+    announcements: TvAnnouncementRow[];
+    upcomingEvents: TvEventRow[];
   };
   control: {
     pinnedPanel: string | null;
@@ -525,6 +529,8 @@ export async function getTvDashboard({
     perfectAttendance,
     liveNow,
     control,
+    announcements,
+    upcomingEvents,
   ] = await Promise.all([
     getCompoundLeaderboards(branchId, start, end),
     getVolumeKingsForGender(branchId, 'MALE', start, end),
@@ -535,6 +541,8 @@ export async function getTvDashboard({
     getPerfectAttendance(branchId, start, end),
     getLiveNow(branchId),
     getTvControlState(branchId),
+    listLiveAnnouncements(branchId),
+    listUpcomingEvents(branchId),
   ]);
 
   const payload: TvDashboardPayload = {
@@ -550,6 +558,8 @@ export async function getTvDashboard({
       latestPRs,
       perfectAttendance,
       liveNow,
+      announcements,
+      upcomingEvents,
     },
     control,
   };

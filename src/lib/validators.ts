@@ -808,6 +808,52 @@ export const tvOptInSchema = z.object({
   showOnTv: z.boolean(),
 });
 
+export const createTvAnnouncementSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required').max(120),
+  body: z.string().trim().min(1, 'Body is required').max(800),
+  icon: z.string().trim().max(8).nullable().optional(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
+  isActive: z.boolean().optional(),
+  expiresAt: z.string().datetime({ message: 'Must be an ISO datetime' }).nullable().optional(),
+});
+
+export const updateTvAnnouncementSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    body: z.string().trim().min(1).max(800).optional(),
+    icon: z.string().trim().max(8).nullable().optional(),
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+    isActive: z.boolean().optional(),
+    expiresAt: z.string().datetime({ message: 'Must be an ISO datetime' }).nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: 'At least one field must be provided',
+  });
+
+export const createTvEventSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required').max(120),
+  description: z.string().trim().max(800).nullable().optional(),
+  location: z.string().trim().max(200).nullable().optional(),
+  icon: z.string().trim().max(8).nullable().optional(),
+  eventAt: z.string().datetime({ message: 'Must be an ISO datetime' }),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const updateTvEventSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(800).nullable().optional(),
+    location: z.string().trim().max(200).nullable().optional(),
+    icon: z.string().trim().max(8).nullable().optional(),
+    eventAt: z.string().datetime({ message: 'Must be an ISO datetime' }).optional(),
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: 'At least one field must be provided',
+  });
+
 // ─── TYPE EXPORTS ────────────────────────────────────
 
 export type TrainerShiftInput = z.infer<typeof trainerShiftSchema>;
@@ -855,3 +901,7 @@ export type TvDashboardQueryInput = z.infer<typeof tvDashboardQuerySchema>;
 export type CreateTvDeviceInput = z.infer<typeof createTvDeviceSchema>;
 export type UpdateTvControlInput = z.infer<typeof updateTvControlSchema>;
 export type TvOptInInput = z.infer<typeof tvOptInSchema>;
+export type CreateTvAnnouncementInput = z.infer<typeof createTvAnnouncementSchema>;
+export type UpdateTvAnnouncementInput = z.infer<typeof updateTvAnnouncementSchema>;
+export type CreateTvEventInput = z.infer<typeof createTvEventSchema>;
+export type UpdateTvEventInput = z.infer<typeof updateTvEventSchema>;
