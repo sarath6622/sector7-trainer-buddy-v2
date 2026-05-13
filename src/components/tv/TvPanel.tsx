@@ -143,23 +143,26 @@ function LeaderRowCard({
   return (
     <div className="flex items-stretch overflow-hidden rounded-2xl bg-black/40 ring-1 ring-white/5">
       <RankBadge rank={rank} accent={accent} />
-      <div className="flex shrink-0 items-center pl-3 pr-1">
-        <Avatar src={row.profileImageUrl} name={row.clientName} size="xl" gender={gender} />
-      </div>
-      <div className="flex flex-1 items-center gap-4 px-3 min-w-0">
-        <InitialsCircle name={row.clientName} accent={accent} />
-        <div className="flex flex-col min-w-0">
-          <div className="truncate text-3xl font-bold">{row.clientName}</div>
-          <div className="truncate text-lg text-zinc-500">
+      <div className="flex flex-1 flex-col justify-center min-w-0 gap-2 px-6 py-4">
+        <div className="truncate text-4xl font-bold leading-tight">{row.clientName}</div>
+        <div>
+          <div className={`text-6xl font-extrabold tabular-nums leading-none ${a.text}`}>
+            {row.weightKg.toFixed(1)}
+            <span className="ml-1 text-2xl font-bold text-zinc-400">KG</span>
+          </div>
+          <div className="mt-1 text-sm uppercase tracking-widest text-zinc-500">
             {row.reps ? `${row.reps} rep${row.reps === 1 ? '' : 's'}` : 'Elite Member'}
           </div>
         </div>
       </div>
-      <div className="flex items-center pr-6">
-        <div className={`text-5xl font-extrabold tabular-nums ${a.text}`}>
-          {row.weightKg.toFixed(1)}
-          <span className="ml-1 text-xl font-bold text-zinc-400">KG</span>
-        </div>
+      <div className="flex shrink-0 items-center pr-5 py-3">
+        <Avatar
+          src={row.profileImageUrl}
+          name={row.clientName}
+          size="3xl"
+          gender={gender}
+          accent={accent}
+        />
       </div>
     </div>
   );
@@ -183,17 +186,6 @@ function RankBadge({ rank, accent }: { rank: number; accent: Accent }) {
   return (
     <div className="flex w-20 shrink-0 items-center justify-center bg-zinc-800/80">
       <div className="text-4xl font-extrabold text-zinc-300">{rank}</div>
-    </div>
-  );
-}
-
-function InitialsCircle({ name, accent }: { name: string; accent: Accent }) {
-  const a = accentClasses(accent);
-  return (
-    <div
-      className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-lg font-extrabold ring-2 ${a.ring} ${a.text}`}
-    >
-      {initialsOf(name)}
     </div>
   );
 }
@@ -252,18 +244,23 @@ function VolumeColumn({
               className="flex items-stretch overflow-hidden rounded-2xl bg-black/40 ring-1 ring-white/5"
             >
               <RankBadge rank={i + 1} accent={accent} />
-              <div className="flex shrink-0 items-center pl-3 pr-1">
-                <Avatar src={r.profileImageUrl} name={r.clientName} size="xl" gender={gender} />
+              <div className="flex shrink-0 items-center pl-4 pr-2 py-3">
+                <Avatar
+                  src={r.profileImageUrl}
+                  name={r.clientName}
+                  size="2xl"
+                  gender={gender}
+                  accent={accent}
+                />
               </div>
-              <div className="flex flex-1 items-center gap-4 px-3 min-w-0">
-                <InitialsCircle name={r.clientName} accent={accent} />
+              <div className="flex flex-1 items-center px-4 min-w-0">
                 <div className="flex flex-col min-w-0">
-                  <div className="truncate text-3xl font-bold">{r.clientName}</div>
-                  <div className="truncate text-lg text-zinc-500">Elite Member</div>
+                  <div className="truncate text-4xl font-bold">{r.clientName}</div>
+                  <div className="truncate text-xl text-zinc-500">Elite Member</div>
                 </div>
               </div>
               <div className="flex items-center pr-6">
-                <div className={`text-5xl font-extrabold tabular-nums ${a.text}`}>
+                <div className={`text-6xl font-extrabold tabular-nums ${a.text}`}>
                   {formatTons(r.totalVolumeKg)}
                 </div>
               </div>
@@ -726,20 +723,37 @@ function Avatar({
   name,
   size,
   gender,
+  accent,
 }: {
   src: string | null;
   name: string;
-  size: 'md' | 'lg' | 'xl';
+  size: 'md' | 'lg' | 'xl' | '2xl' | '3xl';
   gender?: Gender;
+  accent?: Accent;
 }) {
-  const dim = size === 'xl' ? 'h-20 w-20' : size === 'lg' ? 'h-16 w-16' : 'h-14 w-14';
+  const dim =
+    size === '3xl'
+      ? 'h-56 w-56'
+      : size === '2xl'
+        ? 'h-36 w-36'
+        : size === 'xl'
+          ? 'h-20 w-20'
+          : size === 'lg'
+            ? 'h-16 w-16'
+            : 'h-14 w-14';
+  const ring =
+    accent === 'blue'
+      ? 'ring-4 ring-blue-400/60 shadow-lg shadow-blue-500/20'
+      : accent === 'pink'
+        ? 'ring-4 ring-pink-400/60 shadow-lg shadow-pink-500/20'
+        : 'ring-2 ring-white/10';
   const url = src ?? dummyAvatarUrl(name, gender);
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={url}
       alt={name}
-      className={`shrink-0 rounded-full bg-zinc-800 object-cover ring-2 ring-white/10 ${dim}`}
+      className={`shrink-0 rounded-full bg-zinc-800 object-cover ${ring} ${dim}`}
     />
   );
 }
@@ -753,16 +767,6 @@ function dummyAvatarUrl(name: string, gender?: Gender): string {
   const prefix = gender === 'female' ? 'f' : gender === 'male' ? 'm' : 'x';
   const seed = encodeURIComponent(`${prefix}-${slug}`);
   return `https://api.dicebear.com/9.x/avataaars/svg?seed=${seed}&backgroundColor=2a2a2a,1f1f1f,3a3a3a`;
-}
-
-function initialsOf(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0])
-    .join('')
-    .toUpperCase();
 }
 
 function accentClasses(accent: Accent): {

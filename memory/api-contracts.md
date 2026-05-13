@@ -716,6 +716,37 @@ collapse into a single "Coming Up" board slide showing the next 5. Past events
 auto-hide via the `eventAt >= now` filter at query time — no manual cleanup
 needed. The slide is skipped from rotation when zero events match.
 
+### Profile image upload (Added 2026-05-13)
+
+> Uploads land in Cloudinary under `sector7/profile-images/{branchId}/{userId}`.
+> The stored URL has face-aware crop (`c_fill,g_face,w_400,h_400,f_auto,q_auto`)
+> baked in via Cloudinary URL transformations — consumers (TV panels, lists,
+> avatars) render the URL directly with no per-call transform. The same
+> `User.profileImageUrl` field is written for both admin and client uploads.
+> Max file size 5 MB; allowed mime types: `image/jpeg`, `image/png`, `image/webp`.
+> Audit: `USER_PROFILE_IMAGE_UPDATED` / `USER_PROFILE_IMAGE_REMOVED`.
+
+```
+POST   /api/admin/users/[id]/profile-image    multipart/form-data, field "file" → { profileImageUrl }
+       Role: BRANCH_ADMIN | SUPER_ADMIN. Branch-scoped to caller.
+DELETE /api/admin/users/[id]/profile-image    → { profileImageUrl: null }
+       Same auth. Clears the URL. Cloudinary asset is left orphaned.
+
+GET    /api/client/profile/image              → { profileImageUrl: string | null }
+       Role: CLIENT only. Returns the caller's current photo URL.
+POST   /api/client/profile/image              multipart/form-data, field "file" → { profileImageUrl }
+       Role: CLIENT only. Always scoped to caller's own user row.
+DELETE /api/client/profile/image              → { profileImageUrl: null }
+       Role: CLIENT only.
+```
+
+Errors:
+
+- `INVALID_FILE_TYPE` (400) — mime type not in allow-list
+- `FILE_TOO_LARGE` (400) — > 5 MB
+- `CLOUDINARY_NOT_CONFIGURED` (500) — env vars missing
+- `NOT_FOUND` (404) — user not in caller's branch
+
 ### Client opt-in toggle
 
 ```

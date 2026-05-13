@@ -353,3 +353,29 @@ Removed code: `triggerBranchEvent` and its payload types from `src/lib/pusher.ts
 - The `branch-{branchId}` channel name is now retired and should not be reused for unrelated purposes — naming consistency for any future broadcast feature is better than recycling.
 
 ---
+
+## ADR-034: Cloudinary for Profile Image Storage with Face-Aware Crop Baked Into Stored URL
+
+**Date:** 2026-05-13
+**Status:** Accepted
+
+**Context:** The TV leaderboard renders `User.profileImageUrl` directly via `<img>` tags in `TvPanel` (medal pips, volume rows, PR feed, etc.). Until now that field has been a free-text column with no upload mechanism — values were either null or seeded externally. We needed a real upload pipeline reachable by both admins (managing client records) and clients themselves (settings page). Constraints: small gym, a few dozen images per branch; TV display benefits from face-centered crops since heads get cut off when an off-center photo lands in a circular medal pip; storing image bytes in Postgres (bytea) bloats the DB and gives us no CDN.
+
+**Decision:**
+
+- **Storage:** Cloudinary, configured with `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET`. Uploads go into `sector7/profile-images/{branchId}/{userId}` with `overwrite: true`, so re-uploads replace the same asset (no Cloudinary asset cleanup needed on update). Cost: free tier covers many years of this workload.
+- **Upload transport:** server-side multipart upload via API routes (`POST /api/admin/users/[id]/profile-image`, `POST /api/client/profile/image`). The browser sends `multipart/form-data` with a single `file` field to our Next.js route, the route streams the buffer to Cloudinary using the SDK and the secret. Rejected: client-side signed uploads — more moving parts (signature endpoint, CORS, browser-direct-to-third-party) for negligible bandwidth savings at our scale.
+- **Stored URL form:** the value persisted into `User.profileImageUrl` is a Cloudinary delivery URL with face-aware crop baked in: `c_fill,g_face,w_400,h_400,f_auto,q_auto`. Consumers (TV panels, community feed, admin lists, client avatars) render the URL directly. They do not call back into Cloudinary for transforms, and they do not need to know which provider is behind the URL.
+- **Validation at edge:** mime type ∈ {`image/jpeg`, `image/png`, `image/webp`}; size ≤ 5 MB. Both checked in the service layer before the Cloudinary call.
+- **Auth surfaces, dual entry points:** admin endpoint is `BRANCH_ADMIN | SUPER_ADMIN`, branch-scoped to caller. Client endpoint is `CLIENT` only, always scoped to caller's own row — clients cannot upload for other users. The TV opt-in (`ClientProfile.showOnTv`) remains a separate, independent toggle: uploading a photo does not auto-opt-in to the TV; opting in without a photo just falls back to initials. Decoupling is intentional — uploading a photo is broadly useful (community feed, avatars), TV visibility is a separate consent.
+- **Deletion semantics:** `DELETE` clears `User.profileImageUrl` to `null` but leaves the Cloudinary asset orphaned. Reasoning: assets are tiny (KBs), `overwrite: true` means re-uploads reclaim the slot, and Cloudinary's free tier is generous. Revisit if storage telemetry shows actual pressure.
+
+**Consequences:**
+
+- New runtime dependency on Cloudinary. Missing env vars surface as `CLOUDINARY_NOT_CONFIGURED` (500) with a clear message, not a silent fail.
+- Two new audit actions: `USER_PROFILE_IMAGE_UPDATED`, `USER_PROFILE_IMAGE_REMOVED`. Audit captures old/new URL — useful for "who replaced this photo?".
+- `User.profileImageUrl` semantics tightened: it is now a Cloudinary delivery URL with transforms baked in. Anything seeded outside Cloudinary will still work (it's just a string), but pages rendering at face-centered medal-pip sizes will look better when the value comes from this pipeline.
+- Trainer photos use the same plumbing if a future task wires the admin trainer page through the same uploader and same `/api/admin/users/[id]/profile-image` endpoint — no new infrastructure needed.
+- Optional follow-ups (not built now): (a) crop/zoom UI in the browser before upload; (b) explicit asset deletion on remove; (c) signed upload presets for client-direct-to-Cloudinary; (d) image moderation hook. All of these would slot in without breaking the stored-URL contract.
+
+---

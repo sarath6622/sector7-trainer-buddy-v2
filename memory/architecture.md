@@ -179,6 +179,11 @@ NODE_ENV=development
 
 # Cron (Phase 24 — bearer-token auth for /api/cron/* routes)
 CRON_SECRET=<32-byte base64 secret>
+
+# Cloudinary (profile image uploads — ADR-034)
+CLOUDINARY_CLOUD_NAME=<cloud-name>
+CLOUDINARY_API_KEY=<api-key>
+CLOUDINARY_API_SECRET=<api-secret>
 ```
 
 ## Secrets & Cron (Phase 24)

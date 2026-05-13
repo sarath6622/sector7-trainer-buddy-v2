@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { BadgeGrid, type EarnedBadge, type LockedBadge } from '@/components/badges/BadgeGrid';
+import { ProfileImageUploader } from '@/components/forms/ProfileImageUploader';
 import ProgressLineChart from '@/components/charts/ProgressLineChart';
 import WorkoutProgressionPanel, {
   type ExerciseSummary,
@@ -112,6 +113,7 @@ interface ClientData {
   phone: string | null;
   isActive: boolean;
   role: string;
+  profileImageUrl: string | null;
   clientProfile: {
     id: string;
     gender: string | null;
@@ -721,8 +723,17 @@ export default function ClientProfilePage() {
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex flex-1 items-center gap-2.5 min-w-0">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
-              {initials}
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-bold text-primary">
+              {client.profileImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={client.profileImageUrl}
+                  alt={`${client.firstName} ${client.lastName}`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span>{initials}</span>
+              )}
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold leading-none">
@@ -798,6 +809,20 @@ export default function ClientProfilePage() {
                 {error}
               </p>
             )}
+
+            {/* Photo */}
+            <Section title="Photo">
+              <ProfileImageUploader
+                currentUrl={client.profileImageUrl}
+                initials={initials}
+                endpoint={`/api/admin/users/${client.id}/profile-image`}
+                size="lg"
+                onChange={(url) => setClient({ ...client, profileImageUrl: url })}
+              />
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                Shown on the gym TV leaderboard if the client opts in.
+              </p>
+            </Section>
 
             {/* Personal Information */}
             <Section title="Personal Information">

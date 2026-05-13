@@ -1,21 +1,31 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Monitor, Settings as SettingsIcon } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { Camera, Monitor, Settings as SettingsIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ProfileImageUploader } from '@/components/forms/ProfileImageUploader';
 
 export default function ClientSettingsPage() {
+  const { data: session } = useSession();
   const [showOnTv, setShowOnTv] = useState<boolean | null>(null);
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null | undefined>(undefined);
   const [saving, setSaving] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/client/profile/tv-opt-in', { cache: 'no-store' });
-      if (!res.ok) throw new Error(`Status ${res.status}`);
-      const json = (await res.json()) as { data: { showOnTv: boolean } };
-      setShowOnTv(json.data.showOnTv);
+      const [tvRes, imgRes] = await Promise.all([
+        fetch('/api/client/profile/tv-opt-in', { cache: 'no-store' }),
+        fetch('/api/client/profile/image', { cache: 'no-store' }),
+      ]);
+      if (!tvRes.ok) throw new Error(`TV opt-in status ${tvRes.status}`);
+      if (!imgRes.ok) throw new Error(`Image status ${imgRes.status}`);
+      const tvJson = (await tvRes.json()) as { data: { showOnTv: boolean } };
+      const imgJson = (await imgRes.json()) as { data: { profileImageUrl: string | null } };
+      setShowOnTv(tvJson.data.showOnTv);
+      setProfileImageUrl(imgJson.data.profileImageUrl);
     } catch (err) {
       console.error(err);
       toast.error('Failed to load settings');
@@ -53,6 +63,10 @@ export default function ClientSettingsPage() {
     }
   }
 
+  const firstName = session?.user?.firstName ?? '';
+  const lastName = session?.user?.lastName ?? '';
+  const initials = `${firstName[0] ?? ''}${lastName[0] ?? ''}`.toUpperCase() || '?';
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -61,6 +75,34 @@ export default function ClientSettingsPage() {
           Settings
         </h1>
         <p className="text-sm text-muted-foreground">Control how you appear around the gym.</p>
+      </div>
+
+      {/* Photo card */}
+      <div className="rounded-2xl bg-card p-5 ring-1 ring-border/50">
+        <div className="flex items-start gap-4">
+          <div className="rounded-xl bg-orange-500/15 p-3">
+            <Camera className="size-6 text-orange-400" />
+          </div>
+          <div className="flex-1 space-y-3">
+            <div>
+              <div className="font-semibold">Your photo</div>
+              <p className="text-sm text-muted-foreground">
+                Used on the gym TV leaderboard, community feed, and your profile.
+              </p>
+            </div>
+            {profileImageUrl === undefined ? (
+              <Skeleton className="h-28 w-28 rounded-full" />
+            ) : (
+              <ProfileImageUploader
+                currentUrl={profileImageUrl}
+                initials={initials}
+                endpoint="/api/client/profile/image"
+                size="lg"
+                onChange={(url) => setProfileImageUrl(url)}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
       {/* TV opt-in card */}
