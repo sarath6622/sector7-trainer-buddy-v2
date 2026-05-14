@@ -52,7 +52,7 @@ export function TvPanel({ panelKey, data, now, announcement }: Props) {
     case 'streaks':
       return <StreakPanel data={panels.streaks} />;
     case 'latestPRs':
-      return <LatestPrPanel data={panels.latestPRs} />;
+      return <LatestPrPanel data={panels.latestPRs} now={now} />;
     case 'events':
       return <EventsPanel data={panels.upcomingEvents} now={now} />;
     case 'badges':
@@ -150,9 +150,11 @@ function LeaderRowCard({
             {row.weightKg.toFixed(1)}
             <span className="ml-1 text-2xl font-bold text-zinc-400">KG</span>
           </div>
-          <div className="mt-1 text-sm uppercase tracking-widest text-zinc-500">
-            {row.reps ? `${row.reps} rep${row.reps === 1 ? '' : 's'}` : 'Elite Member'}
-          </div>
+          {row.reps != null && (
+            <div className="mt-1.5 text-xl font-semibold uppercase tracking-widest text-zinc-400">
+              {row.reps} rep{row.reps === 1 ? '' : 's'}
+            </div>
+          )}
         </div>
       </div>
       <div className="flex shrink-0 items-center pr-5 py-3">
@@ -254,10 +256,7 @@ function VolumeColumn({
                 />
               </div>
               <div className="flex flex-1 items-center px-4 min-w-0">
-                <div className="flex flex-col min-w-0">
-                  <div className="truncate text-4xl font-bold">{r.clientName}</div>
-                  <div className="truncate text-xl text-zinc-500">Elite Member</div>
-                </div>
+                <div className="truncate text-4xl font-bold">{r.clientName}</div>
               </div>
               <div className="flex items-center pr-6">
                 <div className={`text-6xl font-extrabold tabular-nums ${a.text}`}>
@@ -387,36 +386,42 @@ interface PrRow {
   achievedAt: string;
 }
 
-function LatestPrPanel({ data }: { data: PrRow[] }) {
+function LatestPrPanel({ data, now }: { data: PrRow[]; now: number }) {
   return (
     <div className="flex w-full flex-1 min-h-0 flex-col">
       <div className="flex flex-1 min-h-0 flex-col rounded-3xl bg-gradient-to-b from-zinc-900/80 to-zinc-950/70 p-7 ring-1 ring-white/5 shadow-2xl">
         {data.length === 0 ? (
-          <EmptyState text="No recent PRs" />
+          <EmptyState text="No PRs logged in the last 7 days" />
         ) : (
-          <div className="grid flex-1 grid-cols-2 gap-4 content-start">
+          <div className="grid flex-1 grid-cols-2 gap-6 content-start">
             {data.slice(0, 6).map((r, i) => (
               <div
                 key={`${r.clientName}-${i}`}
                 className="flex items-stretch overflow-hidden rounded-2xl bg-black/40 ring-1 ring-white/5"
               >
-                <div className="flex w-16 shrink-0 items-center justify-center bg-gradient-to-b from-yellow-500 via-orange-500 to-orange-700">
-                  <Zap className="h-7 w-7 text-white" />
-                </div>
-                <div className="flex shrink-0 items-center pl-3 pr-1 py-2">
-                  <Avatar src={r.profileImageUrl} name={r.clientName} size="lg" />
-                </div>
-                <div className="flex flex-1 items-center gap-3 px-2 min-w-0">
-                  <div className="flex flex-col min-w-0">
-                    <div className="truncate text-2xl font-bold">{r.clientName}</div>
-                    <div className="truncate text-base text-zinc-400">{r.exerciseName}</div>
+                <div className="flex shrink-0 items-center pl-6">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-600 shadow-lg shadow-orange-500/30">
+                    <Zap className="h-11 w-11 text-white" />
                   </div>
                 </div>
-                <div className="flex items-center pr-4">
-                  <div className="text-3xl font-extrabold tabular-nums text-orange-400">
-                    {r.weightKg.toFixed(0)}
-                    <span className="ml-0.5 text-base font-bold text-zinc-400">KG</span>
+                <div className="flex flex-1 flex-col justify-center gap-3 px-6 py-6 min-w-0">
+                  <div className="truncate text-5xl font-bold leading-tight">{r.clientName}</div>
+                  <div>
+                    <div className="text-7xl font-extrabold tabular-nums leading-none text-orange-400">
+                      {r.weightKg.toFixed(0)}
+                      <span className="ml-1 text-3xl font-bold text-zinc-400">KG</span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-3 text-xl font-semibold uppercase tracking-widest">
+                      <span className="truncate text-zinc-300">{r.exerciseName}</span>
+                      <span className="shrink-0 text-zinc-600">·</span>
+                      <span className="shrink-0 text-orange-400/90">
+                        {formatRelativeTime(r.achievedAt, now)}
+                      </span>
+                    </div>
                   </div>
+                </div>
+                <div className="flex shrink-0 items-center pr-6 py-4">
+                  <Avatar src={r.profileImageUrl} name={r.clientName} size="3xl" />
                 </div>
               </div>
             ))}
@@ -539,8 +544,8 @@ function EventsPanel({ data, now }: { data: UpcomingEvent[]; now: number }) {
       {data.length === 0 ? (
         <EmptyState text="No upcoming events" />
       ) : (
-        <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 content-start">
-          {data.slice(0, 5).map((e) => (
+        <div className="grid flex-1 min-h-0 grid-cols-1 gap-6 content-start">
+          {data.slice(0, 4).map((e) => (
             <EventCard key={e.id} event={e} now={now} />
           ))}
         </div>
@@ -555,28 +560,27 @@ function EventCard({ event, now }: { event: UpcomingEvent; now: number }) {
   return (
     <div className="flex items-stretch overflow-hidden rounded-2xl bg-black/40 ring-1 ring-sky-500/20">
       {/* Date block on the left — day-of-month + short month, sky accent */}
-      <div className="flex w-32 shrink-0 flex-col items-center justify-center gap-1 bg-gradient-to-b from-sky-500 via-sky-600 to-sky-800 px-2 py-3">
-        <div className="text-xs font-semibold uppercase tracking-widest text-sky-100/80">
+      <div className="flex w-48 shrink-0 flex-col items-center justify-center gap-1 bg-gradient-to-b from-sky-500 via-sky-600 to-sky-800 px-3 py-6">
+        <div className="text-xl font-semibold uppercase tracking-widest text-sky-100/80">
           {when.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase()}
         </div>
-        <div className="text-5xl font-extrabold leading-none text-white tabular-nums">
+        <div className="text-8xl font-extrabold leading-none text-white tabular-nums">
           {when.getDate()}
         </div>
-        <div className="text-xs font-semibold uppercase tracking-widest text-sky-100/80">
+        <div className="text-xl font-semibold uppercase tracking-widest text-sky-100/80">
           {when.toLocaleDateString('en-IN', { weekday: 'short' }).toUpperCase()}
         </div>
       </div>
 
-      {/* Icon */}
-      <div className="flex w-24 shrink-0 items-center justify-center">
-        <div className="text-6xl leading-none">{event.icon ?? '📅'}</div>
-      </div>
-
       {/* Title + meta */}
-      <div className="flex flex-1 flex-col justify-center gap-1 px-3 min-w-0 py-3">
-        <div className="truncate text-3xl font-bold text-white">{event.title}</div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-lg text-zinc-400">
-          <span className="tabular-nums">
+      <div className="flex flex-1 flex-col justify-center gap-4 px-8 min-w-0 py-6">
+        <div className="flex items-center gap-4 min-w-0">
+          {event.icon && <span className="shrink-0 text-6xl leading-none">{event.icon}</span>}
+          <div className="truncate text-6xl font-bold text-white">{event.title}</div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="flex items-center gap-2.5 rounded-xl bg-sky-500/15 px-4 py-2 text-3xl font-semibold tabular-nums text-sky-300">
+            <Timer className="h-7 w-7 shrink-0" />
             {when.toLocaleTimeString('en-IN', {
               hour: '2-digit',
               minute: '2-digit',
@@ -584,26 +588,40 @@ function EventCard({ event, now }: { event: UpcomingEvent; now: number }) {
             })}
           </span>
           {event.location && (
-            <span className="flex items-center gap-1.5 truncate">
-              <MapPin className="h-4 w-4 shrink-0" />
+            <span className="flex min-w-0 items-center gap-2.5 rounded-xl bg-white/5 px-4 py-2 text-3xl text-zinc-200">
+              <MapPin className="h-7 w-7 shrink-0" />
               <span className="truncate">{event.location}</span>
             </span>
           )}
         </div>
         {event.description && (
-          <div className="truncate text-base text-zinc-500">{event.description}</div>
+          <div className="truncate text-3xl text-zinc-400">{event.description}</div>
         )}
       </div>
 
-      {/* Countdown chip */}
-      <div className="flex items-center pr-6">
+      {/* Countdown */}
+      <div className="flex shrink-0 items-center pr-10">
         <div className="flex flex-col items-end">
-          <div className="text-3xl font-extrabold tabular-nums text-sky-400">{countdown}</div>
-          <div className="text-xs uppercase tracking-widest text-zinc-500">to go</div>
+          <div className="text-7xl font-extrabold tabular-nums text-sky-400">{countdown}</div>
+          <div className="text-2xl font-semibold uppercase tracking-widest text-zinc-400">
+            to go
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+/** Compact "X ago" freshness label for a past timestamp. */
+function formatRelativeTime(iso: string, now: number): string {
+  const ms = now - new Date(iso).getTime();
+  if (ms < 60_000) return 'just now';
+  const totalMin = Math.floor(ms / 60_000);
+  if (totalMin < 60) return `${totalMin}m ago`;
+  const hours = Math.floor(totalMin / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 /** Compact "in X" countdown — days for >24h, hours-minutes otherwise. */
@@ -695,8 +713,14 @@ function CenteredPanelTitle({
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="flex h-full flex-1 items-center justify-center">
-      <div className="text-3xl text-zinc-500">{text}</div>
+    <div className="flex h-full flex-1 flex-col items-center justify-center gap-7 text-center">
+      <div className="flex h-40 w-40 items-center justify-center rounded-full bg-zinc-800/60 ring-1 ring-white/5">
+        <Flame className="h-20 w-20 text-zinc-600" />
+      </div>
+      <div className="text-7xl font-extrabold uppercase tracking-tight text-zinc-300">
+        Be the first
+      </div>
+      <div className="max-w-2xl text-3xl text-zinc-500">{text}</div>
     </div>
   );
 }

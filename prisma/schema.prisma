@@ -1223,13 +1223,13 @@ model TvDevice {
 }
 
 /// Singleton row per branch holding admin-driven overrides for the TV display
-/// rotation. `pinnedPanel` freezes the rotation on one panel (null = auto).
+/// rotation. `pinnedPanels` restricts the rotation to a chosen subset of panels
+/// (empty = auto-rotate everything; one entry = effectively frozen on that panel).
 /// `shoutout` is a transient banner shown for `shoutoutExpiresAt - now` seconds.
-/// Mutations broadcast `TV_PIN_CHANGED` / `TV_SHOUTOUT` on `branch-{branchId}`.
 model TvControlState {
   id                String   @id @default(cuid())
   branchId          String   @unique
-  pinnedPanel       String?
+  pinnedPanels      String[]
   shoutout          String?
   shoutoutExpiresAt DateTime?
   updatedByUserId   String?

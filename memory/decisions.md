@@ -379,3 +379,30 @@ Removed code: `triggerBranchEvent` and its payload types from `src/lib/pusher.ts
 - Optional follow-ups (not built now): (a) crop/zoom UI in the browser before upload; (b) explicit asset deletion on remove; (c) signed upload presets for client-direct-to-Cloudinary; (d) image moderation hook. All of these would slot in without breaking the stored-URL contract.
 
 ---
+
+## ADR-035: TV Pin Is a Panel Subset, Not a Single Panel (Supersedes the Single-Pin Part of ADR-032)
+
+**Date:** 2026-05-14
+**Status:** Accepted (supersedes the single-`pinnedPanel` decision in ADR-032; everything else in ADR-032/033 stands)
+
+**Context:** ADR-032 gave the admin a single-panel pin — `TvControlState.pinnedPanel String?`, where non-null froze the TV rotation on exactly one panel and null meant auto-rotate everything. In practice operators wanted to show a _handful_ of panels (e.g. the three compound lifts during a meet, skipping events/PRs) without freezing on just one. The single-pin model couldn't express "rotate through this subset."
+
+**Decision:** Replace `pinnedPanel String?` with `pinnedPanels String[]` on `TvControlState`. Semantics:
+
+- **`[]` (empty)** — auto-rotate through the full deck (leaderboards + latest PRs + events + announcement slides). Same as the old `null`.
+- **One entry** — TV shows only that panel; rotation has nothing to advance to, so it is effectively frozen. Subsumes the old single-pin behavior.
+- **Multiple entries** — TV rotates through only those panels, 15s each, in deck order.
+
+The TV (`TvDashboard`) computes an `activeDeck` = the full deck filtered to the pinned subset (or the full deck when the subset is empty). Safety valve: if the pinned set matches _nothing_ currently in the deck (e.g. all pinned panels are hidden, like `events` with zero upcoming events), it falls back to the full deck so the screen never goes blank. Announcement slides are excluded from a non-empty pinned subset — pinning is about the fixed panels, announcements are their own opt-in deck.
+
+Admin UI (`/admin/tv-control`) becomes a multi-select: each panel button toggles membership, a "Clear" button empties the set, and the banner reads "Rotating N: …" instead of "Currently pinned: …".
+
+**Migration:** `20260514100000_tv_control_multi_pin` adds `pinnedPanels TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]`, backfills it from the old `pinnedPanel` (one-element array where it was set), then drops `pinnedPanel`. Applied to local Docker first, then Neon.
+
+**Consequences:**
+
+- `TV_PIN_SET` audit rows now carry `pinnedPanels` arrays in old/new value instead of a single string.
+- `updateTvControlState` compares pin sets order-insensitively (`samePanels`) so re-saving the same subset in a different order doesn't emit a spurious audit row.
+- API contract: `POST /api/admin/tv-control` takes `pinnedPanels?: string[]`; the `control` block in `TvLivePayload` / `TvDashboardPayload` carries `pinnedPanels: string[]`.
+- The `TV_PIN_SET` audit action name is unchanged — it still describes the same intent, just with richer payload.
+- ADR-032's auth/role/opt-in/gendered-leaderboard decisions and ADR-033's polling transport are untouched.

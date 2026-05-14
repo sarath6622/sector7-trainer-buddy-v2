@@ -22,7 +22,7 @@ import { Switch } from '@/components/ui/switch';
 import Link from 'next/link';
 
 interface ControlState {
-  pinnedPanel: string | null;
+  pinnedPanels: string[];
   shoutout: { message: string; expiresAt: string } | null;
 }
 
@@ -335,22 +335,24 @@ export default function TvControlPage() {
     }
   }
 
-  async function setPin(panel: string | null) {
+  async function savePins(nextPanels: string[]) {
     setSubmitting(true);
     try {
       const res = await fetch('/api/admin/tv-control', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pinnedPanel: panel }),
+        body: JSON.stringify({ pinnedPanels: nextPanels }),
       });
       const json = await res.json();
       if (!res.ok) {
         toast.error(json.error ?? 'Failed to update');
         return;
       }
-      setState((s) => (s ? { ...s, pinnedPanel: panel } : s));
+      setState((s) => (s ? { ...s, pinnedPanels: nextPanels } : s));
       toast.success(
-        panel ? `Pinned ${PANEL_OPTIONS.find((p) => p.key === panel)?.label}` : 'Pin cleared',
+        nextPanels.length === 0
+          ? 'Rotation cleared — TV shows all panels'
+          : `TV rotates ${nextPanels.length} panel${nextPanels.length === 1 ? '' : 's'}`,
       );
     } catch (err) {
       console.error(err);
@@ -358,6 +360,14 @@ export default function TvControlPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function togglePin(panelKey: string) {
+    const current = state?.pinnedPanels ?? [];
+    const next = current.includes(panelKey)
+      ? current.filter((k) => k !== panelKey)
+      : [...current, panelKey];
+    savePins(next);
   }
 
   async function sendShoutout() {
@@ -400,9 +410,10 @@ export default function TvControlPage() {
     }
   }
 
-  const pinnedPanelLabel = state?.pinnedPanel
-    ? (PANEL_OPTIONS.find((p) => p.key === state.pinnedPanel)?.label ?? state.pinnedPanel)
-    : null;
+  const pinnedPanels = state?.pinnedPanels ?? [];
+  const pinnedLabels = pinnedPanels.map(
+    (key) => PANEL_OPTIONS.find((p) => p.key === key)?.label ?? key,
+  );
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -428,35 +439,44 @@ export default function TvControlPage() {
         </div>
       </div>
 
-      {/* Pin panel */}
+      {/* Pin panels */}
       <div className="rounded-2xl bg-card p-5 ring-1 ring-border/50 space-y-4">
         <div className="flex items-center gap-2">
           <Pin className="size-5 text-orange-400" />
-          <div className="font-semibold">Pin a panel</div>
+          <div className="font-semibold">Pin panels</div>
         </div>
         <p className="text-sm text-muted-foreground">
-          When pinned, the TV stops rotating and stays on the chosen panel until you clear it.
+          Select one or more panels — the TV rotates through only those. Pick one to freeze on it.
+          Select none to rotate through everything.
         </p>
-        {pinnedPanelLabel && (
-          <div className="rounded-xl bg-orange-500/10 px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-orange-300">
-              <Pin className="size-4" />
-              <span className="font-medium">Currently pinned:</span>
-              <span>{pinnedPanelLabel}</span>
+        {pinnedPanels.length > 0 && (
+          <div className="rounded-xl bg-orange-500/10 px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-orange-300 min-w-0">
+              <Pin className="size-4 shrink-0" />
+              <span className="font-medium shrink-0">
+                {pinnedPanels.length === 1 ? 'Pinned:' : `Rotating ${pinnedPanels.length}:`}
+              </span>
+              <span className="truncate">{pinnedLabels.join(', ')}</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setPin(null)} disabled={submitting}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => savePins([])}
+              disabled={submitting}
+              className="shrink-0"
+            >
               <PinOff /> Clear
             </Button>
           </div>
         )}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {PANEL_OPTIONS.map((p) => {
-            const isActive = state?.pinnedPanel === p.key;
+            const isActive = pinnedPanels.includes(p.key);
             return (
               <Button
                 key={p.key}
                 variant={isActive ? 'default' : 'outline'}
-                onClick={() => setPin(isActive ? null : p.key)}
+                onClick={() => togglePin(p.key)}
                 disabled={submitting}
                 className="justify-start"
               >

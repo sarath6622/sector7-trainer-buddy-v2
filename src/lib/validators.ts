@@ -796,12 +796,12 @@ export const createTvDeviceSchema = z.object({
 
 export const updateTvControlSchema = z
   .object({
-    pinnedPanel: z.string().max(100).nullable().optional(),
+    pinnedPanels: z.array(z.string().max(100)).max(20).optional(),
     shoutout: z.string().max(500).nullable().optional(),
     shoutoutTtlSec: z.number().int().min(5).max(600).optional(),
   })
-  .refine((v) => v.pinnedPanel !== undefined || v.shoutout !== undefined, {
-    message: 'At least one of pinnedPanel or shoutout must be provided',
+  .refine((v) => v.pinnedPanels !== undefined || v.shoutout !== undefined, {
+    message: 'At least one of pinnedPanels or shoutout must be provided',
   });
 
 export const tvOptInSchema = z.object({

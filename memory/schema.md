@@ -905,15 +905,16 @@ model TvDevice {
 ### New Model: TvControlState
 
 Singleton row per branch holding admin-driven overrides for the TV display
-rotation. `pinnedPanel` freezes rotation on one panel (null = auto). `shoutout`
-is a transient banner shown until `shoutoutExpiresAt`. Mutations broadcast
-`TV_PIN_CHANGED` / `TV_SHOUTOUT` on the new `branch-{branchId}` Pusher channel.
+rotation. `pinnedPanels` restricts rotation to a chosen subset of panels —
+empty = auto-rotate everything, one entry = effectively frozen on that panel
+(see ADR-035; supersedes the original single `pinnedPanel String?`). `shoutout`
+is a transient banner shown until `shoutoutExpiresAt`.
 
 ```prisma
 model TvControlState {
   id                String   @id @default(cuid())
   branchId          String   @unique
-  pinnedPanel       String?
+  pinnedPanels      String[]
   shoutout          String?
   shoutoutExpiresAt DateTime?
   updatedByUserId   String?
@@ -1014,3 +1015,18 @@ model TvEvent {
 Applied to both local Docker and Neon. Both tables are leaf nodes (no existing
 data depends on them) so the migrations are purely additive — no row counts
 needed for verification.
+
+## TV Control Multi-Pin (2026-05-14)
+
+### Altered: TvControlState
+
+- `pinnedPanel String?` replaced with `pinnedPanels String[]`. Empty array =
+  auto-rotate everything; one or more entries = TV rotates through only that
+  subset. See ADR-035.
+
+### Migration
+
+- `20260514100000_tv_control_multi_pin` — adds `pinnedPanels TEXT[] NOT NULL
+DEFAULT ARRAY[]::TEXT[]`, backfills it from the old single `pinnedPanel`
+  (one-element array where set), then drops `pinnedPanel`. Applied to local
+  Docker and Neon.

@@ -4,7 +4,8 @@ import { auditLog } from '@/lib/audit';
 const DEFAULT_SHOUTOUT_TTL_SEC = 60;
 
 export interface TvControlSnapshot {
-  pinnedPanel: string | null;
+  /** Panels the TV rotates through. Empty = auto-rotate everything. */
+  pinnedPanels: string[];
   shoutout: { message: string; expiresAt: string } | null;
 }
 
@@ -15,13 +16,13 @@ export interface TvControlSnapshot {
  */
 export async function getTvControlState(branchId: string): Promise<TvControlSnapshot> {
   const row = await prisma.tvControlState.findUnique({ where: { branchId } });
-  if (!row) return { pinnedPanel: null, shoutout: null };
+  if (!row) return { pinnedPanels: [], shoutout: null };
 
   const shoutoutLive =
     row.shoutout && row.shoutoutExpiresAt && row.shoutoutExpiresAt.getTime() > Date.now();
 
   return {
-    pinnedPanel: row.pinnedPanel,
+    pinnedPanels: row.pinnedPanels,
     shoutout: shoutoutLive
       ? { message: row.shoutout!, expiresAt: row.shoutoutExpiresAt!.toISOString() }
       : null,
@@ -31,9 +32,16 @@ export async function getTvControlState(branchId: string): Promise<TvControlSnap
 export interface UpdateTvControlInput {
   branchId: string;
   actorId: string;
-  pinnedPanel?: string | null;
+  pinnedPanels?: string[];
   shoutout?: string | null;
   shoutoutTtlSec?: number;
+}
+
+function samePanels(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((v, i) => v === sortedB[i]);
 }
 
 /**
@@ -45,11 +53,12 @@ export interface UpdateTvControlInput {
  * mutated, so a single call that changes both yields two audit rows.
  */
 export async function updateTvControlState(input: UpdateTvControlInput) {
-  const { branchId, actorId, pinnedPanel, shoutout, shoutoutTtlSec } = input;
+  const { branchId, actorId, pinnedPanels, shoutout, shoutoutTtlSec } = input;
 
   const existing = await prisma.tvControlState.findUnique({ where: { branchId } });
 
-  const pinChanged = pinnedPanel !== undefined && pinnedPanel !== (existing?.pinnedPanel ?? null);
+  const pinChanged =
+    pinnedPanels !== undefined && !samePanels(pinnedPanels, existing?.pinnedPanels ?? []);
   const shoutoutChanged = shoutout !== undefined;
 
   const expiresAt =
@@ -58,7 +67,7 @@ export async function updateTvControlState(input: UpdateTvControlInput) {
       : null;
 
   const data = {
-    ...(pinnedPanel !== undefined && { pinnedPanel }),
+    ...(pinnedPanels !== undefined && { pinnedPanels }),
     ...(shoutout !== undefined && {
       shoutout: shoutout,
       shoutoutExpiresAt: expiresAt,
@@ -79,8 +88,8 @@ export async function updateTvControlState(input: UpdateTvControlInput) {
       subjectType: 'TvControlState',
       subjectId: row.id,
       branchId,
-      oldValue: { pinnedPanel: existing?.pinnedPanel ?? null },
-      newValue: { pinnedPanel },
+      oldValue: { pinnedPanels: existing?.pinnedPanels ?? [] },
+      newValue: { pinnedPanels },
     });
   }
 
@@ -98,7 +107,7 @@ export async function updateTvControlState(input: UpdateTvControlInput) {
   return {
     id: row.id,
     branchId: row.branchId,
-    pinnedPanel: row.pinnedPanel,
+    pinnedPanels: row.pinnedPanels,
     shoutout: row.shoutout,
     shoutoutExpiresAt: row.shoutoutExpiresAt,
     updatedByUserId: row.updatedByUserId,

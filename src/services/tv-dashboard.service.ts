@@ -78,7 +78,7 @@ export interface TvDashboardPayload {
     upcomingEvents: TvEventRow[];
   };
   control: {
-    pinnedPanel: string | null;
+    pinnedPanels: string[];
     shoutout: { message: string; expiresAt: string } | null;
   };
 }

@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const result = await tvControlService.updateTvControlState({
       branchId: session.user.branchId,
       actorId: session.user.id,
-      pinnedPanel: parsed.pinnedPanel,
+      pinnedPanels: parsed.pinnedPanels,
       shoutout: parsed.shoutout,
       shoutoutTtlSec: parsed.shoutoutTtlSec,
     });

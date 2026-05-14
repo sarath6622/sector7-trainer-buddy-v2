@@ -567,7 +567,7 @@ GET    /api/admin/tv/live         → {} → TvLivePayload
   announcements:  TvAnnouncementRow[];  // active, non-expired, sorted
   upcomingEvents: TvEventRow[];         // future-dated, active, top 5
   control: {
-    pinnedPanel: string | null;
+    pinnedPanels: string[];
     shoutout:    { message: string; expiresAt: string } | null;
   };
 }
@@ -607,7 +607,7 @@ triggers a 10-second confetti takeover, then the watermark advances.
     upcomingEvents:    TvEventRow[];         // future-dated, active, top 5
   };
   control: {
-    pinnedPanel: string | null;
+    pinnedPanels: string[];
     shoutout:    { message: string; expiresAt: string } | null;
   };
 }
@@ -653,7 +653,8 @@ DELETE /api/admin/tv/devices/[id]    → {} → { success: true }
 ```
 GET    /api/admin/tv-control         → {} → TvControlState
 POST   /api/admin/tv-control         body: {
-                                       pinnedPanel?: string | null,  // null = auto-rotate
+                                       pinnedPanels?: string[],      // [] = auto-rotate all;
+                                                                     // 1+ = rotate only those
                                        shoutout?:    string | null,
                                        shoutoutTtlSec?: number       // default 60, max 600
                                      } → TvControlState
@@ -662,7 +663,8 @@ POST   /api/admin/tv-control         body: {
        Audit: TV_PIN_SET or TV_SHOUTOUT_BROADCAST (one per mutation)
 ```
 
-`TvControlState` shape: `{ id, branchId, pinnedPanel, shoutout, shoutoutExpiresAt, updatedByUserId, updatedAt }`
+`TvControlState` shape: `{ id, branchId, pinnedPanels, shoutout, shoutoutExpiresAt, updatedByUserId, updatedAt }`
+(`pinnedPanels: string[]` — see ADR-035; supersedes the original single `pinnedPanel`.)
 
 ### TV announcements (multi-slide deck)
 

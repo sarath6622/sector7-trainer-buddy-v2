@@ -98,7 +98,7 @@ export interface TvDashboardPayload {
     upcomingEvents: UpcomingEvent[];
   };
   control: {
-    pinnedPanel: string | null;
+    pinnedPanels: string[];
     shoutout: { message: string; expiresAt: string } | null;
   };
 }
@@ -320,40 +320,45 @@ export function TvDashboard({ token }: { token: string }) {
     return [...base, ...slots];
   })();
 
-  // ── Panel rotation (paused while pinned, paused during PR takeover) ──────
-  const pinnedPanel = data?.control.pinnedPanel ?? null;
-  const pinnedIndex = pinnedPanel
-    ? deck.findIndex((s) => s.kind === 'panel' && s.key === pinnedPanel)
-    : -1;
-  const isPinned = pinnedIndex >= 0;
+  // ── Pinned-panel filter ─────────────────────────────────────────────────
+  // `pinnedPanels` (admin TV control) restricts rotation to a chosen subset.
+  // Empty = rotate everything. If the pinned set matches nothing currently in
+  // the deck (e.g. all pinned panels are hidden), fall back to the full deck
+  // so the TV never goes blank.
+  const pinnedPanels = data?.control.pinnedPanels ?? [];
+  const pinnedDeck = deck.filter((s) => s.kind === 'panel' && pinnedPanels.includes(s.key));
+  const activeDeck: DeckSlot[] =
+    pinnedPanels.length > 0 && pinnedDeck.length > 0 ? pinnedDeck : deck;
+  const pinKey = pinnedPanels.slice().sort().join(',');
+
+  // ── Panel rotation (paused during PR takeover) ──────────────────────────
   const hasTakeover = prQueue.length > 0;
 
-  // Keep panelIndex in range when the deck size changes (announcements added/removed).
+  // Keep panelIndex in range when the active deck shrinks (announcements
+  // added/removed, or the pinned subset changed).
   useEffect(() => {
-    if (deck.length === 0) return;
-    if (panelIndex >= deck.length) {
+    if (activeDeck.length === 0) return;
+    if (panelIndex >= activeDeck.length) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPanelIndex(0);
     }
-  }, [deck.length, panelIndex]);
+  }, [activeDeck.length, panelIndex]);
+
+  // When the pinned set changes, restart from the first pinned panel.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPanelIndex(0);
+  }, [pinKey]);
 
   // Re-run on panelIndex change so a manual click (pip) resets the dwell timer —
   // whoever just navigated gets a full ROTATION_MS to read the slide they picked.
   useEffect(() => {
-    if (isPinned || hasTakeover || deck.length === 0) return;
+    if (hasTakeover || activeDeck.length <= 1) return;
     const t = setInterval(() => {
-      setPanelIndex((i) => (i + 1) % deck.length);
+      setPanelIndex((i) => (i + 1) % activeDeck.length);
     }, ROTATION_MS);
     return () => clearInterval(t);
-  }, [isPinned, hasTakeover, deck.length, panelIndex]);
-
-  // When a pin lands, snap to it immediately
-  useEffect(() => {
-    if (isPinned) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPanelIndex(pinnedIndex);
-    }
-  }, [isPinned, pinnedIndex]);
+  }, [hasTakeover, activeDeck.length, panelIndex]);
 
   // ── PR takeover queue: show one for 10s, then move on ────────────────────
   useEffect(() => {
@@ -383,8 +388,11 @@ export function TvDashboard({ token }: { token: string }) {
     );
   }
 
-  const safeIndex = deck.length > 0 ? Math.min(panelIndex, deck.length - 1) : 0;
-  const currentSlot: DeckSlot = deck[safeIndex] ?? { kind: 'panel', key: LEADERBOARD_ORDER[0]! };
+  const safeIndex = activeDeck.length > 0 ? Math.min(panelIndex, activeDeck.length - 1) : 0;
+  const currentSlot: DeckSlot = activeDeck[safeIndex] ?? {
+    kind: 'panel',
+    key: LEADERBOARD_ORDER[0]!,
+  };
   const meta: PanelMeta =
     currentSlot.kind === 'panel' ? PANEL_META[currentSlot.key] : ANNOUNCEMENT_META;
   const shoutoutLive =
@@ -395,7 +403,7 @@ export function TvDashboard({ token }: { token: string }) {
       {/* Header: logo · centered panel title · clock card */}
       <header className="grid grid-cols-3 items-center gap-6 px-10 pt-6 pb-4">
         <div className="flex items-center justify-start">
-          <img src="/sector7-logo-full.png" alt="Sector 7" className="h-14 w-auto object-contain" />
+          <img src="/sector7-logo-full.png" alt="Sector 7" className="h-24 w-auto object-contain" />
         </div>
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-4">
@@ -404,10 +412,8 @@ export function TvDashboard({ token }: { token: string }) {
               {meta.title}
             </h1>
           </div>
-          <div className="mt-1 flex items-center gap-3 text-base uppercase tracking-[0.3em] text-zinc-500">
-            <span className="text-orange-500">·</span>
+          <div className="mt-2 text-2xl font-semibold uppercase tracking-[0.25em] text-zinc-300">
             {meta.subtitle}
-            <span className="text-orange-500">·</span>
           </div>
         </div>
         <div className="flex items-center justify-end gap-2">
@@ -453,9 +459,22 @@ export function TvDashboard({ token }: { token: string }) {
         )}
       </main>
 
+      {/* Rotation progress bar — fills over ROTATION_MS so viewers can see
+          when the slide is about to change. Keyed on panelIndex so it
+          restarts on every change; hidden when rotation is paused. */}
+      {activeDeck.length > 1 && !hasTakeover && (
+        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/[0.06]">
+          <div
+            key={safeIndex}
+            className="tv-rotation-progress h-full bg-orange-500/80"
+            style={{ animationDuration: `${ROTATION_MS}ms` }}
+          />
+        </div>
+      )}
+
       {/* Footer pip indicator — click to jump to that slide */}
       <footer className="absolute bottom-3 left-0 right-0 flex justify-center gap-2">
-        {deck.map((slot, i) => {
+        {activeDeck.map((slot, i) => {
           const key = slot.kind === 'panel' ? `p-${slot.key}` : `a-${slot.slide.id}`;
           const isAnnouncement = slot.kind === 'announcement';
           const active = i === safeIndex;
@@ -480,6 +499,20 @@ export function TvDashboard({ token }: { token: string }) {
 
       {/* PR takeover */}
       {prQueue[0] && <PrTakeover pr={prQueue[0]} />}
+
+      <style jsx global>{`
+        @keyframes tvRotationProgress {
+          from {
+            width: 0%;
+          }
+          to {
+            width: 100%;
+          }
+        }
+        .tv-rotation-progress {
+          animation: tvRotationProgress linear forwards;
+        }
+      `}</style>
     </div>
   );
 }
