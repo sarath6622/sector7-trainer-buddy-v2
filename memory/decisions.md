@@ -448,6 +448,43 @@ Out-of-scope for this ADR (deferred to a follow-up phase): non-PT gym members lo
 
 ---
 
+## ADR-038: Re-introduce `branch-{branchId}` Pusher Channel for Instant TV PR Celebration + Leaderboard-Jump (Narrows ADR-033)
+
+**Date:** 2026-05-16
+**Status:** Accepted (narrows the polling-only transport from ADR-033 for two specific event types; everything else in ADR-032/033/035 stands)
+
+**Context:** ADR-033 retired the `branch-{branchId}` Pusher channel and migrated the TV display to a polling-only transport (60s dashboard + 10s live). The argument was that the TV is unattended — a 5–10s lag between event and screen update is invisible to a viewer who only glances up occasionally. That argument still holds for _passive_ signals (badges, live-now counts, pinned-panel changes, announcements, events). It does **not** hold for active celebration moments. Two new requirements from the operator surfaced after the v1 TV shipped:
+
+1. **Instant PR celebration.** When a member hits a new compound PR, the gym wants confetti on the TV within ~1s — not "by the next 10s poll." The lag changes the meaning: a confetti overlay that fires 8s after a successful lift reads as decorative; one that fires the moment the trainer (or client) taps Save reads as the gym noticing.
+2. **Race-position-swap animation on leaderboard reorder.** When a PR pushes someone into or within the top 3 of a compound leaderboard, the TV should interrupt the current rotation slide, jump to that compound leaderboard, and animate the rank swap (Framer Motion `layout` on stable-keyed rows — the F1-style position shuffle). Polling can eventually render the new ordering, but it cannot tell the TV "switch to this slide _now_."
+
+Cost was the explicit blocker that drove ADR-033 and a related deferral (the cross-session rest alert was deferred for Pusher-cost reasons, per the operator's auto-memory). The cost shape here is different and bounded: the TV is one persistent connection per branch, events fire only on compound-PR detection (a handful per day per branch — single-digit events per branch per day on the current member base), and the existing trainer/client `session-{id}` channels already dominate quota usage. Adding the TV branch channel is a rounding error against that baseline.
+
+**Decision:** Re-introduce `branch-{branchId}` Pusher channel with a **narrowed scope** — only two event types, both tied to compound-PR detection:
+
+- **`PR_CELEBRATED`** — fired by `workout.service.createWorkoutLogs` immediately after a fresh compound PR is detected. The emission point is the same `else` branch that creates the auto-generated `CommunityPost` (i.e. `isCompound && maxWeight > prevMaxKg && !existingAutoPost`). This gives the same per-session dedup posture as the trainer's "🏆 New PR posted" banner — auto-save firing every ~800ms during mid-edit corrections (e.g. typing "4515" before correcting to "45") does not double-emit. Subsequent saves take the existing-auto-post update path and skip emission. Payload: `{ clientProfileId, clientName, profileImageUrl, exerciseId, exerciseName, slotKey, weightKg, reps, achievedAt }`. The TV pushes the payload directly into its existing PR-takeover queue, advancing the `lastSeenPrAt` watermark so the parallel `/api/admin/tv/live` poll de-duplicates the same PR if both transports deliver it.
+
+- **`LEADERBOARD_CHANGED`** — fired in the same code path with payload `{ slotKey, exerciseId }`. `slotKey` is one of `'bench' | 'squat' | 'deadlift' | 'ohp' | null`; `null` means the PR's exercise doesn't map to a displayed compound slot (e.g. accessory lift), in which case the TV refetches but does not jump. The TV calls `fetchDashboard()` (cache busted server-side — see below) and, when `slotKey` is non-null and present in `activeDeck`, advances `panelIndex` to that slot. Per operator instruction the race-condition policy is: **interrupt the current slide and jump to the leaderboard, then continue the cycle.** The existing 15s rotation timer naturally resumes from the new index.
+
+**Server-side cache invalidation.** Both `tv-dashboard.service` (60s in-process cache, keyed `branchId:month`) and `tv-live.service` (10s in-process cache, keyed `branchId`) gain a `invalidateTvXxxCacheForBranch(branchId)` export. The workout-save path invalidates both for the affected branch BEFORE firing the Pusher events, so the TV's immediate refetch — kicked off by `LEADERBOARD_CHANGED` — reads the new state instead of the stale snapshot. Other consumers of these caches (a single 60s/10s tick under normal load) are unaffected.
+
+**Stable row keys for layout animation.** `LeaderRow` gains `clientProfileId`. The leaderboard SQL in `getCompoundLeaderboardForExercise` already groups by `cp.id`; the change is purely additive (one more column in the SELECT). `TvPanel` keys `LeaderRowCard` by `clientProfileId` (was: `${clientName}-${i}`, index-based — which forced React to remount rows on every re-rank and defeated any Framer-Motion `layout` animation). Each row is wrapped in `<motion.div layout>` inside a `<motion.div layout>` container; the position swap is a function of stable keys + layout — no manual diffing of "who moved where" required.
+
+**What's still polled, deliberately.** Live-now counts, badge unlocks, perfect-attendance, streaks, announcement/event changes, pin/shoutout — all stay on the polling path (ADR-033's `/api/admin/tv/live` 10s + `/api/admin/tv/dashboard` 60s). None of them benefit from instant delivery in the way a celebration moment does. Keeping the Pusher scope narrow keeps quota usage predictable and lets ADR-033's polling-fallback property hold for the rest of the TV surface — if Pusher fails or the TV's connection drops, only confetti and the leaderboard-jump animation lag (back to ≤10s); everything else continues unchanged.
+
+**Auth.** The channel is public (no presence/private auth handshake needed). Payloads are non-sensitive (first/last name + lift weight — the same data the wall display already broadcasts via the polling endpoints). The TV authenticates to the polling endpoints via its bearer token; the Pusher channel is purely a notification stream that triggers those polling endpoints to be hit fresh. Anyone with `NEXT_PUBLIC_PUSHER_KEY` and the branch ID could subscribe, but the worst-case information leak is "branch X had a PR" — already on the wall in 50pt font.
+
+**Consequences:**
+
+- Reverses the transport portion of ADR-033 for two specific event types; the `branch-{branchId}` channel name is reused — intentionally — for the same purpose it was originally meant for, but with a much narrower event set (two events instead of the original five).
+- The existing PR auto-post code path in `workout.service.ts` becomes the single emission point for both events. The "is this a fresh compound PR" predicate (`isCompound && maxWeight > prevMaxKg && !existingAutoPost`) is owned by that file and not duplicated. Events fire via `void` (no await) so the workout save isn't slowed by two Pusher round trips; the helpers in `@/lib/pusher` already wrap in try/catch and log failures, so a Pusher outage never reaches the user.
+- `LeaderRow.clientProfileId` becomes part of the dashboard API contract (one new column in the response). The TV uses it as a stable React key; future consumers (link-to-profile from a leaderboard row, etc.) can use it directly. Backwards-compatible — extra field, no removals.
+- Watermark dedup in the TV continues to work as the safety net: a PR that arrives both via Pusher and (a few seconds later) via the `/api/admin/tv/live` poll is celebrated exactly once. If Pusher delivery is dropped entirely, the poll path still fires confetti within ≤10s — feature degrades gracefully to ADR-033's polling behavior.
+- The volume leaderboard rows (`VolumeRow`) still use index-based keys — they're not in the current rotation deck (`LEADERBOARD_ORDER`), and volume PR detection is not modeled. If those panels return to rotation, they'd need the same stable-key treatment.
+- Cost trajectory: 5 branches × ~5 PRs/day × 2 events = 50 events/day. Well under Pusher's free-tier limits. If `LEADERBOARD_CHANGED` is ever expanded to non-compound PRs or volume-based reranks, revisit before flipping the switch.
+
+---
+
 ## ADR-037: Mark-Complete Flag on WorkoutLog with Auto-Reorder + Auto-Advance
 
 **Date:** 2026-05-16

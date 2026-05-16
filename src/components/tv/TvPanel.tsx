@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import {
   BadgeCheck,
   Crown,
@@ -67,6 +68,10 @@ export function TvPanel({ panelKey, data, now, announcement }: Props) {
 // ─── Compound lift (gendered) ──────────────────────────────────────────────
 
 interface LeaderRow {
+  // Stable identity for React keying — see ADR-038. Without this, the previous
+  // index-based key (`${clientName}-${i}`) caused rows to remount on every
+  // re-rank, defeating Framer Motion's `layout` swap animation.
+  clientProfileId: string;
   clientName: string;
   profileImageUrl: string | null;
   weightKg: number;
@@ -106,17 +111,20 @@ function LeaderColumn({
       {rows.length === 0 ? (
         <EmptyState text="No lifts logged yet this month" />
       ) : (
-        <div className="flex flex-1 flex-col gap-4">
+        // Framer Motion `layout` on each row animates rank swaps when keys are
+        // stable. The F1-style position shuffle when a new PR pushes someone up
+        // is purely a function of this + stable clientProfileId keys (ADR-038).
+        <motion.div className="flex flex-1 flex-col gap-4" layout>
           {rows.map((r, i) => (
-            <LeaderRowCard
-              key={`${r.clientName}-${i}`}
-              rank={i + 1}
-              row={r}
-              accent={accent}
-              gender={gender}
-            />
+            <motion.div
+              key={r.clientProfileId}
+              layout
+              transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+            >
+              <LeaderRowCard rank={i + 1} row={r} accent={accent} gender={gender} />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
       <div
         className={`mt-5 flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed py-4 ${a.dashed}`}

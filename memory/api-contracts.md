@@ -677,7 +677,7 @@ triggers a 10-second confetti takeover, then the watermark advances.
   };
 }
 
-LeaderRow:          { clientName, profileImageUrl, weightKg, reps, achievedAt }
+LeaderRow:          { clientProfileId, clientName, profileImageUrl, weightKg, reps, achievedAt }
 VolumeRow:          { clientName, profileImageUrl, totalVolumeKg }
 StreakRow:          { clientName, profileImageUrl, streakDays }
 BadgeUnlockRow:     { clientName, profileImageUrl, badgeName, badgeIcon, awardedAt }
@@ -828,8 +828,43 @@ PUT    /api/client/profile/tv-opt-in → { showOnTv: boolean } → { showOnTv }
 ### TV transport: polling, not Pusher (superseded 2026-05-12)
 
 The TV display uses polling against `/api/admin/tv/dashboard` (60s) and
-`/api/admin/tv/live` (10s). See ADR-033. The `branch-{branchId}` Pusher channel
-originally proposed in Phase 26 was **never shipped to production**; the
-relevant code was removed before launch. Existing `session-{id}` and `user-{id}`
+`/api/admin/tv/live` (10s). See ADR-033. Existing `session-{id}` and `user-{id}`
 Pusher channels are untouched and continue to serve trainer/client real-time
 features (rest timer, session pause, notifications).
+
+### TV transport: narrow Pusher channel for celebration moments (ADR-038 — 2026-05-16)
+
+Two TV events are delivered via Pusher on `branch-{branchId}` for instant
+celebration; polling remains the source of truth for everything else.
+
+```
+Channel: branch-{branchId}
+  → PR_CELEBRATED       { clientProfileId, clientName, profileImageUrl,
+                          exerciseId, exerciseName,
+                          slotKey: 'bench'|'squat'|'deadlift'|'ohp'|null,
+                          weightKg, reps, achievedAt }
+                          Fired by workout.service.createWorkoutLogs on the
+                          first-time-this-session compound PR detection (same
+                          branch that creates the auto-generated CommunityPost).
+                          Per-session dedup means auto-save mid-edit doesn't
+                          double-fire — see ADR-038.
+
+  → LEADERBOARD_CHANGED  { slotKey, exerciseId }
+                          Fired alongside PR_CELEBRATED. TV refetches dashboard
+                          and (if slotKey is in the rotation deck) jumps to that
+                          panel before resuming the 15s cycle. Server caches
+                          (tv-dashboard.service, tv-live.service) are invalidated
+                          for the branch before the event is emitted so the
+                          immediate refetch reads fresh data.
+```
+
+The `/api/admin/tv/live` 10s poll continues to fire alongside as a graceful-
+degrade path; the TV's `lastSeenPrAt` watermark de-duplicates a PR that arrives
+via both transports. If Pusher delivery is dropped entirely, confetti and the
+leaderboard-jump animation lag back to ≤10s — every other feature continues
+unchanged.
+
+Auth: channel is public. Payloads are non-sensitive (first/last name + lift
+weight — same as the wall display already broadcasts via polling). The TV
+client auths to the polling endpoints with its bearer token; the Pusher
+channel is just a notification stream.

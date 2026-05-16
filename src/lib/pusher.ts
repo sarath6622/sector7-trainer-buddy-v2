@@ -26,6 +26,7 @@ function getPusherServer(): PusherServer {
 
 export type SessionChannel = `session-${string}`;
 export type UserChannel = `user-${string}`;
+export type BranchChannel = `branch-${string}`;
 
 export interface SessionStartedPayload {
   sessionId: string;
@@ -77,6 +78,28 @@ export interface WorkoutUpdatedPayload {
   sessionId: string;
   actorUserId: string; // writer's user id — receivers ignore self-echo
   updatedAt: number; // ms since epoch
+}
+
+// Compound slot key understood by the TV's rotation deck. `null` = the PR's
+// exercise doesn't match any of the four displayed compound leaderboards
+// (e.g. accessory lift) — the TV refetches but does not jump.
+export type CompoundSlotKey = 'bench' | 'squat' | 'deadlift' | 'ohp' | null;
+
+export interface PrCelebratedPayload {
+  clientProfileId: string;
+  clientName: string;
+  profileImageUrl: string | null;
+  exerciseId: string;
+  exerciseName: string;
+  slotKey: CompoundSlotKey;
+  weightKg: number;
+  reps: number | null;
+  achievedAt: string; // ISO
+}
+
+export interface LeaderboardChangedPayload {
+  slotKey: CompoundSlotKey;
+  exerciseId: string;
 }
 
 // ── Trigger helpers ──────────────────────────────────────────────────────────
@@ -146,6 +169,38 @@ export async function triggerWorkoutUpdatedEvent(
     await getPusherServer().trigger(channel, 'WORKOUT_UPDATED', payload);
   } catch (err) {
     console.error(`[Pusher] Failed to trigger WORKOUT_UPDATED on ${channel}:`, err);
+  }
+}
+
+/**
+ * Broadcast a fresh compound PR to the gym TV. Channel `branch-{branchId}` was
+ * retired by ADR-033 and re-introduced with narrower scope by ADR-038 — only
+ * compound-PR celebration and the leaderboard-jump nudge ride this channel.
+ * Best-effort: a Pusher failure must never block the underlying workout save.
+ */
+export async function triggerPrCelebrated(branchId: string, payload: PrCelebratedPayload) {
+  const channel: BranchChannel = `branch-${branchId}`;
+  try {
+    await getPusherServer().trigger(channel, 'PR_CELEBRATED', payload);
+  } catch (err) {
+    console.error(`[Pusher] Failed to trigger PR_CELEBRATED on ${channel}:`, err);
+  }
+}
+
+/**
+ * Nudge the TV that a compound leaderboard's top-N has been disturbed by a
+ * fresh PR. The TV refetches the dashboard and (if the slot is currently in
+ * its rotation deck) jumps straight to that panel before resuming the cycle.
+ */
+export async function triggerLeaderboardChanged(
+  branchId: string,
+  payload: LeaderboardChangedPayload,
+) {
+  const channel: BranchChannel = `branch-${branchId}`;
+  try {
+    await getPusherServer().trigger(channel, 'LEADERBOARD_CHANGED', payload);
+  } catch (err) {
+    console.error(`[Pusher] Failed to trigger LEADERBOARD_CHANGED on ${channel}:`, err);
   }
 }
 

@@ -28,6 +28,16 @@ export function clearTvLiveCache(): void {
   cache.clear();
 }
 
+/**
+ * Invalidate a single branch's cached `/live` payload. Called by the workout-save
+ * path on a fresh compound PR (ADR-038) so the TV's immediate refetch — kicked
+ * off by the Pusher event — reads the new top-N + freshly-posted PR row instead
+ * of a stale 10s snapshot.
+ */
+export function invalidateTvLiveCacheForBranch(branchId: string): void {
+  cache.delete(branchId);
+}
+
 function fullName(firstName: string, lastName: string): string {
   return `${firstName} ${lastName}`.trim();
 }

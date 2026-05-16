@@ -6,6 +6,9 @@ import { listUpcomingEvents, type TvEventRow } from '@/services/tv-event.service
 // ─── Types ────────────────────────────────────────────
 
 export interface LeaderRow {
+  // Stable identity for React keying — lets TvPanel animate rank swaps with
+  // Framer Motion `layout` instead of remounting on every re-rank (ADR-038).
+  clientProfileId: string;
   clientName: string;
   profileImageUrl: string | null;
   weightKg: number;
@@ -99,7 +102,11 @@ const COMPOUND_SLOTS = [
   { key: 'ohp', nameContains: ['overhead press', 'shoulder press', 'military press'] },
 ] as const;
 
-type CompoundSlotKey = (typeof COMPOUND_SLOTS)[number]['key'];
+// Internal: non-null variant used for the `Record<…, exerciseId | null>` map
+// in resolveCompoundSlotExercises. The public-facing slot key (the one Pusher
+// payloads carry to the TV) is nullable — see CompoundSlotKey below.
+type CompoundSlotKeyName = (typeof COMPOUND_SLOTS)[number]['key'];
+export type CompoundSlotKey = CompoundSlotKeyName | null;
 
 // ─── Cache ────────────────────────────────────────────
 
@@ -117,6 +124,34 @@ function cacheKey(branchId: string, month: string): string {
 /** Test/debug helper — clear cached payloads. */
 export function clearTvDashboardCache(): void {
   cache.clear();
+}
+
+/**
+ * Invalidate every cached month-payload for a single branch. Called by the
+ * workout-save path on a fresh compound PR (ADR-038) so the TV's immediate
+ * Pusher-triggered refetch reads the new top-N instead of a stale snapshot.
+ */
+export function invalidateTvDashboardCacheForBranch(branchId: string): void {
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${branchId}:`)) cache.delete(key);
+  }
+}
+
+/**
+ * Map an exercise name to one of the four compound rotation slots on the TV
+ * (bench / squat / deadlift / ohp). Returns null when the exercise isn't a
+ * displayed compound — the TV refetches but does not jump (ADR-038).
+ * Mirrors the substring matching used by resolveCompoundSlotExercises so the
+ * same exercise resolves identically on both the read and the emit sides.
+ */
+export function resolveCompoundSlotKey(exerciseName: string): CompoundSlotKey {
+  const lower = exerciseName.toLowerCase();
+  for (const slot of COMPOUND_SLOTS) {
+    if (slot.nameContains.some((n) => lower.includes(n.toLowerCase()))) {
+      return slot.key;
+    }
+  }
+  return null;
 }
 
 // ─── Month helpers ────────────────────────────────────
@@ -139,13 +174,13 @@ function fullName(firstName: string, lastName: string): string {
 
 // ─── Slot exercise resolution ─────────────────────────
 
-async function resolveCompoundSlotExercises(): Promise<Record<CompoundSlotKey, string | null>> {
+async function resolveCompoundSlotExercises(): Promise<Record<CompoundSlotKeyName, string | null>> {
   const compoundExercises = await prisma.exercise.findMany({
     where: { isCompound: true, isActive: true },
     select: { id: true, name: true },
   });
 
-  const result = {} as Record<CompoundSlotKey, string | null>;
+  const result = {} as Record<CompoundSlotKeyName, string | null>;
   for (const slot of COMPOUND_SLOTS) {
     const match = compoundExercises.find((ex) =>
       slot.nameContains.some((needle) => ex.name.toLowerCase().includes(needle.toLowerCase())),
@@ -166,6 +201,7 @@ async function getCompoundLeaderboardForExercise(
 ): Promise<LeaderRow[]> {
   const rows = await prisma.$queryRaw<
     Array<{
+      clientProfileId: string;
       firstName: string;
       lastName: string;
       profileImageUrl: string | null;
@@ -175,6 +211,7 @@ async function getCompoundLeaderboardForExercise(
     }>
   >`
     SELECT
+      cp.id                     AS "clientProfileId",
       u."firstName",
       u."lastName",
       u."profileImageUrl",
@@ -202,10 +239,10 @@ async function getCompoundLeaderboardForExercise(
   const seen = new Set<string>();
   const result: LeaderRow[] = [];
   for (const r of rows) {
-    const key = `${r.firstName}|${r.lastName}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (seen.has(r.clientProfileId)) continue;
+    seen.add(r.clientProfileId);
     result.push({
+      clientProfileId: r.clientProfileId,
       clientName: fullName(r.firstName, r.lastName),
       profileImageUrl: r.profileImageUrl,
       weightKg: Number(r.maxWeightKg),

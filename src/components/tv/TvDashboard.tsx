@@ -4,10 +4,15 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { CalendarDays, Clock, Dumbbell, Maximize, Megaphone, Minimize, Zap } from 'lucide-react';
 import { TvPanel } from '@/components/tv/TvPanel';
 import { PrTakeover, type TakeoverPr } from '@/components/tv/PrTakeover';
+import { usePusherChannel } from '@/hooks/usePusherChannel';
+import type { PrCelebratedPayload, LeaderboardChangedPayload } from '@/lib/pusher';
 
 // ─── Types matching tv-dashboard.service.ts ────────────────────────────────
 
 interface LeaderRow {
+  // Stable identity (ADR-038) — TvPanel keys rows by this so Framer Motion can
+  // animate rank swaps instead of remounting on each re-rank.
+  clientProfileId: string;
   clientName: string;
   profileImageUrl: string | null;
   weightKg: number;
@@ -330,6 +335,58 @@ export function TvDashboard({ token }: { token: string }) {
   const activeDeck: DeckSlot[] =
     pinnedPanels.length > 0 && pinnedDeck.length > 0 ? pinnedDeck : deck;
   const pinKey = pinnedPanels.slice().sort().join(',');
+
+  // ── Realtime branch channel (ADR-038) ──────────────────────────────────
+  // Pusher-driven instant celebration + leaderboard-jump. Polling still runs
+  // alongside as the graceful-degrade path; the watermark below de-dupes when
+  // both transports deliver the same PR. Subscription only activates once the
+  // dashboard has loaded — that's when we know branchId.
+  // activeDeck is rebuilt every render, so we shadow it into a ref for the
+  // LEADERBOARD_CHANGED handler. The ref is synced inside an effect (eslint
+  // forbids ref writes during render) — Pusher events run as event handlers,
+  // by which time the effect has flushed.
+  const activeDeckRef = useRef<DeckSlot[]>(activeDeck);
+  useEffect(() => {
+    activeDeckRef.current = activeDeck;
+  });
+
+  const handlePrCelebrated = useCallback((raw: unknown) => {
+    const p = raw as PrCelebratedPayload;
+    const at = new Date(p.achievedAt).getTime();
+    if (lastSeenPrAt.current !== null && at <= lastSeenPrAt.current) return;
+    lastSeenPrAt.current = at;
+    setPrQueue((q) => [
+      ...q,
+      {
+        clientName: p.clientName,
+        profileImageUrl: p.profileImageUrl,
+        exerciseName: p.exerciseName,
+        weightKg: p.weightKg,
+        reps: p.reps,
+        achievedAt: p.achievedAt,
+      },
+    ]);
+  }, []);
+
+  const handleLeaderboardChanged = useCallback(
+    (raw: unknown) => {
+      const p = raw as LeaderboardChangedPayload;
+      // Cache was busted server-side; refetch reads the new top-N straight away.
+      void fetchDashboard();
+      if (!p.slotKey) return; // exercise isn't a displayed compound slot
+      // Operator-chosen race-condition policy (a): interrupt the current slide
+      // and jump to the leaderboard. Rotation timer resets via the panelIndex
+      // dep on the rotation useEffect, so the cycle continues from here.
+      const idx = activeDeckRef.current.findIndex((s) => s.kind === 'panel' && s.key === p.slotKey);
+      if (idx >= 0) setPanelIndex(idx);
+    },
+    [fetchDashboard],
+  );
+
+  usePusherChannel(data?.branchId ? `branch-${data.branchId}` : null, {
+    PR_CELEBRATED: handlePrCelebrated,
+    LEADERBOARD_CHANGED: handleLeaderboardChanged,
+  });
 
   // ── Panel rotation (paused during PR takeover) ──────────────────────────
   const hasTakeover = prQueue.length > 0;
