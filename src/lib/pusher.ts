@@ -73,6 +73,12 @@ export interface SessionPauseEventPayload {
   serverNow: number;
 }
 
+export interface WorkoutUpdatedPayload {
+  sessionId: string;
+  actorUserId: string; // writer's user id — receivers ignore self-echo
+  updatedAt: number; // ms since epoch
+}
+
 // ── Trigger helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -122,6 +128,24 @@ export async function triggerSessionPauseEvent(
     await getPusherServer().trigger(channel, 'SESSION_PAUSE_UPDATED', payload);
   } catch (err) {
     console.error(`[Pusher] Failed to trigger SESSION_PAUSE_UPDATED on ${channel}:`, err);
+  }
+}
+
+/**
+ * Notify peers that the session's workout log changed.
+ * Receivers (trainer + client session pages) refetch the session to pick
+ * up the new state. The actorUserId lets each subscriber skip the echo of
+ * its own save.
+ */
+export async function triggerWorkoutUpdatedEvent(
+  sessionId: string,
+  payload: WorkoutUpdatedPayload,
+) {
+  const channel: SessionChannel = `session-${sessionId}`;
+  try {
+    await getPusherServer().trigger(channel, 'WORKOUT_UPDATED', payload);
+  } catch (err) {
+    console.error(`[Pusher] Failed to trigger WORKOUT_UPDATED on ${channel}:`, err);
   }
 }
 

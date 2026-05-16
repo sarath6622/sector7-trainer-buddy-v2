@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, use } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRestTimer } from '@/hooks/useRestTimer';
 import { useSessionPause } from '@/hooks/useSessionPause';
 import { useRestAutofill } from '@/hooks/useRestAutofill';
+import { usePusherChannel } from '@/hooks/usePusherChannel';
+import type { WorkoutUpdatedPayload } from '@/lib/pusher';
 import { useRouter } from 'next/navigation';
 import { Clock, TrendingUp, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import {
@@ -125,6 +128,22 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
     const interval = setInterval(() => void fetchSession(), 10_000);
     return () => clearInterval(interval);
   }, [session, fetchSession, hasUnsaved]);
+
+  // Realtime: when the trainer saves on their device, refetch immediately
+  // instead of waiting for the 10s poll. Skip our own echo. WorkoutLogger
+  // still drops the rehydration if local edits are unsaved, so this is safe
+  // to fire unconditionally; we gate on `hasUnsaved` here only to avoid
+  // wasted round-trips while typing.
+  const { data: authSession } = useSession();
+  const currentUserId = authSession?.user?.id;
+  usePusherChannel(`session-${id}`, {
+    WORKOUT_UPDATED: (data) => {
+      const payload = data as WorkoutUpdatedPayload;
+      if (payload.actorUserId === currentUserId) return;
+      if (hasUnsaved) return;
+      void fetchSession();
+    },
+  });
 
   if (loading) {
     return (

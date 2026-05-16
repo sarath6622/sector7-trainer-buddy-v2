@@ -350,6 +350,7 @@ Channel: session:{sessionInstanceId}
   → SESSION_TIME_COMPLETE { sessionId, message }   (when designated time is up)
   → SESSION_ENDED        { sessionId, endedAt, actualDurationMin }
   → REST_TIMER_UPDATED   { endTime, pausedRemaining, total, updatedAt, serverNow }
+  → WORKOUT_UPDATED      { sessionId, actorUserId, updatedAt }
 
 Channel: user:{userId}
   → NOTIFICATION       { id, title, body, type }
@@ -400,6 +401,21 @@ interface WorkoutEntry {
 `completedAt: ISO | null`. New columns added by migration
 `20260516120000_add_workout_log_completion`; existing rows default to
 `isCompleted=false`.
+
+**Real-time (2026-05-16):** the POST/PUT/DELETE handlers broadcast
+`WORKOUT_UPDATED { sessionId, actorUserId, updatedAt }` on
+`session:{sessionInstanceId}` after each successful mutation. The trainer
+and client session pages subscribe and refetch the session payload on
+peer events (skipping their own echo via `actorUserId`), so changes from
+the other side appear in <1s without polling. The 10s/30s GET polls
+remain as a fallback for when Pusher is down. `WorkoutLogger`'s
+rehydration effect drops the server payload when local edits are
+unsaved, so refetching is always safe.
+
+To keep peer latency low without spamming the broker, structural changes
+in `WorkoutLogger` (add exercise, remove exercise, mark-complete) bypass
+the 5s typing debounce and save with delay 0. Per-set value typing still
+uses the 5s debounce.
 
 - Auth: `assertSessionAccess` — caller must be the **trainer OR the client** of the
   session (branch-scoped). 403 `SESSION_FORBIDDEN` otherwise. 404 `SESSION_NOT_FOUND`

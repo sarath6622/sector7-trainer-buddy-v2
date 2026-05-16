@@ -244,6 +244,11 @@ export function WorkoutLogger({
   const pendingRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Structural changes (exercise add/remove/mark-complete) bypass the 5s
+  // typing debounce so the peer's screen reflects the new state in <1s
+  // instead of feeling laggy. Set by the handler, consumed by the debounce
+  // useEffect on the next render.
+  const flushImmediatelyRef = useRef(false);
   // Prior-session sets per exercise, keyed by exerciseId. Kept separate from
   // `exercises` so it survives hydration (parent refetches replace
   // existingLogs but mustn't wipe placeholders). Empty array = fetched, no
@@ -539,6 +544,9 @@ export function WorkoutLogger({
   }
 
   function addExercisesFromPicker(picked: PickedExercise[]) {
+    // Structural change — flush the next save immediately so the peer sees
+    // the new exercise in ~1s instead of after the 5s typing debounce.
+    flushImmediatelyRef.current = true;
     // No picker-side seed — the on-demand fetch effect populates per-set
     // priors. The picker only carries one snapshot per exercise, which would
     // mask the richer per-row hints once the fetch returns.
@@ -597,6 +605,7 @@ export function WorkoutLogger({
   }
 
   function removeExercise(tempId: string) {
+    flushImmediatelyRef.current = true;
     setExercises((prev) => prev.filter((e) => e.tempId !== tempId));
   }
 
@@ -622,6 +631,7 @@ export function WorkoutLogger({
    * pass and persists it to the server.
    */
   function setExerciseCompleted(tempId: string, completed: boolean) {
+    flushImmediatelyRef.current = true;
     setExercises((prev) => {
       const flipped = prev.map((e) =>
         e.tempId === tempId ? { ...e, isCompleted: completed, collapsed: completed } : e,
@@ -832,13 +842,19 @@ export function WorkoutLogger({
   // "45") have time to be corrected before the PR/badge eval fires
   // server-side; the trade-off is up to 5s of data risk if the user
   // navigates away mid-debounce, mitigated by the unmount flush below.
+  //
+  // Exception: structural changes (add/remove/mark-complete) set
+  // `flushImmediatelyRef`, dropping the delay to 0 so the peer sees the new
+  // shape in ~1s via Pusher rather than waiting on the debounce.
   useEffect(() => {
     if (!hasUnsaved) return;
     if (currentPayload.length === 0) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const delay = flushImmediatelyRef.current ? 0 : 5000;
+    flushImmediatelyRef.current = false;
     saveTimerRef.current = setTimeout(() => {
       void saveWorkout();
-    }, 5000);
+    }, delay);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };

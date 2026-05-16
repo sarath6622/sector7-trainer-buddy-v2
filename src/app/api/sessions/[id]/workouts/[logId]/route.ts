@@ -3,6 +3,7 @@ import { ZodError, z } from 'zod';
 import { getServerSession } from '@/lib/auth';
 import { toErrorResponse, AppError } from '@/lib/errors';
 import { workoutSetSchema } from '@/lib/validators';
+import { triggerWorkoutUpdatedEvent } from '@/lib/pusher';
 import * as workoutService from '@/services/workout.service';
 
 const updateBodySchema = z.object({
@@ -34,9 +35,7 @@ export async function PUT(
     const input = updateBodySchema.parse(body);
 
     // sessionInstanceId is not needed by the service (it derives it from the
-    // log row) but is in the URL for REST consistency and to let middleware
-    // / logs see the parent session.
-    void sessionInstanceId;
+    // log row), but we use it to broadcast WORKOUT_UPDATED below.
 
     const updated = await workoutService.updateWorkoutLog({
       workoutLogId: logId,
@@ -45,6 +44,12 @@ export async function PUT(
       actorTrainerProfileId: trainerProfileId ?? null,
       actorClientProfileId: clientProfileId ?? null,
       branchId,
+    });
+
+    void triggerWorkoutUpdatedEvent(sessionInstanceId, {
+      sessionId: sessionInstanceId,
+      actorUserId,
+      updatedAt: Date.now(),
     });
 
     return NextResponse.json({ data: updated });
@@ -71,7 +76,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; logId: string }> },
 ) {
   try {
-    const { logId } = await params;
+    const { id: sessionInstanceId, logId } = await params;
     const auth = await getServerSession();
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
@@ -87,6 +92,12 @@ export async function DELETE(
       actorTrainerProfileId: trainerProfileId ?? null,
       actorClientProfileId: clientProfileId ?? null,
       branchId,
+    });
+
+    void triggerWorkoutUpdatedEvent(sessionInstanceId, {
+      sessionId: sessionInstanceId,
+      actorUserId,
+      updatedAt: Date.now(),
     });
 
     return NextResponse.json({ data: result });

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { WorkoutLogger } from '@/components/workout/WorkoutLogger';
@@ -10,7 +11,11 @@ import { useRestTimer } from '@/hooks/useRestTimer';
 import { useSessionPause } from '@/hooks/useSessionPause';
 import { useRestAutofill } from '@/hooks/useRestAutofill';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
-import type { SessionStartedPayload, SessionEndedPayload } from '@/lib/pusher';
+import type {
+  SessionStartedPayload,
+  SessionEndedPayload,
+  WorkoutUpdatedPayload,
+} from '@/lib/pusher';
 import { RestTimerPillInline, RestTimerSheet } from '@/components/session/RestTimerUI';
 import { SessionHero, initials, lastActivityMsOf } from '@/components/session/SessionHero';
 
@@ -311,6 +316,13 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   }, []);
 
   const session = sessionMap[activeId] ?? null;
+  const { data: authSession } = useSession();
+  const currentUserId = authSession?.user?.id;
+
+  const fetchSession = useCallback(async (sid: string) => {
+    const res = await fetch(`/api/trainer/sessions/${sid}`);
+    return res.ok ? ((await res.json()).data as SessionData) : null;
+  }, []);
 
   // ── Real-time: subscribe to active session channel ────────────────────────
   usePusherChannel(`session-${activeId}`, {
@@ -334,12 +346,19 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         return { ...prev, [activeId]: { ...cur, status: 'COMPLETED' } };
       });
     },
+    // Peer (client) saved workout edits — refetch so the trainer sees them
+    // live instead of waiting on the 30s poll. Skip our own echo so a save
+    // from this device doesn't trigger a redundant round-trip. WorkoutLogger
+    // drops the rehydration if the trainer has unsaved local edits.
+    WORKOUT_UPDATED: (data) => {
+      const payload = data as WorkoutUpdatedPayload;
+      if (payload.actorUserId === currentUserId) return;
+      void (async () => {
+        const refreshed = await fetchSession(activeId);
+        if (refreshed) setSessionMap((prev) => ({ ...prev, [activeId]: refreshed }));
+      })();
+    },
   });
-
-  const fetchSession = useCallback(async (sid: string) => {
-    const res = await fetch(`/api/trainer/sessions/${sid}`);
-    return res.ok ? ((await res.json()).data as SessionData) : null;
-  }, []);
 
   const fetchInProgress = useCallback(async () => {
     const res = await fetch(`/api/trainer/schedule?status=IN_PROGRESS`);
