@@ -383,6 +383,7 @@ export default function SchedulingPage() {
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionInstance | null>(null);
+  const [overflowSessions, setOverflowSessions] = useState<SessionInstance[] | null>(null);
   // Live workout snapshot for the selected session — populated only when the
   // session is IN_PROGRESS or COMPLETED, since SCHEDULED has no logs yet.
   const [sessionDetail, setSessionDetail] = useState<SessionWorkoutDetail | null>(null);
@@ -1342,6 +1343,13 @@ export default function SchedulingPage() {
           onEventClick={handleEventClick}
           onDateSelect={handleDateSelect}
           onDatesSet={handleDatesSet}
+          onOverflowClick={(hidden) => {
+            const ids = new Set(hidden.map((e) => e.id).filter(Boolean) as string[]);
+            const matched = sessions.filter((s) => ids.has(s.id));
+            // Stable order by time so list reads the same way every open.
+            matched.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
+            if (matched.length > 0) setOverflowSessions(matched);
+          }}
           selectable
           height={isFullscreen ? 'auto' : undefined}
           initialView="timeGridWeek"
@@ -1552,6 +1560,68 @@ export default function SchedulingPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Overflow cluster — full session list at an overcrowded slot */}
+      <Dialog
+        open={!!overflowSessions}
+        onOpenChange={(v) => {
+          if (!v) setOverflowSessions(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {overflowSessions?.length ?? 0} session
+              {overflowSessions && overflowSessions.length !== 1 ? 's' : ''} in this slot
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto -mx-1 px-1">
+            <div className="space-y-1.5">
+              {overflowSessions?.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    setOverflowSessions(null);
+                    setEditingSession(false);
+                    setSelectedSession(s);
+                  }}
+                  className="w-full rounded-xl bg-card p-3 text-left ring-1 ring-border/50 transition-colors hover:bg-muted/50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">
+                        {s.client.user.firstName} {s.client.user.lastName}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                        with {s.trainer.user.firstName} {s.trainer.user.lastName}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {formatTime12(s.scheduledTime)}
+                      </span>
+                      <Badge
+                        variant={
+                          s.status === 'COMPLETED'
+                            ? 'default'
+                            : s.status === 'NO_SHOW'
+                              ? 'destructive'
+                              : 'secondary'
+                        }
+                        className="text-[10px]"
+                      >
+                        {s.status.replace('_', ' ')}
+                      </Badge>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

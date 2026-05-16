@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -33,6 +33,111 @@ const STATUS_LABELS = Object.entries(STATUS_STYLES).map(([key, val]) => ({
   accent: val.accent,
 }));
 
+const OVERFLOW_ACCENT = '#64748b';
+const OVERFLOW_BG_LIGHT = '#e2e8f0';
+const OVERFLOW_BG_DARK = 'rgba(100,116,139,0.25)';
+
+const OVERFLOW_PREFIX = '__overflow__:';
+
+function toDate(value: EventInput['start']): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/**
+ * Detect clusters of overlapping events per day. When a cluster has more than
+ * `visibleCount` events, hide the overflow behind a single "+N more" chip.
+ * Returns the events to render plus the overflow-chip metadata.
+ */
+function compactOverlappingEvents(
+  events: EventInput[],
+  visibleCount: number,
+): { rendered: EventInput[]; overflowMap: Map<string, EventInput[]> } {
+  const overflowMap = new Map<string, EventInput[]>();
+  if (events.length === 0) return { rendered: events, overflowMap };
+
+  // Bucket by local day for cheap clustering — sessions never cross midnight here.
+  const byDay = new Map<string, { event: EventInput; start: Date; end: Date }[]>();
+  const passthrough: EventInput[] = [];
+
+  for (const ev of events) {
+    const start = toDate(ev.start);
+    const end = toDate(ev.end) ?? (start ? new Date(start.getTime() + 30 * 60_000) : null);
+    if (!start || !end) {
+      passthrough.push(ev);
+      continue;
+    }
+    const key = dayKey(start);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key)!.push({ event: ev, start, end });
+  }
+
+  const rendered: EventInput[] = [...passthrough];
+
+  for (const [key, items] of byDay) {
+    items.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    // Sweep to find clusters: a new cluster starts when the next event begins
+    // after the current cluster's running end.
+    let cluster: typeof items = [];
+    let runningEnd = -Infinity;
+
+    const flush = () => {
+      if (cluster.length === 0) return;
+      if (cluster.length <= visibleCount) {
+        rendered.push(...cluster.map((c) => c.event));
+      } else {
+        const visible = cluster.slice(0, visibleCount);
+        const hidden = cluster.slice(visibleCount);
+        rendered.push(...visible.map((c) => c.event));
+
+        const overflowId = `${OVERFLOW_PREFIX}${key}:${visible[visible.length - 1]!.start.toISOString()}`;
+        const overflowStart = hidden[0]!.start;
+        const overflowEnd = hidden.reduce((max, c) => (c.end > max ? c.end : max), hidden[0]!.end);
+        overflowMap.set(
+          overflowId,
+          hidden.map((c) => c.event),
+        );
+        rendered.push({
+          id: overflowId,
+          title: `+${hidden.length} more`,
+          start: overflowStart,
+          end: overflowEnd,
+          extendedProps: {
+            isOverflow: true,
+            overflowCount: hidden.length,
+            overflowId,
+          },
+        });
+      }
+      cluster = [];
+    };
+
+    for (const item of items) {
+      if (item.start.getTime() >= runningEnd) {
+        flush();
+        cluster = [item];
+        runningEnd = item.end.getTime();
+      } else {
+        cluster.push(item);
+        if (item.end.getTime() > runningEnd) runningEnd = item.end.getTime();
+      }
+    }
+    flush();
+  }
+
+  return { rendered, overflowMap };
+}
+
 interface SessionCalendarProps {
   events: EventInput[];
   onEventClick?: (info: EventClickArg) => void;
@@ -44,6 +149,16 @@ interface SessionCalendarProps {
   /** Optional React node rendered on the left side of the legend row */
   filterSlot?: React.ReactNode;
   onDatesSet?: (info: DatesSetArg) => void;
+  /**
+   * Cap visible cards per overlapping cluster. Extras collapse into a
+   * "+N more" chip. Defaults: 3 on desktop, 2 on mobile (≤640px).
+   */
+  overflowVisibleCount?: number;
+  /**
+   * Fires when the user taps a "+N more" overflow chip. Receives the list of
+   * hidden events for that slot so the parent can render a popover/dialog.
+   */
+  onOverflowClick?: (hidden: EventInput[]) => void;
 }
 
 export function SessionCalendar({
@@ -56,6 +171,8 @@ export function SessionCalendar({
   showLegend = true,
   filterSlot,
   onDatesSet,
+  overflowVisibleCount,
+  onOverflowClick,
 }: SessionCalendarProps) {
   const calendarRef = useRef<FullCalendar>(null);
 
@@ -80,7 +197,39 @@ export function SessionCalendar({
   const isDark =
     typeof window !== 'undefined' && document.documentElement.classList.contains('dark');
 
-  const coloredEvents = events.map((event) => {
+  const visibleCount = overflowVisibleCount ?? (isMobile ? 2 : 3);
+
+  // Cluster + collapse overlapping events first, then colour. Only opt in when
+  // the caller wires up `onOverflowClick` — otherwise the "+N more" chip would
+  // be dead, so we keep FullCalendar's default side-by-side layout.
+  const clusteringEnabled = !!onOverflowClick;
+  const { rendered, overflowMap } = useMemo(
+    () =>
+      clusteringEnabled
+        ? compactOverlappingEvents(events, visibleCount)
+        : { rendered: events, overflowMap: new Map<string, EventInput[]>() },
+    [events, visibleCount, clusteringEnabled],
+  );
+  // Keep latest overflowMap accessible from the event click handler without
+  // re-binding the FullCalendar prop on every render.
+  const overflowMapRef = useRef(overflowMap);
+  useEffect(() => {
+    overflowMapRef.current = overflowMap;
+  }, [overflowMap]);
+
+  const coloredEvents = rendered.map((event) => {
+    if (event.extendedProps?.isOverflow) {
+      return {
+        ...event,
+        backgroundColor: isDark ? OVERFLOW_BG_DARK : OVERFLOW_BG_LIGHT,
+        borderColor: OVERFLOW_ACCENT,
+        textColor: 'inherit',
+        extendedProps: {
+          ...event.extendedProps,
+          accentColor: OVERFLOW_ACCENT,
+        },
+      };
+    }
     const status = (event.extendedProps?.status as string) ?? 'SCHEDULED';
     const light = STATUS_STYLES[status] ?? STATUS_STYLES.SCHEDULED!;
     const dark = STATUS_STYLES_DARK[status] ?? STATUS_STYLES_DARK.SCHEDULED!;
@@ -98,6 +247,18 @@ export function SessionCalendar({
       },
     };
   });
+
+  function handleEventClick(info: EventClickArg) {
+    if (info.event.extendedProps?.isOverflow) {
+      const overflowId = info.event.extendedProps.overflowId as string | undefined;
+      if (overflowId && onOverflowClick) {
+        const hidden = overflowMapRef.current.get(overflowId) ?? [];
+        onOverflowClick(hidden);
+      }
+      return;
+    }
+    onEventClick?.(info);
+  }
 
   return (
     <div className="space-y-4">
@@ -131,7 +292,7 @@ export function SessionCalendar({
           right: 'dayGridMonth,timeGridWeek,timeGridDay',
         }}
         events={coloredEvents}
-        eventClick={onEventClick}
+        eventClick={handleEventClick}
         selectable={selectable}
         select={onDateSelect}
         datesSet={onDatesSet}
@@ -158,6 +319,13 @@ export function SessionCalendar({
           if (accent) {
             info.el.style.setProperty('--fc-event-accent', accent);
             info.el.style.borderLeftColor = accent;
+          }
+          if (info.event.extendedProps?.isOverflow) {
+            info.el.classList.add('fc-event-overflow');
+            info.el.setAttribute(
+              'title',
+              `${info.event.extendedProps.overflowCount} more sessions in this slot — click to view`,
+            );
           }
         }}
       />
