@@ -611,6 +611,13 @@ model WorkoutLog {
   sessionInstanceId String
   exerciseId        String
   orderIndex        Int
+  // ADR-037 (2026-05-16): mark-complete flag. Either the trainer or the
+  // client taps "Mark complete" on the WorkoutLogger card. Completed logs
+  // sort to the bottom of the list (UI), collapsed by default, with a
+  // strikethrough header. Can be unmarked. `completedAt` is the
+  // most-recent transition into completed; null when isCompleted=false.
+  isCompleted       Boolean  @default(false)
+  completedAt       DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

@@ -449,6 +449,10 @@ export const workoutEntrySchema = z.object({
   exerciseId: cuidSchema,
   orderIndex: z.number().int().min(0),
   sets: z.array(workoutSetSchema).min(1),
+  // ADR-037: mark-complete flag. When omitted, the service leaves the
+  // existing completion state untouched (auto-save fires every 800ms; we
+  // don't want a keystroke that doesn't touch the toggle to clobber it).
+  isCompleted: z.boolean().optional(),
 });
 
 export const createWorkoutSchema = z.object({

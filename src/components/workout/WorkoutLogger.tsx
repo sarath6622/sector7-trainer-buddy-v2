@@ -82,6 +82,11 @@ interface ExerciseEntry {
   exerciseType: ExerciseType;
   sets: SetData[];
   collapsed: boolean;
+  // ADR-037: mark-complete state. Completed exercises sort to the bottom
+  // of the list, render with a strikethrough header + "Completed" pill,
+  // default-collapsed. Tapping still expands them so the user can add or
+  // edit sets; "Unmark" inside the card flips this back to false.
+  isCompleted: boolean;
 }
 
 type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -105,6 +110,9 @@ interface WorkoutLoggerProps {
     id: string;
     exerciseId: string;
     orderIndex: number;
+    // ADR-037 — optional for backwards-compat with any legacy caller that
+    // narrows the shape; the API returns it on all reads.
+    isCompleted?: boolean;
     exercise: {
       id: string;
       name: string;
@@ -271,69 +279,73 @@ export function WorkoutLogger({
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (existingLogs && existingLogs.length > 0) {
-      type Log = (typeof existingLogs)[number];
-      type RawSet = Log['sets'][number];
+    if (!existingLogs || existingLogs.length === 0) return;
 
-      // Score a set by how many fields have data (higher = more complete)
-      const score = (s: RawSet) =>
-        (s.reps != null ? 1 : 0) +
-        (s.weightKg != null ? 1 : 0) +
-        (s.durationSec != null ? 1 : 0) +
-        (s.rpe != null ? 1 : 0);
+    type Log = (typeof existingLogs)[number];
+    type RawSet = Log['sets'][number];
 
-      // Group duplicate WorkoutLog records by exercise.id (logs are ordered oldest→newest via id ASC)
-      const groups = new Map<string, { primary: Log; setMap: Map<number, RawSet> }>();
-      for (const log of existingLogs) {
-        const group = groups.get(log.exercise.id);
-        if (!group) {
-          const setMap = new Map<number, RawSet>();
-          for (const s of log.sets) setMap.set(s.setNumber, s);
-          groups.set(log.exercise.id, { primary: log, setMap });
-        } else {
-          // Merge sets: newer log's set wins if it has more data; new set numbers are appended
-          for (const s of log.sets) {
-            const existing = group.setMap.get(s.setNumber);
-            if (!existing || score(s) > score(existing)) {
-              group.setMap.set(s.setNumber, s);
-            }
+    // Score a set by how many fields have data (higher = more complete)
+    const score = (s: RawSet) =>
+      (s.reps != null ? 1 : 0) +
+      (s.weightKg != null ? 1 : 0) +
+      (s.durationSec != null ? 1 : 0) +
+      (s.rpe != null ? 1 : 0);
+
+    // Group duplicate WorkoutLog records by exercise.id (logs are ordered oldest→newest via id ASC)
+    const groups = new Map<
+      string,
+      { primary: Log; setMap: Map<number, RawSet>; isCompleted: boolean }
+    >();
+    for (const log of existingLogs) {
+      const group = groups.get(log.exercise.id);
+      if (!group) {
+        const setMap = new Map<number, RawSet>();
+        for (const s of log.sets) setMap.set(s.setNumber, s);
+        groups.set(log.exercise.id, {
+          primary: log,
+          setMap,
+          isCompleted: log.isCompleted ?? false,
+        });
+      } else {
+        // Merge sets: newer log's set wins if it has more data; new set
+        // numbers are appended. isCompleted ORs across duplicates so a
+        // legacy dup group with one completed row stays completed in the UI.
+        for (const s of log.sets) {
+          const existing = group.setMap.get(s.setNumber);
+          if (!existing || score(s) > score(existing)) {
+            group.setMap.set(s.setNumber, s);
           }
         }
+        if (log.isCompleted) group.isCompleted = true;
       }
+    }
 
-      const deduped = [...groups.values()]
-        .sort((a, b) => a.primary.orderIndex - b.primary.orderIndex)
-        .map(({ primary, setMap }) => ({
-          ...primary,
-          sets: [...setMap.values()].sort((a, b) => a.setNumber - b.setNumber),
-        }));
-
-      const initial = deduped.map<ExerciseEntry>((log, idx) => ({
-        tempId: log.id,
-        exerciseId: log.exercise.id,
-        exerciseName: log.exercise.name,
-        targetMuscle: log.exercise.targetMuscleGroup,
-        category: log.exercise.category,
-        exerciseType: log.exercise.exerciseType,
-        sets: log.sets.map((s) => ({
-          setNumber: s.setNumber,
-          reps: s.reps ?? undefined,
-          weightKg: s.weightKg ?? undefined,
-          durationSec: s.durationSec ?? undefined,
-          rpe: s.rpe ?? undefined,
-          restSec: s.restSec ?? undefined,
-          notes: s.notes ?? '',
-        })),
-        collapsed: idx !== deduped.length - 1,
+    const deduped = [...groups.values()]
+      .sort((a, b) => a.primary.orderIndex - b.primary.orderIndex)
+      .map(({ primary, setMap, isCompleted }) => ({
+        ...primary,
+        isCompleted,
+        sets: [...setMap.values()].sort((a, b) => a.setNumber - b.setNumber),
       }));
-      setExercises(initial);
-      // Seed the last-saved hash so auto-save doesn't re-POST the data we
-      // just hydrated from the server. Shape must match the payload built
-      // in `currentPayload` so the comparison is apples-to-apples.
-      lastSavedHashRef.current = JSON.stringify(
-        initial.map((entry, idx) => ({
+
+    setExercises((prev) => {
+      // Two preservation rules across server re-hydration (this effect fires
+      // every time `existingLogs` changes — e.g. on each 10s/30s poll):
+      //
+      //   1. If the local copy has unsaved changes, drop the server payload
+      //      on the floor. Auto-save will push our local state up within
+      //      ~800ms; the next poll will then reflect it. Without this the
+      //      poll's stale snapshot stomps the user's mid-type values.
+      //   2. Otherwise preserve `collapsed` per exerciseId — the server
+      //      doesn't track UI state, so the freshly-built `initial` array
+      //      would re-collapse everything except the last exercise on every
+      //      tick. The reported bug: expanding one card auto-collapses it on
+      //      the next poll and expands the bottom one.
+      const currentHash = JSON.stringify(
+        prev.map((entry, idx) => ({
           exerciseId: entry.exerciseId,
           orderIndex: idx,
+          isCompleted: entry.isCompleted,
           sets: entry.sets.map((s) => ({
             setNumber: s.setNumber,
             reps: s.reps,
@@ -345,17 +357,77 @@ export function WorkoutLogger({
           })),
         })),
       );
+      const hasUnsavedLocal = prev.length > 0 && currentHash !== lastSavedHashRef.current;
+      if (hasUnsavedLocal) return prev;
 
-      // Bootstrap today's focus from whatever exercises were already logged
-      // before this mount (session resumed or page refreshed). Each exercise's
-      // catalog muscle maps to one curated bucket.
-      const seeded = new Set<CuratedMuscleGroupId>();
-      for (const log of deduped) {
-        const id = curatedGroupOf(log.exercise.targetMuscleGroup);
-        if (id) seeded.add(id);
-      }
-      if (seeded.size > 0) setFocusGroupIds(seeded);
+      const prevCollapsedById = new Map(prev.map((e) => [e.exerciseId, e.collapsed]));
+      const isFirstHydration = prev.length === 0;
+
+      const initial = deduped.map<ExerciseEntry>((log, idx) => {
+        const isCompleted = log.isCompleted;
+        return {
+          tempId: log.id,
+          exerciseId: log.exercise.id,
+          exerciseName: log.exercise.name,
+          targetMuscle: log.exercise.targetMuscleGroup,
+          category: log.exercise.category,
+          exerciseType: log.exercise.exerciseType,
+          sets: log.sets.map((s) => ({
+            setNumber: s.setNumber,
+            reps: s.reps ?? undefined,
+            weightKg: s.weightKg ?? undefined,
+            durationSec: s.durationSec ?? undefined,
+            rpe: s.rpe ?? undefined,
+            restSec: s.restSec ?? undefined,
+            notes: s.notes ?? '',
+          })),
+          // Collapse rules:
+          //   - Re-hydration: preserve the user's last choice for this exerciseId.
+          //   - First hydration of a completed log: collapsed.
+          //   - First hydration of the last incomplete log: expanded.
+          //   - Anything else first-time: collapsed.
+          //   - Brand-new server-pushed exercise mid-session: expanded (so peer
+          //     additions from the trainer aren't invisible to the client).
+          collapsed: prevCollapsedById.has(log.exercise.id)
+            ? (prevCollapsedById.get(log.exercise.id) ?? false)
+            : isFirstHydration
+              ? isCompleted || idx !== deduped.length - 1
+              : false,
+          isCompleted,
+        };
+      });
+
+      // Seed the last-saved hash so auto-save doesn't re-POST the data we
+      // just hydrated. Shape must match the payload built in `currentPayload`.
+      lastSavedHashRef.current = JSON.stringify(
+        initial.map((entry, idx) => ({
+          exerciseId: entry.exerciseId,
+          orderIndex: idx,
+          isCompleted: entry.isCompleted,
+          sets: entry.sets.map((s) => ({
+            setNumber: s.setNumber,
+            reps: s.reps,
+            weightKg: s.weightKg,
+            durationSec: s.durationSec,
+            rpe: s.rpe,
+            restSec: s.restSec,
+            notes: s.notes || undefined,
+          })),
+        })),
+      );
+      return initial;
+    });
+
+    // Bootstrap today's focus from whatever exercises were already logged
+    // before this mount (session resumed or page refreshed). Each exercise's
+    // catalog muscle maps to one curated bucket. Re-runs on every poll are
+    // a no-op because `setFocusGroupIds` does referential-equality dedup.
+    const seeded = new Set<CuratedMuscleGroupId>();
+    for (const log of deduped) {
+      const id = curatedGroupOf(log.exercise.targetMuscleGroup);
+      if (id) seeded.add(id);
     }
+    if (seeded.size > 0) setFocusGroupIds(seeded);
   }, [existingLogs]);
 
   const searchExercises = useCallback(
@@ -503,6 +575,7 @@ export function WorkoutLogger({
         ],
         // Expand only the last addition so the trainer lands on a fresh card
         collapsed: idx !== fresh.length - 1,
+        isCompleted: false,
         lastSet: p.lastSet
           ? {
               reps: p.lastSet.reps,
@@ -512,7 +585,12 @@ export function WorkoutLogger({
             }
           : null,
       }));
-      return [...collapsed, ...additions];
+      // Keep completed exercises at the bottom even after a fresh addition
+      // (incomplete first, then completed in their existing order).
+      const sorted = [...collapsed].sort((a, b) => Number(a.isCompleted) - Number(b.isCompleted));
+      const completedTail = sorted.filter((e) => e.isCompleted);
+      const incompleteHead = sorted.filter((e) => !e.isCompleted);
+      return [...incompleteHead, ...additions, ...completedTail];
     });
     setPickerOpen(false);
     setSuggestionsOpen(false);
@@ -529,6 +607,47 @@ export function WorkoutLogger({
       return prev.map((e) =>
         e.tempId === tempId ? { ...e, collapsed: !isCollapsed } : { ...e, collapsed: true },
       );
+    });
+  }
+
+  /**
+   * Flip the mark-complete flag on a single exercise (ADR-037).
+   * - Marking complete: collapse this card, sort completed exercises to the
+   *   bottom (preserving relative order among incomplete + completed), and
+   *   auto-expand the first remaining incomplete exercise so the user
+   *   doesn't have to hunt for the next thing to log.
+   * - Unmarking: flip the flag and expand the card (the user just brought
+   *   it back into focus). Sort still moves it back up among the incompletes.
+   * Auto-save (debounced ~800ms) picks up the new isCompleted on its next
+   * pass and persists it to the server.
+   */
+  function setExerciseCompleted(tempId: string, completed: boolean) {
+    setExercises((prev) => {
+      const flipped = prev.map((e) =>
+        e.tempId === tempId ? { ...e, isCompleted: completed, collapsed: completed } : e,
+      );
+      // Stable sort: incomplete first, then completed. Items keep their
+      // existing order within each group, so users see a predictable list.
+      const incomplete = flipped.filter((e) => !e.isCompleted);
+      const completedItems = flipped.filter((e) => e.isCompleted);
+      const reordered = [...incomplete, ...completedItems];
+      // Auto-advance: when the user marks something complete, expand the
+      // next incomplete card so logging flows top-to-bottom without an
+      // extra tap. No-op when nothing is left to log (everything is done).
+      if (completed) {
+        const nextIncomplete = reordered.findIndex((e) => !e.isCompleted);
+        if (nextIncomplete !== -1) {
+          return reordered.map((e, idx) =>
+            idx === nextIncomplete ? { ...e, collapsed: false } : { ...e, collapsed: true },
+          );
+        }
+      } else {
+        // Unmark: expand the just-uncompleted card, collapse the rest.
+        return reordered.map((e) =>
+          e.tempId === tempId ? { ...e, collapsed: false } : { ...e, collapsed: true },
+        );
+      }
+      return reordered;
     });
   }
 
@@ -638,6 +757,7 @@ export function WorkoutLogger({
       exercises.map((entry, idx) => ({
         exerciseId: entry.exerciseId,
         orderIndex: idx,
+        isCompleted: entry.isCompleted,
         sets: entry.sets.map((s) => ({
           setNumber: s.setNumber,
           reps: s.reps,
@@ -770,9 +890,23 @@ export function WorkoutLogger({
             </>
           )} */}
           {view === 'log' && exercises.length > 0 && (
-            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-              {exercises.length}
-            </span>
+            <>
+              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                {exercises.length}
+              </span>
+              {/* ADR-037: surface completion progress alongside the total
+              count so the user can see "4 (2 done)" at a glance without
+              scanning every card. */}
+              {(() => {
+                const doneCount = exercises.filter((e) => e.isCompleted).length;
+                if (doneCount === 0) return null;
+                return (
+                  <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+                    {doneCount} done
+                  </span>
+                );
+              })()}
+            </>
           )}
           {view === 'log' && (
             <AutoSaveIndicator status={autoSaveStatus} onRetry={() => void saveWorkout()} />
@@ -1259,11 +1393,16 @@ export function WorkoutLogger({
             return (
               <div
                 key={entry.tempId}
-                className="overflow-hidden rounded-2xl bg-card shadow-sm"
+                className={`overflow-hidden rounded-2xl bg-card shadow-sm transition-opacity ${
+                  entry.isCompleted ? 'opacity-70' : ''
+                }`}
                 style={{
                   border: '1px solid rgba(255,255,255,0.06)',
                   borderLeftWidth: 3,
-                  borderLeftColor: cfg.accent,
+                  // Completed cards desaturate to emerald regardless of the
+                  // exercise type's normal accent — quick visual cue that
+                  // the card is in a different state.
+                  borderLeftColor: entry.isCompleted ? '#10b981' : cfg.accent,
                 }}
               >
                 {/* Card header — entire row toggles collapse so the trainer
@@ -1288,18 +1427,32 @@ export function WorkoutLogger({
                     <Icon className={`h-4 w-4 ${cfg.text}`} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold leading-tight">
+                    <p
+                      className={`truncate text-sm font-semibold leading-tight ${
+                        entry.isCompleted ? 'text-muted-foreground line-through' : ''
+                      }`}
+                    >
                       {entry.exerciseName}
                     </p>
                     <div className="mt-0.5 flex items-center gap-2">
                       <span className="text-[11px] text-muted-foreground">
                         {entry.targetMuscle}
                       </span>
-                      <span
-                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
-                      >
-                        {entry.sets.length} {entry.sets.length === 1 ? 'set' : 'sets'}
-                      </span>
+                      {entry.isCompleted ? (
+                        // ADR-037: explicit "Completed" pill replaces the
+                        // set-count chip when complete so the state is
+                        // immediately legible at the row level.
+                        <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500">
+                          <Check className="h-2.5 w-2.5" />
+                          Completed
+                        </span>
+                      ) : (
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
+                        >
+                          {entry.sets.length} {entry.sets.length === 1 ? 'set' : 'sets'}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-0.5">
@@ -1511,7 +1664,7 @@ export function WorkoutLogger({
                         {/* Add Set — rest is initiated per-row via the cell's
                         idle button, so the bottom row no longer needs a
                         separate Rest affordance. */}
-                        <div className="mt-3">
+                        <div className="mt-3 space-y-2">
                           <button
                             onClick={() => addSet(exIdx)}
                             className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
@@ -1519,6 +1672,27 @@ export function WorkoutLogger({
                             <Plus className="h-3.5 w-3.5" />
                             Add Set
                           </button>
+                          {/* ADR-037: Mark-complete pill. Persists via
+                          auto-save (debounced ~800ms). On mark, this card
+                          collapses + sorts to the bottom; the next incomplete
+                          card auto-expands. On unmark, the card stays open
+                          and sorts back up among the incompletes. */}
+                          {entry.isCompleted ? (
+                            <button
+                              onClick={() => setExerciseCompleted(entry.tempId, false)}
+                              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
+                            >
+                              Unmark complete
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setExerciseCompleted(entry.tempId, true)}
+                              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500/15 py-3 text-sm font-semibold text-emerald-500 transition-colors active:bg-emerald-500/25"
+                            >
+                              <Check className="h-4 w-4" />
+                              Mark complete
+                            </button>
+                          )}
                         </div>
                       </div>
                     </motion.div>

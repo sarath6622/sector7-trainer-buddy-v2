@@ -385,6 +385,22 @@ PUT    /api/sessions/[id]/workouts/[logId]          → { sets?: WorkoutSet[] } 
 DELETE /api/sessions/[id]/workouts/[logId]          → {} → { data: { success: true } }
 ```
 
+`WorkoutEntry` shape (ADR-037 added `isCompleted`):
+
+```typescript
+interface WorkoutEntry {
+  exerciseId: string;
+  orderIndex: number;
+  sets: WorkoutSet[]; // ≥1
+  isCompleted?: boolean; // ADR-037; omitted → service preserves existing flag
+}
+```
+
+`WorkoutLog` rows in read responses now include `isCompleted: boolean` and
+`completedAt: ISO | null`. New columns added by migration
+`20260516120000_add_workout_log_completion`; existing rows default to
+`isCompleted=false`.
+
 - Auth: `assertSessionAccess` — caller must be the **trainer OR the client** of the
   session (branch-scoped). 403 `SESSION_FORBIDDEN` otherwise. 404 `SESSION_NOT_FOUND`
   if branch mismatch.

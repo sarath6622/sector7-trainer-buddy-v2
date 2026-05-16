@@ -24,6 +24,11 @@ interface WorkoutEntryInput {
   exerciseId: string;
   orderIndex: number;
   sets: WorkoutSetInput[];
+  // Optional — when omitted the existing isCompleted on the row is preserved
+  // (auto-save fires every ~800ms; a keystroke that doesn't touch the
+  // toggle must not clobber it). When provided, the service syncs both the
+  // boolean and completedAt timestamp.
+  isCompleted?: boolean;
 }
 
 /**
@@ -164,12 +169,23 @@ export async function createWorkoutLogs({
 
       if (existing) {
         // Keep the original log row (and createdAt). Just sync orderIndex
-        // and the set children below.
+        // and the set children below. isCompleted is only touched when the
+        // payload explicitly carries it — auto-save fires every 800ms and
+        // most saves are about set values, not the completion toggle.
+        const updateData: {
+          orderIndex?: number;
+          isCompleted?: boolean;
+          completedAt?: Date | null;
+        } = {};
         if (existing.orderIndex !== entry.orderIndex) {
-          await tx.workoutLog.update({
-            where: { id: existing.id },
-            data: { orderIndex: entry.orderIndex },
-          });
+          updateData.orderIndex = entry.orderIndex;
+        }
+        if (entry.isCompleted !== undefined && entry.isCompleted !== existing.isCompleted) {
+          updateData.isCompleted = entry.isCompleted;
+          updateData.completedAt = entry.isCompleted ? new Date() : null;
+        }
+        if (Object.keys(updateData).length > 0) {
+          await tx.workoutLog.update({ where: { id: existing.id }, data: updateData });
         }
         logId = existing.id;
 
@@ -208,6 +224,10 @@ export async function createWorkoutLogs({
             sessionInstanceId,
             exerciseId: entry.exerciseId,
             orderIndex: entry.orderIndex,
+            // First save can already mark the row complete if the client
+            // sent the toggle; default false otherwise.
+            isCompleted: entry.isCompleted ?? false,
+            completedAt: entry.isCompleted ? new Date() : null,
             sets: {
               create: entry.sets.map((set) => ({
                 setNumber: set.setNumber,
