@@ -826,26 +826,56 @@ export function WorkoutLogger({
     }
   }, [currentPayload, sessionInstanceId]);
 
-  // Debounce: wait for typing to settle, then auto-save. Cancels and resets
-  // on every change so a flurry of keystrokes results in a single POST.
+  // Debounce: wait 5s for typing / corrections to settle, then auto-save.
+  // Cancels and resets on every change so a flurry of keystrokes results
+  // in one POST. The window is deliberately wide — typos (e.g. "4515" for
+  // "45") have time to be corrected before the PR/badge eval fires
+  // server-side; the trade-off is up to 5s of data risk if the user
+  // navigates away mid-debounce, mitigated by the unmount flush below.
   useEffect(() => {
     if (!hasUnsaved) return;
     if (currentPayload.length === 0) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       void saveWorkout();
-    }, 800);
+    }, 5000);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [hasUnsaved, currentHash, currentPayload.length, saveWorkout]);
 
+  // Keep refs aligned with latest values so the unmount-flush effect (which
+  // only runs once with empty deps) can read the most recent payload + hash
+  // without re-binding its cleanup.
+  const currentPayloadRef = useRef(currentPayload);
+  const currentHashRef = useRef(currentHash);
+  useEffect(() => {
+    currentPayloadRef.current = currentPayload;
+    currentHashRef.current = currentHash;
+  }, [currentPayload, currentHash]);
+
   useEffect(() => {
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       if (statusFadeRef.current) clearTimeout(statusFadeRef.current);
+      // Unmount flush: if a debounced save is pending, fire it immediately
+      // with the latest payload before tearing down. Best-effort — the
+      // fetch races the unmount and may not complete on a hard page
+      // navigation, but covers the common "switch tab / go back" case.
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        const payload = currentPayloadRef.current;
+        const hashAtFlush = currentHashRef.current;
+        if (payload.length > 0 && hashAtFlush !== lastSavedHashRef.current) {
+          void fetch(`/api/sessions/${sessionInstanceId}/workouts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ exercises: payload }),
+            keepalive: true, // hint to the browser to keep the request alive past unmount
+          });
+        }
+      }
     };
-  }, []);
+  }, [sessionInstanceId]);
 
   useEffect(() => {
     onUnsavedChange?.(hasUnsaved);
@@ -1672,21 +1702,39 @@ export function WorkoutLogger({
                             <Plus className="h-3.5 w-3.5" />
                             Add Set
                           </button>
-                          {/* ADR-037: Mark-complete pill. Persists via
-                          auto-save (debounced ~800ms). On mark, this card
-                          collapses + sorts to the bottom; the next incomplete
-                          card auto-expands. On unmark, the card stays open
-                          and sorts back up among the incompletes.
-                          Gated on at least one set having actual data
-                          (reps / weightKg / durationSec) — prevents marking
-                          empty placeholder rows as done. */}
+                          {/* ADR-037: Mark-complete pill. Persists via the
+                          5s auto-save debounce. On mark this card collapses
+                          + sorts to the bottom; the next incomplete card
+                          auto-expands. On unmark the card stays open and
+                          sorts back up among the incompletes.
+                          Gated on at least one set having the type's
+                          required data:
+                            WEIGHTED  → reps + weightKg
+                            BODYWEIGHT → reps
+                            DURATION  → durationSec
+                            CARDIO    → durationSec
+                          Empty placeholder rows can't sneak through. */}
                           {(() => {
-                            const hasLoggedSet = entry.sets.some(
-                              (s) =>
-                                (s.reps !== undefined && s.reps !== null) ||
-                                (s.weightKg !== undefined && s.weightKg !== null) ||
-                                (s.durationSec !== undefined && s.durationSec !== null),
-                            );
+                            const has = (v: number | null | undefined) =>
+                              v !== undefined && v !== null;
+                            const setIsComplete = (s: SetData) => {
+                              switch (entry.exerciseType) {
+                                case 'WEIGHTED':
+                                  return has(s.reps) && has(s.weightKg);
+                                case 'BODYWEIGHT':
+                                  return has(s.reps);
+                                case 'DURATION':
+                                case 'CARDIO':
+                                  return has(s.durationSec);
+                              }
+                            };
+                            const hasLoggedSet = entry.sets.some(setIsComplete);
+                            const missingLabel =
+                              entry.exerciseType === 'WEIGHTED'
+                                ? 'Enter reps + kg'
+                                : entry.exerciseType === 'BODYWEIGHT'
+                                  ? 'Enter reps first'
+                                  : 'Enter duration first';
                             if (entry.isCompleted) {
                               return (
                                 <button
@@ -1704,13 +1752,13 @@ export function WorkoutLogger({
                                 aria-label={
                                   hasLoggedSet
                                     ? 'Mark exercise complete'
-                                    : 'Log at least one set before marking complete'
+                                    : `${missingLabel} before marking complete`
                                 }
-                                title={hasLoggedSet ? undefined : 'Log at least one set first'}
+                                title={hasLoggedSet ? undefined : missingLabel}
                                 className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500/15 py-3 text-sm font-semibold text-emerald-500 transition-colors active:bg-emerald-500/25 disabled:cursor-not-allowed disabled:bg-muted/30 disabled:text-muted-foreground/50 disabled:active:bg-muted/30"
                               >
                                 <Check className="h-4 w-4" />
-                                {hasLoggedSet ? 'Mark complete' : 'Log a set first'}
+                                {hasLoggedSet ? 'Mark complete' : missingLabel}
                               </button>
                             );
                           })()}
