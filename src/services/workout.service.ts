@@ -23,6 +23,7 @@ interface WorkoutSetInput {
   durationSec?: number;
   rpe?: number;
   restSec?: number;
+  stepsCount?: number;
   notes?: string;
 }
 
@@ -220,6 +221,7 @@ export async function createWorkoutLogs({
             durationSec: set.durationSec ?? null,
             rpe: set.rpe ?? null,
             restSec: set.restSec ?? null,
+            stepsCount: set.stepsCount ?? null,
             notes: set.notes ?? null,
           };
           if (existingSet) {
@@ -248,6 +250,7 @@ export async function createWorkoutLogs({
                 durationSec: set.durationSec ?? null,
                 rpe: set.rpe ?? null,
                 restSec: set.restSec ?? null,
+                stepsCount: set.stepsCount ?? null,
                 notes: set.notes ?? null,
               })),
             },
@@ -266,6 +269,7 @@ export async function createWorkoutLogs({
               targetMuscleGroup: true,
               category: true,
               exerciseType: true,
+              secondaryMetric: true,
             },
           },
           sets: { orderBy: { setNumber: 'asc' } },
@@ -493,6 +497,7 @@ export async function updateWorkoutLog({
         durationSec: set.durationSec,
         rpe: set.rpe,
         restSec: set.restSec,
+        stepsCount: set.stepsCount,
         notes: set.notes,
       })),
     });
@@ -597,6 +602,7 @@ export async function getSessionWorkouts({ sessionInstanceId, branchId }: GetSes
           targetMuscleGroup: true,
           category: true,
           exerciseType: true,
+          secondaryMetric: true,
           equipmentRequired: true,
         },
       },
@@ -650,6 +656,7 @@ export async function getClientWorkouts({
           targetMuscleGroup: true,
           category: true,
           exerciseType: true,
+          secondaryMetric: true,
           equipmentRequired: true,
         },
       },

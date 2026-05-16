@@ -58,6 +58,7 @@ export const GROUP_THEME: Record<CuratedMuscleGroupId, { bg: string; text: strin
   };
 
 type ExerciseType = 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+type SecondaryMetric = 'KM' | 'STEPS' | 'METERS' | 'NONE';
 
 interface LastSet {
   setNumber: number;
@@ -74,6 +75,7 @@ interface ExerciseSuggestion {
   targetMuscleGroup: string;
   category: string;
   exerciseType: ExerciseType;
+  secondaryMetric: SecondaryMetric;
   lastSet: LastSet | null;
   sessionCount: number;
 }
@@ -95,6 +97,7 @@ export interface PickedExercise {
   targetMuscleGroup: string;
   category: string;
   exerciseType: ExerciseType;
+  secondaryMetric: SecondaryMetric;
   lastSet: LastSet | null;
 }
 
@@ -269,6 +272,7 @@ export function MuscleGroupPicker({
         targetMuscleGroup: e.targetMuscleGroup,
         category: e.category,
         exerciseType: e.exerciseType,
+        secondaryMetric: e.secondaryMetric,
         lastSet: e.lastSet,
       })),
     );

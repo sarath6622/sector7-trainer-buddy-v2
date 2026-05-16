@@ -2,7 +2,12 @@ import { prisma } from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { auditLog } from '@/lib/audit';
 import { expandCuratedGroups } from '@/lib/muscle-groups';
-import type { ExerciseCategory, DifficultyLevel, ExerciseType } from '@prisma/client';
+import type {
+  ExerciseCategory,
+  DifficultyLevel,
+  ExerciseType,
+  SecondaryMetric,
+} from '@prisma/client';
 
 interface CreateExerciseInput {
   name: string;
@@ -12,6 +17,7 @@ interface CreateExerciseInput {
   difficulty?: DifficultyLevel;
   category: ExerciseCategory;
   exerciseType?: ExerciseType;
+  secondaryMetric?: SecondaryMetric;
   isCompound?: boolean;
   instructions?: string;
   demoVideoUrl?: string;
@@ -29,6 +35,7 @@ interface UpdateExerciseInput {
   difficulty?: DifficultyLevel;
   category?: ExerciseCategory;
   exerciseType?: ExerciseType;
+  secondaryMetric?: SecondaryMetric;
   isCompound?: boolean;
   instructions?: string;
   demoVideoUrl?: string;
@@ -61,6 +68,7 @@ interface BulkImportInput {
     difficulty?: DifficultyLevel;
     category: ExerciseCategory;
     exerciseType?: ExerciseType;
+    secondaryMetric?: SecondaryMetric;
     instructions?: string;
     demoVideoUrl?: string;
     demoGifUrl?: string;
@@ -82,6 +90,7 @@ export async function createExercise({ actorId, branchId, ...data }: CreateExerc
       difficulty: data.difficulty,
       category: data.category,
       exerciseType: data.exerciseType ?? 'WEIGHTED',
+      secondaryMetric: data.secondaryMetric ?? 'KM',
       isCompound: data.isCompound ?? false,
       instructions: data.instructions,
       demoVideoUrl: data.demoVideoUrl,
@@ -123,6 +132,7 @@ export async function updateExercise({
   if (data.difficulty !== undefined) updateData.difficulty = data.difficulty;
   if (data.category !== undefined) updateData.category = data.category;
   if (data.exerciseType !== undefined) updateData.exerciseType = data.exerciseType;
+  if (data.secondaryMetric !== undefined) updateData.secondaryMetric = data.secondaryMetric;
   if (data.isCompound !== undefined) updateData.isCompound = data.isCompound;
   if (data.instructions !== undefined) updateData.instructions = data.instructions;
   if (data.demoVideoUrl !== undefined) updateData.demoVideoUrl = data.demoVideoUrl;
@@ -272,6 +282,7 @@ export async function bulkImportExercises({ exercises, actorId, branchId }: Bulk
           difficulty: ex.difficulty,
           category: ex.category,
           exerciseType: ex.exerciseType ?? 'WEIGHTED',
+          secondaryMetric: ex.secondaryMetric ?? 'KM',
           instructions: ex.instructions,
           demoVideoUrl: ex.demoVideoUrl,
           demoGifUrl: ex.demoGifUrl,

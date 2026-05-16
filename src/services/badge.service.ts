@@ -540,7 +540,12 @@ export async function evaluateExerciseMilestoneBadges(
   clientProfileId: string,
   branchId: string,
   exerciseId: string,
-  sets: { weightKg?: number | null; reps?: number | null; durationSec?: number | null }[],
+  sets: {
+    weightKg?: number | null;
+    reps?: number | null;
+    durationSec?: number | null;
+    stepsCount?: number | null;
+  }[],
   actorId: string,
 ): Promise<NewBadge[]> {
   const definitions = await getGenderFilteredDefinitions('EXERCISE_MILESTONE', clientProfileId);
@@ -554,6 +559,11 @@ export async function evaluateExerciseMilestoneBadges(
   const maxWeight = Math.max(...sets.map((s) => s.weightKg ?? 0));
   const maxReps = Math.max(...sets.map((s) => s.reps ?? 0));
   const durations = sets.map((s) => s.durationSec ?? 0).filter((d) => d > 0);
+  // Total steps across the session's sets, not max-per-set. A Stair Climber
+  // workout typically logs one set; if a trainer splits into intervals
+  // (e.g. 5×3min) summing matches the trainer's mental model of "today's
+  // step count".
+  const totalSteps = sets.reduce((sum, s) => sum + (s.stepsCount ?? 0), 0);
 
   const qualifyingByUnit: Record<string, typeof exerciseDefs> = {};
 
@@ -578,6 +588,9 @@ export async function evaluateExerciseMilestoneBadges(
         }
         break;
       }
+      case 'STEPS':
+        achieved = totalSteps >= def.thresholdValue;
+        break;
     }
 
     if (achieved) {

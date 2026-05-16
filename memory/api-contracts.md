@@ -296,14 +296,39 @@ GET    /api/trainer/analytics            → {} → { clientAttendanceRate, sess
 interface WorkoutEntry {
   exerciseId: string;
   orderIndex: number;
+  isCompleted?: boolean; // ADR-037
   sets: {
     setNumber: number;
     reps?: number;
     weightKg?: number;
     durationSec?: number;
     rpe?: number;
+    restSec?: number; // rest taken BEFORE this set
+    stepsCount?: number; // CARDIO + secondaryMetric=STEPS only
     notes?: string;
   }[];
+}
+```
+
+### Exercise Create/Update Shape (admin + trainer)
+
+```typescript
+interface ExerciseInput {
+  name: string;
+  targetMuscleGroup: string;
+  secondaryMuscles?: string[];
+  equipmentRequired?: string;
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  category: ExerciseCategory;
+  exerciseType?: 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+  // CARDIO-only — drives the second column the workout logger renders.
+  // KM/METERS store distance in WorkoutSet.notes; STEPS stores integer in
+  // WorkoutSet.stepsCount; NONE hides the second column. Defaults to 'KM'.
+  secondaryMetric?: 'KM' | 'STEPS' | 'METERS' | 'NONE';
+  isCompound?: boolean;
+  instructions?: string;
+  demoVideoUrl?: string;
+  demoGifUrl?: string;
 }
 ```
 

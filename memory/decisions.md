@@ -537,3 +537,34 @@ Cost was the explicit blocker that drove ADR-033 and a related deferral (the cro
 - Audit rows for trainer-initiated mutations have `actorId = trainer.userId`, `branchId = trainer.branchId`. The action enum (`EXERCISE_CREATED` / `EXERCISE_UPDATED` / `EXERCISE_DELETED` / `EXERCISES_BULK_IMPORTED`) is the same as admin — so a single audit filter shows mutations regardless of which role initiated them.
 - The shared `ExerciseLibraryView` component reads its endpoint from a `basePath` prop. Future role additions (e.g. if BRANCH_ADMIN ever splits from SUPER_ADMIN on this surface) need only a new route + a new wrapper page; the UI doesn't fork.
 - A `TRAINER` calling `/api/admin/exercises` is still rejected (403). They must use `/api/trainer/exercises`. If a future code-mod consolidates the two route trees, it must also widen the role check or trainer write paths break silently.
+
+## ADR-040: Per-Exercise Secondary Metric for CARDIO (enum + dedicated steps column)
+
+**Date:** 2026-05-16
+**Status:** Accepted
+
+**Context:** All CARDIO exercises rendered the same two columns in the WorkoutLogger: `SEC` (duration) + `KM` (distance, stored as a string in `WorkoutSet.notes`). The trainer asked for Stair Climber to capture step count instead of kilometers. Three obvious options were considered: (a) hardcode Stair Climber by name, (b) add a nullable `secondaryMetricLabel String?` free-text override, (c) introduce a strict enum + dedicated typed column for the canonical alternates.
+
+**Decision:**
+
+- **Strict enum.** New `SecondaryMetric { KM, STEPS, METERS, NONE }` on `Exercise`, default `KM`. Only meaningful for `exerciseType = CARDIO`; ignored on render for other types. Locks the set of metrics so the renderer doesn't have to handle arbitrary user-entered strings, and so future analytics queries can group by metric without normalising free text.
+- **Dedicated column for STEPS.** `WorkoutSet.stepsCount Int?` rather than reusing `notes`. Reason: step count is the only metric in this set that is _primarily_ an integer the trainer charts over time; storing it as a typed column lets a future progress chart aggregate `SUM(stepsCount)` directly. KM and METERS continue to live in `notes` to avoid touching existing data — the legacy treadmill / cycling logs already use that field and shifting them would have required a migration with no behavior win.
+- **`NONE` is a real choice, not a workaround.** It hides the second column entirely. Cardio classes / dance / shadow boxing fit this — duration is the only thing the trainer logs.
+- **Field is always serialized to the client.** The picker, recent-exercises endpoint, session-detail read, and workout-log read all `select: { secondaryMetric: true }`. The WorkoutLogger reads it off the entry and resolves the column via `colsFor(exerciseType, secondaryMetric)`. No global lookup table on the client.
+
+**Consequences:**
+
+- Existing CARDIO exercises (Treadmill, Cycling, Rowing, Stair Climber, etc.) inherit `KM` from the default. The "Stair Climber should be STEPS" change is a one-line edit in the Edit Exercise dialog by the operator/trainer — no data migration.
+- Mark-complete gate is unchanged for CARDIO: only `durationSec` is required. Step count is optional metadata.
+- Badge evaluation now considers `stepsCount`. `ThresholdUnit` gained a `STEPS` value (migration `20260516210000_add_threshold_unit_steps`) and `evaluateExerciseMilestoneBadges` adds a `case 'STEPS'` branch using `totalSteps` (sum across the session's sets). The admin badges UI exposes `Steps` in the measurement dropdown and auto-picks it when the chosen exercise is CARDIO + secondaryMetric=STEPS. Higher-is-better only — `durationCondition` is not surfaced for STEPS because there's no plausible "fewer steps is better" use case for this metric.
+- The progress chart endpoint (`/api/trainer/clients/[id]/exercise-progress`) plots `SUM(stepsCount)` per session when the exercise is CARDIO + STEPS, with label `Steps`. `listExercisesWithProgressData` was updated symmetrically so the "exercises with progress data" tile shows steps-tracked cardio exercises with `unit = 'steps'`. The progress modal label inside WorkoutLogger continues to read from `progressUnitFor(exerciseType, secondaryMetric)` — these are now end-to-end consistent.
+- Reversibility: removing the feature would require deleting two columns + one enum. The data in `stepsCount` would be lost (it's the typed column, not text), but `notes` is unaffected. Conversely, adding more metrics (e.g. METERS_PER_SECOND, CALORIES) is one enum-value extension + one branch in `colsFor` and the dialog's `SECONDARY_METRICS` list.
+
+**Migrations:**
+
+- `20260516200000_add_exercise_secondary_metric` — additive (one enum, one NOT NULL column with default, one nullable column).
+- `20260516210000_add_threshold_unit_steps` — `ALTER TYPE ThresholdUnit ADD VALUE 'STEPS'` (Postgres enum extension; cannot be wrapped in a transaction so the file is a single statement).
+
+Both applied to local Docker first per Rule 0, then `prisma migrate deploy` to Neon.
+
+**Placeholder hints + history reads:** `LastSetSnapshot` gained `stepsCount: number | null` and both `getLastSetsByExercise` and `getRecentExercisesByMuscleGroup` now select + return it. `placeholderFor` in WorkoutLogger uses it so the trainer sees last session's step count as a faint hint when adding a new set.

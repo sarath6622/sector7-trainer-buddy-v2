@@ -41,6 +41,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 
 type ExerciseType = 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+type SecondaryMetric = 'KM' | 'STEPS' | 'METERS' | 'NONE';
 
 interface Exercise {
   id: string;
@@ -52,9 +53,17 @@ interface Exercise {
   difficulty: string | null;
   category: string;
   exerciseType: ExerciseType;
+  secondaryMetric: SecondaryMetric;
   instructions: string | null;
   isActive: boolean;
 }
+
+const SECONDARY_METRICS: { value: SecondaryMetric; label: string; hint: string }[] = [
+  { value: 'KM', label: 'KM', hint: 'Distance in kilometers (treadmill, cycle)' },
+  { value: 'STEPS', label: 'Steps', hint: 'Step count (stair climber)' },
+  { value: 'METERS', label: 'Meters', hint: 'Distance in meters (rowing)' },
+  { value: 'NONE', label: 'None', hint: 'Only duration is captured' },
+];
 
 interface PaginationInfo {
   page: number;
@@ -158,6 +167,7 @@ export function ExerciseLibraryView({ basePath }: ExerciseLibraryViewProps) {
     difficulty: '',
     category: 'HYPERTROPHY',
     exerciseType: 'WEIGHTED' as ExerciseType,
+    secondaryMetric: 'KM' as SecondaryMetric,
     isCompound: false,
     instructions: '',
   });
@@ -198,6 +208,7 @@ export function ExerciseLibraryView({ basePath }: ExerciseLibraryViewProps) {
       difficulty: '',
       category: 'HYPERTROPHY',
       exerciseType: 'WEIGHTED',
+      secondaryMetric: 'KM',
       isCompound: false,
       instructions: '',
     });
@@ -214,6 +225,7 @@ export function ExerciseLibraryView({ basePath }: ExerciseLibraryViewProps) {
       difficulty: ex.difficulty ?? '',
       category: ex.category,
       exerciseType: ex.exerciseType,
+      secondaryMetric: ex.secondaryMetric ?? 'KM',
       isCompound: ex.isCompound ?? false,
       instructions: ex.instructions ?? '',
     });
@@ -236,6 +248,9 @@ export function ExerciseLibraryView({ basePath }: ExerciseLibraryViewProps) {
         difficulty: form.difficulty || undefined,
         category: form.category,
         exerciseType: form.exerciseType,
+        // Server ignores this for non-CARDIO types; sending unconditionally
+        // keeps the dialog state-machine simple.
+        secondaryMetric: form.secondaryMetric,
         isCompound: form.isCompound,
         instructions: form.instructions || undefined,
       };
@@ -774,6 +789,39 @@ export function ExerciseLibraryView({ basePath }: ExerciseLibraryViewProps) {
                 />
               </div>
             </div>
+
+            {/* Row 4b: Secondary Metric — CARDIO-only.
+                Drives the second column the workout logger renders alongside
+                duration (km / steps / meters / none). */}
+            {form.exerciseType === 'CARDIO' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Secondary Metric
+                </Label>
+                <Select
+                  value={form.secondaryMetric}
+                  onValueChange={(v) =>
+                    setForm({ ...form, secondaryMetric: (v ?? 'KM') as SecondaryMetric })
+                  }
+                >
+                  <SelectTrigger className="h-11 w-full text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SECONDARY_METRICS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{m.label}</span>
+                          <span className="hidden text-xs text-muted-foreground sm:inline">
+                            — {m.hint}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Is Compound */}
             <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">

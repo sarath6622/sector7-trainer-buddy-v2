@@ -51,6 +51,7 @@ interface ExerciseOption {
   targetMuscleGroup: string;
   category: string;
   exerciseType: ExerciseType;
+  secondaryMetric: SecondaryMetric;
   equipmentRequired: string | null;
 }
 
@@ -61,8 +62,13 @@ interface SetData {
   durationSec: number | undefined;
   rpe: number | undefined;
   restSec: number | undefined;
+  // Only populated when the parent exercise has secondaryMetric=STEPS
+  // (e.g. Stair Climber). Other CARDIO exercises store km in `notes`.
+  stepsCount: number | undefined;
   notes: string;
 }
+
+type SecondaryMetric = 'KM' | 'STEPS' | 'METERS' | 'NONE';
 
 interface LastSetSnapshot {
   setNumber: number;
@@ -71,6 +77,7 @@ interface LastSetSnapshot {
   durationSec: number | null;
   rpe: number | null;
   restSec: number | null;
+  stepsCount: number | null;
 }
 
 interface ExerciseEntry {
@@ -80,6 +87,10 @@ interface ExerciseEntry {
   targetMuscle: string;
   category: string;
   exerciseType: ExerciseType;
+  // Only meaningful for CARDIO; drives which second column the logger
+  // renders. Defaulted to 'KM' for entries hydrated before the field existed
+  // server-side.
+  secondaryMetric: SecondaryMetric;
   sets: SetData[];
   collapsed: boolean;
   // ADR-037: mark-complete state. Completed exercises sort to the bottom
@@ -119,6 +130,8 @@ interface WorkoutLoggerProps {
       targetMuscleGroup: string;
       category: string;
       exerciseType: ExerciseType;
+      // Older API readers may omit this — defaults to 'KM' on hydration.
+      secondaryMetric?: SecondaryMetric;
     };
     sets: {
       setNumber: number;
@@ -127,6 +140,7 @@ interface WorkoutLoggerProps {
       durationSec: number | null;
       rpe: number | null;
       restSec: number | null;
+      stepsCount?: number | null;
       notes: string | null;
     }[];
   }[];
@@ -175,7 +189,14 @@ type ColDef = { key: keyof SetData; label: string; step?: string; min?: number; 
 // the model but is no longer entered here (other surfaces / future trainer
 // modes can bring it back if needed). Capped at 60 min via the rest timer
 // validator; the input accepts seconds for compactness.
-const TYPE_COLS: Record<ExerciseType, ColDef[]> = {
+//
+// CARDIO's second column is per-exercise (Exercise.secondaryMetric):
+//   KM     → distance in km, stored in WorkoutSet.notes (legacy)
+//   STEPS  → integer step count, stored in WorkoutSet.stepsCount (Stair Climber)
+//   METERS → distance in m, stored in WorkoutSet.notes
+//   NONE   → no second column (just duration)
+// Resolve via `colsFor(entry)` rather than a static lookup.
+const STATIC_TYPE_COLS: Record<Exclude<ExerciseType, 'CARDIO'>, ColDef[]> = {
   WEIGHTED: [
     { key: 'weightKg', label: 'kg', step: '0.5' },
     { key: 'reps', label: 'Reps' },
@@ -189,11 +210,41 @@ const TYPE_COLS: Record<ExerciseType, ColDef[]> = {
     { key: 'durationSec', label: 'sec' },
     { key: 'restSec', label: 'Rest', min: 0, max: 3600 },
   ],
-  CARDIO: [
-    { key: 'durationSec', label: 'sec' },
-    { key: 'notes', label: 'km' },
-  ],
 };
+
+function colsFor(exerciseType: ExerciseType, secondaryMetric: SecondaryMetric): ColDef[] {
+  if (exerciseType !== 'CARDIO') {
+    return STATIC_TYPE_COLS[exerciseType] ?? STATIC_TYPE_COLS.WEIGHTED;
+  }
+  const second: ColDef | null =
+    secondaryMetric === 'STEPS'
+      ? { key: 'stepsCount', label: 'steps', min: 0, max: 100000 }
+      : secondaryMetric === 'METERS'
+        ? { key: 'notes', label: 'm' }
+        : secondaryMetric === 'NONE'
+          ? null
+          : { key: 'notes', label: 'km' };
+  return second
+    ? [{ key: 'durationSec', label: 'sec' }, second]
+    : [{ key: 'durationSec', label: 'sec' }];
+}
+
+// Resolve the unit displayed in the per-exercise Progress modal. For CARDIO
+// this mirrors the second-column metric so the chart axis matches what the
+// trainer just typed in.
+function progressUnitFor(
+  exerciseType: ExerciseType,
+  secondaryMetric: SecondaryMetric,
+): 'kg' | 'km' | 'steps' | 'm' | 'sec' | 'reps' {
+  if (exerciseType === 'WEIGHTED') return 'kg';
+  if (exerciseType === 'DURATION') return 'sec';
+  if (exerciseType === 'CARDIO') {
+    if (secondaryMetric === 'STEPS') return 'steps';
+    if (secondaryMetric === 'METERS') return 'm';
+    return 'km';
+  }
+  return 'reps';
+}
 
 // ─── WorkoutLogger ────────────────────────────────────────────────────────────
 
@@ -358,6 +409,7 @@ export function WorkoutLogger({
             durationSec: s.durationSec,
             rpe: s.rpe,
             restSec: s.restSec,
+            stepsCount: s.stepsCount,
             notes: s.notes || undefined,
           })),
         })),
@@ -377,6 +429,7 @@ export function WorkoutLogger({
           targetMuscle: log.exercise.targetMuscleGroup,
           category: log.exercise.category,
           exerciseType: log.exercise.exerciseType,
+          secondaryMetric: log.exercise.secondaryMetric ?? 'KM',
           sets: log.sets.map((s) => ({
             setNumber: s.setNumber,
             reps: s.reps ?? undefined,
@@ -384,6 +437,7 @@ export function WorkoutLogger({
             durationSec: s.durationSec ?? undefined,
             rpe: s.rpe ?? undefined,
             restSec: s.restSec ?? undefined,
+            stepsCount: s.stepsCount ?? undefined,
             notes: s.notes ?? '',
           })),
           // Collapse rules:
@@ -416,6 +470,7 @@ export function WorkoutLogger({
             durationSec: s.durationSec,
             rpe: s.rpe,
             restSec: s.restSec,
+            stepsCount: s.stepsCount,
             notes: s.notes || undefined,
           })),
         })),
@@ -570,6 +625,7 @@ export function WorkoutLogger({
         targetMuscle: p.targetMuscleGroup,
         category: p.category,
         exerciseType: p.exerciseType,
+        secondaryMetric: p.secondaryMetric,
         sets: [
           {
             setNumber: 1,
@@ -578,6 +634,7 @@ export function WorkoutLogger({
             durationSec: undefined,
             rpe: undefined,
             restSec: undefined,
+            stepsCount: undefined,
             notes: '',
           },
         ],
@@ -689,6 +746,7 @@ export function WorkoutLogger({
           durationSec: undefined,
           rpe: undefined,
           restSec: undefined,
+          stepsCount: undefined,
           notes: '',
         },
       ];
@@ -775,6 +833,7 @@ export function WorkoutLogger({
           durationSec: s.durationSec,
           rpe: s.rpe,
           restSec: s.restSec,
+          stepsCount: s.stepsCount,
           notes: s.notes || undefined,
         })),
       })),
@@ -1105,6 +1164,7 @@ export function WorkoutLogger({
                     targetMuscleGroup: ex.targetMuscleGroup,
                     category: ex.category,
                     exerciseType: ex.exerciseType,
+                    secondaryMetric: ex.secondaryMetric,
                     lastSet: null,
                   }));
                 if (picked.length === 0) return;
@@ -1434,7 +1494,7 @@ export function WorkoutLogger({
           {exercises.map((entry, exIdx) => {
             const cfg = TYPE_CONFIG[entry.exerciseType] ?? TYPE_CONFIG.WEIGHTED;
             const Icon = cfg.icon;
-            const cols = TYPE_COLS[entry.exerciseType] ?? TYPE_COLS.WEIGHTED;
+            const cols = colsFor(entry.exerciseType, entry.secondaryMetric);
 
             return (
               <div
@@ -1506,14 +1566,7 @@ export function WorkoutLogger({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const unit =
-                            entry.exerciseType === 'WEIGHTED'
-                              ? 'kg'
-                              : entry.exerciseType === 'CARDIO'
-                                ? 'km'
-                                : entry.exerciseType === 'DURATION'
-                                  ? 'sec'
-                                  : 'reps';
+                          const unit = progressUnitFor(entry.exerciseType, entry.secondaryMetric);
                           setProgressModal({
                             exerciseId: entry.exerciseId,
                             exerciseName: entry.exerciseName,
@@ -1918,6 +1971,7 @@ function placeholderFor(key: keyof SetData, last: LastSetSnapshot | null | undef
   if (key === 'durationSec' && last.durationSec != null) return String(last.durationSec);
   if (key === 'rpe' && last.rpe != null) return String(last.rpe);
   if (key === 'restSec' && last.restSec != null) return formatRestSec(last.restSec);
+  if (key === 'stepsCount' && last.stepsCount != null) return String(last.stepsCount);
   return key === 'rpe' ? '1–10' : '—';
 }
 

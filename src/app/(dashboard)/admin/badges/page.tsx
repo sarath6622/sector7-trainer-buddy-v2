@@ -37,9 +37,10 @@ type BadgeType =
   | 'WEIGHT_LIFTED'
   | 'EXERCISE_MILESTONE';
 type GenderFilter = 'MALE' | 'FEMALE' | 'ALL';
-type ThresholdUnit = 'KG' | 'REPS' | 'SECONDS';
+type ThresholdUnit = 'KG' | 'REPS' | 'SECONDS' | 'STEPS';
 type DurationCondition = 'LONGER_IS_BETTER' | 'SHORTER_IS_BETTER';
 type ExerciseType = 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+type SecondaryMetric = 'KM' | 'STEPS' | 'METERS' | 'NONE';
 
 interface BadgeDefinition {
   id: string;
@@ -62,6 +63,7 @@ interface ExerciseOption {
   id: string;
   name: string;
   exerciseType: ExerciseType;
+  secondaryMetric: SecondaryMetric;
 }
 
 interface PaginationInfo {
@@ -180,11 +182,19 @@ export default function BadgeDefinitionsPage() {
       .then((r) => r.json())
       .then((result) =>
         setExercises(
-          result.data?.map((e: { id: string; name: string; exerciseType: ExerciseType }) => ({
-            id: e.id,
-            name: e.name,
-            exerciseType: e.exerciseType,
-          })) ?? [],
+          result.data?.map(
+            (e: {
+              id: string;
+              name: string;
+              exerciseType: ExerciseType;
+              secondaryMetric?: SecondaryMetric;
+            }) => ({
+              id: e.id,
+              name: e.name,
+              exerciseType: e.exerciseType,
+              secondaryMetric: e.secondaryMetric ?? 'KM',
+            }),
+          ) ?? [],
         ),
       )
       .catch(() => {});
@@ -436,6 +446,7 @@ export default function BadgeDefinitionsPage() {
                         {b.thresholdValue}
                         {b.thresholdUnit === 'KG' && ' kg'}
                         {b.thresholdUnit === 'REPS' && ' reps'}
+                        {b.thresholdUnit === 'STEPS' && ' steps'}
                         {b.thresholdUnit === 'SECONDS' && (
                           <>
                             {' '}
@@ -639,12 +650,16 @@ export default function BadgeDefinitionsPage() {
                     value={form.exerciseId}
                     onValueChange={(v) => {
                       const ex = exercises.find((e) => e.id === v);
+                      // CARDIO exercises with secondaryMetric=STEPS auto-pick STEPS;
+                      // everything else falls back to the duration-based default.
                       const autoUnit: ThresholdUnit | '' = ex
                         ? ex.exerciseType === 'BODYWEIGHT'
                           ? 'REPS'
-                          : ex.exerciseType === 'DURATION' || ex.exerciseType === 'CARDIO'
-                            ? 'SECONDS'
-                            : 'KG'
+                          : ex.exerciseType === 'CARDIO' && ex.secondaryMetric === 'STEPS'
+                            ? 'STEPS'
+                            : ex.exerciseType === 'DURATION' || ex.exerciseType === 'CARDIO'
+                              ? 'SECONDS'
+                              : 'KG'
                         : '';
                       setForm({
                         ...form,
@@ -707,6 +722,7 @@ export default function BadgeDefinitionsPage() {
                         <SelectItem value="KG">Weight (kg)</SelectItem>
                         <SelectItem value="REPS">Reps</SelectItem>
                         <SelectItem value="SECONDS">Duration (seconds)</SelectItem>
+                        <SelectItem value="STEPS">Steps</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -767,7 +783,9 @@ export default function BadgeDefinitionsPage() {
                                 ? 'e.g. 50'
                                 : form.thresholdUnit === 'SECONDS'
                                   ? 'e.g. 60'
-                                  : 'Select exercise first'
+                                  : form.thresholdUnit === 'STEPS'
+                                    ? 'e.g. 5000'
+                                    : 'Select exercise first'
                             : form.type === 'BODY_COMPOSITION'
                               ? 'e.g. 3'
                               : form.type === 'SESSION_MILESTONE'
@@ -793,7 +811,9 @@ export default function BadgeDefinitionsPage() {
                                   ? 'reps'
                                   : form.thresholdUnit === 'SECONDS'
                                     ? 'seconds'
-                                    : ''
+                                    : form.thresholdUnit === 'STEPS'
+                                      ? 'steps'
+                                      : ''
                               : ''}
                   </span>
                 </div>

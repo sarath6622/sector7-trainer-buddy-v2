@@ -61,6 +61,8 @@ export const difficultyLevelSchema = z.enum(['EASY', 'MEDIUM', 'HARD']);
 
 export const exerciseTypeSchema = z.enum(['WEIGHTED', 'BODYWEIGHT', 'DURATION', 'CARDIO']);
 
+export const secondaryMetricSchema = z.enum(['KM', 'STEPS', 'METERS', 'NONE']);
+
 export const exerciseCategorySchema = z.enum([
   'HYPERTROPHY',
   'CARDIO',
@@ -78,7 +80,7 @@ export const badgeTypeSchema = z.enum([
   'EXERCISE_MILESTONE',
 ]);
 
-export const thresholdUnitSchema = z.enum(['KG', 'REPS', 'SECONDS']);
+export const thresholdUnitSchema = z.enum(['KG', 'REPS', 'SECONDS', 'STEPS']);
 
 export const durationConditionSchema = z.enum(['LONGER_IS_BETTER', 'SHORTER_IS_BETTER']);
 
@@ -368,6 +370,10 @@ export const createExerciseSchema = z.object({
   difficulty: difficultyLevelSchema.optional(),
   category: exerciseCategorySchema,
   exerciseType: exerciseTypeSchema.default('WEIGHTED'),
+  // Only meaningful when exerciseType = CARDIO. KM keeps the legacy behavior
+  // (distance stored in WorkoutSet.notes); STEPS uses the dedicated
+  // stepsCount column; NONE hides the second input.
+  secondaryMetric: secondaryMetricSchema.default('KM'),
   isCompound: z.boolean().default(false),
   instructions: z.string().optional(),
   demoVideoUrl: z.string().url().optional(),
@@ -442,6 +448,10 @@ export const workoutSetSchema = z.object({
   // the rest timer's total when a set is added right after a rest finishes;
   // can also be entered manually. Capped at 1h to match restTimerStateSchema.
   restSec: z.number().int().min(0).max(3600).optional(),
+  // Step count — only used when the parent exercise has secondaryMetric=STEPS
+  // (e.g. Stair Climber). Capped generously; treadmill-class machines max out
+  // well below 100k per session.
+  stepsCount: z.number().int().min(0).max(100000).optional(),
   notes: z.string().optional(),
 });
 

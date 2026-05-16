@@ -333,14 +333,17 @@ export async function getChartData({
     throw new AppError('MISSING_EXERCISE_ID', 'exerciseId is required for exercise metric', 400);
   }
 
-  // Determine exercise type to know which field to chart
+  // Determine exercise type + secondary metric to know which field to chart.
+  // CARDIO with secondaryMetric=STEPS plots stepsCount instead of duration so
+  // the trainer's progression view matches what they actually log.
   const exercise = await prisma.exercise.findUnique({
     where: { id: exerciseId },
-    select: { exerciseType: true, name: true },
+    select: { exerciseType: true, secondaryMetric: true, name: true },
   });
   if (!exercise) throw new AppError('EXERCISE_NOT_FOUND', 'Exercise not found', 404);
 
   const type = exercise.exerciseType;
+  const isStepsCardio = type === 'CARDIO' && exercise.secondaryMetric === 'STEPS';
 
   const workoutLogs = await prisma.workoutLog.findMany({
     where: { exerciseId, sessionInstance: { clientProfileId } },
@@ -381,7 +384,25 @@ export async function getChartData({
       .filter(Boolean) as { date: string; value: number; label: string }[];
   }
 
-  // DURATION or CARDIO — max duration per session
+  // CARDIO + secondaryMetric=STEPS — total steps across the session's sets.
+  // Use sum (not max) so an interval workout (5×3min stair climber) reads as
+  // the trainer's intended "total steps today", matching the badge eval.
+  if (isStepsCardio) {
+    return workoutLogs
+      .map((log) => {
+        const totalSteps = log.sets.reduce((sum, s) => sum + (s.stepsCount ?? 0), 0);
+        return totalSteps > 0
+          ? {
+              date: log.sessionInstance.scheduledDate.toISOString(),
+              value: totalSteps,
+              label: 'Steps',
+            }
+          : null;
+      })
+      .filter(Boolean) as { date: string; value: number; label: string }[];
+  }
+
+  // DURATION or CARDIO (KM/METERS/NONE) — max duration per session
   return workoutLogs
     .map((log) => {
       const maxD = Math.max(...log.sets.map((s) => s.durationSec ?? 0));
@@ -422,6 +443,7 @@ export async function listExercisesWithProgressData({
             { weightKg: { not: null } },
             { reps: { not: null } },
             { durationSec: { not: null } },
+            { stepsCount: { not: null } },
           ],
         },
       },
@@ -429,22 +451,20 @@ export async function listExercisesWithProgressData({
     select: {
       exerciseId: true,
       exercise: {
-        select: { name: true, targetMuscleGroup: true, exerciseType: true },
+        select: {
+          name: true,
+          targetMuscleGroup: true,
+          exerciseType: true,
+          secondaryMetric: true,
+        },
       },
       sets: {
-        select: { weightKg: true, reps: true, durationSec: true },
+        select: { weightKg: true, reps: true, durationSec: true, stepsCount: true },
       },
       sessionInstance: { select: { scheduledDate: true } },
     },
     orderBy: { sessionInstance: { scheduledDate: 'asc' } },
   });
-
-  const UNIT_MAP: Record<string, string> = {
-    WEIGHTED: 'kg',
-    BODYWEIGHT: 'reps',
-    DURATION: 'sec',
-    CARDIO: 'sec',
-  };
 
   const map = new Map<
     string,
@@ -459,32 +479,42 @@ export async function listExercisesWithProgressData({
 
   for (const row of rows) {
     const type = row.exercise.exerciseType;
-    let maxVal: number | null = null;
+    const isStepsCardio = type === 'CARDIO' && row.exercise.secondaryMetric === 'STEPS';
+    let value: number | null = null;
+    let unit = 'kg';
 
     if (type === 'WEIGHTED') {
       const vals = row.sets.map((s) => s.weightKg ?? 0).filter((v) => v > 0);
-      maxVal = vals.length > 0 ? Math.max(...vals) : null;
+      value = vals.length > 0 ? Math.max(...vals) : null;
+      unit = 'kg';
     } else if (type === 'BODYWEIGHT') {
       const vals = row.sets.map((s) => s.reps ?? 0).filter((v) => v > 0);
-      maxVal = vals.length > 0 ? Math.max(...vals) : null;
+      value = vals.length > 0 ? Math.max(...vals) : null;
+      unit = 'reps';
+    } else if (isStepsCardio) {
+      // Total steps across the session — matches the chart endpoint's aggregation.
+      const total = row.sets.reduce((sum, s) => sum + (s.stepsCount ?? 0), 0);
+      value = total > 0 ? total : null;
+      unit = 'steps';
     } else {
-      // DURATION or CARDIO
+      // DURATION or CARDIO (KM/METERS/NONE)
       const vals = row.sets.map((s) => s.durationSec ?? 0).filter((v) => v > 0);
-      maxVal = vals.length > 0 ? Math.max(...vals) : null;
+      value = vals.length > 0 ? Math.max(...vals) : null;
+      unit = 'sec';
     }
 
-    if (maxVal == null) continue;
+    if (value == null) continue;
 
     if (!map.has(row.exerciseId)) {
       map.set(row.exerciseId, {
         name: row.exercise.name,
         muscle: row.exercise.targetMuscleGroup,
         exerciseType: type,
-        unit: UNIT_MAP[type] ?? 'kg',
+        unit,
         values: [],
       });
     }
-    map.get(row.exerciseId)!.values.push(maxVal);
+    map.get(row.exerciseId)!.values.push(value);
   }
 
   return Array.from(map.entries())
@@ -603,6 +633,7 @@ export interface LastSetSnapshot {
   durationSec: number | null;
   rpe: number | null;
   restSec: number | null;
+  stepsCount: number | null;
   performedAt: string;
 }
 
@@ -612,6 +643,8 @@ export interface RecentExerciseSuggestion {
   targetMuscleGroup: string;
   category: string;
   exerciseType: 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+  /** For CARDIO exercises: which secondary metric the logger should capture. */
+  secondaryMetric: 'KM' | 'STEPS' | 'METERS' | 'NONE';
   /** Most recent set logged for this exercise across all sessions for the client. */
   lastSet: LastSetSnapshot | null;
   /** Total sessions in which this exercise appears (for ranking context). */
@@ -668,6 +701,7 @@ export async function getRecentExercisesByMuscleGroup({
           targetMuscleGroup: true,
           category: true,
           exerciseType: true,
+          secondaryMetric: true,
         },
       },
       sets: {
@@ -678,6 +712,7 @@ export async function getRecentExercisesByMuscleGroup({
           durationSec: true,
           rpe: true,
           restSec: true,
+          stepsCount: true,
           createdAt: true,
         },
         orderBy: { setNumber: 'asc' },
@@ -692,6 +727,7 @@ export async function getRecentExercisesByMuscleGroup({
     targetMuscleGroup: string;
     category: string;
     exerciseType: 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
+    secondaryMetric: 'KM' | 'STEPS' | 'METERS' | 'NONE';
     lastSet: LastSetSnapshot | null;
     lastSeenAt: Date;
     sessionCount: number;
@@ -711,7 +747,12 @@ export async function getRecentExercisesByMuscleGroup({
       continue;
     }
     const dataSets = log.sets.filter(
-      (s) => s.reps != null || s.weightKg != null || s.durationSec != null || s.rpe != null,
+      (s) =>
+        s.reps != null ||
+        s.weightKg != null ||
+        s.durationSec != null ||
+        s.rpe != null ||
+        s.stepsCount != null,
     );
     const chosen = dataSets[dataSets.length - 1] ?? log.sets[log.sets.length - 1] ?? null;
     byExercise.set(ex.id, {
@@ -720,6 +761,7 @@ export async function getRecentExercisesByMuscleGroup({
       targetMuscleGroup: ex.targetMuscleGroup,
       category: ex.category,
       exerciseType: ex.exerciseType,
+      secondaryMetric: ex.secondaryMetric,
       lastSet: chosen
         ? {
             setNumber: chosen.setNumber,
@@ -728,6 +770,7 @@ export async function getRecentExercisesByMuscleGroup({
             durationSec: chosen.durationSec,
             rpe: chosen.rpe,
             restSec: chosen.restSec,
+            stepsCount: chosen.stepsCount,
             performedAt: (chosen.createdAt ?? log.createdAt).toISOString(),
           }
         : null,
@@ -762,6 +805,7 @@ export async function getRecentExercisesByMuscleGroup({
         targetMuscleGroup: a.targetMuscleGroup,
         category: a.category,
         exerciseType: a.exerciseType,
+        secondaryMetric: a.secondaryMetric,
         lastSet: a.lastSet,
         sessionCount: a.sessionCount,
       }));
@@ -821,6 +865,7 @@ export async function getLastSetsByExercise({
           durationSec: true,
           rpe: true,
           restSec: true,
+          stepsCount: true,
           createdAt: true,
         },
         orderBy: { setNumber: 'asc' },
@@ -846,6 +891,7 @@ export async function getLastSetsByExercise({
       durationSec: s.durationSec,
       rpe: s.rpe,
       restSec: s.restSec,
+      stepsCount: s.stepsCount,
       performedAt: (s.createdAt ?? log.createdAt).toISOString(),
     }));
     result.set(log.exerciseId, sets);

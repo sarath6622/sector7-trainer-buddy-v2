@@ -419,6 +419,8 @@ model WorkoutSet {
   weightKg     Float?
   durationSec  Int?    // for timed exercises
   rpe          Int?    // 1-10 Rate of Perceived Exertion
+  restSec      Int?    // rest taken before this set
+  stepsCount   Int?    // CARDIO + secondaryMetric=STEPS only
   notes        String?
   createdAt    DateTime @default(now())
 
@@ -438,6 +440,9 @@ model Exercise {
   equipmentRequired   String?
   difficulty          DifficultyLevel?
   category            ExerciseCategory
+  exerciseType        ExerciseType     @default(WEIGHTED)
+  secondaryMetric     SecondaryMetric  @default(KM)  // CARDIO only
+  isCompound          Boolean          @default(false)
   instructions        String?
   demoVideoUrl        String?
   demoGifUrl          String?
@@ -1015,6 +1020,42 @@ model TvEvent {
 Applied to both local Docker and Neon. Both tables are leaf nodes (no existing
 data depends on them) so the migrations are purely additive — no row counts
 needed for verification.
+
+## Per-Exercise Secondary Metric (2026-05-16)
+
+### New Enum: SecondaryMetric
+
+```prisma
+enum SecondaryMetric {
+  KM        // Distance in km, stored in WorkoutSet.notes (legacy)
+  STEPS     // Integer count, stored in WorkoutSet.stepsCount (Stair Climber)
+  METERS    // Distance in m, stored in WorkoutSet.notes
+  NONE      // Only duration is captured; second column hidden
+}
+```
+
+### Altered: Exercise
+
+- `secondaryMetric SecondaryMetric @default(KM)` added. Only meaningful for
+  `exerciseType = CARDIO`; ignored on render for other types. Drives the
+  second column the workout logger renders alongside duration.
+
+### Altered: WorkoutSet
+
+- `stepsCount Int?` added. Populated only when the parent exercise has
+  `secondaryMetric = STEPS`. KM and METERS continue to use the existing
+  `notes` field for backward compatibility — no data backfill needed.
+
+### Migration
+
+- `20260516200000_add_exercise_secondary_metric` — additive: creates
+  `SecondaryMetric` enum, adds `exercises.secondaryMetric` (NOT NULL DEFAULT
+  'KM'), adds `workout_sets.stepsCount INTEGER NULL`. Applied to local Docker
+  and Neon. Existing CARDIO rows inherit `KM` from the default so existing
+  Stair Climber / Treadmill data continues rendering as today.
+- `20260516210000_add_threshold_unit_steps` — extends `ThresholdUnit` enum
+  with `STEPS` so `EXERCISE_MILESTONE` badges can target step-based cardio
+  (e.g. "10,000 steps on Stair Climber"). Applied to local Docker and Neon.
 
 ## TV Control Multi-Pin (2026-05-14)
 

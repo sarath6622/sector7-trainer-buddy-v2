@@ -115,6 +115,17 @@ enum ExerciseType {
   CARDIO        // Duration + distance      (Treadmill, Cycling, Rowing…)
 }
 
+// Second metric captured alongside duration for CARDIO exercises. The
+// workout logger reads this off the Exercise row to label and bind the
+// second column. Non-CARDIO exercises always store KM (the default) but
+// the field is unused on render.
+enum SecondaryMetric {
+  KM        // Distance in km, stored in WorkoutSet.notes (legacy)
+  STEPS     // Integer count, stored in WorkoutSet.stepsCount (Stair Climber, etc.)
+  METERS    // Distance in m, stored in WorkoutSet.notes
+  NONE      // Only duration is captured; second column hidden
+}
+
 enum BadgeType {
   STREAK             // Consecutive session attendance
   PERSONAL_RECORD    // New max weight on an exercise
@@ -128,6 +139,7 @@ enum ThresholdUnit {
   KG        // Weight in kilograms (weighted exercises)
   REPS      // Repetitions (bodyweight exercises)
   SECONDS   // Duration in seconds (duration exercises)
+  STEPS     // Step count (CARDIO with secondaryMetric=STEPS, e.g. Stair Climber)
 }
 
 enum DurationCondition {
@@ -642,6 +654,10 @@ model WorkoutSet {
   // `total` (auto-filled when the trainer adds a set right after a rest
   // finishes) or entered manually. Null = no rest data recorded.
   restSec      Int?
+  // Step count for CARDIO exercises whose Exercise.secondaryMetric = STEPS
+  // (e.g. Stair Climber). For KM/METERS the distance still lives in `notes`
+  // for now.
+  stepsCount   Int?
   notes        String?
   createdAt    DateTime @default(now())
 
@@ -685,6 +701,12 @@ model Exercise {
   difficulty          DifficultyLevel?
   category            ExerciseCategory
   exerciseType        ExerciseType     @default(WEIGHTED)
+  // For CARDIO exercises: which second metric the workout logger should
+  // capture alongside duration. KM is the default (legacy behavior, value
+  // stored in WorkoutSet.notes); STEPS uses the dedicated stepsCount column;
+  // METERS reuses notes with a relabeled column; NONE hides the second
+  // column entirely. Ignored for non-CARDIO types.
+  secondaryMetric     SecondaryMetric  @default(KM)
   instructions        String?
   demoVideoUrl        String?
   demoGifUrl          String?
