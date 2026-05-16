@@ -136,3 +136,28 @@ export function hasRole(userRole: string | string[], allowedRoles: string[]): bo
   // Single role check (backward compatible)
   return allowedRoles.includes(userRole);
 }
+
+/**
+ * Authorize read access to a specific client's training data
+ * (`/api/trainer/clients/[id]/*` endpoints). Returns true if the caller is:
+ *   - a trainer / admin in the same branch (the existing trainer-only check), OR
+ *   - the client themselves (clientProfileId matches their own profile).
+ *
+ * Added 2026-05-16 so the WorkoutLogger — now usable by clients on their own
+ * PT sessions (ADR-036) — can hit the same in-session helper endpoints
+ * (last-sets, workout-history, exercise-progress, etc.) without forcing us
+ * to mirror every route under `/api/client/*`.
+ */
+export function canReadClientTrainingData(
+  user: { role?: string; roles?: string[]; clientProfileId?: string | null },
+  clientProfileId: string,
+): boolean {
+  const roles = user.roles ?? (user.role ? [user.role] : []);
+  if (hasRole(roles, ['TRAINER', 'KICKBOXING_TRAINER', 'SUPER_ADMIN', 'BRANCH_ADMIN'])) {
+    return true;
+  }
+  if (hasRole(roles, ['CLIENT']) && user.clientProfileId === clientProfileId) {
+    return true;
+  }
+  return false;
+}

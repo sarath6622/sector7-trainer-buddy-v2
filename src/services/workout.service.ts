@@ -8,6 +8,7 @@ import {
   type NewBadge,
 } from '@/services/badge.service';
 import { createPost } from '@/services/community.service';
+import { assertSessionAccess } from '@/services/session.service';
 
 interface WorkoutSetInput {
   setNumber: number;
@@ -25,20 +26,32 @@ interface WorkoutEntryInput {
   sets: WorkoutSetInput[];
 }
 
-interface CreateWorkoutInput {
-  sessionInstanceId: string;
-  exercises: WorkoutEntryInput[];
-  trainerProfileId: string;
-  actorId: string;
+/**
+ * Actor identity for workout mutations. Either the trainer of the session
+ * or the client themselves may log workouts (see ADR-036). One of
+ * `actorTrainerProfileId` / `actorClientProfileId` must be set; both may be
+ * set when the same User has both profiles. assertSessionAccess validates
+ * that the actor owns the session.
+ */
+interface WorkoutActor {
+  actorUserId: string;
+  actorTrainerProfileId: string | null;
+  actorClientProfileId: string | null;
   branchId: string;
 }
 
-interface UpdateWorkoutLogInput {
+interface CreateWorkoutInput extends WorkoutActor {
+  sessionInstanceId: string;
+  exercises: WorkoutEntryInput[];
+}
+
+interface UpdateWorkoutLogInput extends WorkoutActor {
   workoutLogId: string;
   sets?: WorkoutSetInput[];
-  trainerProfileId: string;
-  actorId: string;
-  branchId: string;
+}
+
+interface DeleteWorkoutLogInput extends WorkoutActor {
+  workoutLogId: string;
 }
 
 interface GetSessionWorkoutsInput {
@@ -56,21 +69,46 @@ interface ListClientWorkoutsInput {
 }
 
 /**
- * Create workout logs for a session (batch of exercises with sets)
+ * Create workout logs for a session (batch of exercises with sets).
+ *
+ * Authorization: caller must be either the trainer or the client of the
+ * session (see ADR-036). assertSessionAccess raises before any mutation
+ * runs.
  */
 export async function createWorkoutLogs({
   sessionInstanceId,
   exercises,
-  trainerProfileId,
-  actorId,
+  actorUserId,
+  actorTrainerProfileId,
+  actorClientProfileId,
   branchId,
 }: CreateWorkoutInput) {
-  // Verify session belongs to this trainer and is IN_PROGRESS
-  const session = await prisma.sessionInstance.findFirst({
-    where: { id: sessionInstanceId, branchId, trainerProfileId },
+  // assertSessionAccess returns the session row scoped to branch and verifies
+  // the actor (trainer OR client of this session) is allowed to write.
+  const session = await assertSessionAccess({
+    sessionId: sessionInstanceId,
+    branchId,
+    trainerProfileId: actorTrainerProfileId,
+    clientProfileId: actorClientProfileId,
   });
 
-  if (!session) {
+  // Re-read the full row — assertSessionAccess returns a narrow select that
+  // omits scheduledDate / startedAt which the auto-post path needs below.
+  const fullSession = await prisma.sessionInstance.findFirst({
+    where: { id: sessionInstanceId, branchId },
+    select: {
+      id: true,
+      branchId: true,
+      status: true,
+      clientProfileId: true,
+      trainerProfileId: true,
+      scheduledDate: true,
+      startedAt: true,
+    },
+  });
+  if (!fullSession) {
+    // Defensive: assertSessionAccess succeeded so this can only fire under a
+    // racing delete. Treat as not-found rather than a generic 500.
     throw new AppError('SESSION_NOT_FOUND', 'Session not found', 404);
   }
 
@@ -208,7 +246,7 @@ export async function createWorkoutLogs({
 
   await auditLog({
     action: 'WORKOUT_LOGGED',
-    actorId,
+    actorId: actorUserId,
     subjectType: 'SessionInstance',
     subjectId: sessionInstanceId,
     branchId,
@@ -216,7 +254,13 @@ export async function createWorkoutLogs({
       exerciseCount: exercises.length,
       totalSets: exercises.reduce((sum, e) => sum + e.sets.length, 0),
     },
-    metadata: { trainerProfileId },
+    metadata: {
+      // Differentiates trainer- vs client-logged workouts in the audit trail.
+      // Reports / replay tools key off this to attribute who entered data.
+      loggedBy: actorClientProfileId ? 'CLIENT' : 'TRAINER',
+      trainerProfileId: fullSession.trainerProfileId,
+      clientProfileId: fullSession.clientProfileId,
+    },
   });
 
   // Evaluate badges for all exercise types (non-blocking)
@@ -227,13 +271,13 @@ export async function createWorkoutLogs({
       const maxWeight = Math.max(...log.sets.map((s) => s.weightKg ?? 0));
       if (maxWeight > 0) {
         const prBadges = await evaluatePRBadges(
-          session.clientProfileId,
+          fullSession.clientProfileId,
           branchId,
           log.exercise.id,
           log.exercise.name,
           maxWeight,
-          actorId,
-          session.id,
+          actorUserId,
+          fullSession.id,
         );
         newBadges.push(...prBadges);
 
@@ -251,9 +295,9 @@ export async function createWorkoutLogs({
               workoutLog: {
                 exercise: { id: log.exercise.id },
                 sessionInstance: {
-                  clientProfileId: session.clientProfileId,
+                  clientProfileId: fullSession.clientProfileId,
                   branchId,
-                  id: { not: session.id }, // exclude current session
+                  id: { not: fullSession.id }, // exclude current session
                 },
               },
               weightKg: { not: null },
@@ -268,11 +312,11 @@ export async function createWorkoutLogs({
               // a post per save spams the feed. If a post for this client +
               // exercise already exists from the current session, update it
               // in place rather than creating a new one.
-              const sessionStart = session.startedAt ?? session.scheduledDate;
+              const sessionStart = fullSession.startedAt ?? fullSession.scheduledDate;
               const existingAutoPost = await prisma.communityPost.findFirst({
                 where: {
                   branchId,
-                  clientProfileId: session.clientProfileId,
+                  clientProfileId: fullSession.clientProfileId,
                   exerciseId: log.exercise.id,
                   isAutoGenerated: true,
                   createdAt: { gte: sessionStart },
@@ -281,23 +325,26 @@ export async function createWorkoutLogs({
               });
 
               if (existingAutoPost) {
-                if (maxWeight > (existingAutoPost.weightKg ?? 0)) {
-                  await prisma.communityPost.update({
-                    where: { id: existingAutoPost.id },
-                    data: { weightKg: maxWeight, reps: maxReps },
-                  });
-                }
+                // Snapshot semantics: the post mirrors this session's current
+                // best lift, so always sync — including downward corrections.
+                // Without this, a mid-edit typo (e.g. "4515" before correcting
+                // to "45") locks into the feed because subsequent saves only
+                // ratchet upward.
+                await prisma.communityPost.update({
+                  where: { id: existingAutoPost.id },
+                  data: { weightKg: maxWeight, reps: maxReps },
+                });
                 // Don't push the ID — the banner already appeared on the
                 // initial save; subsequent saves shouldn't re-trigger it.
               } else {
                 const post = await createPost({
                   branchId,
-                  clientProfileId: session.clientProfileId,
+                  clientProfileId: fullSession.clientProfileId,
                   exerciseId: log.exercise.id,
                   weightKg: maxWeight,
                   reps: maxReps,
                   isAutoGenerated: true,
-                  actorId,
+                  actorId: actorUserId,
                 });
                 autoGeneratedPostIds.push(post.id);
               }
@@ -308,22 +355,22 @@ export async function createWorkoutLogs({
         }
 
         const wlBadges = await evaluateWeightLiftedBadges(
-          session.clientProfileId,
+          fullSession.clientProfileId,
           branchId,
           log.exercise.id,
           maxWeight,
-          actorId,
+          actorUserId,
         );
         newBadges.push(...wlBadges);
       }
 
       // Exercise milestone badges: evaluate for all exercise types (weight, reps, duration)
       const emBadges = await evaluateExerciseMilestoneBadges(
-        session.clientProfileId,
+        fullSession.clientProfileId,
         branchId,
         log.exercise.id,
         log.sets,
-        actorId,
+        actorUserId,
       );
       newBadges.push(...emBadges);
     }
@@ -337,19 +384,22 @@ export async function createWorkoutLogs({
 }
 
 /**
- * Update a workout log (replace sets)
+ * Update a workout log (replace sets).
+ *
+ * Authorization: caller must be trainer or client of the parent session.
  */
 export async function updateWorkoutLog({
   workoutLogId,
   sets,
-  trainerProfileId,
-  actorId,
+  actorUserId,
+  actorTrainerProfileId,
+  actorClientProfileId,
   branchId,
 }: UpdateWorkoutLogInput) {
   const workoutLog = await prisma.workoutLog.findUnique({
     where: { id: workoutLogId },
     include: {
-      sessionInstance: { select: { branchId: true, trainerProfileId: true } },
+      sessionInstance: { select: { id: true, branchId: true } },
       sets: true,
     },
   });
@@ -362,9 +412,12 @@ export async function updateWorkoutLog({
     throw new AppError('FORBIDDEN', 'Access denied', 403);
   }
 
-  if (workoutLog.sessionInstance.trainerProfileId !== trainerProfileId) {
-    throw new AppError('FORBIDDEN', 'Not your session', 403);
-  }
+  await assertSessionAccess({
+    sessionId: workoutLog.sessionInstance.id,
+    branchId,
+    trainerProfileId: actorTrainerProfileId,
+    clientProfileId: actorClientProfileId,
+  });
 
   if (sets) {
     // Delete existing sets and recreate
@@ -401,29 +454,32 @@ export async function updateWorkoutLog({
 
   await auditLog({
     action: 'WORKOUT_UPDATED',
-    actorId,
+    actorId: actorUserId,
     subjectType: 'WorkoutLog',
     subjectId: workoutLogId,
     branchId,
-    metadata: { trainerProfileId },
+    metadata: { loggedBy: actorClientProfileId ? 'CLIENT' : 'TRAINER' },
   });
 
   return updated;
 }
 
 /**
- * Delete a workout log and its sets
+ * Delete a workout log and its sets.
+ *
+ * Authorization: caller must be trainer or client of the parent session.
  */
-export async function deleteWorkoutLog(
-  workoutLogId: string,
-  trainerProfileId: string,
-  actorId: string,
-  branchId: string,
-) {
+export async function deleteWorkoutLog({
+  workoutLogId,
+  actorUserId,
+  actorTrainerProfileId,
+  actorClientProfileId,
+  branchId,
+}: DeleteWorkoutLogInput) {
   const workoutLog = await prisma.workoutLog.findUnique({
     where: { id: workoutLogId },
     include: {
-      sessionInstance: { select: { branchId: true, trainerProfileId: true } },
+      sessionInstance: { select: { id: true, branchId: true } },
     },
   });
 
@@ -435,20 +491,23 @@ export async function deleteWorkoutLog(
     throw new AppError('FORBIDDEN', 'Access denied', 403);
   }
 
-  if (workoutLog.sessionInstance.trainerProfileId !== trainerProfileId) {
-    throw new AppError('FORBIDDEN', 'Not your session', 403);
-  }
+  await assertSessionAccess({
+    sessionId: workoutLog.sessionInstance.id,
+    branchId,
+    trainerProfileId: actorTrainerProfileId,
+    clientProfileId: actorClientProfileId,
+  });
 
   await prisma.workoutSet.deleteMany({ where: { workoutLogId } });
   await prisma.workoutLog.delete({ where: { id: workoutLogId } });
 
   await auditLog({
     action: 'WORKOUT_DELETED',
-    actorId,
+    actorId: actorUserId,
     subjectType: 'WorkoutLog',
     subjectId: workoutLogId,
     branchId,
-    metadata: { trainerProfileId },
+    metadata: { loggedBy: actorClientProfileId ? 'CLIENT' : 'TRAINER' },
   });
 
   return { success: true };

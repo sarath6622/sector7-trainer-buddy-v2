@@ -10,6 +10,7 @@ vi.mock('@/lib/prisma', () => ({
     exercise: { findMany: vi.fn(), findUnique: vi.fn() },
     workoutSet: { aggregate: vi.fn() },
     workoutLog: {},
+    communityPost: { findFirst: vi.fn(), update: vi.fn() },
     $transaction: (...args: unknown[]) => mockTransaction(...args),
   },
 }));
@@ -56,21 +57,59 @@ beforeEach(() => {
     _max: { weightKg: 100 },
   });
 
-  // $transaction passes through to a fake `tx` that returns the workout logs
+  // Default: no existing auto-post for the session+exercise
+  (prisma.communityPost.findFirst as Mock).mockResolvedValue(null);
+  (prisma.communityPost.update as Mock).mockResolvedValue({});
+
+  // $transaction passes through to a fake `tx` that returns the workout logs.
+  // Mirrors the upsert path in createWorkoutLogs: findMany existing → create
+  // new → findUnique the final shape with relations.
   mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+    const finalByLogId = new Map<string, unknown>();
+    const buildLog = (
+      exerciseId: string,
+      sets: Array<{ setNumber: number; weightKg?: number | null; reps?: number | null }>,
+    ) => ({
+      id: `log-${exerciseId}`,
+      exerciseId,
+      exercise: {
+        id: exerciseId,
+        name: exerciseId === 'ex-bench' ? 'Bench Press' : 'Bicep Curl',
+      },
+      sets,
+    });
     const tx = {
       workoutLog: {
         findMany: vi.fn().mockResolvedValue([]),
         deleteMany: vi.fn().mockResolvedValue({}),
-        create: vi.fn().mockImplementation(async ({ data }: { data: { exerciseId: string } }) => ({
-          id: `log-${data.exerciseId}`,
-          exerciseId: data.exerciseId,
-          exercise: {
-            id: data.exerciseId,
-            name: data.exerciseId === 'ex-bench' ? 'Bench Press' : 'Bicep Curl',
+        create: vi.fn().mockImplementation(
+          async ({
+            data,
+          }: {
+            data: {
+              exerciseId: string;
+              sets: {
+                create: Array<{
+                  setNumber: number;
+                  weightKg?: number | null;
+                  reps?: number | null;
+                }>;
+              };
+            };
+          }) => {
+            const log = buildLog(data.exerciseId, data.sets.create);
+            finalByLogId.set(log.id, log);
+            return log;
           },
-          sets: [{ setNumber: 1, weightKg: 110, reps: 5 }],
-        })),
+        ),
+        findUnique: vi.fn().mockImplementation(async ({ where }: { where: { id: string } }) => {
+          // Fall back to a default bench log so legacy test cases that didn't
+          // wire up the create→findUnique chain still pass.
+          return (
+            finalByLogId.get(where.id) ??
+            buildLog('ex-bench', [{ setNumber: 1, weightKg: 110, reps: 5 }])
+          );
+        }),
       },
       workoutSet: { deleteMany: vi.fn().mockResolvedValue({}) },
     };
@@ -94,8 +133,9 @@ describe('createWorkoutLogs — auto-post on compound PR (ADR-020)', () => {
     const result = await workout.createWorkoutLogs({
       sessionInstanceId: SESSION_ID,
       exercises: [benchEntry],
-      trainerProfileId: TRAINER_ID,
-      actorId: ACTOR,
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER_ID,
+      actorClientProfileId: null,
       branchId: BRANCH,
     });
 
@@ -120,8 +160,9 @@ describe('createWorkoutLogs — auto-post on compound PR (ADR-020)', () => {
     await workout.createWorkoutLogs({
       sessionInstanceId: SESSION_ID,
       exercises: [{ ...benchEntry, exerciseId: 'ex-curl' }],
-      trainerProfileId: TRAINER_ID,
-      actorId: ACTOR,
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER_ID,
+      actorClientProfileId: null,
       branchId: BRANCH,
     });
 
@@ -136,8 +177,9 @@ describe('createWorkoutLogs — auto-post on compound PR (ADR-020)', () => {
     await workout.createWorkoutLogs({
       sessionInstanceId: SESSION_ID,
       exercises: [benchEntry],
-      trainerProfileId: TRAINER_ID,
-      actorId: ACTOR,
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER_ID,
+      actorClientProfileId: null,
       branchId: BRANCH,
     });
 
@@ -151,8 +193,9 @@ describe('createWorkoutLogs — auto-post on compound PR (ADR-020)', () => {
     await workout.createWorkoutLogs({
       sessionInstanceId: SESSION_ID,
       exercises: [benchEntry],
-      trainerProfileId: TRAINER_ID,
-      actorId: ACTOR,
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER_ID,
+      actorClientProfileId: null,
       branchId: BRANCH,
     });
 
@@ -168,8 +211,9 @@ describe('createWorkoutLogs — auto-post on compound PR (ADR-020)', () => {
     const result = await workout.createWorkoutLogs({
       sessionInstanceId: SESSION_ID,
       exercises: [benchEntry],
-      trainerProfileId: TRAINER_ID,
-      actorId: ACTOR,
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER_ID,
+      actorClientProfileId: null,
       branchId: BRANCH,
     });
 
@@ -188,16 +232,18 @@ describe('createWorkoutLogs — auto-post on compound PR (ADR-020)', () => {
 
     // Override the tx mock so the returned log has no weighted sets
     mockTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const durationLog = {
+        id: 'log-1',
+        exerciseId: 'ex-bench',
+        exercise: { id: 'ex-bench', name: 'Bench Press' },
+        sets: [{ setNumber: 1, durationSec: 60, weightKg: null }],
+      };
       const tx = {
         workoutLog: {
           findMany: vi.fn().mockResolvedValue([]),
           deleteMany: vi.fn().mockResolvedValue({}),
-          create: vi.fn().mockResolvedValue({
-            id: 'log-1',
-            exerciseId: 'ex-bench',
-            exercise: { id: 'ex-bench', name: 'Bench Press' },
-            sets: [{ setNumber: 1, durationSec: 60, weightKg: null }],
-          }),
+          create: vi.fn().mockResolvedValue(durationLog),
+          findUnique: vi.fn().mockResolvedValue(durationLog),
         },
         workoutSet: { deleteMany: vi.fn().mockResolvedValue({}) },
       };
@@ -207,11 +253,67 @@ describe('createWorkoutLogs — auto-post on compound PR (ADR-020)', () => {
     await workout.createWorkoutLogs({
       sessionInstanceId: SESSION_ID,
       exercises: [durationEntry],
-      trainerProfileId: TRAINER_ID,
-      actorId: ACTOR,
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER_ID,
+      actorClientProfileId: null,
       branchId: BRANCH,
     });
 
+    expect(mockCreatePost).not.toHaveBeenCalled();
+  });
+
+  it('syncs an existing auto-post downward when a typo is corrected', async () => {
+    // Repro: trainer fat-fingered "4515" into the weight field, auto-save
+    // created a post at 4515, then the trainer corrected to 45. Pre-fix the
+    // post was locked at 4515 forever because the dedup only updated upward.
+    (prisma.exercise.findUnique as Mock).mockResolvedValue({ isCompound: true });
+    (prisma.workoutSet.aggregate as Mock).mockResolvedValue({ _max: { weightKg: null } });
+    (prisma.communityPost.findFirst as Mock).mockResolvedValue({
+      id: 'post-typo',
+      weightKg: 4515,
+      reps: null,
+    });
+
+    const result = await workout.createWorkoutLogs({
+      sessionInstanceId: SESSION_ID,
+      exercises: [{ ...benchEntry, sets: [{ setNumber: 1, weightKg: 45, reps: 15 }] }],
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER_ID,
+      actorClientProfileId: null,
+      branchId: BRANCH,
+    });
+
+    expect(prisma.communityPost.update).toHaveBeenCalledWith({
+      where: { id: 'post-typo' },
+      data: { weightKg: 45, reps: 15 },
+    });
+    expect(mockCreatePost).not.toHaveBeenCalled();
+    // Banner shouldn't re-fire on follow-up saves
+    expect(result.autoGeneratedPostIds).toEqual([]);
+  });
+
+  it('syncs an existing auto-post upward when the lift improves mid-session', async () => {
+    (prisma.exercise.findUnique as Mock).mockResolvedValue({ isCompound: true });
+    (prisma.workoutSet.aggregate as Mock).mockResolvedValue({ _max: { weightKg: 100 } });
+    (prisma.communityPost.findFirst as Mock).mockResolvedValue({
+      id: 'post-existing',
+      weightKg: 105,
+      reps: 5,
+    });
+
+    await workout.createWorkoutLogs({
+      sessionInstanceId: SESSION_ID,
+      exercises: [benchEntry],
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER_ID,
+      actorClientProfileId: null,
+      branchId: BRANCH,
+    });
+
+    expect(prisma.communityPost.update).toHaveBeenCalledWith({
+      where: { id: 'post-existing' },
+      data: { weightKg: 110, reps: 5 },
+    });
     expect(mockCreatePost).not.toHaveBeenCalled();
   });
 
@@ -224,8 +326,9 @@ describe('createWorkoutLogs — auto-post on compound PR (ADR-020)', () => {
     const result = await workout.createWorkoutLogs({
       sessionInstanceId: SESSION_ID,
       exercises: [benchEntry],
-      trainerProfileId: TRAINER_ID,
-      actorId: ACTOR,
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER_ID,
+      actorClientProfileId: null,
       branchId: BRANCH,
     });
 

@@ -20,6 +20,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const instance = await prisma.sessionInstance.findFirst({
       where: { id, branchId: session.user.branchId, clientProfileId },
       include: {
+        // Echo the client's own id+name back. Needed by the shared
+        // WorkoutLogger when the client is logging their own session
+        // (ADR-036) — the logger keys exercise-history fetches on this id.
+        client: {
+          select: {
+            id: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+        },
         trainer: {
           include: { user: { select: { firstName: true, lastName: true } } },
         },

@@ -5,6 +5,9 @@ import { workoutSetSchema } from '@/lib/validators';
 import { z } from 'zod';
 import * as workoutService from '@/services/workout.service';
 
+/**
+ * @deprecated Prefer PUT /api/sessions/[sessionId]/workouts/[logId].
+ */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
@@ -27,8 +30,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const workoutLog = await workoutService.updateWorkoutLog({
       workoutLogId: id,
       sets: input.sets,
-      trainerProfileId,
-      actorId: session.user.id,
+      actorUserId: session.user.id,
+      actorTrainerProfileId: trainerProfileId,
+      actorClientProfileId: null,
       branchId: session.user.branchId,
     });
 
@@ -39,6 +43,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   }
 }
 
+/**
+ * @deprecated Prefer DELETE /api/sessions/[sessionId]/workouts/[logId].
+ */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
@@ -55,12 +62,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     }
 
     const { id } = await params;
-    const result = await workoutService.deleteWorkoutLog(
-      id,
-      trainerProfileId,
-      session.user.id,
-      session.user.branchId,
-    );
+    const result = await workoutService.deleteWorkoutLog({
+      workoutLogId: id,
+      actorUserId: session.user.id,
+      actorTrainerProfileId: trainerProfileId,
+      actorClientProfileId: null,
+      branchId: session.user.branchId,
+    });
 
     return NextResponse.json({ data: result });
   } catch (error) {

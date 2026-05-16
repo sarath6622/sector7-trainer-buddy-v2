@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { getServerSession, canReadClientTrainingData } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { AppError } from '@/lib/errors';
 import { getChartData } from '@/services/progress.service';
@@ -7,16 +7,17 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * GET /api/trainer/clients/[id]/exercise-progress?exerciseId=xxx
- * Returns weight/duration progression for a client's exercise (trainer-scoped).
+ * Returns weight/duration progression for a client's exercise.
+ *
+ * Auth: trainer/admin in branch, OR the client themselves (ADR-036).
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER', 'ADMIN'])) {
+    const { id: clientProfileId } = await params;
+    if (!session || !canReadClientTrainingData(session.user, clientProfileId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
-
-    const { id: clientProfileId } = await params;
     const url = new URL(req.url);
     const exerciseId = url.searchParams.get('exerciseId');
     if (!exerciseId) {

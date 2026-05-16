@@ -4,6 +4,11 @@ import { toErrorResponse } from '@/lib/errors';
 import { createWorkoutSchema } from '@/lib/validators';
 import * as workoutService from '@/services/workout.service';
 
+/**
+ * @deprecated Prefer POST /api/sessions/[id]/workouts (shared trainer/client
+ * write path, ADR-036). This route stays alive for offline-sync clients that
+ * already POST here; once that's migrated it can go.
+ */
 export async function POST(req: Request) {
   try {
     const session = await getServerSession();
@@ -26,8 +31,9 @@ export async function POST(req: Request) {
       {
         sessionInstanceId: input.sessionInstanceId,
         exercises: input.exercises,
-        trainerProfileId,
-        actorId: session.user.id,
+        actorUserId: session.user.id,
+        actorTrainerProfileId: trainerProfileId,
+        actorClientProfileId: null,
         branchId: session.user.branchId,
       },
     );

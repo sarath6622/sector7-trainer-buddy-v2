@@ -4,6 +4,7 @@ const mockWorkoutLogCreate = vi.fn();
 
 vi.mock('@/lib/prisma', () => {
   const workoutLogCreate = (...args: unknown[]) => mockWorkoutLogCreate(...args);
+  const workoutLogFindUnique = vi.fn();
   return {
     prisma: {
       sessionInstance: {
@@ -14,18 +15,28 @@ vi.mock('@/lib/prisma', () => {
       },
       workoutLog: {
         create: workoutLogCreate,
-        findUnique: vi.fn(),
+        findUnique: workoutLogFindUnique,
         findMany: vi.fn(),
         delete: vi.fn(),
       },
       workoutSet: {
         deleteMany: vi.fn(),
         createMany: vi.fn(),
+        aggregate: vi.fn().mockResolvedValue({ _max: { weightKg: null } }),
       },
-      $transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => {
-        // Interactive transaction: call the function with a tx proxy that uses the same mocks
+      communityPost: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn() },
+      $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+        // tx proxy mirrors the upsert path: findMany returns no existing logs,
+        // create returns the new log, findUnique returns the same.
         return fn({
-          workoutLog: { create: workoutLogCreate },
+          workoutLog: {
+            findMany: vi.fn().mockResolvedValue([]),
+            deleteMany: vi.fn().mockResolvedValue({}),
+            create: workoutLogCreate,
+            update: vi.fn(),
+            findUnique: workoutLogFindUnique,
+          },
+          workoutSet: { deleteMany: vi.fn().mockResolvedValue({}) },
         });
       }),
     },
@@ -59,8 +70,9 @@ describe('createWorkoutLogs', () => {
         ],
       },
     ],
-    trainerProfileId: TRAINER,
-    actorId: ACTOR,
+    actorUserId: ACTOR,
+    actorTrainerProfileId: TRAINER,
+    actorClientProfileId: null,
     branchId: BRANCH,
   };
 
@@ -99,6 +111,7 @@ describe('createWorkoutLogs', () => {
       status: 'IN_PROGRESS',
       branchId: BRANCH,
       trainerProfileId: TRAINER,
+      clientProfileId: 'client-1',
     });
     (prisma.exercise.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'ex-1' }]);
 
@@ -118,11 +131,14 @@ describe('createWorkoutLogs', () => {
       ],
     };
     mockWorkoutLogCreate.mockResolvedValue(mockLog);
+    // The upsert path re-reads the final shape via findUnique after create —
+    // wire both mocks so the tx returns the same row to the caller.
+    (prisma.workoutLog.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockLog);
 
     const result = await workoutService.createWorkoutLogs(input);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].exerciseId).toBe('ex-1');
+    expect(result.workoutLogs).toHaveLength(1);
+    expect(result.workoutLogs[0]!.exerciseId).toBe('ex-1');
     expect(mockWorkoutLogCreate).toHaveBeenCalled();
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -143,8 +159,9 @@ describe('updateWorkoutLog', () => {
       workoutService.updateWorkoutLog({
         workoutLogId: 'wl-1',
         sets: [{ setNumber: 1, reps: 12, weightKg: 80 }],
-        trainerProfileId: TRAINER,
-        actorId: ACTOR,
+        actorUserId: ACTOR,
+        actorTrainerProfileId: TRAINER,
+        actorClientProfileId: null,
         branchId: BRANCH,
       }),
     ).rejects.toThrow('Workout log not found');
@@ -153,42 +170,53 @@ describe('updateWorkoutLog', () => {
   it('should throw if wrong branch', async () => {
     (prisma.workoutLog.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 'wl-1',
-      sessionInstance: { branchId: 'other-branch', trainerProfileId: TRAINER },
+      sessionInstance: { id: 'sess-1', branchId: 'other-branch' },
       sets: [],
     });
     await expect(
       workoutService.updateWorkoutLog({
         workoutLogId: 'wl-1',
         sets: [{ setNumber: 1, reps: 12 }],
-        trainerProfileId: TRAINER,
-        actorId: ACTOR,
+        actorUserId: ACTOR,
+        actorTrainerProfileId: TRAINER,
+        actorClientProfileId: null,
         branchId: BRANCH,
       }),
     ).rejects.toThrow('Access denied');
   });
 
-  it('should throw if not trainer session', async () => {
+  it('should throw if neither trainer nor client of session', async () => {
     (prisma.workoutLog.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 'wl-1',
-      sessionInstance: { branchId: BRANCH, trainerProfileId: 'other-trainer' },
+      sessionInstance: { id: 'sess-1', branchId: BRANCH },
       sets: [],
+    });
+    // assertSessionAccess will look up the session row and reject because the
+    // session belongs to a different trainer / client.
+    (prisma.sessionInstance.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'sess-1',
+      branchId: BRANCH,
+      trainerProfileId: 'other-trainer',
+      clientProfileId: 'other-client',
+      status: 'IN_PROGRESS',
     });
     await expect(
       workoutService.updateWorkoutLog({
         workoutLogId: 'wl-1',
         sets: [{ setNumber: 1, reps: 12 }],
-        trainerProfileId: TRAINER,
-        actorId: ACTOR,
+        actorUserId: ACTOR,
+        actorTrainerProfileId: TRAINER,
+        actorClientProfileId: null,
         branchId: BRANCH,
       }),
-    ).rejects.toThrow('Not your session');
+    ).rejects.toThrow('Not allowed to access this session');
   });
 
   it('should replace sets and audit', async () => {
     (prisma.workoutLog.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         id: 'wl-1',
-        sessionInstance: { branchId: BRANCH, trainerProfileId: TRAINER },
+        sessionInstance: { id: 'sess-1', branchId: BRANCH },
         sets: [{ setNumber: 1, reps: 10 }],
       })
       .mockResolvedValueOnce({
@@ -201,6 +229,13 @@ describe('updateWorkoutLog', () => {
         },
         sets: [{ setNumber: 1, reps: 12, weightKg: 80 }],
       });
+    (prisma.sessionInstance.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'sess-1',
+      branchId: BRANCH,
+      trainerProfileId: TRAINER,
+      clientProfileId: null,
+      status: 'IN_PROGRESS',
+    });
 
     (prisma.workoutSet.deleteMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     (prisma.workoutSet.createMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
@@ -208,8 +243,9 @@ describe('updateWorkoutLog', () => {
     const result = await workoutService.updateWorkoutLog({
       workoutLogId: 'wl-1',
       sets: [{ setNumber: 1, reps: 12, weightKg: 80 }],
-      trainerProfileId: TRAINER,
-      actorId: ACTOR,
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER,
+      actorClientProfileId: null,
       branchId: BRANCH,
     });
 

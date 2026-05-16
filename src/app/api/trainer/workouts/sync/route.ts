@@ -37,8 +37,9 @@ export async function POST(request: NextRequest) {
               sets: log.sets,
             },
           ],
-          trainerProfileId,
-          actorId: session.user.id,
+          actorUserId: session.user.id,
+          actorTrainerProfileId: trainerProfileId,
+          actorClientProfileId: null,
           branchId: session.user.branchId,
         });
         synced.push(log.localId);

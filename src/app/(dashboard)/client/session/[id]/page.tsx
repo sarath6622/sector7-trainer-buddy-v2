@@ -3,26 +3,9 @@
 import { useState, useEffect, useCallback, use } from 'react';
 import { useRestTimer } from '@/hooks/useRestTimer';
 import { useSessionPause } from '@/hooks/useSessionPause';
+import { useRestAutofill } from '@/hooks/useRestAutofill';
 import { useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  Dumbbell,
-  Activity,
-  Timer,
-  User2,
-  Calendar,
-  Clock,
-  RefreshCw,
-  Eye,
-  TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
-  Minus,
-  Pause,
-  Play,
-  X,
-  BedDouble,
-} from 'lucide-react';
+import { Clock, TrendingUp, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -33,7 +16,9 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { Button } from '@/components/ui/button';
-import { InlineTimer } from '@/components/timer/SessionTimer';
+import { WorkoutLogger } from '@/components/workout/WorkoutLogger';
+import { RestTimerPillFloating, RestTimerSheet } from '@/components/session/RestTimerUI';
+import { SessionHero, initials, lastActivityMsOf } from '@/components/session/SessionHero';
 
 type ExerciseType = 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
 
@@ -45,11 +30,17 @@ interface SetData {
   rpe: number | null;
   restSec: number | null;
   notes: string | null;
+  // Surfaced by the API even without an explicit `select` — used by the
+  // SessionHero idle escalation. Optional because legacy rows may lack it.
+  createdAt?: string;
 }
 
 interface WorkoutLog {
   id: string;
+  exerciseId: string;
   orderIndex: number;
+  // Same — drives idle escalation in the hero.
+  updatedAt?: string;
   exercise: {
     id: string;
     name: string;
@@ -67,70 +58,9 @@ interface SessionData {
   durationMin: number;
   status: string;
   startedAt?: string;
+  client?: { id: string; user: { firstName: string; lastName: string } };
   trainer: { user: { firstName: string; lastName: string } };
   workoutLogs: WorkoutLog[];
-}
-
-// ─── Type config (read-only, same palette as WorkoutLogger) ──────────────────
-const TYPE_CONFIG: Record<
-  ExerciseType,
-  { label: string; icon: React.ElementType; bg: string; text: string; accent: string }
-> = {
-  WEIGHTED: {
-    label: 'Weighted',
-    icon: Dumbbell,
-    bg: 'bg-blue-500/10',
-    text: 'text-blue-500',
-    accent: '#3b82f6',
-  },
-  BODYWEIGHT: {
-    label: 'Bodyweight',
-    icon: User2,
-    bg: 'bg-emerald-500/10',
-    text: 'text-emerald-500',
-    accent: '#22c55e',
-  },
-  DURATION: {
-    label: 'Duration',
-    icon: Timer,
-    bg: 'bg-amber-500/10',
-    text: 'text-amber-500',
-    accent: '#f59e0b',
-  },
-  CARDIO: {
-    label: 'Cardio',
-    icon: Activity,
-    bg: 'bg-red-500/10',
-    text: 'text-red-500',
-    accent: '#ef4444',
-  },
-};
-
-type ColDef = { key: keyof SetData; label: string };
-const TYPE_COLS: Record<ExerciseType, ColDef[]> = {
-  WEIGHTED: [
-    { key: 'reps', label: 'Reps' },
-    { key: 'weightKg', label: 'kg' },
-    { key: 'restSec', label: 'Rest' },
-  ],
-  BODYWEIGHT: [
-    { key: 'reps', label: 'Reps' },
-    { key: 'restSec', label: 'Rest' },
-  ],
-  DURATION: [
-    { key: 'durationSec', label: 'sec' },
-    { key: 'restSec', label: 'Rest' },
-  ],
-  CARDIO: [
-    { key: 'durationSec', label: 'sec' },
-    { key: 'notes', label: 'km' },
-  ],
-};
-
-function getGridClass(colCount: number) {
-  if (colCount === 1) return 'grid-cols-[2rem_1fr]';
-  if (colCount === 2) return 'grid-cols-[2rem_1fr_1fr]';
-  return 'grid-cols-[2rem_1fr_1fr_1fr]';
 }
 
 function formatTime12(t: string) {
@@ -144,278 +74,57 @@ function toLocalDateStr(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-CA');
 }
 
-function formatVal(val: number | string | null | undefined, fallback = '—') {
-  if (val === null || val === undefined || val === '') return fallback;
-  return String(val);
-}
-
-// Display rest stored as seconds in MM:SS so the client read-only view
-// matches the trainer logger's formatted cell.
-function formatRestSec(sec: number | null | undefined): string {
-  if (sec === null || sec === undefined) return '—';
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-// ─── Rest Timer UI ────────────────────────────────────────────────────────────
-
-const REST_PRESETS = [
-  { label: '1 min', seconds: 60 },
-  { label: '2 min', seconds: 120 },
-  { label: '3 min', seconds: 180 },
-  { label: '5 min', seconds: 300 },
-];
-
-// ── Floating pill shown when sheet is closed but timer is active ───────────────
-function RestTimerPill({
-  remaining,
-  isPaused,
-  isDone,
-  onOpen,
-  onStop,
-}: {
-  remaining: number | null;
-  isPaused: boolean;
-  isDone: boolean;
-  onOpen: () => void;
-  onStop: () => void;
-}) {
-  if (remaining === null && !isDone) return null;
-  const mins = remaining !== null ? Math.floor(remaining / 60) : 0;
-  const secs = remaining !== null ? remaining % 60 : 0;
-
-  return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full bg-zinc-900 border border-white/15 shadow-2xl px-4 py-2.5">
-      <BedDouble className={`h-4 w-4 ${isDone ? 'text-emerald-400' : 'text-blue-400'}`} />
-      {isDone ? (
-        <span className="text-sm font-bold text-emerald-400">Rest done!</span>
-      ) : (
-        <span className="text-sm font-black tabular-nums text-white">
-          {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-          {isPaused && <span className="ml-1.5 text-[10px] font-normal text-white/40">paused</span>}
-        </span>
-      )}
-      <button
-        onClick={onOpen}
-        className="text-xs text-white/50 hover:text-white transition-colors px-1"
-      >
-        Open
-      </button>
-      <div className="w-px h-4 bg-white/15" />
-      <button onClick={onStop} className="text-white/40 hover:text-red-400 transition-colors">
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
-
-// ── Sheet ─────────────────────────────────────────────────────────────────────
-function RestTimerSheet({
-  onClose,
-  timer,
-}: {
-  onClose: () => void;
-  timer: ReturnType<typeof useRestTimer>;
-}) {
-  const [custom, setCustom] = useState('');
-  const { remaining, isRunning, isPaused, isDone, progress, total, start, pause, resume, stop } =
-    timer;
-
-  const mins = remaining !== null ? Math.floor(remaining / 60) : 0;
-  const secs = remaining !== null ? remaining % 60 : 0;
-  const circumference = 2 * Math.PI * 54;
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-3xl border-t border-white/10 pb-safe">
-        {/* Handle */}
-        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mt-3 mb-1" />
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
-          <div className="flex items-center gap-2">
-            <BedDouble className="h-4 w-4 text-blue-400" />
-            <p className="font-bold text-sm">Rest Timer</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="px-5 py-5 space-y-5">
-          {/* Countdown ring */}
-          <div className="flex flex-col items-center gap-3">
-            <div className="relative w-36 h-36">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="54"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.08)"
-                  strokeWidth="8"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="54"
-                  fill="none"
-                  stroke={isDone ? '#22c55e' : '#3b82f6'}
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={circumference * (1 - progress)}
-                  className="transition-all duration-500"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                {isDone ? (
-                  <p className="text-lg font-bold text-emerald-400">Done!</p>
-                ) : remaining !== null ? (
-                  <>
-                    <p className="text-3xl font-black tabular-nums text-white">
-                      {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-                    </p>
-                    <p className="text-[10px] text-white/40 mt-0.5">
-                      {isPaused ? 'paused' : 'remaining'}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-white/30">pick a time</p>
-                )}
-              </div>
-            </div>
-
-            {/* Controls */}
-            {(isRunning || isPaused) && !isDone && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={isPaused ? resume : pause}
-                  className="flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-semibold transition-colors"
-                >
-                  {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                  {isPaused ? 'Resume' : 'Pause'}
-                </button>
-                <button
-                  onClick={stop}
-                  className="flex items-center gap-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 px-4 py-2 text-sm font-semibold transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                  Stop
-                </button>
-              </div>
-            )}
-            {isDone && (
-              <button
-                onClick={stop}
-                className="rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 px-5 py-2 text-sm font-semibold transition-colors"
-              >
-                Reset
-              </button>
-            )}
-          </div>
-
-          {/* Quick presets */}
-          <div>
-            <p className="text-xs text-white/40 font-semibold uppercase tracking-wide mb-2">
-              Quick select
-            </p>
-            <div className="grid grid-cols-4 gap-2">
-              {REST_PRESETS.map((p) => (
-                <button
-                  key={p.seconds}
-                  onClick={() => {
-                    setCustom('');
-                    start(p.seconds);
-                  }}
-                  className={`rounded-2xl py-3 text-sm font-bold transition-colors ${
-                    total === p.seconds && (isRunning || isPaused)
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white/[0.08] text-white/70 hover:bg-white/15'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Custom */}
-          <div>
-            <p className="text-xs text-white/40 font-semibold uppercase tracking-wide mb-2">
-              Custom (seconds)
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                min={1}
-                value={custom}
-                onChange={(e) => setCustom(e.target.value)}
-                placeholder="e.g. 90"
-                className="flex-1 rounded-xl bg-white/[0.08] border border-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-blue-500"
-              />
-              <button
-                onClick={() => {
-                  const s = parseInt(custom, 10);
-                  if (s > 0) start(s);
-                }}
-                disabled={!custom || parseInt(custom, 10) <= 0}
-                className="rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-colors"
-              >
-                Start
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function ClientSessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
 
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [progressModal, setProgressModal] = useState<{
     exerciseId: string;
     exerciseName: string;
     unit: string;
   } | null>(null);
   const [restTimerOpen, setRestTimerOpen] = useState(false);
+  // Tracks whether the logger has pending unsaved edits (currently used only
+  // to decide whether to forcefully refresh from server — when there are
+  // unsaved local edits, server polling could clobber them).
+  const [hasUnsaved, setHasUnsaved] = useState(false);
   const restTimer = useRestTimer(id);
   const sessionPause = useSessionPause(id);
+  const { lastFinishedRestSec, consumeRest } = useRestAutofill(id, restTimer);
+
+  // 1Hz tick — mirrors the trainer page so SessionHero can re-derive elapsed
+  // time, idle escalation, and rest-done staleness once a second. Declared
+  // up here (above the early returns) so hooks fire in a stable order.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, []);
 
   const fetchSession = useCallback(async () => {
     const res = await fetch(`/api/client/sessions/${id}`);
     if (res.ok) {
       const { data } = await res.json();
       setSession(data as SessionData);
-      setLastRefreshed(new Date());
     }
   }, [id]);
 
-  // Initial load
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSession().finally(() => setLoading(false));
   }, [fetchSession]);
 
-  // Poll every 10 seconds while session is IN_PROGRESS
+  // Poll every 10s while session is IN_PROGRESS so the client picks up edits
+  // made on the trainer's device. Pauses polling when the client has local
+  // unsaved edits — otherwise a server refresh would overwrite them mid-type.
   useEffect(() => {
     if (!session || session.status !== 'IN_PROGRESS') return;
+    if (hasUnsaved) return;
     const interval = setInterval(() => void fetchSession(), 10_000);
     return () => clearInterval(interval);
-  }, [session, fetchSession]);
+  }, [session, fetchSession, hasUnsaved]);
 
   if (loading) {
     return (
@@ -444,321 +153,113 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
     );
   }
 
-  const trainerName = `${session.trainer.user.firstName} ${session.trainer.user.lastName}`;
+  const trainerFirst = session.trainer.user.firstName;
+  const trainerLast = session.trainer.user.lastName;
+  const trainerName = `${trainerFirst} ${trainerLast}`;
+  const trainerInitials = initials(trainerFirst, trainerLast);
   const isActive = session.status === 'IN_PROGRESS' && !!session.startedAt;
+  const isScheduled = session.status === 'SCHEDULED';
 
-  // Merge duplicate WorkoutLog records for the same exercise (from old buggy saves).
-  // Logs are ordered oldest→newest (id ASC). For each set number, keep the most data-rich version.
-  const scoreSet = (s: SetData) =>
-    (s.reps != null ? 1 : 0) +
-    (s.weightKg != null ? 1 : 0) +
-    (s.durationSec != null ? 1 : 0) +
-    (s.rpe != null ? 1 : 0);
-
-  const groups = new Map<string, { primary: WorkoutLog; setMap: Map<number, SetData> }>();
-  for (const log of session.workoutLogs) {
-    const group = groups.get(log.exercise.id);
-    if (!group) {
-      const setMap = new Map<number, SetData>();
-      for (const s of log.sets) setMap.set(s.setNumber, s);
-      groups.set(log.exercise.id, { primary: log, setMap });
-    } else {
-      for (const s of log.sets) {
-        const existing = group.setMap.get(s.setNumber);
-        if (!existing || scoreSet(s) > scoreSet(existing)) {
-          group.setMap.set(s.setNumber, s);
-        }
-      }
-    }
-  }
-
-  const groupedLogs = [...groups.values()]
-    .sort((a, b) => a.primary.orderIndex - b.primary.orderIndex)
-    .map(({ primary, setMap }) => ({
-      ...primary,
-      sets: [...setMap.values()].sort((a, b) => a.setNumber - b.setNumber),
-    }));
-
-  const totalSets = groupedLogs.reduce((acc, log) => acc + log.sets.length, 0);
+  // Idle escalation anchors to the latest of: startedAt, any log's updatedAt,
+  // any set's createdAt. Without this, the hero would show "1H idle" even
+  // moments after the user logged a set (anchored only on startedAt).
+  const lastActivityMs = lastActivityMsOf(session);
 
   return (
-    <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
-      {/* ── Sticky header ── */}
+    <div
+      className="-m-4 md:-m-6 flex flex-col bg-background"
+      style={{ height: 'calc(100dvh - 3.5rem - env(safe-area-inset-top))' }}
+    >
+      {/* ── Sticky hero card ── */}
+      {/* No back button here — exit paths live in the global top nav
+          (hamburger menu + logo), which matches the trainer session page's
+          chrome-free shell. Less competing UI; the hero gets the focus. */}
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-        <div className="flex h-12 items-center gap-3 px-4">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => router.push('/client')}
-            className="shrink-0"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <span className="flex-1 truncate text-sm font-semibold text-muted-foreground">
-            Live Session
-          </span>
-          {isActive && (
-            <div className="flex items-center gap-1.5">
-              {sessionPause.isPaused ? (
-                <>
-                  <Pause className="h-3 w-3 text-amber-500" aria-label="Paused" />
-                  <span
-                    className="font-mono text-base font-bold tabular-nums text-amber-500"
-                    title="Trainer paused the session"
-                  >
-                    <InlineTimer
-                      startedAt={session.startedAt!}
-                      expectedDurationMin={session.durationMin}
-                      pausedAt={sessionPause.pausedAt}
-                      accumulatedPausedSec={sessionPause.accumulatedPausedSec}
-                    />
-                  </span>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">
-                    Paused
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                  <span className="font-mono text-base font-bold tabular-nums text-emerald-500">
-                    <InlineTimer
-                      startedAt={session.startedAt!}
-                      expectedDurationMin={session.durationMin}
-                      pausedAt={sessionPause.pausedAt}
-                      accumulatedPausedSec={sessionPause.accumulatedPausedSec}
-                    />
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Session info strip ── */}
-      <div className="border-b bg-muted/30 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">With {trainerName}</p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                {new Date(toLocalDateStr(session.scheduledDate)).toLocaleDateString('en-IN', {
-                  weekday: 'short',
-                  day: 'numeric',
-                  month: 'short',
-                })}
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {formatTime12(session.scheduledTime)}
-              </span>
-              <span className="flex items-center gap-1">
-                <Timer className="h-3 w-3" />
-                {session.durationMin} min
-              </span>
-            </div>
-          </div>
-          {isActive && (
-            <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-500">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-              LIVE
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Content ── */}
-      <div className="flex-1 overflow-y-auto pb-6">
-        {/* Workout overview strip */}
-        {groupedLogs.length > 0 && (
-          <div className="flex items-center gap-4 border-b bg-muted/20 px-4 py-2.5">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Dumbbell className="h-3.5 w-3.5" />
-              <span>
-                <span className="font-semibold text-foreground">{groupedLogs.length}</span> exercise
-                {groupedLogs.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Eye className="h-3.5 w-3.5" />
-              <span>
-                <span className="font-semibold text-foreground">{totalSets}</span> sets logged
-              </span>
-            </div>
-            {isActive && (
-              <div className="ml-auto flex items-center gap-3">
-                <button
-                  onClick={() => setRestTimerOpen(true)}
-                  className="flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  <BedDouble className="h-3.5 w-3.5" />
-                  Rest
-                </button>
-                {lastRefreshed && (
-                  <button
-                    onClick={() => void fetchSession()}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <RefreshCw className="h-3 w-3" />
-                    Refresh
-                  </button>
-                )}
-              </div>
-            )}
+        {/* Hero only renders once the trainer has started the session. For
+            SCHEDULED, the body below shows a "Waiting for trainer to start"
+            empty state instead — there's no elapsed timer to anchor a hero. */}
+        {!isScheduled && (
+          <div className="px-3 py-2.5">
+            <SessionHero
+              // Client-side: the hero subject is the trainer ("With X").
+              // The avatar initials match so the visual identity stays
+              // consistent with the client dashboard's "Next session with X"
+              // surface.
+              name={`With ${trainerName}`}
+              initials={trainerInitials}
+              startedAt={session.startedAt ?? null}
+              expectedDurationMin={session.durationMin}
+              pausedAt={sessionPause.pausedAt}
+              accumulatedPausedSec={sessionPause.accumulatedPausedSec}
+              isPaused={sessionPause.isPaused}
+              onTogglePause={() => void sessionPause.toggle()}
+              restTimer={{
+                isDone: restTimer.isDone,
+                isRunning: restTimer.isRunning,
+                isPaused: restTimer.isPaused,
+                endTime: restTimer.endTime,
+                remaining: restTimer.remaining,
+              }}
+              lastActivityMs={lastActivityMs}
+              now={now}
+              // No `onEnd` — start/end remain trainer-only (ADR-036). The
+              // client gets the Pause button only.
+            />
           </div>
         )}
-
-        <div className="space-y-3 px-4 pt-4">
-          {/* Empty state */}
-          {groupedLogs.length === 0 && (
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 py-12">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
-                <Dumbbell className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium">
-                  {isActive ? 'Workout not started yet' : 'No exercises logged'}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {isActive
-                    ? 'Your trainer will log exercises as they happen'
-                    : 'No workout data was recorded for this session'}
-                </p>
-              </div>
-              {isActive && (
-                <p className="text-xs text-muted-foreground">Auto-updates every 10 seconds</p>
-              )}
-            </div>
-          )}
-
-          {/* Exercise cards — read-only */}
-          {groupedLogs.map((log) => {
-            const cfg = TYPE_CONFIG[log.exercise.exerciseType];
-            const Icon = cfg.icon;
-            const cols = TYPE_COLS[log.exercise.exerciseType];
-
-            return (
-              <div
-                key={log.id}
-                className="overflow-hidden rounded-2xl border bg-card shadow-sm"
-                style={{ borderLeftWidth: 3, borderLeftColor: cfg.accent }}
-              >
-                {/* Exercise header */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cfg.bg}`}
-                  >
-                    <Icon className={`h-4 w-4 ${cfg.text}`} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{log.exercise.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {log.exercise.targetMuscleGroup}
-                    </p>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
-                  >
-                    {log.sets.length} set{log.sets.length !== 1 ? 's' : ''}
-                  </span>
-                  <button
-                    onClick={() =>
-                      setProgressModal({
-                        exerciseId: log.exercise.id,
-                        exerciseName: log.exercise.name,
-                        unit:
-                          log.exercise.exerciseType === 'WEIGHTED'
-                            ? 'kg'
-                            : log.exercise.exerciseType === 'DURATION' ||
-                                log.exercise.exerciseType === 'CARDIO'
-                              ? 'sec'
-                              : 'reps',
-                      })
-                    }
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
-                    title="View my progress"
-                  >
-                    <TrendingUp className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {/* Sets table — read-only */}
-                <div className="border-t px-4 pb-3 pt-2">
-                  {/* Column headers */}
-                  <div className={`mb-2 grid items-center gap-2 ${getGridClass(cols.length)}`}>
-                    <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Set
-                    </span>
-                    {cols.map((col) => (
-                      <span
-                        key={col.key as string}
-                        className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                      >
-                        {col.label}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Set rows */}
-                  <div className="space-y-1.5">
-                    {log.sets.map((set) => (
-                      <div
-                        key={set.setNumber}
-                        className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
-                      >
-                        {/* Set number */}
-                        <div className="flex items-center justify-center">
-                          <span
-                            className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-                            style={{ backgroundColor: cfg.accent + '22', color: cfg.accent }}
-                          >
-                            {set.setNumber}
-                          </span>
-                        </div>
-
-                        {/* Values */}
-                        {cols.map((col) => {
-                          const val =
-                            col.key === 'notes' ? set.notes : (set[col.key] as number | null);
-                          const filled = val !== null && val !== undefined && val !== '';
-                          const display =
-                            col.key === 'restSec'
-                              ? formatRestSec(val as number | null)
-                              : formatVal(val);
-                          return (
-                            <div
-                              key={col.key as string}
-                              className={`flex h-10 items-center justify-center rounded-xl border text-sm font-semibold tabular-nums ${
-                                filled
-                                  ? 'border-border/50 bg-muted/30 text-foreground'
-                                  : 'border-border/20 bg-transparent text-muted-foreground/40'
-                              }`}
-                            >
-                              {display}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Live refresh hint */}
-          {isActive && groupedLogs.length > 0 && (
-            <p className="text-center text-xs text-muted-foreground">
-              Auto-updates every 10 seconds
-            </p>
-          )}
-        </div>
       </div>
+
+      {/* ── Body ── */}
+      {isScheduled ? (
+        // Session not started yet — start/end remain trainer-only (ADR-036).
+        // Clients see a waiting state, not the logger.
+        <div className="flex-1 overflow-y-auto px-4 py-12">
+          <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-12 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
+              <Clock className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium">Waiting for trainer to start</p>
+            {/* Scheduled time is shown here (rather than in the top strip)
+                because this is the one screen state where the user actually
+                needs to know "when is this supposed to happen." */}
+            <p className="text-sm font-semibold tabular-nums text-foreground">
+              {new Date(toLocalDateStr(session.scheduledDate)).toLocaleDateString('en-IN', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'short',
+              })}{' '}
+              · {formatTime12(session.scheduledTime)} · {session.durationMin} min with {trainerName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Once your trainer starts the session, you and they can both log exercises here in real
+              time.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+          <WorkoutLogger
+            key={session.id}
+            sessionInstanceId={session.id}
+            // Client-scoped exercise progress modal opens inside the logger
+            // (ADR-017 — passing clientProfileId enables the per-exercise
+            // trend button). The client's own id may not be on the payload,
+            // but the WorkoutLogger handles `undefined` by hiding the button.
+            clientProfileId={session.client?.id}
+            existingLogs={session.workoutLogs}
+            onUnsavedChange={setHasUnsaved}
+            onRequestRest={isActive ? () => setRestTimerOpen(true) : undefined}
+            lastFinishedRestSec={lastFinishedRestSec}
+            onConsumeRest={consumeRest}
+            restTimerRemaining={restTimer.remaining}
+            restTimerPaused={restTimer.isPaused}
+          />
+        </div>
+      )}
 
       {/* Rest timer — floating pill when sheet is closed */}
       {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
-        <RestTimerPill
+        <RestTimerPillFloating
           remaining={restTimer.remaining}
           isPaused={restTimer.isPaused}
           isDone={restTimer.isDone}
@@ -786,6 +287,10 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
 }
 
 // ─── Client-scoped exercise progress modal ────────────────────────────────────
+// Kept on this page (rather than centralised) because it pulls from
+// /api/client/progress/charts — a client-only endpoint. Trainer logger uses a
+// different endpoint (/api/trainer/clients/[id]/exercise-progress) for the
+// same chart shape (ADR-017).
 
 interface ChartPoint {
   date: string;
@@ -829,7 +334,6 @@ function ClientExerciseProgressModal({
   const best = values.length ? Math.max(...values) : null;
   const delta = latest != null && first != null ? latest - first : null;
 
-  // Pre-format dates so XAxis receives clean strings
   const chartData = raw
     .filter((p) => p.value != null)
     .map((p) => ({
@@ -867,12 +371,9 @@ function ClientExerciseProgressModal({
         className="relative z-10 w-full max-w-lg rounded-t-3xl bg-card pb-safe shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="h-1 w-10 rounded-full bg-border" />
         </div>
-
-        {/* Header */}
         <div className="flex items-start justify-between px-5 pt-3 pb-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -904,9 +405,7 @@ function ClientExerciseProgressModal({
           </div>
         ) : (
           <div className="space-y-4 px-5 pb-8">
-            {/* Stat pills */}
             <div className="grid grid-cols-3 gap-3">
-              {/* Latest */}
               <div className="rounded-2xl bg-background p-3 ring-1 ring-border/40">
                 <p className="text-[10px] text-muted-foreground">Latest</p>
                 <p className="mt-1 text-lg font-bold leading-none">
@@ -916,7 +415,6 @@ function ClientExerciseProgressModal({
                   </span>
                 </p>
               </div>
-              {/* Best */}
               <div className="rounded-2xl bg-background p-3 ring-1 ring-border/40">
                 <p className="text-[10px] text-muted-foreground">Best</p>
                 <p className="mt-1 text-lg font-bold leading-none text-amber-500">
@@ -926,7 +424,6 @@ function ClientExerciseProgressModal({
                   </span>
                 </p>
               </div>
-              {/* Change */}
               <div className="rounded-2xl bg-background p-3 ring-1 ring-border/40">
                 <p className="text-[10px] text-muted-foreground">Change</p>
                 <div
@@ -942,8 +439,6 @@ function ClientExerciseProgressModal({
                 </p>
               </div>
             </div>
-
-            {/* Chart */}
             <div className="rounded-2xl bg-background p-4 ring-1 ring-border/40">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {axisLabel}
@@ -1005,8 +500,6 @@ function ClientExerciseProgressModal({
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-
-            {/* Trend summary */}
             {values.length >= 2 && (
               <div
                 className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm ${

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { getServerSession, canReadClientTrainingData } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import * as progressService from '@/services/progress.service';
 
@@ -14,14 +14,10 @@ import * as progressService from '@/services/progress.service';
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
-    if (
-      !session ||
-      !hasRole(session.user.role, ['TRAINER', 'KICKBOXING_TRAINER', 'SUPER_ADMIN', 'BRANCH_ADMIN'])
-    ) {
+    const { id: clientProfileId } = await params;
+    if (!session || !canReadClientTrainingData(session.user, clientProfileId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
-
-    const { id: clientProfileId } = await params;
     const url = new URL(req.url);
 
     const idsParam = url.searchParams.get('exerciseIds') ?? '';

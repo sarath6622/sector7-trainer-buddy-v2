@@ -1,216 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, use } from 'react';
+import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Square, BedDouble, Pause, Play, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { WorkoutLogger } from '@/components/workout/WorkoutLogger';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 import { useRestTimer } from '@/hooks/useRestTimer';
 import { useSessionPause } from '@/hooks/useSessionPause';
+import { useRestAutofill } from '@/hooks/useRestAutofill';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
 import type { SessionStartedPayload, SessionEndedPayload } from '@/lib/pusher';
-
-const REST_PRESETS = [
-  { label: '1 min', seconds: 60 },
-  { label: '2 min', seconds: 120 },
-  { label: '3 min', seconds: 180 },
-  { label: '5 min', seconds: 300 },
-];
-
-function RestTimerPill({
-  remaining,
-  isPaused,
-  isDone,
-  onOpen,
-  onStop,
-}: {
-  remaining: number | null;
-  isPaused: boolean;
-  isDone: boolean;
-  onOpen: () => void;
-  onStop: () => void;
-}) {
-  if (remaining === null && !isDone) return null;
-  const mins = remaining !== null ? Math.floor(remaining / 60) : 0;
-  const secs = remaining !== null ? remaining % 60 : 0;
-  return (
-    <div
-      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 mb-2 border ${isDone ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}
-    >
-      <BedDouble className={`h-4 w-4 shrink-0 ${isDone ? 'text-emerald-400' : 'text-blue-400'}`} />
-      {isDone ? (
-        <span className="flex-1 text-sm font-bold text-emerald-400">Rest done!</span>
-      ) : (
-        <span className="flex-1 text-sm font-black tabular-nums text-white">
-          {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-          {isPaused && <span className="ml-1.5 text-[10px] font-normal text-white/40">paused</span>}
-        </span>
-      )}
-      <button
-        onClick={onOpen}
-        className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
-      >
-        Expand
-      </button>
-      <div className="w-px h-4 bg-white/15" />
-      <button onClick={onStop} className="text-white/40 hover:text-red-400 transition-colors">
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
-
-function RestTimerSheet({
-  onClose,
-  timer,
-}: {
-  onClose: () => void;
-  timer: ReturnType<typeof useRestTimer>;
-}) {
-  const [custom, setCustom] = useState('');
-  const { remaining, isRunning, isPaused, isDone, progress, total, start, pause, resume, stop } =
-    timer;
-  const mins = remaining !== null ? Math.floor(remaining / 60) : 0;
-  const secs = remaining !== null ? remaining % 60 : 0;
-  const circumference = 2 * Math.PI * 54;
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-3xl border-t border-white/10 pb-safe">
-        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mt-3 mb-1" />
-        <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
-          <div className="flex items-center gap-2">
-            <BedDouble className="h-4 w-4 text-blue-400" />
-            <p className="font-bold text-sm">Rest Timer</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="px-5 py-5 space-y-5">
-          <div className="flex flex-col items-center gap-3">
-            <div className="relative w-36 h-36">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="54"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.08)"
-                  strokeWidth="8"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="54"
-                  fill="none"
-                  stroke={isDone ? '#22c55e' : '#3b82f6'}
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={circumference * (1 - progress)}
-                  className="transition-all duration-500"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                {isDone ? (
-                  <p className="text-lg font-bold text-emerald-400">Done!</p>
-                ) : remaining !== null ? (
-                  <>
-                    <p className="text-3xl font-black tabular-nums text-white">
-                      {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-                    </p>
-                    <p className="text-[10px] text-white/40 mt-0.5">
-                      {isPaused ? 'paused' : 'remaining'}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-white/30">pick a time</p>
-                )}
-              </div>
-            </div>
-            {(isRunning || isPaused) && !isDone && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={isPaused ? resume : pause}
-                  className="flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-semibold transition-colors"
-                >
-                  {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                  {isPaused ? 'Resume' : 'Pause'}
-                </button>
-                <button
-                  onClick={stop}
-                  className="flex items-center gap-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 px-4 py-2 text-sm font-semibold transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                  Stop
-                </button>
-              </div>
-            )}
-            {isDone && (
-              <button
-                onClick={stop}
-                className="rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 px-5 py-2 text-sm font-semibold transition-colors"
-              >
-                Reset
-              </button>
-            )}
-          </div>
-          <div>
-            <p className="text-xs text-white/40 font-semibold uppercase tracking-wide mb-2">
-              Quick select
-            </p>
-            <div className="grid grid-cols-4 gap-2">
-              {REST_PRESETS.map((p) => (
-                <button
-                  key={p.seconds}
-                  onClick={() => {
-                    setCustom('');
-                    start(p.seconds);
-                  }}
-                  className={`rounded-2xl py-3 text-sm font-bold transition-colors ${total === p.seconds && (isRunning || isPaused) ? 'bg-blue-500 text-white' : 'bg-white/[0.08] text-white/70 hover:bg-white/15'}`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs text-white/40 font-semibold uppercase tracking-wide mb-2">
-              Custom (seconds)
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                min={1}
-                value={custom}
-                onChange={(e) => setCustom(e.target.value)}
-                placeholder="e.g. 90"
-                className="flex-1 rounded-xl bg-white/[0.08] border border-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-blue-500"
-              />
-              <button
-                onClick={() => {
-                  const s = parseInt(custom, 10);
-                  if (s > 0) start(s);
-                }}
-                disabled={!custom || parseInt(custom, 10) <= 0}
-                className="rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-colors"
-              >
-                Start
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
+import { RestTimerPillInline, RestTimerSheet } from '@/components/session/RestTimerUI';
+import { SessionHero, initials, lastActivityMsOf } from '@/components/session/SessionHero';
 
 interface SessionData {
   id: string;
@@ -251,27 +53,8 @@ interface SessionData {
   }[];
 }
 
-function initials(first: string, last: string) {
-  return `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
-}
-
-function lastActivityMs(s: SessionData | undefined): number | null {
-  if (!s?.startedAt) return null;
-  let latest = new Date(s.startedAt).getTime();
-  for (const log of s.workoutLogs ?? []) {
-    if (log.updatedAt) {
-      const t = new Date(log.updatedAt).getTime();
-      if (t > latest) latest = t;
-    }
-    for (const set of log.sets ?? []) {
-      if (set.createdAt) {
-        const t = new Date(set.createdAt).getTime();
-        if (t > latest) latest = t;
-      }
-    }
-  }
-  return latest;
-}
+// `initials` + `lastActivityMsOf` live in @/components/session/SessionHero;
+// imported above and reused by both pages.
 
 function formatIdle(ms: number): string {
   const sec = Math.max(0, Math.floor(ms / 1000));
@@ -281,16 +64,6 @@ function formatIdle(ms: number): string {
   const hr = Math.floor(min / 60);
   const rem = min % 60;
   return rem === 0 ? `${hr}h` : `${hr}h${rem}m`;
-}
-
-function formatElapsedFromSec(sec: number): string {
-  const safe = Math.max(0, Math.floor(sec));
-  const hrs = Math.floor(safe / 3600);
-  const mins = Math.floor((safe % 3600) / 60);
-  const secs = safe % 60;
-  const mm = String(mins).padStart(2, '0');
-  const ss = String(secs).padStart(2, '0');
-  return hrs > 0 ? `${hrs}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 function formatRestRemaining(sec: number | null): string {
@@ -327,7 +100,7 @@ function OthersChip({
   const rest = useRestTimer(s.id, { silent: true });
   const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
   const init = initials(s.client.user.firstName, s.client.user.lastName);
-  const lastActivity = lastActivityMs(detailed);
+  const lastActivity = lastActivityMsOf(detailed);
   const idleMs = lastActivity != null ? Math.max(0, now - lastActivity) : null;
   const idleSec = idleMs != null ? Math.floor(idleMs / 1000) : null;
   const warn = idleSec != null && idleSec >= 480 && idleSec < 1200;
@@ -517,35 +290,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const [defaultDurationMin, setDefaultDurationMin] = useState<number | null>(null);
   const restTimer = useRestTimer(activeId);
   const sessionPause = useSessionPause(activeId);
-
-  // ── Rest auto-fill plumbing ────────────────────────────────────────────────
-  // Surface the most-recently-active timer's total to the workout logger so
-  // the next Add Set click prefills the restSec column. Tracks the last
-  // non-null `total` we've seen and republishes it whenever the timer
-  // transitions away from active (done OR cleared via Stop). The logger
-  // consumes the value once via `onConsumeRest` so it doesn't bleed into
-  // sets the trainer adds long after the rest is over.
-  const [lastFinishedRestSec, setLastFinishedRestSec] = useState<number | null>(null);
-  const lastTimerTotalRef = useRef<number | null>(null);
-  // Wipe both the published prefill and the in-memory "last seen total" any
-  // time the trainer flips to a different client's tab. Without this, a 90s
-  // rest that just ended for ClientA would prefill the next set ClientB
-  // adds — which is exactly the cross-client clash the trainer reported.
-  useEffect(() => {
-    setLastFinishedRestSec(null);
-    lastTimerTotalRef.current = null;
-  }, [activeId]);
-  useEffect(() => {
-    if (restTimer.total !== null) {
-      lastTimerTotalRef.current = restTimer.total;
-    }
-  }, [restTimer.total]);
-  useEffect(() => {
-    const cleared = !restTimer.isRunning && !restTimer.isPaused && restTimer.total === null;
-    if ((restTimer.isDone || cleared) && lastTimerTotalRef.current !== null) {
-      setLastFinishedRestSec(lastTimerTotalRef.current);
-    }
-  }, [restTimer.isDone, restTimer.isRunning, restTimer.isPaused, restTimer.total]);
+  const { lastFinishedRestSec, consumeRest } = useRestAutofill(activeId, restTimer);
 
   // Branch default session duration drives the hero progress ring so the ring
   // reflects the gym's standard slot length rather than an out-of-band per-row
@@ -837,253 +582,35 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           const otherTabs = tabs.filter((s) => s.id !== activeId);
           if (!activeTab) return null;
 
-          const renderHero = () => {
-            const s = activeTab;
-            const detailed = sessionMap[s.id] ?? s;
-            const name = `${s.client.user.firstName} ${s.client.user.lastName}`;
-            const init = initials(s.client.user.firstName, s.client.user.lastName);
-            const startedAt = detailed.startedAt ?? s.startedAt;
-            const expectedMin = defaultDurationMin ?? detailed.durationMin ?? s.durationMin;
-            // Subtract paused time from displayed elapsed — when the session
-            // is paused, the counter freezes and the ring stops advancing.
-            // Both terms are derived from `now` in a single floor() so the
-            // counter doesn't flicker when paused (the page's 1Hz tick and
-            // the hook's 1Hz tick aren't in phase, so two independent
-            // floor()s would jitter ±1s while showing a "frozen" value).
-            const accumulatedPausedMs = sessionPause.accumulatedPausedSec * 1000;
-            const livePausedMs = sessionPause.pausedAt
-              ? Math.max(0, now - sessionPause.pausedAt)
-              : 0;
-            const elapsedSec = startedAt
-              ? Math.max(
-                  0,
-                  Math.floor(
-                    (now - new Date(startedAt).getTime() - accumulatedPausedMs - livePausedMs) /
-                      1000,
-                  ),
-                )
-              : 0;
-            const expectedSec = Math.max(1, expectedMin * 60);
-            const progress = Math.min(1, elapsedSec / expectedSec);
-            const overtime = elapsedSec >= expectedSec;
-            const ringStroke = sessionPause.isPaused
-              ? '#fbbf24' // amber while paused
-              : overtime
-                ? '#fb7185'
-                : '#c4b5fd';
-
-            // Status pill mirrors OthersChip's logic so the trainer sees the
-            // same state vocabulary across the active client and peers.
-            // Priority: session-paused → live rest state → idle escalation → "Live".
-            const lastActivity = lastActivityMs(detailed);
-            const idleMs = lastActivity != null ? Math.max(0, now - lastActivity) : null;
-            const idleSec = idleMs != null ? Math.floor(idleMs / 1000) : null;
-            const warn = idleSec != null && idleSec >= 480 && idleSec < 1200;
-            const urgent = idleSec != null && idleSec >= 1200;
-            const showIdle = idleMs != null && idleSec != null && idleSec >= 60;
-
-            // Same escalation as OthersChip: rest-done is fresh for 2 min,
-            // amber for 2-5 min, red beyond 5 min. Keeps the hero's status
-            // vocabulary in lockstep with the inactive chips so trainers
-            // read consistent meaning across the row.
-            const restDoneSec =
-              restTimer.isDone && restTimer.endTime != null
-                ? Math.max(0, Math.floor((now - restTimer.endTime) / 1000))
-                : 0;
-            const restDoneFresh = restTimer.isDone && restDoneSec < 120;
-            const restDoneWarn = restTimer.isDone && restDoneSec >= 120 && restDoneSec < 300;
-            const restDoneUrgent = restTimer.isDone && restDoneSec >= 300;
-
-            type HeroStatus =
-              | { kind: 'session-paused'; label: string }
-              | { kind: 'rest-running'; label: string }
-              | { kind: 'rest-paused'; label: string }
-              | { kind: 'rest-done-fresh'; label: string }
-              | { kind: 'rest-done-warn'; label: string }
-              | { kind: 'rest-done-urgent'; label: string }
-              | { kind: 'idle-warn'; label: string }
-              | { kind: 'idle-urgent'; label: string }
-              | { kind: 'live'; label: string };
-
-            const status: HeroStatus = sessionPause.isPaused
-              ? { kind: 'session-paused', label: 'Session paused' }
-              : restDoneUrgent
-                ? {
-                    kind: 'rest-done-urgent',
-                    label: `Rest done · ${formatIdle(restDoneSec * 1000)}`,
-                  }
-                : restDoneWarn
-                  ? {
-                      kind: 'rest-done-warn',
-                      label: `Rest done · ${formatIdle(restDoneSec * 1000)}`,
-                    }
-                  : restDoneFresh
-                    ? { kind: 'rest-done-fresh', label: 'Rest done!' }
-                    : restTimer.isRunning
-                      ? {
-                          kind: 'rest-running',
-                          label: `Resting · ${formatRestRemaining(restTimer.remaining)}`,
-                        }
-                      : restTimer.isPaused
-                        ? {
-                            kind: 'rest-paused',
-                            label: `Rest paused · ${formatRestRemaining(restTimer.remaining)}`,
-                          }
-                        : urgent && idleMs != null
-                          ? { kind: 'idle-urgent', label: `${formatIdle(idleMs)} idle` }
-                          : warn && idleMs != null
-                            ? { kind: 'idle-warn', label: `${formatIdle(idleMs)} idle` }
-                            : showIdle && idleMs != null
-                              ? { kind: 'live', label: `${formatIdle(idleMs)} idle` }
-                              : { kind: 'live', label: 'Live' };
-
-            // Light tones — the hero's purple gradient eats anything dark.
-            const pillStyles: Record<HeroStatus['kind'], { text: string; dot: string }> = {
-              'session-paused': { text: 'text-amber-100', dot: 'bg-amber-300' },
-              'rest-running': { text: 'text-blue-100', dot: 'bg-blue-300' },
-              'rest-paused': { text: 'text-amber-100', dot: 'bg-amber-300' },
-              'rest-done-fresh': { text: 'text-emerald-100', dot: 'bg-emerald-300' },
-              'rest-done-warn': { text: 'text-amber-100', dot: 'bg-amber-300' },
-              'rest-done-urgent': { text: 'text-rose-100', dot: 'bg-rose-300' },
-              'idle-warn': { text: 'text-amber-100', dot: 'bg-amber-300' },
-              'idle-urgent': { text: 'text-rose-100', dot: 'bg-rose-300' },
-              live: { text: 'text-emerald-100', dot: 'bg-emerald-300' },
-            };
-            const pill = pillStyles[status.kind];
-            const shouldPing =
-              status.kind === 'live' ||
-              status.kind === 'rest-done-fresh' ||
-              status.kind === 'rest-done-warn' ||
-              status.kind === 'rest-done-urgent' ||
-              status.kind === 'idle-urgent' ||
-              status.kind === 'session-paused';
-
-            const avatarRingR = 22;
-            const avatarRingCircumference = 2 * Math.PI * avatarRingR;
-
-            return (
-              <div
-                role="tab"
-                aria-selected
-                aria-label={`${name}, ${status.label}`}
-                className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 px-3.5 py-2.5 text-white shadow-lg shadow-purple-900/20"
-              >
-                <div className="flex items-center gap-3">
-                  {/* Avatar with story-ring progress: the ring around the
-                      avatar shows how much of the expected session duration
-                      has elapsed, so we don't need a separate progress
-                      slot fighting for space in the action row. */}
-                  <div className="relative h-12 w-12 shrink-0">
-                    <svg className="absolute inset-0 -rotate-90" viewBox="0 0 48 48">
-                      <circle
-                        cx="24"
-                        cy="24"
-                        r={avatarRingR}
-                        fill="none"
-                        stroke="rgba(255,255,255,0.18)"
-                        strokeWidth="2.5"
-                      />
-                      <circle
-                        cx="24"
-                        cy="24"
-                        r={avatarRingR}
-                        fill="none"
-                        stroke={ringStroke}
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeDasharray={avatarRingCircumference}
-                        strokeDashoffset={avatarRingCircumference * (1 - progress)}
-                        className="transition-[stroke-dashoffset] duration-500"
-                      />
-                    </svg>
-                    <div className="absolute inset-[3px] flex items-center justify-center rounded-full bg-white/15 text-xs font-bold ring-1 ring-white/10">
-                      {init}
-                    </div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2">
-                      <p className="truncate text-sm font-semibold leading-tight">{name}</p>
-                      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider text-purple-100/70">
-                        Session
-                      </span>
-                    </div>
-                    <div className="mt-0.5 flex flex-col items-start">
-                      {startedAt && (
-                        <span
-                          className={`font-mono text-xl font-black tabular-nums leading-none ${
-                            sessionPause.isPaused
-                              ? 'text-amber-100/80'
-                              : overtime
-                                ? 'text-rose-100'
-                                : 'text-white'
-                          }`}
-                        >
-                          {formatElapsedFromSec(elapsedSec)}
-                        </span>
-                      )}
-                      {/* Status label — rendered below the timer as plain
-                          text + dot (no pill background) so the long "Xh Ym
-                          idle" strings fit on a single line and don't fight
-                          the timer for horizontal space. */}
-                      <span className="mt-1 flex items-center gap-1.5">
-                        <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                          {shouldPing && (
-                            <span
-                              className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${pill.dot}`}
-                            />
-                          )}
-                          <span
-                            className={`relative inline-flex h-1.5 w-1.5 rounded-full ${pill.dot}`}
-                          />
-                        </span>
-                        <span
-                          className={`text-[10px] font-semibold uppercase tracking-wider tabular-nums ${pill.text}`}
-                        >
-                          {status.label}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                  {/* Right action cluster — Pause then End, both 40×40
-                      circular. Destructive (End) on the trailing edge so
-                      the thumb lands on it last. Progress lives in the
-                      avatar ring on the left, freeing this row from the
-                      visual clutter of a third control. */}
-                  <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void sessionPause.toggle()}
-                      aria-label={sessionPause.isPaused ? 'Resume session' : 'Pause session'}
-                      className={`flex h-10 w-10 items-center justify-center rounded-full ring-1 transition-colors active:scale-95 ${
-                        sessionPause.isPaused
-                          ? 'bg-amber-400/25 text-amber-100 ring-amber-300/50 hover:bg-amber-400/35'
-                          : 'bg-white/15 text-white ring-white/20 hover:bg-white/25'
-                      }`}
-                    >
-                      {sessionPause.isPaused ? (
-                        <Play className="h-4 w-4" />
-                      ) : (
-                        <Pause className="h-4 w-4" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleEnd}
-                      disabled={ending}
-                      aria-label="End session"
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/25 text-rose-100 ring-1 ring-rose-300/50 transition-colors hover:bg-rose-500/35 active:scale-95 disabled:opacity-50"
-                    >
-                      <Square className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          };
+          const s = activeTab;
+          const detailed = sessionMap[s.id] ?? s;
+          const heroName = `${s.client.user.firstName} ${s.client.user.lastName}`;
+          const heroInitials = initials(s.client.user.firstName, s.client.user.lastName);
+          const expectedMin = defaultDurationMin ?? detailed.durationMin ?? s.durationMin;
 
           return (
             <div role="tablist" aria-label="Active sessions" className="px-3 pb-2.5 space-y-2">
-              {renderHero()}
+              <SessionHero
+                name={heroName}
+                initials={heroInitials}
+                startedAt={detailed.startedAt ?? s.startedAt ?? null}
+                expectedDurationMin={expectedMin}
+                pausedAt={sessionPause.pausedAt}
+                accumulatedPausedSec={sessionPause.accumulatedPausedSec}
+                isPaused={sessionPause.isPaused}
+                onTogglePause={() => void sessionPause.toggle()}
+                restTimer={{
+                  isDone: restTimer.isDone,
+                  isRunning: restTimer.isRunning,
+                  isPaused: restTimer.isPaused,
+                  endTime: restTimer.endTime,
+                  remaining: restTimer.remaining,
+                }}
+                lastActivityMs={lastActivityMsOf(detailed)}
+                now={now}
+                onEnd={handleEnd}
+                ending={ending}
+              />
               {otherTabs.length > 0 && (
                 // -my-1 py-1 / -mx-1 px-1: when overflow-x is auto, browsers
                 // also clip the y-axis, which chops the chips' colored rings
@@ -1119,7 +646,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           onUnsavedChange={setHasUnsaved}
           onRequestRest={isActive ? () => setRestTimerOpen(true) : undefined}
           lastFinishedRestSec={lastFinishedRestSec}
-          onConsumeRest={() => setLastFinishedRestSec(null)}
+          onConsumeRest={consumeRest}
           restTimerRemaining={restTimer.remaining}
           restTimerPaused={restTimer.isPaused}
         />
@@ -1133,7 +660,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           className="shrink-0 px-4 pt-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
         >
-          <RestTimerPill
+          <RestTimerPillInline
             remaining={restTimer.remaining}
             isPaused={restTimer.isPaused}
             isDone={restTimer.isDone}

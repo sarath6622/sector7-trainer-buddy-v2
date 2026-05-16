@@ -667,10 +667,13 @@ export function WorkoutLogger({
     setAutoSaveStatus('saving');
     const sentHash = JSON.stringify(currentPayload);
     try {
-      const res = await fetch('/api/trainer/workouts', {
+      // Shared trainer/client write path (ADR-036). The route uses
+      // assertSessionAccess so either the session's trainer or its client
+      // can save; sessionInstanceId moves from the body to the URL.
+      const res = await fetch(`/api/sessions/${sessionInstanceId}/workouts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionInstanceId, exercises: currentPayload }),
+        body: JSON.stringify({ exercises: currentPayload }),
       });
       if (res.ok) {
         lastSavedHashRef.current = sentHash;

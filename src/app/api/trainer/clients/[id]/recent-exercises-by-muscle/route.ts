@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { getServerSession, canReadClientTrainingData } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import * as progressService from '@/services/progress.service';
 import { CURATED_MUSCLE_GROUPS, type CuratedMuscleGroupId } from '@/lib/muscle-groups';
@@ -12,18 +12,16 @@ const VALID_IDS = new Set<string>(CURATED_MUSCLE_GROUPS.map((g) => g.id));
  * Powers the "today's focus" picker on the active session screen. Returns the
  * top N exercises this client has recently performed in each curated muscle
  * group, with the most recent set attached as a progression hint.
+ *
+ * Auth: trainer/admin in branch, OR the client themselves (ADR-036).
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
-    if (
-      !session ||
-      !hasRole(session.user.role, ['TRAINER', 'KICKBOXING_TRAINER', 'SUPER_ADMIN', 'BRANCH_ADMIN'])
-    ) {
+    const { id: clientProfileId } = await params;
+    if (!session || !canReadClientTrainingData(session.user, clientProfileId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
-
-    const { id: clientProfileId } = await params;
     const url = new URL(req.url);
 
     const groupsParam = url.searchParams.get('groups') ?? '';
