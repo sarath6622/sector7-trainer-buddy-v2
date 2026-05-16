@@ -1676,23 +1676,44 @@ export function WorkoutLogger({
                           auto-save (debounced ~800ms). On mark, this card
                           collapses + sorts to the bottom; the next incomplete
                           card auto-expands. On unmark, the card stays open
-                          and sorts back up among the incompletes. */}
-                          {entry.isCompleted ? (
-                            <button
-                              onClick={() => setExerciseCompleted(entry.tempId, false)}
-                              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
-                            >
-                              Unmark complete
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => setExerciseCompleted(entry.tempId, true)}
-                              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500/15 py-3 text-sm font-semibold text-emerald-500 transition-colors active:bg-emerald-500/25"
-                            >
-                              <Check className="h-4 w-4" />
-                              Mark complete
-                            </button>
-                          )}
+                          and sorts back up among the incompletes.
+                          Gated on at least one set having actual data
+                          (reps / weightKg / durationSec) — prevents marking
+                          empty placeholder rows as done. */}
+                          {(() => {
+                            const hasLoggedSet = entry.sets.some(
+                              (s) =>
+                                (s.reps !== undefined && s.reps !== null) ||
+                                (s.weightKg !== undefined && s.weightKg !== null) ||
+                                (s.durationSec !== undefined && s.durationSec !== null),
+                            );
+                            if (entry.isCompleted) {
+                              return (
+                                <button
+                                  onClick={() => setExerciseCompleted(entry.tempId, false)}
+                                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
+                                >
+                                  Unmark complete
+                                </button>
+                              );
+                            }
+                            return (
+                              <button
+                                onClick={() => setExerciseCompleted(entry.tempId, true)}
+                                disabled={!hasLoggedSet}
+                                aria-label={
+                                  hasLoggedSet
+                                    ? 'Mark exercise complete'
+                                    : 'Log at least one set before marking complete'
+                                }
+                                title={hasLoggedSet ? undefined : 'Log at least one set first'}
+                                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500/15 py-3 text-sm font-semibold text-emerald-500 transition-colors active:bg-emerald-500/25 disabled:cursor-not-allowed disabled:bg-muted/30 disabled:text-muted-foreground/50 disabled:active:bg-muted/30"
+                              >
+                                <Check className="h-4 w-4" />
+                                {hasLoggedSet ? 'Mark complete' : 'Log a set first'}
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
                     </motion.div>
