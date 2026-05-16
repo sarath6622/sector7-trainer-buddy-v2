@@ -193,6 +193,15 @@ GET    /api/admin/exercises/[id]         → {} → Exercise
 PUT    /api/admin/exercises/[id]         → { ...updatedFields } → Exercise
 DELETE /api/admin/exercises/[id]         → {} → { success }
 POST   /api/admin/exercises/bulk-import  → { exercises: ExerciseInput[] } → { created: number, errors: ImportError[] }
+
+# Trainer parity — same contracts, gated on TRAINER role. Writes are global
+# (single Exercise table, no branchId/createdById on the row). See decisions.md.
+POST   /api/trainer/exercises              → identical body/response as admin
+GET    /api/trainer/exercises              → identical
+GET    /api/trainer/exercises/[id]         → identical
+PUT    /api/trainer/exercises/[id]         → identical
+DELETE /api/trainer/exercises/[id]         → identical
+POST   /api/trainer/exercises/bulk-import  → identical
 ```
 
 ### Analytics

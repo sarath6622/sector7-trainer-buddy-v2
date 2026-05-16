@@ -514,3 +514,26 @@ Cost was the explicit blocker that drove ADR-033 and a related deferral (the cro
 - Tests: `tests/unit/workout-completion.test.ts` covers the four key isCompleted scenarios — new with true, new with omitted, existing-preserved-on-omit, and unmark. Existing workout tests still pass unchanged.
 - The pre-existing dedup logic for legacy duplicate `WorkoutLog` rows (ADR-016) now ORs `isCompleted` across duplicates — if any of the merged logs is completed, the rendered card is treated as completed. Realistically a no-op on post-ADR-015 sessions (which keep one log per exercise) but defensible for the long tail.
 - Non-PT clients / SoloWorkout (deferred from ADR-036) remain out of scope; when that model lands it will reuse the same isCompleted/completedAt shape on either a new entity or by sharing `WorkoutLog` via a polymorphic parent. Either way, the upsert semantics here ("payload omits → preserve") translate directly.
+
+## ADR-039: Trainers Get Full Exercise-Library CRUD Parity With Admin
+
+**Date:** 2026-05-16
+**Status:** Accepted
+
+**Context:** The admin Exercise Library at `/admin/exercises` (with `POST/PUT/DELETE/bulk-import` at `/api/admin/exercises`) was gated on `SUPER_ADMIN`/`BRANCH_ADMIN` only. Operator asked for the same capability on the trainer side so trainers can add the lifts they actually program for clients without admin bottlenecking. Two design questions had to be resolved up-front: scope (global vs branch-scoped vs trainer-private) and permissions (create-only vs ownership-bound edit/delete vs full parity).
+
+**Decision:**
+
+- **Full parity.** TRAINER role can create, edit, delete, and bulk-import — same surface as admin. No "edit only what you created" ownership model. Operator's call; the gym is small enough that mutual destructive-edit risk is acceptable in exchange for not adding a `createdById` column and not building a moderation queue.
+- **Global scope, not branch-scoped.** Trainer-created exercises join the same global `Exercise` table that admin writes to; every branch/trainer/client sees them. The `Exercise` table has no `branchId` today and this ADR does NOT add one. This is a deliberate exception to Rule 2 (Branch-Scoped Everything) because the exercise library is treated as a shared catalog — same way admin already treats it.
+- **TRAINER role only.** Not `KICKBOXING_TRAINER` or `CROSSFIT_TRAINER` — those roles are narrow (attendance-only) and don't program weighted exercises.
+- **Mirror routes, not shared.** `/api/trainer/exercises/*` exists as a parallel set of route files to `/api/admin/exercises/*` rather than expanding the admin route's role allowlist. Reason: a `/api/admin/*` URL appearing in trainer-side network panels is confusing and breaks the convention that the URL prefix matches the actor's role; keeping the namespaces clean now is cheaper than untangling later.
+- **One shared UI component.** Both pages render `<ExerciseLibraryView basePath="..." />` from `src/components/exercises/ExerciseLibraryView.tsx`. The 870-line page UI is identical on both sides, so duplicating it would have been an ongoing maintenance tax. The admin and trainer page files are now thin two-line wrappers.
+- **Service layer untouched.** All routes call the existing `exercise.service.ts`. The service already accepts `actorId` and `branchId` for the audit log — trainers' branchId flows through unchanged, so audit rows correctly attribute the actor and the branch they were operating from even though the row itself is global.
+
+**Consequences:**
+
+- A trainer in Branch A creating an exercise will surface it for trainers/clients in Branch B. If a future requirement demands branch-private custom exercises, this ADR is reversible by adding `Exercise.branchId` (nullable to preserve global rows) and filtering on listExercises. Not now.
+- Audit rows for trainer-initiated mutations have `actorId = trainer.userId`, `branchId = trainer.branchId`. The action enum (`EXERCISE_CREATED` / `EXERCISE_UPDATED` / `EXERCISE_DELETED` / `EXERCISES_BULK_IMPORTED`) is the same as admin — so a single audit filter shows mutations regardless of which role initiated them.
+- The shared `ExerciseLibraryView` component reads its endpoint from a `basePath` prop. Future role additions (e.g. if BRANCH_ADMIN ever splits from SUPER_ADMIN on this surface) need only a new route + a new wrapper page; the UI doesn't fork.
+- A `TRAINER` calling `/api/admin/exercises` is still rejected (403). They must use `/api/trainer/exercises`. If a future code-mod consolidates the two route trees, it must also widen the role check or trainer write paths break silently.

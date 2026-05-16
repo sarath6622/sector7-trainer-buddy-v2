@@ -80,6 +80,8 @@ export const TRAINER_NAV_ITEMS: NavItem[] = [
     group: 'My Work',
   },
   { label: 'Leaves', href: '/trainer/leaves', icon: CalendarDays, group: 'My Work' },
+  // Programs
+  { label: 'Exercises', href: '/trainer/exercises', icon: Dumbbell, group: 'Programs' },
   // Insights
   { label: 'Analytics', href: '/trainer/analytics', icon: BarChart3, group: 'Insights' },
   // Community
