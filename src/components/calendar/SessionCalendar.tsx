@@ -196,16 +196,27 @@ export function SessionCalendar({
 
   const resolvedView = isMobile ? 'timeGridDay' : initialView;
 
+  // Track the active FullCalendar view so the overflow threshold adapts when
+  // the user clicks month/week/day in the toolbar.
+  const [currentView, setCurrentView] = useState<string>(resolvedView);
+
   // Detect dark mode on client
   const isDark =
     typeof window !== 'undefined' && document.documentElement.classList.contains('dark');
 
-  const visibleCount = overflowVisibleCount ?? (isMobile ? 2 : 3);
+  // View-aware defaults. Week columns are narrow → 1 visible card + "View all".
+  // Day view has the full grid width → 2 cards fit comfortably. Mobile mirrors
+  // week's tight budget. Month view skips clustering entirely (FullCalendar's
+  // dayMaxEvents handles spillover there).
+  const visibleCount =
+    overflowVisibleCount ??
+    (isMobile ? 1 : currentView === 'timeGridWeek' ? 1 : currentView === 'timeGridDay' ? 2 : 3);
+
+  const clusteringEnabled = !!onOverflowClick && currentView !== 'dayGridMonth';
 
   // Cluster + collapse overlapping events first, then colour. Only opt in when
   // the caller wires up `onOverflowClick` — otherwise the "+N more" chip would
   // be dead, so we keep FullCalendar's default side-by-side layout.
-  const clusteringEnabled = !!onOverflowClick;
   const { rendered, overflowMap } = useMemo(
     () =>
       clusteringEnabled
@@ -298,7 +309,11 @@ export function SessionCalendar({
         eventClick={handleEventClick}
         selectable={selectable}
         select={onDateSelect}
-        datesSet={onDatesSet}
+        datesSet={(info) => {
+          // FullCalendar fires this on date navigation AND view change.
+          if (info.view.type !== currentView) setCurrentView(info.view.type);
+          onDatesSet?.(info);
+        }}
         height={height}
         slotMinTime="05:00:00"
         slotMaxTime="22:00:00"
