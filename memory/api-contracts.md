@@ -37,6 +37,20 @@ POST   /api/admin/users                  → { email, firstName, lastName, phone
 GET    /api/admin/users/[id]             → {} → User (with profile)
 PUT    /api/admin/users/[id]             → { ...updatedFields } → User
 DELETE /api/admin/users/[id]             → {} → { success } (soft delete)
+GET    /api/admin/users/[id]/clients     → {} → { data: TrainerClient[] }
+                                            For a trainer user. Returns clients with an active PtPackage
+                                            assigned to this trainer in the caller's branch. Empty array
+                                            if user has no TrainerProfile.
+                                            TrainerClient = {
+                                              clientProfile: { id, paymentStatus, user: { firstName, lastName,
+                                                                                          email, phone, profileImageUrl } },
+                                              package: { id, planName, sessionsPerMonth, totalSessions, used,
+                                                         startDate, endDate },
+                                              nextSession: { id, scheduledDate, scheduledTime } | null,
+                                            }
+                                            `used` = COMPLETED + NO_SHOW within package window + onboardingUsedSessions.
+                                            `nextSession` is the earliest upcoming SCHEDULED instance for this trainer+client.
+                                            Sorted alphabetically by client name. Auth: BRANCH_ADMIN | SUPER_ADMIN.
 ```
 
 ### Trainer-Client Mapping

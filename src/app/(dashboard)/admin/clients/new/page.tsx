@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, UserPlus } from 'lucide-react';
+import { Loader2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -93,10 +94,8 @@ export default function NewClientPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-8">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/admin/clients')}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+      <div className="space-y-2">
+        <Breadcrumb items={[{ label: 'Clients', href: '/admin/clients' }, { label: 'New' }]} />
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Add Client</h1>
           <p className="mt-1 text-sm text-muted-foreground">Create a new client account</p>

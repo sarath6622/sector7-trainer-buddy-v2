@@ -2,16 +2,8 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  Dumbbell,
-  Activity,
-  Timer,
-  User2,
-} from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, Dumbbell, Activity, Timer, User2 } from 'lucide-react';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 type ExerciseType = 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
 
@@ -225,14 +217,10 @@ export default function TrainerSessionViewPage({ params }: { params: Promise<{ i
     <div className="fixed inset-0 flex flex-col bg-background">
       {/* ── Header ── */}
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+        <div className="px-4 pt-2.5 pb-2">
+          <Breadcrumb items={[{ label: 'Dashboard', href: '/trainer' }, { label: clientName }]} />
+        </div>
         <div className="flex h-14 items-center gap-3 px-4">
-          <button
-            onClick={() => router.push('/trainer')}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-
           <div className="flex flex-1 items-center gap-2.5 min-w-0">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
               {clientInit}

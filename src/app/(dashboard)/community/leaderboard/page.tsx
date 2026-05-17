@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Trophy, ArrowLeft, Crown, Flame } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Trophy, Crown, Flame } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { toast } from 'sonner';
-import Link from 'next/link';
 
 // ─── Types ────────────────────────────────────────────
 
@@ -238,12 +237,10 @@ export default function LeaderboardPage() {
   return (
     <div className="max-w-xl mx-auto p-4 space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link href="/community">
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
+      <div className="space-y-2">
+        <Breadcrumb
+          items={[{ label: 'Community', href: '/community' }, { label: 'Leaderboard' }]}
+        />
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Trophy className="h-6 w-6 text-yellow-400" />

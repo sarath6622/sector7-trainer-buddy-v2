@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft,
   KeyRound,
   Pencil,
   Plus,
@@ -29,6 +28,7 @@ import { DatePickerModal } from '@/components/ui/date-picker-modal';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import {
   Select,
   SelectContent,
@@ -715,13 +715,15 @@ export default function ClientProfilePage() {
     <div className="-m-4 md:-m-6 flex h-full flex-col overflow-hidden bg-background">
       {/* Sticky header */}
       <div className="sticky top-0 z-20 border-b border-white/[0.06] bg-background/95 backdrop-blur">
+        <div className="px-4 pt-2.5 pb-2">
+          <Breadcrumb
+            items={[
+              { label: 'Clients', href: '/admin/clients' },
+              { label: `${client.firstName} ${client.lastName}` },
+            ]}
+          />
+        </div>
         <div className="flex h-14 items-center gap-3 px-4">
-          <button
-            onClick={() => router.push('/admin/clients')}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
           <div className="flex flex-1 items-center gap-2.5 min-w-0">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-bold text-primary">
               {client.profileImageUrl ? (

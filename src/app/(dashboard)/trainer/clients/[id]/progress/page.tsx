@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import {
   TrendingUp,
   Plus,
-  ArrowLeft,
   Pencil,
   Ruler,
   Scale,
@@ -22,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import {
   Dialog,
   DialogContent,
@@ -141,7 +141,6 @@ function DeltaChip({
 
 export default function TrainerClientProgressPage() {
   const { id: clientProfileId } = useParams<{ id: string }>();
-  const router = useRouter();
 
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
   const [weightChart, setWeightChart] = useState<ChartPoint[]>([]);
@@ -349,18 +348,13 @@ export default function TrainerClientProgressPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-5 pb-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/trainer/clients')}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Client Progress</h1>
-            <p className="text-xs text-muted-foreground">{entries.length} entries recorded</p>
-          </div>
+      <div className="space-y-2">
+        <Breadcrumb
+          items={[{ label: 'Clients', href: '/trainer/clients' }, { label: 'Progress' }]}
+        />
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Client Progress</h1>
+          <p className="text-xs text-muted-foreground">{entries.length} entries recorded</p>
         </div>
       </div>
 
