@@ -627,9 +627,6 @@ export default function CrossfitPage() {
         {/* ── ATTENDANCE TAB ── */}
         <TabsContent value="attendance" className="mt-4">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Attendance log</CardTitle>
-            </CardHeader>
             <CardContent>
               {/* Stat cards — hidden on mobile to save vertical space; from sm
                   they reflect the same filter context as the table/list below. */}
@@ -672,42 +669,47 @@ export default function CrossfitPage() {
                     }}
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Class</Label>
-                  <Select
-                    value={attendanceClassId || 'all'}
-                    items={[
-                      { value: 'all', label: 'All classes' },
-                      ...classes.map((c) => ({ value: c.id, label: c.name })),
-                    ]}
-                    onValueChange={(v) => setAttendanceClassId(v === 'all' || !v ? '' : v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All classes" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All classes</SelectItem>
-                      {classes.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="att-search" className="text-xs text-muted-foreground">
-                    Member
-                  </Label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input
-                      id="att-search"
-                      placeholder="Search by name"
-                      value={attendanceSearch}
-                      onChange={(e) => setAttendanceSearch(e.target.value)}
-                      className="pl-8"
-                    />
+                {/* Class + Member share one row on mobile via a nested 2-col
+                    grid; `sm:contents` dissolves the wrapper at sm+ so they
+                    flow as siblings of the outer 3-col grid. */}
+                <div className="grid grid-cols-2 gap-3 sm:contents">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Class</Label>
+                    <Select
+                      value={attendanceClassId || 'all'}
+                      items={[
+                        { value: 'all', label: 'All classes' },
+                        ...classes.map((c) => ({ value: c.id, label: c.name })),
+                      ]}
+                      onValueChange={(v) => setAttendanceClassId(v === 'all' || !v ? '' : v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All classes" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All classes</SelectItem>
+                        {classes.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="att-search" className="text-xs text-muted-foreground">
+                      Member
+                    </Label>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        id="att-search"
+                        placeholder="Search by name"
+                        value={attendanceSearch}
+                        onChange={(e) => setAttendanceSearch(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
