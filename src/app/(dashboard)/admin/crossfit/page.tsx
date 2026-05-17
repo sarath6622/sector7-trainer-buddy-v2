@@ -12,8 +12,8 @@ import {
   CheckCircle2,
   UserCheck,
   CalendarDays,
-  Timer,
 } from 'lucide-react';
+import { DateRangePickerModal } from '@/components/ui/date-range-picker-modal';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
@@ -632,7 +632,7 @@ export default function CrossfitPage() {
             </CardHeader>
             <CardContent>
               {/* Stat cards — reflect the same filter context as the table below */}
-              <div className="grid gap-3 mb-4 grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 mb-4 grid-cols-1 sm:grid-cols-3">
                 <StatCard
                   icon={CheckCircle2}
                   iconBg="bg-emerald-500/15"
@@ -657,41 +657,18 @@ export default function CrossfitPage() {
                   value={attendanceStats ? attendanceStats.sessionsHeld.toString() : '—'}
                   loading={attendanceLoading && !attendanceStats}
                 />
-                <StatCard
-                  icon={Timer}
-                  iconBg="bg-purple-500/15"
-                  iconColor="text-purple-600"
-                  label="Total duration"
-                  value={
-                    attendanceStats ? formatDurationMin(attendanceStats.totalDurationMin) : '—'
-                  }
-                  loading={attendanceLoading && !attendanceStats}
-                />
               </div>
 
-              <div className="grid gap-3 mb-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 mb-4 sm:grid-cols-3">
                 <div className="space-y-1">
-                  <Label htmlFor="att-from" className="text-xs text-muted-foreground">
-                    From
-                  </Label>
-                  <Input
-                    id="att-from"
-                    type="date"
-                    value={attendanceDateFrom}
-                    max={attendanceDateTo}
-                    onChange={(e) => setAttendanceDateFrom(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="att-to" className="text-xs text-muted-foreground">
-                    To
-                  </Label>
-                  <Input
-                    id="att-to"
-                    type="date"
-                    value={attendanceDateTo}
-                    min={attendanceDateFrom}
-                    onChange={(e) => setAttendanceDateTo(e.target.value)}
+                  <Label className="text-xs text-muted-foreground">Date range</Label>
+                  <DateRangePickerModal
+                    from={attendanceDateFrom}
+                    to={attendanceDateTo}
+                    onChange={({ from, to }) => {
+                      setAttendanceDateFrom(from);
+                      setAttendanceDateTo(to);
+                    }}
                   />
                 </div>
                 <div className="space-y-1">
@@ -746,7 +723,48 @@ export default function CrossfitPage() {
                 </div>
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  {/* Mobile card list — stacks per row, no horizontal scroll */}
+                  <div className="space-y-2 sm:hidden">
+                    {attendanceRows.map((r) => (
+                      <div key={r.id} className="rounded-xl bg-card p-3 ring-1 ring-border/50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium truncate">{r.member.name}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                              {new Date(r.date).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                              })}
+                              {' · '}
+                              {r.class.name} · {r.class.startTime}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground/80 truncate">
+                              Marked{' '}
+                              {new Date(r.markedAt).toLocaleTimeString('en-IN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false,
+                              })}{' '}
+                              · by {r.markedByName}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className={
+                              r.member.type === 'GYM_MEMBER'
+                                ? 'bg-blue-500/15 text-blue-600 shrink-0'
+                                : 'bg-zinc-500/15 text-zinc-500 shrink-0'
+                            }
+                          >
+                            {r.member.type === 'GYM_MEMBER' ? 'Member' : 'Walk-in'}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden sm:block overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1123,13 +1141,4 @@ function StatCard({
       </div>
     </div>
   );
-}
-
-function formatDurationMin(min: number): string {
-  if (min <= 0) return '0m';
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
 }
