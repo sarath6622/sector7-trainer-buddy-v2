@@ -507,7 +507,35 @@ PUT    /api/admin/crossfit/classes/[id]          → { trainerProfileId?, name?,
 POST   /api/admin/crossfit/enrollments           → { classId, clientProfileId?, clientType, externalName?, externalPhone? } → CrossfitEnrollment
 GET    /api/admin/crossfit/enrollments           → ?classId&clientType → CrossfitEnrollment[]
 DELETE /api/admin/crossfit/enrollments/[id]      → {} → { success: true }
+GET    /api/admin/crossfit/attendance            → ?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD&classId?&search?&page?&pageSize? → Paginated<AttendanceRow>
 ```
+
+`AttendanceRow` shape (used by the admin Attendance log tab — added 2026-05-17):
+
+```typescript
+{
+  id: string;
+  date: string;                                            // YYYY-MM-DD of the session
+  class: { id: string; name: string; startTime: string };  // "HH:MM"
+  member: {
+    type: 'GYM_MEMBER' | 'EXTERNAL';
+    name: string;                                          // full name OR externalName / "Walk-in"
+    profileImageUrl: string | null;
+  };
+  markedAt: string;                                        // ISO 8601
+  markedByName: string;                                    // trainer/admin who marked it
+}
+```
+
+Notes:
+
+- Role: `BRANCH_ADMIN | SUPER_ADMIN`, branch-scoped.
+- `dateFrom`/`dateTo` are inclusive; defaults to last 7 days at the UI level (not the API).
+- `search` matches `client.user.firstName`/`lastName` (case-insensitive contains) OR
+  `externalName` so walk-ins surface alongside members.
+- `markedByName` resolves `CrossfitAttendance.markedByUserId` via a side query
+  (no Prisma relation on that column).
+- Default `pageSize=25`, max `100`.
 
 ## CrossFit Trainer Routes
 

@@ -585,6 +585,108 @@ export async function getCrossfitAttendance(sessionId: string, branchId: string)
   });
 }
 
+// ─── Admin Attendance List ───────────────────────────────────────────────────
+
+interface AttendanceListInput {
+  branchId: string;
+  dateFrom: string; // YYYY-MM-DD inclusive
+  dateTo: string; // YYYY-MM-DD inclusive
+  classId?: string;
+  search?: string;
+  page: number;
+  pageSize: number;
+}
+
+export async function getCrossfitAttendanceList(input: AttendanceListInput) {
+  const { branchId, dateFrom, dateTo, classId, search, page, pageSize } = input;
+
+  // Build session date range as Date objects (CrossfitSession.date is a Date)
+  const start = new Date(`${dateFrom}T00:00:00.000Z`);
+  const end = new Date(`${dateTo}T23:59:59.999Z`);
+
+  const search_ = search?.trim();
+  const where: Prisma.CrossfitAttendanceWhereInput = {
+    branchId,
+    session: {
+      date: { gte: start, lte: end },
+      ...(classId ? { classId } : {}),
+    },
+    ...(search_
+      ? {
+          OR: [
+            {
+              client: {
+                user: {
+                  OR: [
+                    { firstName: { contains: search_, mode: 'insensitive' } },
+                    { lastName: { contains: search_, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            },
+            { externalName: { contains: search_, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, rows] = await Promise.all([
+    prisma.crossfitAttendance.count({ where }),
+    prisma.crossfitAttendance.findMany({
+      where,
+      include: {
+        session: {
+          include: {
+            class: { select: { id: true, name: true, startTime: true } },
+          },
+        },
+        client: {
+          include: {
+            user: { select: { firstName: true, lastName: true, profileImageUrl: true } },
+          },
+        },
+      },
+      orderBy: [{ session: { date: 'desc' } }, { markedAt: 'desc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+
+  // Resolve marker names in a single side query — CrossfitAttendance.markedByUserId
+  // has no Prisma relation, so we batch-fetch the users we need.
+  const markerIds = Array.from(new Set(rows.map((r) => r.markedByUserId)));
+  const markers = markerIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: markerIds } },
+        select: { id: true, firstName: true, lastName: true },
+      })
+    : [];
+  const markerById = new Map(markers.map((m) => [m.id, `${m.firstName} ${m.lastName}`]));
+
+  return {
+    data: rows.map((r) => ({
+      id: r.id,
+      date: r.session.date.toISOString().slice(0, 10), // YYYY-MM-DD
+      class: r.session.class,
+      member: {
+        type: r.clientProfileId ? ('GYM_MEMBER' as const) : ('EXTERNAL' as const),
+        name: r.client
+          ? `${r.client.user.firstName} ${r.client.user.lastName}`
+          : (r.externalName ?? 'Walk-in'),
+        profileImageUrl: r.client?.user.profileImageUrl ?? null,
+      },
+      markedAt: r.markedAt.toISOString(),
+      markedByName: markerById.get(r.markedByUserId) ?? 'Unknown',
+    })),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+  };
+}
+
 // ─── Client Search ───────────────────────────────────────────────────────────
 
 export async function searchCrossfitClients(query: string, branchId: string, classId?: string) {

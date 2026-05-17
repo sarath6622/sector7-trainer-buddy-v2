@@ -578,6 +578,15 @@ export const markCrossfitAttendanceSchema = z.object({
   externalName: z.string().optional(),
 });
 
+export const listCrossfitAttendanceQuerySchema = z.object({
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dateFrom must be YYYY-MM-DD'),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dateTo must be YYYY-MM-DD'),
+  classId: cuidSchema.optional(),
+  search: z.string().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+
 // ─── KICKBOXING TRAINER ───────────────────────────────
 
 export const openKickboxingSessionSchema = z.object({

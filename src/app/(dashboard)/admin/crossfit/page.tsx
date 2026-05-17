@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, Pencil, Dumbbell, Users, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, Dumbbell, Users, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
@@ -74,6 +74,19 @@ interface ClientOption {
   user: { firstName: string; lastName: string };
 }
 
+interface AttendanceRow {
+  id: string;
+  date: string; // YYYY-MM-DD
+  class: { id: string; name: string; startTime: string };
+  member: {
+    type: 'GYM_MEMBER' | 'EXTERNAL';
+    name: string;
+    profileImageUrl: string | null;
+  };
+  markedAt: string; // ISO
+  markedByName: string;
+}
+
 export default function CrossfitPage() {
   const { confirm, ConfirmDialog } = useConfirm();
   const [classes, setClasses] = useState<CrossfitClass[]>([]);
@@ -96,6 +109,26 @@ export default function CrossfitPage() {
     maxCapacity: 20,
   });
   const [classSubmitting, setClassSubmitting] = useState(false);
+
+  // Attendance tab state
+  const todayYMD = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const weekAgoYMD = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const [attendanceDateFrom, setAttendanceDateFrom] = useState(weekAgoYMD());
+  const [attendanceDateTo, setAttendanceDateTo] = useState(todayYMD());
+  const [attendanceClassId, setAttendanceClassId] = useState('');
+  const [attendanceSearch, setAttendanceSearch] = useState('');
+  const [attendancePage, setAttendancePage] = useState(1);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([]);
+  const [attendanceTotal, setAttendanceTotal] = useState(0);
+  const ATTENDANCE_PAGE_SIZE = 25;
 
   // Enrollment dialog
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
@@ -151,6 +184,37 @@ export default function CrossfitPage() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // Fetch attendance whenever any filter changes. Debounced via a small
+  // setTimeout so typing in the search box doesn't fire a request per keystroke.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const qs = new URLSearchParams({
+        dateFrom: attendanceDateFrom,
+        dateTo: attendanceDateTo,
+        page: String(attendancePage),
+        pageSize: String(ATTENDANCE_PAGE_SIZE),
+      });
+      if (attendanceClassId) qs.set('classId', attendanceClassId);
+      if (attendanceSearch.trim()) qs.set('search', attendanceSearch.trim());
+
+      setAttendanceLoading(true);
+      fetch(`/api/admin/crossfit/attendance?${qs.toString()}`)
+        .then((r) => r.json())
+        .then((res) => {
+          setAttendanceRows(res.data ?? []);
+          setAttendanceTotal(res.pagination?.total ?? 0);
+        })
+        .catch(() => toast.error('Failed to load attendance'))
+        .finally(() => setAttendanceLoading(false));
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [attendanceDateFrom, attendanceDateTo, attendanceClassId, attendanceSearch, attendancePage]);
+
+  // Resetting page when filters change keeps the user from landing on an empty page.
+  useEffect(() => {
+    setAttendancePage(1);
+  }, [attendanceDateFrom, attendanceDateTo, attendanceClassId, attendanceSearch]);
 
   function openCreateClass() {
     setEditingClass(null);
@@ -311,9 +375,10 @@ export default function CrossfitPage() {
       </div>
 
       <Tabs defaultValue="classes">
-        <TabsList className="grid w-full grid-cols-2 md:w-80">
+        <TabsList className="grid w-full grid-cols-3 md:w-[30rem]">
           <TabsTrigger value="classes">Classes</TabsTrigger>
           <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
+          <TabsTrigger value="attendance">Attendance</TabsTrigger>
         </TabsList>
 
         {/* ── CLASSES TAB ── */}
@@ -535,6 +600,179 @@ export default function CrossfitPage() {
                     </TableBody>
                   </Table>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── ATTENDANCE TAB ── */}
+        <TabsContent value="attendance" className="mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Attendance log</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 mb-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-1">
+                  <Label htmlFor="att-from" className="text-xs text-muted-foreground">
+                    From
+                  </Label>
+                  <Input
+                    id="att-from"
+                    type="date"
+                    value={attendanceDateFrom}
+                    max={attendanceDateTo}
+                    onChange={(e) => setAttendanceDateFrom(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="att-to" className="text-xs text-muted-foreground">
+                    To
+                  </Label>
+                  <Input
+                    id="att-to"
+                    type="date"
+                    value={attendanceDateTo}
+                    min={attendanceDateFrom}
+                    onChange={(e) => setAttendanceDateTo(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Class</Label>
+                  <Select
+                    value={attendanceClassId || 'all'}
+                    items={[
+                      { value: 'all', label: 'All classes' },
+                      ...classes.map((c) => ({ value: c.id, label: c.name })),
+                    ]}
+                    onValueChange={(v) => setAttendanceClassId(v === 'all' || !v ? '' : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All classes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All classes</SelectItem>
+                      {classes.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="att-search" className="text-xs text-muted-foreground">
+                    Member
+                  </Label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      id="att-search"
+                      placeholder="Search by name"
+                      value={attendanceSearch}
+                      onChange={(e) => setAttendanceSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {attendanceLoading ? (
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : attendanceRows.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground text-sm">
+                  No attendance recorded for this filter.
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Class</TableHead>
+                          <TableHead>Member</TableHead>
+                          <TableHead className="hidden sm:table-cell">Type</TableHead>
+                          <TableHead className="hidden md:table-cell">Marked at</TableHead>
+                          <TableHead className="hidden lg:table-cell">By</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {attendanceRows.map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell className="whitespace-nowrap text-sm">
+                              {new Date(r.date).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <span className="font-medium">{r.class.name}</span>
+                              <span className="ml-1.5 text-xs text-muted-foreground">
+                                {r.class.startTime}
+                              </span>
+                            </TableCell>
+                            <TableCell className="font-medium">{r.member.name}</TableCell>
+                            <TableCell className="hidden sm:table-cell">
+                              <Badge
+                                variant="secondary"
+                                className={
+                                  r.member.type === 'GYM_MEMBER'
+                                    ? 'bg-blue-500/15 text-blue-600'
+                                    : 'bg-zinc-500/15 text-zinc-500'
+                                }
+                              >
+                                {r.member.type === 'GYM_MEMBER' ? 'Member' : 'Walk-in'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-muted-foreground text-sm whitespace-nowrap">
+                              {new Date(r.markedAt).toLocaleTimeString('en-IN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false,
+                              })}
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
+                              {r.markedByName}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Showing {(attendancePage - 1) * ATTENDANCE_PAGE_SIZE + 1}
+                      {'–'}
+                      {Math.min(attendancePage * ATTENDANCE_PAGE_SIZE, attendanceTotal)} of{' '}
+                      {attendanceTotal}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={attendancePage <= 1}
+                        onClick={() => setAttendancePage((p) => Math.max(1, p - 1))}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={attendancePage * ATTENDANCE_PAGE_SIZE >= attendanceTotal}
+                        onClick={() => setAttendancePage((p) => p + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
