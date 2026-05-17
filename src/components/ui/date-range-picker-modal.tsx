@@ -166,19 +166,18 @@ export function DateRangePickerModal({
             {isMobile && <div className="fixed inset-0 z-[99] bg-black/40" aria-hidden />}
             <div
               ref={panelRef}
-              className="fixed z-[100] overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-border/60"
+              className="fixed z-[100] w-fit overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-border/60"
               style={
                 isMobile
                   ? {
                       top: '50%',
                       left: '50%',
                       transform: 'translate(-50%, -50%)',
-                      width: 'min(92vw, 360px)',
+                      maxWidth: '92vw',
                     }
                   : {
                       top: anchor?.top ?? 0,
                       left: anchor?.left ?? 0,
-                      minWidth: anchor?.width ?? 240,
                       maxWidth: '92vw',
                     }
               }
