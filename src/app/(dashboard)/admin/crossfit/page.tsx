@@ -380,7 +380,7 @@ export default function CrossfitPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="px-2 py-3 md:p-6 space-y-4 md:space-y-6">
       {ConfirmDialog}
 
       <div className="flex items-center gap-3">
@@ -631,8 +631,9 @@ export default function CrossfitPage() {
               <CardTitle className="text-base">Attendance log</CardTitle>
             </CardHeader>
             <CardContent>
-              {/* Stat cards — reflect the same filter context as the table below */}
-              <div className="grid gap-3 mb-4 grid-cols-1 sm:grid-cols-3">
+              {/* Stat cards — hidden on mobile to save vertical space; from sm
+                  they reflect the same filter context as the table/list below. */}
+              <div className="hidden sm:grid gap-3 mb-4 grid-cols-3">
                 <StatCard
                   icon={CheckCircle2}
                   iconBg="bg-emerald-500/15"
