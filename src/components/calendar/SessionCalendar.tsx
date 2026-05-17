@@ -103,18 +103,21 @@ function compactOverlappingEvents(
         const overflowId = `${OVERFLOW_PREFIX}${key}:${visible[visible.length - 1]!.start.toISOString()}`;
         const overflowStart = hidden[0]!.start;
         const overflowEnd = hidden.reduce((max, c) => (c.end > max ? c.end : max), hidden[0]!.end);
+        // Dialog shows EVERY session in the cluster (not just the hidden ones)
+        // so admins can see the full slot — including the cards already visible
+        // on the grid — in one consistent list.
         overflowMap.set(
           overflowId,
-          hidden.map((c) => c.event),
+          cluster.map((c) => c.event),
         );
         rendered.push({
           id: overflowId,
-          title: `+${hidden.length} more`,
+          title: `View all ${cluster.length}`,
           start: overflowStart,
           end: overflowEnd,
           extendedProps: {
             isOverflow: true,
-            overflowCount: hidden.length,
+            overflowCount: cluster.length,
             overflowId,
           },
         });
@@ -324,7 +327,7 @@ export function SessionCalendar({
             info.el.classList.add('fc-event-overflow');
             info.el.setAttribute(
               'title',
-              `${info.event.extendedProps.overflowCount} more sessions in this slot — click to view`,
+              `View all ${info.event.extendedProps.overflowCount} sessions in this slot`,
             );
           }
         }}
