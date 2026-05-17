@@ -211,8 +211,60 @@ export async function getUsers(input: ListUsersInput) {
     prisma.user.count({ where }),
   ]);
 
+  // Compute sessions-used per active package so the UI can show
+  // sessions-based progress (paid-for sessions, not time).
+  const activePackages = users.flatMap((u) => u.clientProfile?.ptPackages ?? []);
+  const usedByPackageId = new Map<string, number>();
+
+  if (activePackages.length > 0) {
+    const clientIds = Array.from(new Set(activePackages.map((p) => p.clientProfileId)));
+    const minStart = new Date(Math.min(...activePackages.map((p) => p.startDate.getTime())));
+    const maxEnd = new Date(
+      Math.max(
+        ...activePackages.map((p) =>
+          (p.endDate ?? new Date(p.startDate.getTime() + 30 * 86_400_000)).getTime(),
+        ),
+      ),
+    );
+
+    const sessions = await prisma.sessionInstance.findMany({
+      where: {
+        branchId,
+        clientProfileId: { in: clientIds },
+        status: { in: ['COMPLETED', 'NO_SHOW'] },
+        scheduledDate: { gte: minStart, lte: maxEnd },
+      },
+      select: { clientProfileId: true, scheduledDate: true },
+    });
+
+    for (const pkg of activePackages) {
+      const windowEnd = pkg.endDate ?? new Date(pkg.startDate.getTime() + 30 * 86_400_000);
+      const counted = sessions.filter(
+        (s) =>
+          s.clientProfileId === pkg.clientProfileId &&
+          s.scheduledDate >= pkg.startDate &&
+          s.scheduledDate <= windowEnd,
+      ).length;
+      usedByPackageId.set(pkg.id, counted + pkg.onboardingUsedSessions);
+    }
+  }
+
+  const data = users.map((u) => {
+    if (!u.clientProfile?.ptPackages?.length) return u;
+    return {
+      ...u,
+      clientProfile: {
+        ...u.clientProfile,
+        ptPackages: u.clientProfile.ptPackages.map((pkg) => ({
+          ...pkg,
+          usedSessions: usedByPackageId.get(pkg.id) ?? pkg.onboardingUsedSessions,
+        })),
+      },
+    };
+  });
+
   return {
-    data: users,
+    data,
     pagination: {
       page,
       pageSize,

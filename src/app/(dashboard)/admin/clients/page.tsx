@@ -36,6 +36,8 @@ interface ActivePackage {
   startDate: string;
   endDate: string | null;
   sessionsPerMonth: number;
+  totalSessions: number;
+  usedSessions: number;
   trainer: {
     user: { firstName: string; lastName: string };
   };
@@ -189,29 +191,48 @@ export default function ClientListPage() {
             const initials = `${client.firstName[0]}${client.lastName[0]}`.toUpperCase();
             const pkg = client.clientProfile?.ptPackages?.[0] ?? null;
 
-            // Package expiry calculations
-            let daysLeft: number | null = null;
+            // Package expiry calculations — sessions left is the source of truth
+            // (clients pay for sessions, not time). Urgency thresholds are
+            // expressed in day-equivalents using sessionsPerMonth (per 30 days).
+            let sessionsLeft: number | null = null;
             let pctUsed = 0;
             let urgencyBar = 'bg-emerald-500';
             let urgencyBadge = 'bg-emerald-500/15 text-emerald-400';
-            if (pkg?.endDate) {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const start = new Date(pkg.startDate);
-              const end = new Date(pkg.endDate);
-              const totalDays = Math.max(
-                1,
-                Math.round((end.getTime() - start.getTime()) / 86_400_000),
-              );
-              daysLeft = Math.max(0, Math.ceil((end.getTime() - today.getTime()) / 86_400_000));
-              pctUsed = Math.min(100, Math.round(((totalDays - daysLeft) / totalDays) * 100));
-              if (daysLeft <= 7) {
+            if (pkg && pkg.totalSessions > 0) {
+              sessionsLeft = Math.max(0, pkg.totalSessions - pkg.usedSessions);
+              pctUsed = Math.min(100, Math.round((pkg.usedSessions / pkg.totalSessions) * 100));
+              const perDay = pkg.sessionsPerMonth / 30;
+              const redThreshold = Math.max(1, Math.ceil(perDay * 7));
+              const amberThreshold = Math.max(2, Math.ceil(perDay * 14));
+              if (sessionsLeft <= redThreshold) {
                 urgencyBar = 'bg-red-500';
                 urgencyBadge = 'bg-red-500/15 text-red-400';
-              } else if (daysLeft <= 14) {
+              } else if (sessionsLeft <= amberThreshold) {
                 urgencyBar = 'bg-amber-500';
                 urgencyBadge = 'bg-amber-500/15 text-amber-400';
               }
+            }
+
+            // Surface package-level issues that need admin attention as a
+            // badge next to the client's Active/Inactive status.
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            let packageAlert: { label: string; className: string } | null = null;
+            if (!pkg) {
+              packageAlert = {
+                label: 'No trainer',
+                className: 'bg-amber-500/15 text-amber-400',
+              };
+            } else if (pkg.endDate && new Date(pkg.endDate) < today) {
+              packageAlert = {
+                label: 'Expired',
+                className: 'bg-red-500/15 text-red-400',
+              };
+            } else if (sessionsLeft === 0) {
+              packageAlert = {
+                label: 'Sessions used',
+                className: 'bg-red-500/15 text-red-400',
+              };
             }
 
             return (
@@ -244,6 +265,16 @@ export default function ClientListPage() {
                       >
                         {client.isActive ? 'Active' : 'Inactive'}
                       </span>
+                      {packageAlert && (
+                        <span
+                          className={cn(
+                            'shrink-0 rounded-full px-1.5 py-px text-[9px] font-semibold',
+                            packageAlert.className,
+                          )}
+                        >
+                          {packageAlert.label}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
@@ -282,15 +313,15 @@ export default function ClientListPage() {
                         {' · '}
                         {pkg.sessionsPerMonth} sess/mo
                       </span>
-                      {daysLeft !== null && (
+                      {sessionsLeft !== null && (
                         <span
                           className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-semibold tabular-nums ${urgencyBadge}`}
                         >
-                          {daysLeft}d left
+                          {sessionsLeft}/{pkg.totalSessions} left
                         </span>
                       )}
                     </div>
-                    {pkg.endDate && (
+                    {pkg.totalSessions > 0 && (
                       <div className="h-1 rounded-full bg-muted overflow-hidden">
                         <div
                           className={`h-full rounded-full ${urgencyBar}`}

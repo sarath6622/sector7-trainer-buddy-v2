@@ -12,6 +12,7 @@ import {
   CalendarRange,
   ChevronRight,
   FileText,
+  Info,
   Layers,
   RefreshCw,
   Settings,
@@ -25,6 +26,23 @@ import {
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar as CalendarUI } from '@/components/ui/calendar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   ResponsiveContainer,
   BarChart,
@@ -32,7 +50,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Cell,
   LabelList,
 } from 'recharts';
@@ -124,6 +142,10 @@ interface ExpiringPackage {
   trainerName: string;
   endDate: string;
   daysLeft: number;
+  totalSessions: number;
+  usedSessions: number;
+  sessionsLeft: number;
+  reason: 'time' | 'sessions' | 'both';
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -149,6 +171,8 @@ function getGreeting() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+type KpiModalType = 'clients' | 'sessions' | 'completion' | 'noshows' | null;
+
 export default function AdminDashboard() {
   const { data: session } = useSession();
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
@@ -159,6 +183,7 @@ export default function AdminDashboard() {
   const [customRange, setCustomRange] = useState<DateRange | null>(null);
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [pickerSelection, setPickerSelection] = useState<DayPickerRange | undefined>();
+  const [openModal, setOpenModal] = useState<KpiModalType>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   // close picker on outside click
@@ -452,50 +477,70 @@ export default function AdminDashboard() {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <KpiCard
-          icon={<Users className="h-4 w-4" />}
-          label="Active Clients"
-          value={activeClients}
-          sub={`with sessions ${subLabel}`}
-          color="text-blue-500"
-          bg="bg-blue-500/10"
-        />
-        <KpiCard
-          icon={<Layers className="h-4 w-4" />}
-          label="Total Sessions"
-          value={totalScheduled}
-          sub={`${totalCompleted} completed`}
-          color="text-violet-500"
-          bg="bg-violet-500/10"
-          progress={totalScheduled > 0 ? (totalCompleted / totalScheduled) * 100 : 0}
-          progressColor="bg-violet-500"
-        />
-        <KpiCard
-          icon={<TrendingUp className="h-4 w-4" />}
-          label="Avg Completion"
-          value={avgCompletion != null ? `${avgCompletion}%` : '—'}
-          sub={`${utilization.length} trainer${utilization.length !== 1 ? 's' : ''}`}
-          color="text-emerald-500"
-          bg="bg-emerald-500/10"
-          progress={avgCompletion ?? 0}
-          progressColor={
-            (avgCompletion ?? 0) >= 70
-              ? 'bg-emerald-500'
-              : (avgCompletion ?? 0) >= 40
-                ? 'bg-amber-500'
-                : 'bg-red-500'
-          }
-        />
-        <KpiCard
-          icon={<UserX className="h-4 w-4" />}
-          label="No-Shows"
-          value={totalNoShows}
-          sub={subLabel}
-          color={totalNoShows > 0 ? 'text-red-500' : 'text-muted-foreground'}
-          bg={totalNoShows > 0 ? 'bg-red-500/10' : 'bg-muted/60'}
-        />
-      </div>
+      <TooltipProvider delay={150}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <KpiCard
+            icon={<Users className="h-4 w-4" />}
+            label="Active Clients"
+            value={activeClients}
+            sub={`with sessions ${subLabel}`}
+            color="text-blue-500"
+            bg="bg-blue-500/10"
+            tooltip="Clients who currently have an active PT package assigned. Inactive packages and clients without any package are not counted."
+            onClick={() => setOpenModal('clients')}
+          />
+          <KpiCard
+            icon={<Layers className="h-4 w-4" />}
+            label="Total Sessions"
+            value={totalScheduled}
+            sub={`${totalCompleted} completed`}
+            color="text-violet-500"
+            bg="bg-violet-500/10"
+            progress={totalScheduled > 0 ? (totalCompleted / totalScheduled) * 100 : 0}
+            progressColor="bg-violet-500"
+            tooltip={`Every session in the selected period — scheduled, completed, no-show, and cancelled — added together. The bar shows how many of those are already completed (${totalCompleted}/${totalScheduled}).`}
+            onClick={() => setOpenModal('sessions')}
+          />
+          <KpiCard
+            icon={<TrendingUp className="h-4 w-4" />}
+            label="Avg Completion"
+            value={avgCompletion != null ? `${avgCompletion}%` : '—'}
+            sub={`${utilization.length} trainer${utilization.length !== 1 ? 's' : ''}`}
+            color="text-emerald-500"
+            bg="bg-emerald-500/10"
+            progress={avgCompletion ?? 0}
+            progressColor={
+              (avgCompletion ?? 0) >= 70
+                ? 'bg-emerald-500'
+                : (avgCompletion ?? 0) >= 40
+                  ? 'bg-amber-500'
+                  : 'bg-red-500'
+            }
+            tooltip="For each trainer we calculate completed ÷ total sessions in this period, then take the average across all trainers. Trainers with no sessions count as 0%."
+            onClick={() => setOpenModal('completion')}
+          />
+          <KpiCard
+            icon={<UserX className="h-4 w-4" />}
+            label="No-Shows"
+            value={totalNoShows}
+            sub={subLabel}
+            color={totalNoShows > 0 ? 'text-red-500' : 'text-muted-foreground'}
+            bg={totalNoShows > 0 ? 'bg-red-500/10' : 'bg-muted/60'}
+            tooltip="Sessions that were scheduled but the client did not attend (marked No-Show by the trainer) during the selected period. Cancellations are excluded."
+            onClick={() => setOpenModal('noshows')}
+          />
+        </div>
+      </TooltipProvider>
+
+      {/* ── KPI Detail Modal ── */}
+      <KpiDetailModal
+        open={openModal}
+        onClose={() => setOpenModal(null)}
+        subLabel={subLabel}
+        consumption={consumption}
+        utilization={utilization}
+        noShow={noShow}
+      />
 
       {/* ── Middle row: Activity + Quick Nav ── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -575,10 +620,19 @@ export default function AdminDashboard() {
           </div>
           <div className="divide-y divide-border/40">
             {expiringPackages.map((pkg) => {
+              // Show the metric that triggered the alert (or the more urgent
+              // of the two when both did). Express "urgency" as the smaller
+              // of (daysLeft, sessionsLeft) so the badge color is consistent.
+              const limitingMetric =
+                pkg.reason === 'sessions' ||
+                (pkg.reason === 'both' && pkg.sessionsLeft <= pkg.daysLeft)
+                  ? ('sessions' as const)
+                  : ('time' as const);
+              const limitingValue = limitingMetric === 'sessions' ? pkg.sessionsLeft : pkg.daysLeft;
               const urgency =
-                pkg.daysLeft <= 3
+                limitingValue <= 3
                   ? 'text-red-400 bg-red-500/15'
-                  : pkg.daysLeft <= 7
+                  : limitingValue <= 7
                     ? 'text-amber-400 bg-amber-500/15'
                     : 'text-yellow-400 bg-yellow-500/15';
               const initials = pkg.clientName
@@ -595,7 +649,7 @@ export default function AdminDashboard() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{pkg.clientName}</p>
                     <p className="text-[11px] text-muted-foreground truncate">
-                      with {pkg.trainerName} · ends{' '}
+                      with {pkg.trainerName} · {pkg.usedSessions}/{pkg.totalSessions} sess · ends{' '}
                       {new Date(pkg.endDate).toLocaleDateString('en-IN', {
                         day: 'numeric',
                         month: 'short',
@@ -605,7 +659,9 @@ export default function AdminDashboard() {
                   <span
                     className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold tabular-nums ${urgency}`}
                   >
-                    {pkg.daysLeft}d left
+                    {limitingMetric === 'sessions'
+                      ? `${pkg.sessionsLeft} sess left`
+                      : `${pkg.daysLeft}d left`}
                   </span>
                 </div>
               );
@@ -650,7 +706,7 @@ export default function AdminDashboard() {
                 axisLine={false}
                 tickLine={false}
               />
-              <Tooltip
+              <RechartsTooltip
                 cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                 formatter={(value) => [`${value}%`, 'Utilization']}
                 contentStyle={{
@@ -699,6 +755,8 @@ function KpiCard({
   bg,
   progress,
   progressColor,
+  tooltip,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -708,11 +766,50 @@ function KpiCard({
   bg: string;
   progress?: number;
   progressColor?: string;
+  tooltip?: string;
+  onClick?: () => void;
 }) {
+  const interactive = !!onClick;
   return (
-    <div className="rounded-2xl bg-card p-5 ring-1 ring-border/50">
+    <div
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        interactive
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        'rounded-2xl bg-card p-5 ring-1 ring-border/50 transition-all',
+        interactive &&
+          'cursor-pointer hover:ring-primary/40 hover:bg-card/80 active:scale-[0.99] outline-none focus-visible:ring-2 focus-visible:ring-primary',
+      )}
+    >
       <div className="flex items-start justify-between">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          {tooltip && (
+            <Tooltip>
+              <TooltipTrigger
+                type="button"
+                aria-label={`How ${label} is calculated`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+              >
+                <Info className="h-3 w-3" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[260px] text-left leading-relaxed">
+                {tooltip}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
         <div
           className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', bg, color)}
         >
@@ -730,6 +827,304 @@ function KpiCard({
       )}
       <p className="mt-2 text-xs text-muted-foreground">{sub}</p>
     </div>
+  );
+}
+
+// ─── KPI Detail Modal ────────────────────────────────────────────────────────
+
+const KPI_MODAL_META: Record<
+  Exclude<KpiModalType, null>,
+  { title: string; description: (subLabel: string) => string }
+> = {
+  clients: {
+    title: 'Active Clients',
+    description: (s) => `Per-client session breakdown for ${s}.`,
+  },
+  sessions: {
+    title: 'Total Sessions',
+    description: (s) => `Every session ${s}, grouped by client and status.`,
+  },
+  completion: {
+    title: 'Avg Completion',
+    description: (s) => `Completion rate by trainer ${s}. Higher = more delivered sessions.`,
+  },
+  noshows: {
+    title: 'No-Shows',
+    description: (s) => `No-show count and rate by trainer ${s}.`,
+  },
+};
+
+function PercentPill({ value, kind }: { value: number; kind: 'good' | 'bad' }) {
+  const color =
+    kind === 'good'
+      ? value >= 70
+        ? 'bg-emerald-500/15 text-emerald-400'
+        : value >= 40
+          ? 'bg-amber-500/15 text-amber-400'
+          : 'bg-red-500/15 text-red-400'
+      : value <= 5
+        ? 'bg-emerald-500/15 text-emerald-400'
+        : value <= 15
+          ? 'bg-amber-500/15 text-amber-400'
+          : 'bg-red-500/15 text-red-400';
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+        color,
+      )}
+    >
+      {value}%
+    </span>
+  );
+}
+
+function KpiDetailModal({
+  open,
+  onClose,
+  subLabel,
+  consumption,
+  utilization,
+  noShow,
+}: {
+  open: KpiModalType;
+  onClose: () => void;
+  subLabel: string;
+  consumption: SessionConsumption[];
+  utilization: TrainerUtilization[];
+  noShow: NoShowRate[];
+}) {
+  const meta = open ? KPI_MODAL_META[open] : null;
+
+  return (
+    <Dialog open={!!open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+        {meta && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{meta.title}</DialogTitle>
+              <DialogDescription>{meta.description(subLabel)}</DialogDescription>
+            </DialogHeader>
+            <div className="-mx-4 overflow-y-auto">
+              {open === 'clients' && <ClientsTable rows={consumption} />}
+              {open === 'sessions' && <SessionsTable rows={consumption} />}
+              {open === 'completion' && <CompletionTable rows={utilization} />}
+              {open === 'noshows' && <NoShowsTable rows={noShow} />}
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EmptyRow({ cols, label }: { cols: number; label: string }) {
+  return (
+    <TableRow>
+      <TableCell colSpan={cols} className="text-center text-muted-foreground py-8">
+        {label}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function ClientsTable({ rows }: { rows: SessionConsumption[] }) {
+  const sorted = [...rows].sort((a, b) => b.consumptionPercent - a.consumptionPercent);
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Client</TableHead>
+          <TableHead className="text-right">Plan</TableHead>
+          <TableHead className="text-right">Done</TableHead>
+          <TableHead className="text-right">Upcoming</TableHead>
+          <TableHead className="text-right">No-shows</TableHead>
+          <TableHead className="text-right">Consumed</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sorted.length === 0 ? (
+          <EmptyRow cols={6} label="No active clients in this period." />
+        ) : (
+          sorted.map((c) => (
+            <TableRow key={c.clientName}>
+              <TableCell className="font-medium">{c.clientName}</TableCell>
+              <TableCell className="text-right text-muted-foreground tabular-nums">
+                {c.sessionsPerMonth}/mo
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{c.completed}</TableCell>
+              <TableCell className="text-right tabular-nums text-muted-foreground">
+                {c.scheduled}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {c.noShow > 0 ? (
+                  <span className="text-red-400 font-medium">{c.noShow}</span>
+                ) : (
+                  <span className="text-muted-foreground">0</span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <PercentPill value={c.consumptionPercent} kind="good" />
+              </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function SessionsTable({ rows }: { rows: SessionConsumption[] }) {
+  const sorted = [...rows].sort(
+    (a, b) =>
+      b.completed +
+      b.scheduled +
+      b.noShow +
+      b.cancelled -
+      (a.completed + a.scheduled + a.noShow + a.cancelled),
+  );
+  const totals = sorted.reduce(
+    (acc, r) => ({
+      completed: acc.completed + r.completed,
+      scheduled: acc.scheduled + r.scheduled,
+      noShow: acc.noShow + r.noShow,
+      cancelled: acc.cancelled + r.cancelled,
+      total: acc.total + r.completed + r.scheduled + r.noShow + r.cancelled,
+    }),
+    { completed: 0, scheduled: 0, noShow: 0, cancelled: 0, total: 0 },
+  );
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Client</TableHead>
+          <TableHead className="text-right">Completed</TableHead>
+          <TableHead className="text-right">Upcoming</TableHead>
+          <TableHead className="text-right">No-shows</TableHead>
+          <TableHead className="text-right">Cancelled</TableHead>
+          <TableHead className="text-right font-semibold">Total</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sorted.length === 0 ? (
+          <EmptyRow cols={6} label="No sessions in this period." />
+        ) : (
+          sorted.map((c) => {
+            const total = c.completed + c.scheduled + c.noShow + c.cancelled;
+            return (
+              <TableRow key={c.clientName}>
+                <TableCell className="font-medium">{c.clientName}</TableCell>
+                <TableCell className="text-right tabular-nums text-emerald-400">
+                  {c.completed}
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-muted-foreground">
+                  {c.scheduled}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {c.noShow > 0 ? (
+                    <span className="text-red-400">{c.noShow}</span>
+                  ) : (
+                    <span className="text-muted-foreground">0</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-muted-foreground">
+                  {c.cancelled}
+                </TableCell>
+                <TableCell className="text-right tabular-nums font-semibold">{total}</TableCell>
+              </TableRow>
+            );
+          })
+        )}
+      </TableBody>
+      {sorted.length > 0 && (
+        <TableFooter>
+          <TableRow>
+            <TableCell>Total</TableCell>
+            <TableCell className="text-right tabular-nums">{totals.completed}</TableCell>
+            <TableCell className="text-right tabular-nums">{totals.scheduled}</TableCell>
+            <TableCell className="text-right tabular-nums">{totals.noShow}</TableCell>
+            <TableCell className="text-right tabular-nums">{totals.cancelled}</TableCell>
+            <TableCell className="text-right tabular-nums">{totals.total}</TableCell>
+          </TableRow>
+        </TableFooter>
+      )}
+    </Table>
+  );
+}
+
+function CompletionTable({ rows }: { rows: TrainerUtilization[] }) {
+  const sorted = [...rows].sort((a, b) => b.utilizationPercent - a.utilizationPercent);
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Trainer</TableHead>
+          <TableHead className="text-right">Total sessions</TableHead>
+          <TableHead className="text-right">Completed</TableHead>
+          <TableHead className="text-right">Completion</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sorted.length === 0 ? (
+          <EmptyRow cols={4} label="No trainer activity in this period." />
+        ) : (
+          sorted.map((t) => (
+            <TableRow key={t.trainerName}>
+              <TableCell className="font-medium">{t.trainerName}</TableCell>
+              <TableCell className="text-right tabular-nums">{t.totalSessions}</TableCell>
+              <TableCell className="text-right tabular-nums text-emerald-400">
+                {t.completedSessions}
+              </TableCell>
+              <TableCell className="text-right">
+                <PercentPill value={t.utilizationPercent} kind="good" />
+              </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function NoShowsTable({ rows }: { rows: NoShowRate[] }) {
+  const sorted = [...rows]
+    .filter((r) => r.totalSessions > 0)
+    .sort((a, b) => b.noShowCount - a.noShowCount);
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Trainer</TableHead>
+          <TableHead className="text-right">Sessions</TableHead>
+          <TableHead className="text-right">No-shows</TableHead>
+          <TableHead className="text-right">No-show rate</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sorted.length === 0 ? (
+          <EmptyRow cols={4} label="No no-shows in this period." />
+        ) : (
+          sorted.map((t) => (
+            <TableRow key={t.trainerName}>
+              <TableCell className="font-medium">{t.trainerName}</TableCell>
+              <TableCell className="text-right tabular-nums text-muted-foreground">
+                {t.totalSessions}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {t.noShowCount > 0 ? (
+                  <span className="text-red-400 font-semibold">{t.noShowCount}</span>
+                ) : (
+                  <span className="text-muted-foreground">0</span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <PercentPill value={t.noShowPercent} kind="bad" />
+              </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
   );
 }
 
