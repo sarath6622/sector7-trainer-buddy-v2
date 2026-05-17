@@ -630,7 +630,7 @@ export async function getCrossfitAttendanceList(input: AttendanceListInput) {
       : {}),
   };
 
-  const [total, rows] = await Promise.all([
+  const [total, rows, distinctMembers, distinctSessionRows] = await Promise.all([
     prisma.crossfitAttendance.count({ where }),
     prisma.crossfitAttendance.findMany({
       where,
@@ -650,7 +650,35 @@ export async function getCrossfitAttendanceList(input: AttendanceListInput) {
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
+    // Distinct (clientProfileId, externalName) tuples → unique-member count.
+    // Walk-ins land as (null, "Sam"), members as (id, null); both shape into
+    // separate buckets so a member and a walk-in with the same name don't merge.
+    prisma.crossfitAttendance.groupBy({
+      by: ['clientProfileId', 'externalName'],
+      where,
+      _count: { _all: true },
+    }),
+    // Distinct session ids present in the filtered attendance set, so duration
+    // and sessions-held reflect the same filter context as the table.
+    prisma.crossfitAttendance.findMany({
+      where,
+      select: { sessionId: true },
+      distinct: ['sessionId'],
+    }),
   ]);
+
+  const distinctSessionIds = distinctSessionRows.map((r) => r.sessionId);
+  const sessions = distinctSessionIds.length
+    ? await prisma.crossfitSession.findMany({
+        where: { id: { in: distinctSessionIds } },
+        select: { startedAt: true, endedAt: true },
+      })
+    : [];
+
+  const totalDurationMin = sessions.reduce((sum, s) => {
+    if (!s.startedAt || !s.endedAt) return sum;
+    return sum + (s.endedAt.getTime() - s.startedAt.getTime()) / 60_000;
+  }, 0);
 
   // Resolve marker names in a single side query — CrossfitAttendance.markedByUserId
   // has no Prisma relation, so we batch-fetch the users we need.
@@ -683,6 +711,12 @@ export async function getCrossfitAttendanceList(input: AttendanceListInput) {
       pageSize,
       total,
       totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+    stats: {
+      totalAttendances: total,
+      uniqueMembers: distinctMembers.length,
+      sessionsHeld: sessions.length,
+      totalDurationMin: Math.round(totalDurationMin),
     },
   };
 }

@@ -1,7 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, Pencil, Dumbbell, Users, X, Search } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  Pencil,
+  Dumbbell,
+  Users,
+  X,
+  Search,
+  CheckCircle2,
+  UserCheck,
+  CalendarDays,
+  Timer,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
@@ -128,6 +140,12 @@ export default function CrossfitPage() {
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([]);
   const [attendanceTotal, setAttendanceTotal] = useState(0);
+  const [attendanceStats, setAttendanceStats] = useState<{
+    totalAttendances: number;
+    uniqueMembers: number;
+    sessionsHeld: number;
+    totalDurationMin: number;
+  } | null>(null);
   const ATTENDANCE_PAGE_SIZE = 25;
 
   // Enrollment dialog
@@ -204,6 +222,7 @@ export default function CrossfitPage() {
         .then((res) => {
           setAttendanceRows(res.data ?? []);
           setAttendanceTotal(res.pagination?.total ?? 0);
+          setAttendanceStats(res.stats ?? null);
         })
         .catch(() => toast.error('Failed to load attendance'))
         .finally(() => setAttendanceLoading(false));
@@ -612,6 +631,44 @@ export default function CrossfitPage() {
               <CardTitle className="text-base">Attendance log</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Stat cards — reflect the same filter context as the table below */}
+              <div className="grid gap-3 mb-4 grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  icon={CheckCircle2}
+                  iconBg="bg-emerald-500/15"
+                  iconColor="text-emerald-600"
+                  label="Attendances"
+                  value={attendanceStats ? attendanceStats.totalAttendances.toString() : '—'}
+                  loading={attendanceLoading && !attendanceStats}
+                />
+                <StatCard
+                  icon={UserCheck}
+                  iconBg="bg-blue-500/15"
+                  iconColor="text-blue-600"
+                  label="Unique members"
+                  value={attendanceStats ? attendanceStats.uniqueMembers.toString() : '—'}
+                  loading={attendanceLoading && !attendanceStats}
+                />
+                <StatCard
+                  icon={CalendarDays}
+                  iconBg="bg-orange-500/15"
+                  iconColor="text-orange-600"
+                  label="Sessions held"
+                  value={attendanceStats ? attendanceStats.sessionsHeld.toString() : '—'}
+                  loading={attendanceLoading && !attendanceStats}
+                />
+                <StatCard
+                  icon={Timer}
+                  iconBg="bg-purple-500/15"
+                  iconColor="text-purple-600"
+                  label="Total duration"
+                  value={
+                    attendanceStats ? formatDurationMin(attendanceStats.totalDurationMin) : '—'
+                  }
+                  loading={attendanceLoading && !attendanceStats}
+                />
+              </div>
+
               <div className="grid gap-3 mb-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-1">
                   <Label htmlFor="att-from" className="text-xs text-muted-foreground">
@@ -1032,4 +1089,47 @@ export default function CrossfitPage() {
       </Dialog>
     </div>
   );
+}
+
+function StatCard({
+  icon: Icon,
+  iconBg,
+  iconColor,
+  label,
+  value,
+  loading,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  iconBg: string;
+  iconColor: string;
+  label: string;
+  value: string;
+  loading: boolean;
+}) {
+  return (
+    <div className="rounded-xl bg-card p-3 ring-1 ring-border/50">
+      <div className="flex items-center gap-3">
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
+          <Icon className={`h-4 w-4 ${iconColor}`} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground truncate">{label}</p>
+          {loading ? (
+            <Skeleton className="mt-1 h-5 w-12" />
+          ) : (
+            <p className="text-lg font-semibold leading-tight">{value}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatDurationMin(min: number): string {
+  if (min <= 0) return '0m';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }

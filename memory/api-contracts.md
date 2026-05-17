@@ -507,7 +507,7 @@ PUT    /api/admin/crossfit/classes/[id]          → { trainerProfileId?, name?,
 POST   /api/admin/crossfit/enrollments           → { classId, clientProfileId?, clientType, externalName?, externalPhone? } → CrossfitEnrollment
 GET    /api/admin/crossfit/enrollments           → ?classId&clientType → CrossfitEnrollment[]
 DELETE /api/admin/crossfit/enrollments/[id]      → {} → { success: true }
-GET    /api/admin/crossfit/attendance            → ?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD&classId?&search?&page?&pageSize? → Paginated<AttendanceRow>
+GET    /api/admin/crossfit/attendance            → ?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD&classId?&search?&page?&pageSize? → Paginated<AttendanceRow> & { stats: AttendanceStats }
 ```
 
 `AttendanceRow` shape (used by the admin Attendance log tab — added 2026-05-17):
@@ -536,6 +536,19 @@ Notes:
 - `markedByName` resolves `CrossfitAttendance.markedByUserId` via a side query
   (no Prisma relation on that column).
 - Default `pageSize=25`, max `100`.
+
+`AttendanceStats` block (always included on the response, reflects the SAME
+filter context as the table — `dateFrom`, `dateTo`, `classId`, `search`):
+
+```typescript
+{
+  totalAttendances: number; // count of attendance rows matching the filter
+  uniqueMembers: number; // distinct (clientProfileId, externalName) tuples
+  sessionsHeld: number; // distinct CrossfitSessions touched by the filtered attendances
+  totalDurationMin: number; // Σ (endedAt − startedAt) across those sessions;
+  // sessions with null startedAt/endedAt contribute 0
+}
+```
 
 ## CrossFit Trainer Routes
 
