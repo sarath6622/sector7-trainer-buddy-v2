@@ -8,7 +8,19 @@ import { useRestAutofill } from '@/hooks/useRestAutofill';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
 import type { WorkoutUpdatedPayload } from '@/lib/pusher';
 import { useRouter } from 'next/navigation';
-import { Clock, TrendingUp, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  Clock,
+  TrendingUp,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  ChevronRight,
+  Dumbbell,
+} from 'lucide-react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -61,6 +73,8 @@ interface SessionData {
   durationMin: number;
   status: string;
   startedAt?: string;
+  endedAt?: string | null;
+  actualDurationMin?: number | null;
   client?: { id: string; user: { firstName: string; lastName: string } };
   trainer: { user: { firstName: string; lastName: string } };
   workoutLogs: WorkoutLog[];
@@ -143,6 +157,15 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
       if (hasUnsaved) return;
       void fetchSession();
     },
+    // Trainer ended the session — refetch unconditionally so the page flips
+    // out of the editable WorkoutLogger into the read-only completed view.
+    // We ignore `hasUnsaved` here on purpose: once the trainer has ended,
+    // there's nothing to save against this session anymore.
+    SESSION_ENDED: () => {
+      const trainerFirst = session?.trainer.user.firstName ?? 'Your trainer';
+      toast.info(`${trainerFirst} ended the session`);
+      void fetchSession();
+    },
   });
 
   if (loading) {
@@ -178,6 +201,12 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
   const trainerInitials = initials(trainerFirst, trainerLast);
   const isActive = session.status === 'IN_PROGRESS' && !!session.startedAt;
   const isScheduled = session.status === 'SCHEDULED';
+  // Anything that isn't SCHEDULED or IN_PROGRESS is terminal from the client's
+  // perspective (COMPLETED, CANCELLED, NO_SHOW). We swap the editable
+  // WorkoutLogger for a read-only summary so a client can't keep logging into
+  // a session the trainer has already closed (the original bug: trainer ended
+  // session, client still saw + edited the workout page).
+  const isEnded = !isScheduled && session.status !== 'IN_PROGRESS';
 
   // Idle escalation anchors to the latest of: startedAt, any log's updatedAt,
   // any set's createdAt. Without this, the hero would show "1H idle" even
@@ -196,8 +225,10 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         {/* Hero only renders once the trainer has started the session. For
             SCHEDULED, the body below shows a "Waiting for trainer to start"
-            empty state instead — there's no elapsed timer to anchor a hero. */}
-        {!isScheduled && (
+            empty state instead — there's no elapsed timer to anchor a hero.
+            For ended sessions we also skip the hero: the live timer would be
+            meaningless and the read-only summary owns its own header. */}
+        {!isScheduled && !isEnded && (
           <div className="px-3 py-2.5">
             <SessionHero
               // Client-side: the hero subject is the trainer ("With X").
@@ -255,6 +286,13 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
             </p>
           </div>
         </div>
+      ) : isEnded ? (
+        <EndedSessionView
+          session={session}
+          trainerName={trainerName}
+          onBackToDashboard={() => router.push('/client')}
+          onViewHistory={() => router.push('/client/workouts')}
+        />
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
           <WorkoutLogger
@@ -301,6 +339,182 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
           onClose={() => setProgressModal(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Ended session (COMPLETED / CANCELLED / NO_SHOW) read-only view ───────────
+// Replaces the editable WorkoutLogger once the trainer has ended the session.
+// Reuses the same /client/session/[id] URL, so clicking a past session from
+// /client/workouts also lands here — the previous behaviour was to render the
+// editable logger, which let clients keep modifying closed sessions.
+
+const ENDED_STATUS_THEME: Record<
+  string,
+  {
+    title: string;
+    subtitle: (trainerName: string) => string;
+    icon: typeof CheckCircle2;
+    iconColor: string;
+    iconBg: string;
+  }
+> = {
+  COMPLETED: {
+    title: 'Session Completed',
+    subtitle: (t) => `Ended by ${t}`,
+    icon: CheckCircle2,
+    iconColor: 'text-emerald-500',
+    iconBg: 'bg-emerald-500/15',
+  },
+  CANCELLED: {
+    title: 'Session Cancelled',
+    subtitle: () => 'This session was cancelled',
+    icon: XCircle,
+    iconColor: 'text-red-500',
+    iconBg: 'bg-red-500/15',
+  },
+  NO_SHOW: {
+    title: 'Session Marked No-Show',
+    subtitle: () => 'This session was marked as a no-show',
+    icon: AlertCircle,
+    iconColor: 'text-amber-500',
+    iconBg: 'bg-amber-500/15',
+  },
+};
+
+function formatSetSummary(set: SetData, type: ExerciseType): string {
+  const parts: string[] = [];
+  if (type === 'WEIGHTED') {
+    if (set.weightKg != null) parts.push(`${set.weightKg}kg`);
+    if (set.reps != null) parts.push(`× ${set.reps}`);
+  } else if (type === 'BODYWEIGHT') {
+    if (set.reps != null) parts.push(`${set.reps} reps`);
+  } else if (type === 'DURATION') {
+    if (set.durationSec != null) parts.push(`${set.durationSec}s`);
+  } else if (type === 'CARDIO') {
+    if (set.durationSec != null) parts.push(`${set.durationSec}s`);
+    if (set.notes) parts.push(set.notes);
+  }
+  return parts.length ? parts.join(' ') : '—';
+}
+
+function EndedSessionView({
+  session,
+  trainerName,
+  onBackToDashboard,
+  onViewHistory,
+}: {
+  session: SessionData;
+  trainerName: string;
+  onBackToDashboard: () => void;
+  onViewHistory: () => void;
+}) {
+  const theme = ENDED_STATUS_THEME[session.status] ?? ENDED_STATUS_THEME.COMPLETED!;
+  const Icon = theme.icon;
+  const totalSets = session.workoutLogs.reduce((sum, log) => sum + log.sets.length, 0);
+  const durationLabel = session.actualDurationMin != null ? `${session.actualDurationMin}m` : '—';
+  const dateLabel = new Date(toLocalDateStr(session.scheduledDate)).toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 py-6">
+      <div className="mx-auto max-w-md space-y-5 pb-8">
+        {/* Hero */}
+        <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-6 text-center ring-1 ring-border/50">
+          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${theme.iconBg}`}>
+            <Icon className={`h-7 w-7 ${theme.iconColor}`} />
+          </div>
+          <div>
+            <p className="text-lg font-bold">{theme.title}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{theme.subtitle(trainerName)}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {dateLabel} · {formatTime12(session.scheduledTime)}
+            </p>
+          </div>
+          <div className="mt-2 grid w-full grid-cols-3 gap-2">
+            <SummaryStat label="Duration" value={durationLabel} />
+            <SummaryStat label="Exercises" value={`${session.workoutLogs.length}`} />
+            <SummaryStat label="Total Sets" value={`${totalSets}`} />
+          </div>
+        </div>
+
+        {/* Exercises (read-only) */}
+        {session.workoutLogs.length > 0 ? (
+          <div className="space-y-2">
+            <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Workout Summary
+            </p>
+            <div className="space-y-2">
+              {session.workoutLogs.map((log) => (
+                <div key={log.id} className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{log.exercise.name}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {log.exercise.targetMuscleGroup}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {log.sets.length} set{log.sets.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {log.sets.length > 0 && (
+                    <div className="mt-3 space-y-1.5">
+                      {log.sets.map((set) => (
+                        <div
+                          key={set.setNumber}
+                          className="flex items-center justify-between text-xs"
+                        >
+                          <span className="text-muted-foreground">Set {set.setNumber}</span>
+                          <span className="font-medium tabular-nums">
+                            {formatSetSummary(set, log.exercise.exerciseType)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border/60 px-6 py-8 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+              <Dumbbell className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">No exercises were logged</p>
+          </div>
+        )}
+
+        {/* CTAs */}
+        <div className="space-y-2">
+          <button
+            onClick={onViewHistory}
+            className="flex w-full items-center justify-between rounded-2xl bg-card px-4 py-3.5 text-left ring-1 ring-border/50 transition-colors hover:bg-muted/20"
+          >
+            <span className="text-sm font-medium">View workout history</span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+          <button
+            onClick={onBackToDashboard}
+            className="flex w-full items-center justify-center rounded-2xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-90"
+          >
+            Back to dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-muted/40 px-2 py-2.5">
+      <p className="text-base font-bold leading-none">{value}</p>
+      <p className="mt-1 text-[10px] text-muted-foreground">{label}</p>
     </div>
   );
 }
