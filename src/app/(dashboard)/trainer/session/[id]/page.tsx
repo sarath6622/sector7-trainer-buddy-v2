@@ -11,6 +11,7 @@ import { useRestTimer } from '@/hooks/useRestTimer';
 import { useSessionPause } from '@/hooks/useSessionPause';
 import { useRestAutofill } from '@/hooks/useRestAutofill';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 import type {
   SessionStartedPayload,
   SessionEndedPayload,
@@ -296,6 +297,11 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const restTimer = useRestTimer(activeId);
   const sessionPause = useSessionPause(activeId);
   const { lastFinishedRestSec, consumeRest } = useRestAutofill(activeId, restTimer);
+  // Keyboard-aware container height. iOS standalone PWAs don't shrink `dvh`
+  // when the virtual keyboard opens, so without this the bottom rest-timer
+  // pill ends up hidden behind the keyboard while the trainer types.
+  const keyboardInset = useKeyboardInset();
+  const containerHeight = `calc(100dvh - 3.5rem - env(safe-area-inset-top) - ${keyboardInset}px)`;
 
   // Branch default session duration drives the hero progress ring so the ring
   // reflects the gym's standard slot length rather than an out-of-band per-row
@@ -534,10 +540,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   // ── Loading / starting ──────────────────────────────────────────────────────
   if (loading || starting) {
     return (
-      <div
-        className="-m-4 md:-m-6 flex flex-col bg-background"
-        style={{ height: 'calc(100dvh - 3.5rem - env(safe-area-inset-top))' }}
-      >
+      <div className="-m-4 md:-m-6 flex flex-col bg-background" style={{ height: containerHeight }}>
         {/* ── Sticky tab card placeholder ── */}
         <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
           <div className="px-3 pt-2.5 pb-2.5">
@@ -582,10 +585,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const isActive = session.status === 'IN_PROGRESS' && !!session.startedAt;
 
   return (
-    <div
-      className="-m-4 md:-m-6 flex flex-col bg-background"
-      style={{ height: 'calc(100dvh - 3.5rem - env(safe-area-inset-top))' }}
-    >
+    <div className="-m-4 md:-m-6 flex flex-col bg-background" style={{ height: containerHeight }}>
       {/* ── Badge celebration overlay ── */}
       {celebrationBadges.length > 0 && (
         <BadgeCelebration badges={celebrationBadges} onDone={() => setCelebrationBadges([])} />

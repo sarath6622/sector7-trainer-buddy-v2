@@ -31,6 +31,10 @@ export const viewport: Viewport = {
   userScalable: false,
   viewportFit: 'cover',
   themeColor: '#1a1a1a',
+  // Tells Android Chrome to shrink the layout viewport when the virtual
+  // keyboard opens, so bottom-pinned elements (e.g. session rest-timer pill)
+  // stay above the keyboard instead of being overlaid by it.
+  interactiveWidget: 'resizes-content',
 };
 
 export const metadata: Metadata = {

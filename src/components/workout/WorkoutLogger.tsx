@@ -184,6 +184,14 @@ const TYPE_CONFIG: Record<
 
 type ColDef = { key: keyof SetData; label: string; step?: string; min?: number; max?: number };
 
+// Mobile keypad selection per column. `decimal` for fields that accept
+// fractional values (kg, distance in km/m); `numeric` for whole-number fields
+// (reps, seconds, steps). `numeric` shows a tighter keypad (no decimal point)
+// which reduces mis-taps for reps and rest seconds — the most-typed fields.
+function inputModeFor(key: keyof SetData): 'decimal' | 'numeric' {
+  return key === 'weightKg' || key === 'notes' ? 'decimal' : 'numeric';
+}
+
 // Rest column is shown alongside the type-specific work columns. We surface
 // rest taken before the set instead of RPE — the rpe field still exists on
 // the model but is no longer entered here (other surfaces / future trainer
@@ -1723,29 +1731,57 @@ export function WorkoutLogger({
                                     </button>
                                   );
                                 }
-                                return (
-                                  <Input
-                                    key={col.key as string}
-                                    type="number"
-                                    inputMode="decimal"
-                                    placeholder={placeholderFor(
-                                      col.key,
-                                      priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
-                                    )}
-                                    step={col.step}
-                                    min={col.min}
-                                    max={col.max}
-                                    className="h-11 rounded-xl text-center text-sm font-semibold tabular-nums border border-zinc-700 focus:border-blue-500 focus-visible:ring-0"
-                                    value={
-                                      col.key === 'notes'
-                                        ? set.notes
-                                        : ((set[col.key] as number | undefined) ?? '')
-                                    }
-                                    onChange={(e) =>
-                                      updateSet(exIdx, setIdx, col.key, e.target.value)
-                                    }
-                                  />
-                                );
+                                {
+                                  const mode = inputModeFor(col.key);
+                                  return (
+                                    <Input
+                                      key={col.key as string}
+                                      // text + inputMode (vs type="number") avoids Safari's
+                                      // number-input quirks (mid-keystroke validation, scroll-
+                                      // wheel mutations, trailing-zero stripping) while still
+                                      // surfacing the right mobile keypad.
+                                      type="text"
+                                      inputMode={mode}
+                                      pattern={mode === 'decimal' ? '[0-9]*\\.?[0-9]*' : '[0-9]*'}
+                                      enterKeyHint="done"
+                                      autoComplete="off"
+                                      placeholder={placeholderFor(
+                                        col.key,
+                                        priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
+                                      )}
+                                      // text-base = 16px: below this iOS Safari auto-zooms on
+                                      // focus even with user-scalable=no in PWA standalone.
+                                      className="h-11 rounded-xl text-center text-base font-semibold tabular-nums border border-zinc-700 focus:border-blue-500 focus-visible:ring-0"
+                                      value={
+                                        col.key === 'notes'
+                                          ? set.notes
+                                          : ((set[col.key] as number | undefined) ?? '')
+                                      }
+                                      onChange={(e) =>
+                                        updateSet(exIdx, setIdx, col.key, e.target.value)
+                                      }
+                                      onFocus={(e) => {
+                                        // Wait for the keyboard to start animating in, then
+                                        // scroll the focused cell to the middle of the visible
+                                        // area. Without this the focused row often sits behind
+                                        // the keyboard on small phones.
+                                        const el = e.currentTarget;
+                                        setTimeout(() => {
+                                          el.scrollIntoView({
+                                            block: 'center',
+                                            behavior: 'smooth',
+                                          });
+                                        }, 300);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        // Enter dismisses the keyboard. Native browsers don't
+                                        // advance focus across loose inputs and a form wrapper
+                                        // here would conflict with the existing autosave flow.
+                                        if (e.key === 'Enter') e.currentTarget.blur();
+                                      }}
+                                    />
+                                  );
+                                }
                               })}
 
                               {/* Remove set */}
