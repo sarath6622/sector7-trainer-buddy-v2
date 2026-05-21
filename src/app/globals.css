@@ -281,6 +281,29 @@
   color: var(--foreground);
 }
 
+/* When the parent opts into onTitleClick, the title behaves like a button. */
+.fc-title-clickable .fc .fc-toolbar-title {
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.fc-title-clickable .fc .fc-toolbar-title::after {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.6;
+  margin-left: 2px;
+}
+.fc-title-clickable .fc .fc-toolbar-title:hover {
+  opacity: 0.85;
+}
+
 /* Hide the view-switcher (month/week/day) on mobile — component auto-switches to day view */
 @media (max-width: 639px) {
   .fc .fc-toolbar-chunk:last-child {
@@ -288,6 +311,13 @@
   }
   .fc .fc-toolbar-title {
     font-size: 1rem !important;
+  }
+  .fc .fc-toolbar.fc-header-toolbar {
+    margin-bottom: 0.5em !important;
+  }
+  .fc .fc-button {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.75rem !important;
   }
 }
 
@@ -372,11 +402,13 @@
 .fc .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
   background: var(--primary);
   color: var(--primary-foreground);
-  border-radius: 9999px;
-  padding: 0.25rem 0.75rem;
+  border-radius: 0.75rem;
+  padding: 0.25rem 0.625rem;
   font-weight: 700;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
+  line-height: 1.15;
 }
 
 /* Time grid — today column gets a tinted stripe */

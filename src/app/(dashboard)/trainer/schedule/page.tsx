@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, AlertTriangle, Clock, Loader2, CalendarIcon, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,13 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar, CalendarDayButton } from '@/components/ui/calendar';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -23,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { SessionCalendar } from '@/components/calendar/SessionCalendar';
+import { SessionCalendar, type SessionCalendarHandle } from '@/components/calendar/SessionCalendar';
 import type { EventInput, EventClickArg } from '@fullcalendar/core';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -188,11 +182,14 @@ function TimeSlotGrid({
 function BookSessionModal({
   clients,
   onBooked,
+  open,
+  onOpenChange,
 }: {
   clients: AssignedClient[];
   onBooked: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [clientId, setClientId] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
@@ -261,7 +258,7 @@ function BookSessionModal({
       if (res.ok) {
         toast.success('Session booked successfully.');
         reset();
-        setOpen(false);
+        onOpenChange(false);
         onBooked();
       } else {
         setError(json.error || 'Failed to book session');
@@ -353,21 +350,10 @@ function BookSessionModal({
       <Dialog
         open={open}
         onOpenChange={(o) => {
-          setOpen(o);
+          onOpenChange(o);
           if (!o) reset();
         }}
       >
-        <DialogTrigger
-          render={
-            <Button
-              size="sm"
-              className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Book Session
-            </Button>
-          }
-        />
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -515,6 +501,22 @@ export default function TrainerSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<SessionInstance | null>(null);
   const [clients, setClients] = useState<AssignedClient[]>([]);
+  const [bookOpen, setBookOpen] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [viewedDate, setViewedDate] = useState<Date>(() => new Date());
+  const calendarHandle = useRef<SessionCalendarHandle>(null);
+
+  // Mobile fills the viewport (minus TopNav + bottom tab bar + page chrome);
+  // desktop keeps the fixed 600px height.
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -573,33 +575,68 @@ export default function TrainerSchedulePage() {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Schedule</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            View your sessions and book new ones for your clients
-          </p>
-        </div>
-        <BookSessionModal clients={clients} onBooked={fetchSessions} />
+    <div className="space-y-3 sm:space-y-4">
+      {/* Header — title + button on a single row at every breakpoint */}
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Schedule</h1>
+        <Button
+          size="sm"
+          onClick={() => setBookOpen(true)}
+          className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Book Session</span>
+          <span className="sm:hidden">Book</span>
+        </Button>
       </div>
 
       {/* Calendar */}
       {loading ? (
         <Skeleton className="h-96 w-full rounded-2xl" />
       ) : (
-        <Card>
-          <CardContent className="pt-6">
+        <Card className="py-3 sm:py-4">
+          <CardContent className="px-2 sm:px-4">
             <SessionCalendar
+              ref={calendarHandle}
               events={calendarEvents}
               onEventClick={handleEventClick}
+              onDatesSet={(info) => setViewedDate(info.view.currentStart)}
+              onTitleClick={() => setDatePickerOpen(true)}
+              showDaySummary
+              scrollToCurrentTime
               initialView="timeGridWeek"
-              height={600}
+              height={isMobile ? 'calc(100dvh - 232px)' : 600}
             />
           </CardContent>
         </Card>
       )}
+
+      {/* Date jump picker — opens when user taps the calendar title */}
+      <Dialog open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+        <DialogContent className="max-w-xs p-0">
+          <DialogHeader className="border-b border-border/50 px-4 py-3">
+            <DialogTitle className="text-sm">Jump to date</DialogTitle>
+          </DialogHeader>
+          <Calendar
+            mode="single"
+            selected={viewedDate}
+            onSelect={(date) => {
+              if (date) {
+                calendarHandle.current?.gotoDate(date);
+                setDatePickerOpen(false);
+              }
+            }}
+            className="p-3 [--cell-size:2.5rem]"
+          />
+        </DialogContent>
+      </Dialog>
+
+      <BookSessionModal
+        clients={clients}
+        onBooked={fetchSessions}
+        open={bookOpen}
+        onOpenChange={setBookOpen}
+      />
 
       {/* Selected session details */}
       {selected && (
