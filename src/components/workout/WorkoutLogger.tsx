@@ -1364,15 +1364,39 @@ export function WorkoutLogger({
                           </p>
                         </div>
                       ) : hasFilter ? (
-                        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted">
-                            <Search className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <p className="text-sm font-medium">No exercises match</p>
-                          <p className="text-xs text-muted-foreground">
-                            Try a different filter or clear them all.
-                          </p>
-                        </div>
+                        (() => {
+                          // Two failure modes: (a) chip filters narrowed the
+                          // catalog so a real query found nothing → offer a
+                          // one-tap "search globally for this query" escape;
+                          // (b) only the query is set → nothing we can clear
+                          // for them, fall back to the generic message.
+                          const chipsActive =
+                            searchMuscleGroups.size > 0 || searchExerciseType !== null;
+                          const q = searchQuery.trim();
+                          const canEscape = chipsActive && q.length > 0;
+                          return (
+                            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted">
+                                <Search className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <p className="text-sm font-medium">No exercises match</p>
+                              <p className="text-xs text-muted-foreground">
+                                {canEscape
+                                  ? 'Your filters may be hiding it.'
+                                  : 'Try a different filter or clear them all.'}
+                              </p>
+                              {canEscape && (
+                                <button
+                                  onClick={clearFilters}
+                                  className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground transition-opacity active:opacity-80"
+                                >
+                                  <Search className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate">Search all exercises for “{q}”</span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()
                       ) : (
                         <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
                           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted">
