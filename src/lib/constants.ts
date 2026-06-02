@@ -50,6 +50,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'CrossFit', href: '/admin/crossfit', icon: Dumbbell, group: 'Programs' },
   // Insights
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3, group: 'Insights' },
+  { label: 'Leaderboards', href: '/admin/leaderboards', icon: Trophy, group: 'Insights' },
   { label: 'Audit Log', href: '/admin/audit-log', icon: FileText, group: 'Insights' },
   // System
   {
