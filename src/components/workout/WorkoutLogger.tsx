@@ -340,6 +340,11 @@ export function WorkoutLogger({
   // "Suggestions" so the recall list matches the day's plan instead of
   // dumping every past exercise.
   const [focusGroupIds, setFocusGroupIds] = useState<Set<CuratedMuscleGroupId>>(new Set());
+  // While a numeric cell is being edited we keep the raw keystroke string here,
+  // keyed by `${exIdx}-${setIdx}-${field}`. Without this, coercing to a number on
+  // every keystroke strips a trailing "." or ".0" — making decimals like 100.5
+  // impossible to type. Cleared on blur so the field reverts to the canonical value.
+  const [cellDrafts, setCellDrafts] = useState<Record<string, string>>({});
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1757,6 +1762,7 @@ export function WorkoutLogger({
                                 }
                                 {
                                   const mode = inputModeFor(col.key);
+                                  const draftKey = `${exIdx}-${setIdx}-${col.key as string}`;
                                   return (
                                     <Input
                                       key={col.key as string}
@@ -1779,11 +1785,22 @@ export function WorkoutLogger({
                                       value={
                                         col.key === 'notes'
                                           ? set.notes
-                                          : ((set[col.key] as number | undefined) ?? '')
+                                          : (cellDrafts[draftKey] ??
+                                            (set[col.key] as number | undefined) ??
+                                            '')
                                       }
-                                      onChange={(e) =>
-                                        updateSet(exIdx, setIdx, col.key, e.target.value)
-                                      }
+                                      onChange={(e) => {
+                                        // Keep the raw keystrokes so in-progress
+                                        // decimals (e.g. "100." → "100.5") survive
+                                        // the round-trip through a numeric value.
+                                        if (col.key !== 'notes') {
+                                          setCellDrafts((d) => ({
+                                            ...d,
+                                            [draftKey]: e.target.value,
+                                          }));
+                                        }
+                                        updateSet(exIdx, setIdx, col.key, e.target.value);
+                                      }}
                                       onFocus={(e) => {
                                         // Wait for the keyboard to start animating in, then
                                         // scroll the focused cell to the middle of the visible
@@ -1802,6 +1819,18 @@ export function WorkoutLogger({
                                         // advance focus across loose inputs and a form wrapper
                                         // here would conflict with the existing autosave flow.
                                         if (e.key === 'Enter') e.currentTarget.blur();
+                                      }}
+                                      onBlur={() => {
+                                        // Drop the raw draft so the cell shows the
+                                        // canonical parsed number once editing ends.
+                                        if (col.key !== 'notes') {
+                                          setCellDrafts((d) => {
+                                            if (!(draftKey in d)) return d;
+                                            const next = { ...d };
+                                            delete next[draftKey];
+                                            return next;
+                                          });
+                                        }
                                       }}
                                     />
                                   );
