@@ -663,6 +663,14 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           clientName={`${session.client.user.firstName} ${session.client.user.lastName}`}
           existingLogs={session.workoutLogs}
           onUnsavedChange={setHasUnsaved}
+          onForeground={() => {
+            // Phone unlocked / tab refocused — pull fresh server state so the
+            // log isn't showing stale data after a long background.
+            void (async () => {
+              const refreshed = await fetchSession(session.id);
+              if (refreshed) setSessionMap((prev) => ({ ...prev, [session.id]: refreshed }));
+            })();
+          }}
           onRequestRest={isActive ? () => setRestTimerOpen(true) : undefined}
           lastFinishedRestSec={lastFinishedRestSec}
           onConsumeRest={consumeRest}

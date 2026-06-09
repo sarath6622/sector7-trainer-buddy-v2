@@ -305,6 +305,11 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
             clientProfileId={session.client?.id}
             existingLogs={session.workoutLogs}
             onUnsavedChange={setHasUnsaved}
+            onForeground={() => {
+              // Phone unlocked / tab refocused — refetch so stale data from a
+              // long background is replaced with the latest server state.
+              void fetchSession();
+            }}
             onRequestRest={isActive ? () => setRestTimerOpen(true) : undefined}
             lastFinishedRestSec={lastFinishedRestSec}
             onConsumeRest={consumeRest}

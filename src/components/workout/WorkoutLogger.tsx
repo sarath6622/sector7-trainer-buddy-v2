@@ -107,6 +107,10 @@ interface WorkoutLoggerProps {
   clientProfileId?: string; // when set, enables per-exercise progress modal
   clientName?: string; // shown in the workout-log header so the trainer always knows whose log this is
   onUnsavedChange?: (hasUnsaved: boolean) => void;
+  // Called when the app returns to the foreground (tab re-focused / phone
+  // unlocked). The parent should refetch the session so the screen reflects the
+  // latest server state instead of showing stale data after a long background.
+  onForeground?: () => void;
   onRequestRest?: () => void; // when set, shows a Rest button alongside Add Set
   // Most-recently-finished rest timer total in seconds. When set, the next
   // Add Set click prefills the new row's `restSec` and the consumer should
@@ -283,6 +287,7 @@ export function WorkoutLogger({
   clientProfileId,
   clientName: _clientName,
   onUnsavedChange,
+  onForeground,
   onRequestRest,
   lastFinishedRestSec,
   onConsumeRest,
@@ -990,9 +995,9 @@ export function WorkoutLogger({
     };
   }, [hasUnsaved, currentHash, currentPayload.length, saveWorkout]);
 
-  // Keep refs aligned with latest values so the unmount-flush effect (which
-  // only runs once with empty deps) can read the most recent payload + hash
-  // without re-binding its cleanup.
+  // Keep refs aligned with latest values so the flush/visibility effects
+  // (which bind once) can read the most recent payload + hash + callbacks
+  // without re-binding their listeners on every keystroke.
   const currentPayloadRef = useRef(currentPayload);
   const currentHashRef = useRef(currentHash);
   useEffect(() => {
@@ -1000,28 +1005,80 @@ export function WorkoutLogger({
     currentHashRef.current = currentHash;
   }, [currentPayload, currentHash]);
 
+  // `saveWorkout` and `onForeground` change identity as state/props change, so
+  // the stable visibility listener reaches them through refs.
+  const saveWorkoutRef = useRef(saveWorkout);
+  const onForegroundRef = useRef(onForeground);
+  useEffect(() => {
+    saveWorkoutRef.current = saveWorkout;
+    onForegroundRef.current = onForeground;
+  }, [saveWorkout, onForeground]);
+
+  // Best-effort flush of any pending edit via a keepalive request, so the
+  // latest values survive teardown — a hard navigation AND, crucially, the
+  // app being backgrounded. `keepalive` lets the POST outlive the page going
+  // away; clearing the debounce timer stops a duplicate fire on resume.
+  const flushPendingSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const payload = currentPayloadRef.current;
+    const hashAtFlush = currentHashRef.current;
+    if (payload.length === 0 || hashAtFlush === lastSavedHashRef.current) return;
+    void fetch(`/api/sessions/${sessionInstanceId}/workouts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exercises: payload }),
+      keepalive: true,
+    });
+  }, [sessionInstanceId]);
+
   useEffect(() => {
     return () => {
       if (statusFadeRef.current) clearTimeout(statusFadeRef.current);
-      // Unmount flush: if a debounced save is pending, fire it immediately
-      // with the latest payload before tearing down. Best-effort — the
-      // fetch races the unmount and may not complete on a hard page
-      // navigation, but covers the common "switch tab / go back" case.
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-        const payload = currentPayloadRef.current;
-        const hashAtFlush = currentHashRef.current;
-        if (payload.length > 0 && hashAtFlush !== lastSavedHashRef.current) {
-          void fetch(`/api/sessions/${sessionInstanceId}/workouts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ exercises: payload }),
-            keepalive: true, // hint to the browser to keep the request alive past unmount
-          });
-        }
-      }
+      // Unmount flush — best-effort save before teardown (e.g. switching
+      // session tabs or navigating back).
+      flushPendingSave();
     };
-  }, [sessionInstanceId]);
+  }, [flushPendingSave]);
+
+  // Survive the phone being locked / app backgrounded. The reported case was
+  // Android, where Chrome freezes a backgrounded PWA and can discard its
+  // process under memory pressure (iOS behaves the same); either way the app
+  // cold-starts on return and the last few keystrokes typed inside the 5s
+  // auto-save debounce were lost. We flush the moment the page is hidden — and
+  // again on `freeze`/`pagehide`, the last callbacks before a discard — with a
+  // keepalive POST. On the way back we (a) re-save anything a dropped keepalive
+  // missed, then (b) let the parent refetch so the screen shows fresh server
+  // state. The hydration guard keeps unsaved local edits from being clobbered
+  // by (b).
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === 'hidden') {
+        flushPendingSave();
+        return;
+      }
+      if (
+        currentPayloadRef.current.length > 0 &&
+        currentHashRef.current !== lastSavedHashRef.current
+      ) {
+        void saveWorkoutRef.current();
+      }
+      onForegroundRef.current?.();
+    }
+    document.addEventListener('visibilitychange', onVisibility);
+    // freeze: Android Chrome's Page Lifecycle hook, fired right before a
+    // backgrounded tab is frozen/discarded. pagehide: tab teardown without a
+    // final visibilitychange. Both are last-chance flush points.
+    document.addEventListener('freeze', flushPendingSave);
+    window.addEventListener('pagehide', flushPendingSave);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('freeze', flushPendingSave);
+      window.removeEventListener('pagehide', flushPendingSave);
+    };
+  }, [flushPendingSave]);
 
   useEffect(() => {
     onUnsavedChange?.(hasUnsaved);
