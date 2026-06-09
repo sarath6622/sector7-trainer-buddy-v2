@@ -69,11 +69,87 @@ interface UpdateUserInput {
   sessionDurationOverrideMin?: number;
 }
 
+type AttentionFilter = 'expiring_soon' | 'expired' | 'low_sessions' | 'used_up';
+
 interface ListUsersInput {
   branchId: string;
   role?: UserRole;
   page: number;
   pageSize: number;
+  search?: string;
+  status?: 'all' | 'active' | 'inactive';
+  attention?: AttentionFilter;
+  /** trainerProfileId, or the reserved literal 'unassigned'. */
+  trainerId?: string;
+}
+
+// How many days out counts as "expiring soon" for the renewal filter.
+const EXPIRING_SOON_DAYS = 30;
+
+/**
+ * Resolves the set of clientProfileIds whose active package falls into a
+ * sessions-based renewal bucket. These can't be expressed as a Prisma `where`
+ * because "sessions left" = totalSessions − (onboarding + COMPLETED/NO_SHOW in
+ * the package window), so we compute it here and feed the IDs back into the
+ * main paginated query (keeping DB-level pagination + an accurate total).
+ *
+ * Thresholds mirror the client list card exactly so the filter and the badge
+ * never disagree: red/low = `0 < left ≤ ceil(sessionsPerMonth/30 · 7)`,
+ * used-up = `left === 0`.
+ */
+async function getClientIdsBySessionBucket(
+  branchId: string,
+  bucket: 'low_sessions' | 'used_up',
+): Promise<string[]> {
+  const packages = await prisma.ptPackage.findMany({
+    where: { branchId, isActive: true },
+    select: {
+      clientProfileId: true,
+      startDate: true,
+      endDate: true,
+      totalSessions: true,
+      onboardingUsedSessions: true,
+      sessionsPerMonth: true,
+    },
+  });
+  if (packages.length === 0) return [];
+
+  const minStart = new Date(Math.min(...packages.map((p) => p.startDate.getTime())));
+  const maxEnd = new Date(
+    Math.max(
+      ...packages.map((p) =>
+        (p.endDate ?? new Date(p.startDate.getTime() + 30 * 86_400_000)).getTime(),
+      ),
+    ),
+  );
+
+  const sessions = await prisma.sessionInstance.findMany({
+    where: {
+      branchId,
+      status: { in: ['COMPLETED', 'NO_SHOW'] },
+      scheduledDate: { gte: minStart, lte: maxEnd },
+    },
+    select: { clientProfileId: true, scheduledDate: true },
+  });
+
+  const ids = new Set<string>();
+  for (const pkg of packages) {
+    if (pkg.totalSessions <= 0) continue;
+    const windowEnd = pkg.endDate ?? new Date(pkg.startDate.getTime() + 30 * 86_400_000);
+    const used =
+      pkg.onboardingUsedSessions +
+      sessions.filter(
+        (s) =>
+          s.clientProfileId === pkg.clientProfileId &&
+          s.scheduledDate >= pkg.startDate &&
+          s.scheduledDate <= windowEnd,
+      ).length;
+    const left = Math.max(0, pkg.totalSessions - used);
+    const redThreshold = Math.max(1, Math.ceil((pkg.sessionsPerMonth / 30) * 7));
+    const matches = bucket === 'used_up' ? left === 0 : left > 0 && left <= redThreshold;
+    if (matches) ids.add(pkg.clientProfileId);
+  }
+  return Array.from(ids);
 }
 
 export async function createUser(input: CreateUserInput) {
@@ -176,15 +252,94 @@ export async function createUser(input: CreateUserInput) {
 }
 
 export async function getUsers(input: ListUsersInput) {
-  const { branchId, role, page, pageSize } = input;
+  const { branchId, role, page, pageSize, search, status, attention, trainerId } = input;
 
-  const where: Prisma.UserWhereInput = {
+  // Base scope (branch + role) — used for the stable "active" tally that the
+  // header shows regardless of the current search/status filter.
+  const baseWhere: Prisma.UserWhereInput = {
     branchId,
     deletedAt: null,
     ...(role ? { roles: { hasSome: [role] } } : {}),
   };
 
-  const [users, total] = await Promise.all([
+  // Multi-term search: every whitespace-separated term must match at least one
+  // of name / email / phone (case-insensitive). This makes "asha sujith" match
+  // a first+last name split across columns, while single terms ("as", a phone
+  // fragment, part of an email) still work. Order-independent.
+  const terms = search?.split(/\s+/).filter(Boolean) ?? [];
+  const searchWhere: Prisma.UserWhereInput =
+    terms.length > 0
+      ? {
+          AND: terms.map((term) => ({
+            OR: [
+              { firstName: { contains: term, mode: 'insensitive' as const } },
+              { lastName: { contains: term, mode: 'insensitive' as const } },
+              { email: { contains: term, mode: 'insensitive' as const } },
+              { phone: { contains: term, mode: 'insensitive' as const } },
+            ],
+          })),
+        }
+      : {};
+
+  // ── Assignment + renewal ("needs attention") filters ──────────────────
+  // All package constraints are ANDed onto a single `some` so they describe the
+  // SAME active package row. `unassigned` and `no active package` use `none`.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const expiringHorizon = new Date(startOfToday);
+  expiringHorizon.setDate(expiringHorizon.getDate() + EXPIRING_SOON_DAYS);
+
+  const activePkg: Prisma.PtPackageWhereInput = { isActive: true };
+  let requireSomeActive = false;
+  let requireNoActive = false;
+
+  if (trainerId === 'unassigned') {
+    requireNoActive = true;
+  } else if (trainerId) {
+    activePkg.trainerProfileId = trainerId;
+    requireSomeActive = true;
+  }
+
+  if (attention === 'expired') {
+    activePkg.endDate = { lt: startOfToday };
+    requireSomeActive = true;
+  } else if (attention === 'expiring_soon') {
+    activePkg.endDate = { gte: startOfToday, lte: expiringHorizon };
+    requireSomeActive = true;
+  }
+
+  // Session-count buckets resolve to a clientProfileId set, then constrain the
+  // main query so DB pagination + total stay correct.
+  let sessionBucketIds: string[] | null = null;
+  if (attention === 'low_sessions' || attention === 'used_up') {
+    sessionBucketIds = await getClientIdsBySessionBucket(branchId, attention);
+    requireSomeActive = true;
+  }
+
+  const clientProfileWhere: Prisma.ClientProfileWhereInput = {};
+  if (requireNoActive) {
+    clientProfileWhere.ptPackages = { none: { isActive: true } };
+  } else if (requireSomeActive) {
+    clientProfileWhere.ptPackages = { some: activePkg };
+  }
+  if (sessionBucketIds !== null) {
+    clientProfileWhere.id = { in: sessionBucketIds };
+  }
+
+  const where: Prisma.UserWhereInput = {
+    ...baseWhere,
+    ...(status === 'active'
+      ? { isActive: true }
+      : status === 'inactive'
+        ? { isActive: false }
+        : {}),
+    ...searchWhere,
+    ...(Object.keys(clientProfileWhere).length > 0
+      ? { clientProfile: { is: clientProfileWhere } }
+      : {}),
+  };
+
+  const [users, total, activeCount] = await Promise.all([
     prisma.user.findMany({
       where,
       include: {
@@ -209,6 +364,7 @@ export async function getUsers(input: ListUsersInput) {
       orderBy: { createdAt: 'desc' },
     }),
     prisma.user.count({ where }),
+    prisma.user.count({ where: { ...baseWhere, isActive: true } }),
   ]);
 
   // Compute sessions-used per active package so the UI can show
@@ -271,6 +427,9 @@ export async function getUsers(input: ListUsersInput) {
       total,
       totalPages: Math.ceil(total / pageSize),
     },
+    // Stable branch-wide active tally (ignores search/status) so the header
+    // can show roster health without flickering as the admin types.
+    activeCount,
   };
 }
 

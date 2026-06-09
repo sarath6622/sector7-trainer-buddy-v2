@@ -135,6 +135,15 @@ export const updateUserSchema = createUserSchema.partial().omit({ password: true
 
 export const listUsersSchema = paginationSchema.extend({
   role: userRoleSchema.optional(),
+  search: z.string().trim().max(100).optional(),
+  status: z.enum(['all', 'active', 'inactive']).optional(),
+  // Renewal / "needs attention" buckets, evaluated against the client's active
+  // PT package. `low_sessions` / `used_up` depend on the computed sessions-used
+  // tally, so they resolve via a pre-pass in the service.
+  attention: z.enum(['expiring_soon', 'expired', 'low_sessions', 'used_up']).optional(),
+  // Assignment filter. A trainerProfileId scopes to that trainer's active-package
+  // clients; the reserved value 'unassigned' selects clients with no active package.
+  trainerId: z.string().max(40).optional(),
 });
 
 // ─── ADMIN: TRAINER-CLIENT MAPPINGS ──────────────────

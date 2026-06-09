@@ -19,6 +19,12 @@ vi.mock('@/lib/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    ptPackage: {
+      findMany: vi.fn(),
+    },
+    sessionInstance: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -191,7 +197,7 @@ describe('getUsers', () => {
 
     expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { branchId: 'branch-1', deletedAt: null, role: 'TRAINER' },
+        where: { branchId: 'branch-1', deletedAt: null, roles: { hasSome: ['TRAINER'] } },
       }),
     );
   });
@@ -207,6 +213,190 @@ describe('getUsers', () => {
     });
 
     expect(result.pagination.totalPages).toBe(3);
+  });
+
+  it('searches name / email / phone with every term required (multi-term AND)', async () => {
+    mockedPrisma.user.findMany.mockResolvedValue([]);
+    mockedPrisma.user.count.mockResolvedValue(0);
+
+    await userService.getUsers({
+      branchId: 'branch-1',
+      role: 'CLIENT',
+      page: 1,
+      pageSize: 10,
+      search: 'asha sujith',
+    });
+
+    const termOr = (term: string) => ({
+      OR: [
+        { firstName: { contains: term, mode: 'insensitive' } },
+        { lastName: { contains: term, mode: 'insensitive' } },
+        { email: { contains: term, mode: 'insensitive' } },
+        { phone: { contains: term, mode: 'insensitive' } },
+      ],
+    });
+
+    expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          branchId: 'branch-1',
+          deletedAt: null,
+          roles: { hasSome: ['CLIENT'] },
+          AND: [termOr('asha'), termOr('sujith')],
+        }),
+      }),
+    );
+  });
+
+  it('filters by isActive when status=inactive', async () => {
+    mockedPrisma.user.findMany.mockResolvedValue([]);
+    mockedPrisma.user.count.mockResolvedValue(0);
+
+    await userService.getUsers({
+      branchId: 'branch-1',
+      role: 'CLIENT',
+      page: 1,
+      pageSize: 10,
+      status: 'inactive',
+    });
+
+    expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isActive: false }),
+      }),
+    );
+  });
+
+  it('returns a branch-wide activeCount independent of the filtered total', async () => {
+    mockedPrisma.user.findMany.mockResolvedValue([]);
+    // Promise.all order: count(filtered total) then count(active tally)
+    mockedPrisma.user.count.mockResolvedValueOnce(3).mockResolvedValueOnce(42);
+
+    const result = await userService.getUsers({
+      branchId: 'branch-1',
+      role: 'CLIENT',
+      page: 1,
+      pageSize: 10,
+      search: 'as',
+    });
+
+    expect(result.pagination.total).toBe(3);
+    expect(result.activeCount).toBe(42);
+    expect(mockedPrisma.user.count).toHaveBeenCalledWith({
+      where: {
+        branchId: 'branch-1',
+        deletedAt: null,
+        roles: { hasSome: ['CLIENT'] },
+        isActive: true,
+      },
+    });
+  });
+
+  it('filters by trainer via the active package', async () => {
+    mockedPrisma.user.findMany.mockResolvedValue([]);
+    mockedPrisma.user.count.mockResolvedValue(0);
+
+    await userService.getUsers({
+      branchId: 'branch-1',
+      role: 'CLIENT',
+      page: 1,
+      pageSize: 10,
+      trainerId: 'trainer-1',
+    });
+
+    expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          clientProfile: {
+            is: { ptPackages: { some: { isActive: true, trainerProfileId: 'trainer-1' } } },
+          },
+        }),
+      }),
+    );
+  });
+
+  it('filters unassigned clients (no active package)', async () => {
+    mockedPrisma.user.findMany.mockResolvedValue([]);
+    mockedPrisma.user.count.mockResolvedValue(0);
+
+    await userService.getUsers({
+      branchId: 'branch-1',
+      role: 'CLIENT',
+      page: 1,
+      pageSize: 10,
+      trainerId: 'unassigned',
+    });
+
+    expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          clientProfile: { is: { ptPackages: { none: { isActive: true } } } },
+        }),
+      }),
+    );
+  });
+
+  it('filters expiring-soon by package endDate window', async () => {
+    mockedPrisma.user.findMany.mockResolvedValue([]);
+    mockedPrisma.user.count.mockResolvedValue(0);
+
+    await userService.getUsers({
+      branchId: 'branch-1',
+      role: 'CLIENT',
+      page: 1,
+      pageSize: 10,
+      attention: 'expiring_soon',
+    });
+
+    const call = mockedPrisma.user.findMany.mock.calls[0]![0] as {
+      where: {
+        clientProfile: {
+          is: { ptPackages: { some: { isActive: boolean; endDate: { gte: Date; lte: Date } } } };
+        };
+      };
+    };
+    const endDate = call.where.clientProfile.is.ptPackages.some.endDate;
+    expect(call.where.clientProfile.is.ptPackages.some.isActive).toBe(true);
+    expect(endDate.gte).toBeInstanceOf(Date);
+    expect(endDate.lte.getTime()).toBeGreaterThan(endDate.gte.getTime());
+  });
+
+  it('resolves low-session clients via a pre-pass and constrains by id', async () => {
+    // One package with 8 total, 7 consumed → 1 left, redThreshold = 2 → "low".
+    mockedPrisma.ptPackage.findMany.mockResolvedValue([
+      {
+        clientProfileId: 'c1',
+        startDate: new Date('2026-05-01'),
+        endDate: new Date('2026-07-01'),
+        totalSessions: 8,
+        onboardingUsedSessions: 0,
+        sessionsPerMonth: 8,
+      },
+    ] as never);
+    mockedPrisma.sessionInstance.findMany.mockResolvedValue(
+      Array.from({ length: 7 }, () => ({
+        clientProfileId: 'c1',
+        scheduledDate: new Date('2026-05-15'),
+      })) as never,
+    );
+    mockedPrisma.user.findMany.mockResolvedValue([]);
+    mockedPrisma.user.count.mockResolvedValue(0);
+
+    await userService.getUsers({
+      branchId: 'branch-1',
+      role: 'CLIENT',
+      page: 1,
+      pageSize: 10,
+      attention: 'low_sessions',
+    });
+
+    expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          clientProfile: { is: { ptPackages: { some: { isActive: true } }, id: { in: ['c1'] } } },
+        }),
+      }),
+    );
   });
 });
 

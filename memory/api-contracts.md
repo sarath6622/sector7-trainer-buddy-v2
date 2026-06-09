@@ -32,7 +32,27 @@ GET    /api/auth/me             → {} → { user: { id, email, role, branchId, 
 ### Users
 
 ```
-GET    /api/admin/users                  → ?role=TRAINER|CLIENT&page&pageSize → Paginated<User>
+GET    /api/admin/users                  → ?role=TRAINER|CLIENT&search&status=all|active|inactive
+                                              &attention=expiring_soon|expired|low_sessions|used_up
+                                              &trainerId=<trainerProfileId|'unassigned'>&page&pageSize
+                                              → Paginated<User> & { activeCount }
+                                            search: matches name / email / phone, multi-term (every
+                                            whitespace-separated term must match one of those fields,
+                                            case-insensitive, order-independent). Filtering is server-side
+                                            across the whole branch roster — paginate the filtered set.
+                                            status: filters by User.isActive.
+                                            attention (CLIENT renewal buckets, evaluated against the active
+                                              PT package): expiring_soon = endDate within 30 days;
+                                              expired = endDate in the past; low_sessions = 0 < sessionsLeft
+                                              ≤ ceil(sessionsPerMonth/30·7); used_up = sessionsLeft == 0.
+                                              low_sessions/used_up resolve via a service pre-pass that
+                                              computes sessions-used, then constrain the paginated query by
+                                              clientProfileId (total stays accurate).
+                                            trainerId: scopes to that trainer's active-package clients;
+                                              the literal 'unassigned' selects clients with no active package
+                                              (the "No trainer" state). All filters AND together.
+                                            `activeCount` (sibling of `pagination`) is the branch-wide active
+                                            tally for this role, ignoring search/status (stable header stat).
 POST   /api/admin/users                  → { email, firstName, lastName, phone, role, ...profileFields } → User
 GET    /api/admin/users/[id]             → {} → User (with profile)
 PUT    /api/admin/users/[id]             → { ...updatedFields } → User

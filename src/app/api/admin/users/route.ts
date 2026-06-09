@@ -17,6 +17,10 @@ export async function GET(req: Request) {
       role: searchParams.get('role') ?? undefined,
       page: searchParams.get('page') ?? undefined,
       pageSize: searchParams.get('pageSize') ?? undefined,
+      search: searchParams.get('search') ?? undefined,
+      status: searchParams.get('status') ?? undefined,
+      attention: searchParams.get('attention') ?? undefined,
+      trainerId: searchParams.get('trainerId') ?? undefined,
     });
 
     if (!parsed.success) {
@@ -31,6 +35,10 @@ export async function GET(req: Request) {
       role: parsed.data.role as UserRole | undefined,
       page: parsed.data.page,
       pageSize: parsed.data.pageSize,
+      search: parsed.data.search,
+      status: parsed.data.status,
+      attention: parsed.data.attention,
+      trainerId: parsed.data.trainerId,
     });
 
     return NextResponse.json(result);
