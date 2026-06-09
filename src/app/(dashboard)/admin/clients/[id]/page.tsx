@@ -1472,21 +1472,11 @@ function AdminProgressView({
     );
   }
 
-  if (entries.length === 0 && weightChart.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-4 px-4 py-20 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-          <TrendingUp className="h-7 w-7 text-muted-foreground" />
-        </div>
-        <div>
-          <p className="font-medium">No progress data yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Trainers log progress from the client&apos;s profile.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // No early-return on empty body metrics: a client may have workout history
+  // (Workouts → History tab) without any logged body measurements. We always
+  // render the tabbed view — like the trainer's progress page — and let each
+  // tab show its own empty state. Otherwise admins saw "No progress data yet"
+  // and could never reach the workout history that trainers can see.
 
   const metricTiles = [
     {
@@ -1752,6 +1742,7 @@ function AdminProgressView({
               <WorkoutProgressionPanel
                 exercises={exercises}
                 chartEndpoint={`/api/admin/users/${userId}/progress/charts`}
+                historyEndpoint={`/api/admin/users/${userId}/workout-history`}
               />
             )}
           </TabsContent>
