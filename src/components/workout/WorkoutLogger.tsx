@@ -192,6 +192,28 @@ function inputModeFor(key: keyof SetData): 'decimal' | 'numeric' {
   return key === 'weightKg' || key === 'notes' ? 'decimal' : 'numeric';
 }
 
+// Raise the mobile soft keyboard the moment the search opens. iOS Safari only
+// opens the keyboard when focus() runs *inside* the originating tap gesture,
+// but our search input mounts a render later — so a deferred focus moves the
+// cursor without showing the keyboard. Trick: synchronously focus a throwaway
+// off-screen input while still in the tap, which raises the keyboard; the
+// real input then takes focus on mount and the keyboard stays up. Must be
+// called directly from the tap handler (not a setTimeout) to keep the gesture.
+function primeMobileKeyboard() {
+  if (typeof document === 'undefined') return;
+  const ghost = document.createElement('input');
+  ghost.type = 'text';
+  // Off-screen but focusable — display:none / visibility:hidden can't focus.
+  // 16px font-size avoids iOS auto-zoom; opacity 0 keeps it invisible.
+  ghost.style.cssText =
+    'position:fixed;top:0;left:0;height:1px;width:1px;opacity:0;font-size:16px;border:0;padding:0;z-index:-1;';
+  document.body.appendChild(ghost);
+  ghost.focus();
+  // The real input grabs focus ~50ms later (showSearch effect); remove the
+  // ghost after that so focus has already moved and the keyboard never drops.
+  setTimeout(() => ghost.remove(), 500);
+}
+
 // Rest column is shown alongside the type-specific work columns. We surface
 // rest taken before the set instead of RPE — the rpe field still exists on
 // the model but is no longer entered here (other surfaces / future trainer
@@ -608,6 +630,9 @@ export function WorkoutLogger({
   // nothing. The "All" chip stays the default; focus is still used by the
   // separate Suggestions recall.
   function openSearch() {
+    // Pop the mobile keyboard up front so the trainer can type immediately —
+    // must run synchronously here while we still have the tap gesture.
+    primeMobileKeyboard();
     setSearchMuscleGroups(new Set());
     setShowSearch(true);
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
