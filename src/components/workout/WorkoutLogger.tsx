@@ -576,6 +576,35 @@ export function WorkoutLogger({
     if (showSearch) setTimeout(() => searchRef.current?.focus(), 50);
   }, [showSearch]);
 
+  // Lock the page behind the search overlay. Without this, touch-scrolling the
+  // results list chains past its boundary into the body and scrolls the page
+  // behind the modal (iOS Safari ignores overscroll-behavior in many cases).
+  // Pinning the body with position:fixed stops it dead; we stash and restore
+  // the exact scroll position so closing the modal lands the user where they
+  // were instead of jumping to the top.
+  useEffect(() => {
+    if (!showSearch) return;
+    const { body } = document;
+    const scrollY = window.scrollY;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.width = prev.width;
+      body.style.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [showSearch]);
+
   // Fetch prior-session lastSet for any exercise we don't already have a
   // snapshot for (key absent from the map). The picker seeds known IDs at
   // pick-time, but exercises added via Search or hydrated from existingLogs
@@ -635,7 +664,9 @@ export function WorkoutLogger({
     primeMobileKeyboard();
     setSearchMuscleGroups(new Set());
     setShowSearch(true);
-    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
+    // No scroll-to-top here: the body is pinned while the overlay is open
+    // (see the scroll-lock effect), so the page stays put and the fixed modal
+    // sits over the current view.
   }
 
   function addExercisesFromPicker(picked: PickedExercise[]) {
@@ -1352,7 +1383,7 @@ export function WorkoutLogger({
                     </div>
 
                     {/* ── Results body ── */}
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto overscroll-contain">
                       {searchLoading ? (
                         <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
                           <Loader2 className="h-4 w-4 animate-spin" />
