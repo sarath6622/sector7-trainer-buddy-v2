@@ -601,12 +601,14 @@ export function WorkoutLogger({
     return () => ctrl.abort();
   }, [clientProfileId, sessionInstanceId, missingLastSetKey]);
 
-  // Opening the search modal pre-seeds the muscle-group chips from today's
-  // focus — if the trainer already said "Chest day", they shouldn't have to
-  // re-tap Chest inside search to filter the catalog. Multiple focus groups
-  // all carry over.
+  // Open the search modal with "All" muscle groups selected by default so the
+  // trainer can search the whole catalog freely. Pre-seeding today's focus
+  // (e.g. "Chest day") made people think they had to pick a group first — a
+  // query like "squat" was silently scoped to the focus group and found
+  // nothing. The "All" chip stays the default; focus is still used by the
+  // separate Suggestions recall.
   function openSearch() {
-    setSearchMuscleGroups(new Set(focusGroupIds));
+    setSearchMuscleGroups(new Set());
     setShowSearch(true);
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
   }
@@ -1250,6 +1252,20 @@ export function WorkoutLogger({
                           )}
                         </div>
                         <div className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
+                          {/* "All" = no muscle-group filter. Active (and the
+                              default) whenever nothing is selected so the
+                              trainer can browse/search the whole catalog. */}
+                          <button
+                            onClick={() => setSearchMuscleGroups(new Set())}
+                            aria-pressed={searchMuscleGroups.size === 0}
+                            className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                              searchMuscleGroups.size === 0
+                                ? 'bg-foreground text-background'
+                                : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
+                            }`}
+                          >
+                            All
+                          </button>
                           {CURATED_MUSCLE_GROUPS.map((g) => {
                             const isOn = searchMuscleGroups.has(g.id);
                             const theme = GROUP_THEME[g.id];
