@@ -1261,7 +1261,7 @@ model TvDevice {
 model TvControlState {
   id                String   @id @default(cuid())
   branchId          String   @unique
-  pinnedPanels      String[]
+  pinnedPanels      String[] @default([])
   shoutout          String?
   shoutoutExpiresAt DateTime?
   updatedByUserId   String?

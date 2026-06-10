@@ -10,6 +10,8 @@ interface UpdateSettingsInput {
   reminderTimingMin?: number;
   noShowThresholdMin?: number;
   kickboxingClassSizeLimit?: number;
+  monthlyRegularLeaveQuota?: number;
+  monthlyEmergencyLeaveQuota?: number;
   measurementReminderDays?: number;
 }
 
@@ -53,6 +55,10 @@ export async function updateSettings(
     updateData.noShowThresholdMin = input.noShowThresholdMin;
   if (input.kickboxingClassSizeLimit !== undefined)
     updateData.kickboxingClassSizeLimit = input.kickboxingClassSizeLimit;
+  if (input.monthlyRegularLeaveQuota !== undefined)
+    updateData.monthlyRegularLeaveQuota = input.monthlyRegularLeaveQuota;
+  if (input.monthlyEmergencyLeaveQuota !== undefined)
+    updateData.monthlyEmergencyLeaveQuota = input.monthlyEmergencyLeaveQuota;
   if (input.measurementReminderDays !== undefined)
     updateData.measurementReminderDays = input.measurementReminderDays;
 
@@ -79,6 +85,8 @@ export async function updateSettings(
       reminderTimingMin: existing.reminderTimingMin,
       noShowThresholdMin: existing.noShowThresholdMin,
       kickboxingClassSizeLimit: existing.kickboxingClassSizeLimit,
+      monthlyRegularLeaveQuota: existing.monthlyRegularLeaveQuota,
+      monthlyEmergencyLeaveQuota: existing.monthlyEmergencyLeaveQuota,
       measurementReminderDays: existing.measurementReminderDays,
     },
     newValue: { ...input },
