@@ -55,7 +55,7 @@ interface ExerciseOption {
   equipmentRequired: string | null;
 }
 
-interface SetData {
+export interface SetData {
   setNumber: number;
   reps: number | undefined;
   weightKg: number | undefined;
@@ -80,7 +80,7 @@ interface LastSetSnapshot {
   stepsCount: number | null;
 }
 
-interface ExerciseEntry {
+export interface ExerciseEntry {
   tempId: string;
   exerciseId: string;
   exerciseName: string;
@@ -280,6 +280,79 @@ function progressUnitFor(
   return 'reps';
 }
 
+// A set only "counts" once its type's required work fields are filled — the
+// same gate the mark-complete pill uses (WEIGHTED needs reps + kg, BODYWEIGHT
+// needs reps, DURATION/CARDIO need duration). Partial rows (kg but no reps)
+// are treated as not-yet-entered: excluded from the save payload so a half-
+// typed set never hits the DB, and never rendered in the saved (green) state.
+const hasValue = (v: number | null | undefined) => v !== undefined && v !== null;
+export function isSetComplete(set: SetData, exerciseType: ExerciseType): boolean {
+  switch (exerciseType) {
+    case 'WEIGHTED':
+      return hasValue(set.reps) && hasValue(set.weightKg);
+    case 'BODYWEIGHT':
+      return hasValue(set.reps);
+    case 'DURATION':
+    case 'CARDIO':
+      return hasValue(set.durationSec);
+  }
+}
+
+// Canonical wire shape for a single set. Shared by the save payload, the
+// unsaved-diff hash, and the per-set "saved" signature so all three agree on
+// exactly what counts as a change.
+export function normalizeSet(s: SetData) {
+  return {
+    setNumber: s.setNumber,
+    reps: s.reps,
+    weightKg: s.weightKg,
+    durationSec: s.durationSec,
+    rpe: s.rpe,
+    restSec: s.restSec,
+    stepsCount: s.stepsCount,
+    notes: s.notes || undefined,
+  };
+}
+
+type SavePayloadEntry = {
+  exerciseId: string;
+  orderIndex: number;
+  isCompleted: boolean;
+  sets: ReturnType<typeof normalizeSet>[];
+};
+
+// Build the POST body: keep each exercise's original position as orderIndex
+// (the backend tolerates gaps), drop incomplete sets, and drop any exercise
+// left with no complete set. The backend replaces the session's logs with
+// exactly this, so excluding partial sets is what makes "only save once both
+// kg and reps are entered" true end-to-end.
+export function buildSavePayload(exercises: ExerciseEntry[]): SavePayloadEntry[] {
+  const out: SavePayloadEntry[] = [];
+  exercises.forEach((entry, idx) => {
+    const completeSets = entry.sets.filter((s) => isSetComplete(s, entry.exerciseType));
+    if (completeSets.length === 0) return;
+    out.push({
+      exerciseId: entry.exerciseId,
+      orderIndex: idx,
+      isCompleted: entry.isCompleted,
+      sets: completeSets.map(normalizeSet),
+    });
+  });
+  return out;
+}
+
+// Per-set identity used to flag a row as saved. Encodes the exercise plus the
+// exact persisted values, so any edit to the row changes the signature and the
+// green state drops until the next successful save re-records it.
+export function setSignature(exerciseId: string, set: ReturnType<typeof normalizeSet>): string {
+  return `${exerciseId}::${JSON.stringify(set)}`;
+}
+export function signaturesOf(payload: SavePayloadEntry[]): Set<string> {
+  const out = new Set<string>();
+  for (const e of payload) for (const s of e.sets) out.add(setSignature(e.exerciseId, s));
+  return out;
+}
+
 // ─── WorkoutLogger ────────────────────────────────────────────────────────────
 
 export function WorkoutLogger({
@@ -311,6 +384,10 @@ export function WorkoutLogger({
   // `addExercisesFromPicker` so we reuse the existing dedupe + collapse logic.
   const [searchSelectedIds, setSearchSelectedIds] = useState<Set<string>>(new Set());
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
+  // Per-set signatures (exerciseId + persisted values) for every set currently
+  // saved to the server. A row whose live values match its signature renders
+  // green; any edit drops the match until the next successful save.
+  const [savedSignatures, setSavedSignatures] = useState<Set<string>>(() => new Set());
   // When the trainer taps the per-row Rest button, we remember which set
   // requested it. The next finished/stopped rest writes to that exact set
   // (covers the edge case where the rest is "after the last set" — Add Set
@@ -424,6 +501,31 @@ export function WorkoutLogger({
         sets: [...setMap.values()].sort((a, b) => a.setNumber - b.setNumber),
       }));
 
+    // Seed the per-set "saved" signatures from the server snapshot so already
+    // logged sets render green on load and stay in sync as the peer edits / we
+    // poll. Only complete sets get a signature — partial rows are never saved.
+    // Computed from the server state regardless of the unsaved-local guard
+    // below: these signatures describe what's persisted, not the local draft.
+    const serverSig = new Set<string>();
+    for (const log of deduped) {
+      for (const s of log.sets) {
+        const set: SetData = {
+          setNumber: s.setNumber,
+          reps: s.reps ?? undefined,
+          weightKg: s.weightKg ?? undefined,
+          durationSec: s.durationSec ?? undefined,
+          rpe: s.rpe ?? undefined,
+          restSec: s.restSec ?? undefined,
+          stepsCount: s.stepsCount ?? undefined,
+          notes: s.notes ?? '',
+        };
+        if (isSetComplete(set, log.exercise.exerciseType)) {
+          serverSig.add(setSignature(log.exercise.id, normalizeSet(set)));
+        }
+      }
+    }
+    setSavedSignatures(serverSig);
+
     setExercises((prev) => {
       // Two preservation rules across server re-hydration (this effect fires
       // every time `existingLogs` changes — e.g. on each 10s/30s poll):
@@ -437,23 +539,7 @@ export function WorkoutLogger({
       //      would re-collapse everything except the last exercise on every
       //      tick. The reported bug: expanding one card auto-collapses it on
       //      the next poll and expands the bottom one.
-      const currentHash = JSON.stringify(
-        prev.map((entry, idx) => ({
-          exerciseId: entry.exerciseId,
-          orderIndex: idx,
-          isCompleted: entry.isCompleted,
-          sets: entry.sets.map((s) => ({
-            setNumber: s.setNumber,
-            reps: s.reps,
-            weightKg: s.weightKg,
-            durationSec: s.durationSec,
-            rpe: s.rpe,
-            restSec: s.restSec,
-            stepsCount: s.stepsCount,
-            notes: s.notes || undefined,
-          })),
-        })),
-      );
+      const currentHash = JSON.stringify(buildSavePayload(prev));
       const hasUnsavedLocal = prev.length > 0 && currentHash !== lastSavedHashRef.current;
       if (hasUnsavedLocal) return prev;
 
@@ -498,23 +584,7 @@ export function WorkoutLogger({
 
       // Seed the last-saved hash so auto-save doesn't re-POST the data we
       // just hydrated. Shape must match the payload built in `currentPayload`.
-      lastSavedHashRef.current = JSON.stringify(
-        initial.map((entry, idx) => ({
-          exerciseId: entry.exerciseId,
-          orderIndex: idx,
-          isCompleted: entry.isCompleted,
-          sets: entry.sets.map((s) => ({
-            setNumber: s.setNumber,
-            reps: s.reps,
-            weightKg: s.weightKg,
-            durationSec: s.durationSec,
-            rpe: s.rpe,
-            restSec: s.restSec,
-            stepsCount: s.stepsCount,
-            notes: s.notes || undefined,
-          })),
-        })),
-      );
+      lastSavedHashRef.current = JSON.stringify(buildSavePayload(initial));
       return initial;
     });
 
@@ -896,25 +966,7 @@ export function WorkoutLogger({
   // Snapshot of the current state in the exact shape we POST. Memoized so
   // its identity is stable across renders that don't actually change the
   // logged workout, which keeps the auto-save effect from churning.
-  const currentPayload = useMemo(
-    () =>
-      exercises.map((entry, idx) => ({
-        exerciseId: entry.exerciseId,
-        orderIndex: idx,
-        isCompleted: entry.isCompleted,
-        sets: entry.sets.map((s) => ({
-          setNumber: s.setNumber,
-          reps: s.reps,
-          weightKg: s.weightKg,
-          durationSec: s.durationSec,
-          rpe: s.rpe,
-          restSec: s.restSec,
-          stepsCount: s.stepsCount,
-          notes: s.notes || undefined,
-        })),
-      })),
-    [exercises],
-  );
+  const currentPayload = useMemo(() => buildSavePayload(exercises), [exercises]);
   const currentHash = useMemo(() => JSON.stringify(currentPayload), [currentPayload]);
   const hasUnsaved = currentHash !== lastSavedHashRef.current;
 
@@ -942,6 +994,10 @@ export function WorkoutLogger({
       });
       if (res.ok) {
         lastSavedHashRef.current = sentHash;
+        // Flip every set we just persisted to its saved (green) state. The
+        // writer doesn't get its own Pusher echo, so we can't wait for a
+        // refetch — record signatures straight from the payload we sent.
+        setSavedSignatures(signaturesOf(currentPayload));
         const body = await res.json();
         const newBadges: { name: string; icon: string; description?: string }[] =
           body?.newBadges ?? [];
@@ -1804,178 +1860,200 @@ export function WorkoutLogger({
 
                         {/* Set rows */}
                         <div className="space-y-2">
-                          {entry.sets.map((set, setIdx) => (
-                            <div
-                              key={setIdx}
-                              className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
-                            >
-                              {/* Set number badge */}
-                              <div className="flex items-center justify-center">
-                                <span
-                                  className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-                                  style={{ backgroundColor: cfg.accent + '22', color: cfg.accent }}
-                                >
-                                  {set.setNumber}
-                                </span>
-                              </div>
-
-                              {/* Dynamic fields */}
-                              {cols.map((col) => {
-                                // Rest cell is a 3-state toggle: idle (tap to
-                                // start rest), active (live countdown for the
-                                // row that owns the running timer), done
-                                // (recorded MM:SS value).
-                                if (col.key === 'restSec') {
-                                  const isActiveTarget =
-                                    pendingRestTarget?.tempId === entry.tempId &&
-                                    pendingRestTarget?.setNumber === set.setNumber;
-                                  const hasValue = set.restSec !== undefined;
-                                  const isActive =
-                                    isActiveTarget &&
-                                    restTimerRemaining !== undefined &&
-                                    restTimerRemaining !== null;
-
-                                  if (hasValue) {
-                                    return (
-                                      <div
-                                        key={col.key as string}
-                                        className="flex h-11 items-center justify-center rounded-xl border border-zinc-800 bg-muted/20 text-sm font-semibold tabular-nums text-foreground"
-                                      >
-                                        {formatRestSec(set.restSec)}
-                                      </div>
-                                    );
-                                  }
-                                  if (isActive) {
-                                    return (
-                                      <div
-                                        key={col.key as string}
-                                        aria-live="polite"
-                                        className={`flex h-11 items-center justify-center gap-1 rounded-xl border text-sm font-bold tabular-nums ${
-                                          restTimerPaused
-                                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                                            : 'border-blue-500/50 bg-blue-500/15 text-blue-300'
-                                        }`}
-                                      >
-                                        {restTimerPaused && (
-                                          <span className="text-[10px] uppercase opacity-70">
-                                            ||
-                                          </span>
-                                        )}
-                                        {formatRestSec(restTimerRemaining ?? 0)}
-                                      </div>
-                                    );
-                                  }
-                                  // Idle: only enable the rest button once the
-                                  // trainer has logged the work for this set
-                                  // (kg + reps for WEIGHTED, reps for
-                                  // BODYWEIGHT, duration for DURATION). Resting
-                                  // before logging is almost always a mis-tap.
-                                  const setLogged = cols
-                                    .filter((c) => c.key !== 'restSec' && c.key !== 'notes')
-                                    .every((c) => (set[c.key] as number | undefined) !== undefined);
-                                  return (
-                                    <button
-                                      key={col.key as string}
-                                      onClick={() => requestRestForSet(entry.tempId, set.setNumber)}
-                                      disabled={!setLogged}
-                                      aria-label={
-                                        setLogged
-                                          ? `Start rest after set ${set.setNumber}`
-                                          : `Log this set before starting rest`
-                                      }
-                                      className="flex h-11 items-center justify-center rounded-xl border border-blue-500/30 text-blue-400/70 transition-colors active:bg-blue-500/10 active:text-blue-400 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-muted-foreground/30 disabled:active:bg-transparent"
-                                    >
-                                      <BedDouble className="h-4 w-4" />
-                                    </button>
-                                  );
-                                }
-                                {
-                                  const mode = inputModeFor(col.key);
-                                  const draftKey = `${exIdx}-${setIdx}-${col.key as string}`;
-                                  return (
-                                    <Input
-                                      key={col.key as string}
-                                      // text + inputMode (vs type="number") avoids Safari's
-                                      // number-input quirks (mid-keystroke validation, scroll-
-                                      // wheel mutations, trailing-zero stripping) while still
-                                      // surfacing the right mobile keypad.
-                                      type="text"
-                                      inputMode={mode}
-                                      pattern={mode === 'decimal' ? '[0-9]*\\.?[0-9]*' : '[0-9]*'}
-                                      enterKeyHint="done"
-                                      autoComplete="off"
-                                      placeholder={placeholderFor(
-                                        col.key,
-                                        priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
-                                      )}
-                                      // text-base = 16px: below this iOS Safari auto-zooms on
-                                      // focus even with user-scalable=no in PWA standalone.
-                                      className="h-11 rounded-xl text-center text-base font-semibold tabular-nums border border-zinc-700 focus:border-blue-500 focus-visible:ring-0"
-                                      value={
-                                        col.key === 'notes'
-                                          ? set.notes
-                                          : (cellDrafts[draftKey] ??
-                                            (set[col.key] as number | undefined) ??
-                                            '')
-                                      }
-                                      onChange={(e) => {
-                                        // Keep the raw keystrokes so in-progress
-                                        // decimals (e.g. "100." → "100.5") survive
-                                        // the round-trip through a numeric value.
-                                        if (col.key !== 'notes') {
-                                          setCellDrafts((d) => ({
-                                            ...d,
-                                            [draftKey]: e.target.value,
-                                          }));
-                                        }
-                                        updateSet(exIdx, setIdx, col.key, e.target.value);
-                                      }}
-                                      onFocus={(e) => {
-                                        // Wait for the keyboard to start animating in, then
-                                        // scroll the focused cell to the middle of the visible
-                                        // area. Without this the focused row often sits behind
-                                        // the keyboard on small phones.
-                                        const el = e.currentTarget;
-                                        setTimeout(() => {
-                                          el.scrollIntoView({
-                                            block: 'center',
-                                            behavior: 'smooth',
-                                          });
-                                        }, 300);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        // Enter dismisses the keyboard. Native browsers don't
-                                        // advance focus across loose inputs and a form wrapper
-                                        // here would conflict with the existing autosave flow.
-                                        if (e.key === 'Enter') e.currentTarget.blur();
-                                      }}
-                                      onBlur={() => {
-                                        // Drop the raw draft so the cell shows the
-                                        // canonical parsed number once editing ends.
-                                        if (col.key !== 'notes') {
-                                          setCellDrafts((d) => {
-                                            if (!(draftKey in d)) return d;
-                                            const next = { ...d };
-                                            delete next[draftKey];
-                                            return next;
-                                          });
-                                        }
-                                      }}
-                                    />
-                                  );
-                                }
-                              })}
-
-                              {/* Remove set */}
-                              <button
-                                onClick={() => removeSet(exIdx, setIdx)}
-                                disabled={entry.sets.length <= 1}
-                                className="flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground/40 transition-colors active:bg-destructive/10 active:text-destructive disabled:pointer-events-none disabled:opacity-20"
+                          {entry.sets.map((set, setIdx) => {
+                            // Green once the whole set's persisted values match
+                            // what's on screen — i.e. it's been saved and not
+                            // re-edited since. Partial rows never match (they're
+                            // excluded from the save payload).
+                            const setSaved = savedSignatures.has(
+                              setSignature(entry.exerciseId, normalizeSet(set)),
+                            );
+                            return (
+                              <div
+                                key={setIdx}
+                                className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
                               >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ))}
+                                {/* Set number badge */}
+                                <div className="flex items-center justify-center">
+                                  <span
+                                    className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
+                                    style={{
+                                      backgroundColor: cfg.accent + '22',
+                                      color: cfg.accent,
+                                    }}
+                                  >
+                                    {set.setNumber}
+                                  </span>
+                                </div>
+
+                                {/* Dynamic fields */}
+                                {cols.map((col) => {
+                                  // Rest cell is a 3-state toggle: idle (tap to
+                                  // start rest), active (live countdown for the
+                                  // row that owns the running timer), done
+                                  // (recorded MM:SS value).
+                                  if (col.key === 'restSec') {
+                                    const isActiveTarget =
+                                      pendingRestTarget?.tempId === entry.tempId &&
+                                      pendingRestTarget?.setNumber === set.setNumber;
+                                    const hasValue = set.restSec !== undefined;
+                                    const isActive =
+                                      isActiveTarget &&
+                                      restTimerRemaining !== undefined &&
+                                      restTimerRemaining !== null;
+
+                                    if (hasValue) {
+                                      return (
+                                        <div
+                                          key={col.key as string}
+                                          className="flex h-11 items-center justify-center rounded-xl border border-zinc-800 bg-muted/20 text-sm font-semibold tabular-nums text-foreground"
+                                        >
+                                          {formatRestSec(set.restSec)}
+                                        </div>
+                                      );
+                                    }
+                                    if (isActive) {
+                                      return (
+                                        <div
+                                          key={col.key as string}
+                                          aria-live="polite"
+                                          className={`flex h-11 items-center justify-center gap-1 rounded-xl border text-sm font-bold tabular-nums ${
+                                            restTimerPaused
+                                              ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                                              : 'border-blue-500/50 bg-blue-500/15 text-blue-300'
+                                          }`}
+                                        >
+                                          {restTimerPaused && (
+                                            <span className="text-[10px] uppercase opacity-70">
+                                              ||
+                                            </span>
+                                          )}
+                                          {formatRestSec(restTimerRemaining ?? 0)}
+                                        </div>
+                                      );
+                                    }
+                                    // Idle: only enable the rest button once the
+                                    // trainer has logged the work for this set
+                                    // (kg + reps for WEIGHTED, reps for
+                                    // BODYWEIGHT, duration for DURATION). Resting
+                                    // before logging is almost always a mis-tap.
+                                    const setLogged = cols
+                                      .filter((c) => c.key !== 'restSec' && c.key !== 'notes')
+                                      .every(
+                                        (c) => (set[c.key] as number | undefined) !== undefined,
+                                      );
+                                    return (
+                                      <button
+                                        key={col.key as string}
+                                        onClick={() =>
+                                          requestRestForSet(entry.tempId, set.setNumber)
+                                        }
+                                        disabled={!setLogged}
+                                        aria-label={
+                                          setLogged
+                                            ? `Start rest after set ${set.setNumber}`
+                                            : `Log this set before starting rest`
+                                        }
+                                        className="flex h-11 items-center justify-center rounded-xl border border-blue-500/30 text-blue-400/70 transition-colors active:bg-blue-500/10 active:text-blue-400 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-muted-foreground/30 disabled:active:bg-transparent"
+                                      >
+                                        <BedDouble className="h-4 w-4" />
+                                      </button>
+                                    );
+                                  }
+                                  {
+                                    const mode = inputModeFor(col.key);
+                                    const draftKey = `${exIdx}-${setIdx}-${col.key as string}`;
+                                    return (
+                                      <Input
+                                        key={col.key as string}
+                                        // text + inputMode (vs type="number") avoids Safari's
+                                        // number-input quirks (mid-keystroke validation, scroll-
+                                        // wheel mutations, trailing-zero stripping) while still
+                                        // surfacing the right mobile keypad.
+                                        type="text"
+                                        inputMode={mode}
+                                        pattern={mode === 'decimal' ? '[0-9]*\\.?[0-9]*' : '[0-9]*'}
+                                        enterKeyHint="done"
+                                        autoComplete="off"
+                                        placeholder={placeholderFor(
+                                          col.key,
+                                          priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
+                                        )}
+                                        // text-base = 16px: below this iOS Safari auto-zooms on
+                                        // focus even with user-scalable=no in PWA standalone.
+                                        // Saved rows turn green so the trainer knows the value
+                                        // is persisted; editing flips the row back to neutral.
+                                        className={`h-11 rounded-xl text-center text-base font-semibold tabular-nums border focus:border-blue-500 focus-visible:ring-0 ${
+                                          setSaved
+                                            ? 'border-emerald-600/40 text-emerald-400'
+                                            : 'border-zinc-700'
+                                        }`}
+                                        value={
+                                          col.key === 'notes'
+                                            ? set.notes
+                                            : (cellDrafts[draftKey] ??
+                                              (set[col.key] as number | undefined) ??
+                                              '')
+                                        }
+                                        onChange={(e) => {
+                                          // Keep the raw keystrokes so in-progress
+                                          // decimals (e.g. "100." → "100.5") survive
+                                          // the round-trip through a numeric value.
+                                          if (col.key !== 'notes') {
+                                            setCellDrafts((d) => ({
+                                              ...d,
+                                              [draftKey]: e.target.value,
+                                            }));
+                                          }
+                                          updateSet(exIdx, setIdx, col.key, e.target.value);
+                                        }}
+                                        onFocus={(e) => {
+                                          // Wait for the keyboard to start animating in, then
+                                          // scroll the focused cell to the middle of the visible
+                                          // area. Without this the focused row often sits behind
+                                          // the keyboard on small phones.
+                                          const el = e.currentTarget;
+                                          setTimeout(() => {
+                                            el.scrollIntoView({
+                                              block: 'center',
+                                              behavior: 'smooth',
+                                            });
+                                          }, 300);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          // Enter dismisses the keyboard. Native browsers don't
+                                          // advance focus across loose inputs and a form wrapper
+                                          // here would conflict with the existing autosave flow.
+                                          if (e.key === 'Enter') e.currentTarget.blur();
+                                        }}
+                                        onBlur={() => {
+                                          // Drop the raw draft so the cell shows the
+                                          // canonical parsed number once editing ends.
+                                          if (col.key !== 'notes') {
+                                            setCellDrafts((d) => {
+                                              if (!(draftKey in d)) return d;
+                                              const next = { ...d };
+                                              delete next[draftKey];
+                                              return next;
+                                            });
+                                          }
+                                        }}
+                                      />
+                                    );
+                                  }
+                                })}
+
+                                {/* Remove set */}
+                                <button
+                                  onClick={() => removeSet(exIdx, setIdx)}
+                                  disabled={entry.sets.length <= 1}
+                                  className="flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground/40 transition-colors active:bg-destructive/10 active:text-destructive disabled:pointer-events-none disabled:opacity-20"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
 
                         {/* Add Set — rest is initiated per-row via the cell's
