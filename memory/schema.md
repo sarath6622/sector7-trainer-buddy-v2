@@ -156,6 +156,7 @@ model BranchSettings {
   reminderTimingMin         Int     @default(60)  // minutes before session
   noShowThresholdMin        Int     @default(15)  // minutes late = no-show
   kickboxingClassSizeLimit  Int     @default(20)
+  measurementReminderDays   Int     @default(30)  // days before client is flagged "No measurements" on client lists
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 

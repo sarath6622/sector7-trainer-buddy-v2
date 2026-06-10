@@ -247,6 +247,9 @@ model BranchSettings {
   kickboxingClassSizeLimit  Int     @default(20)
   monthlyRegularLeaveQuota  Int     @default(4)
   monthlyEmergencyLeaveQuota Int    @default(1)
+  // Days a client can go without a logged body/weight measurement before
+  // trainer + admin client lists flag them with a "No measurements" badge.
+  measurementReminderDays   Int     @default(30)
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 

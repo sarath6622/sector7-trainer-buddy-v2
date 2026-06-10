@@ -11,6 +11,7 @@ import {
   Dumbbell,
   History,
   RefreshCw,
+  Ruler,
   Target,
   TrendingUp,
   Users,
@@ -102,6 +103,8 @@ interface ClientData {
   };
   isReassigned?: boolean;
   reassignedSessionCount?: number;
+  measurementStale?: boolean;
+  lastMeasurementAt?: string | null;
 }
 
 interface PastClientData {
@@ -127,6 +130,7 @@ interface PastClientData {
 export default function TrainerClientsPage() {
   const [clients, setClients] = useState<ClientData[]>([]);
   const [pastClients, setPastClients] = useState<PastClientData[]>([]);
+  const [measurementReminderDays, setMeasurementReminderDays] = useState(30);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -139,6 +143,9 @@ export default function TrainerClientsPage() {
         const json = await res.json();
         setClients(json.data);
         setPastClients(json.pastClients ?? []);
+        if (typeof json.measurementReminderDays === 'number') {
+          setMeasurementReminderDays(json.measurementReminderDays);
+        }
       } else {
         setError(true);
       }
@@ -283,6 +290,15 @@ export default function TrainerClientsPage() {
                                 Unpaid
                               </Badge>
                             )
+                          )}
+                          {!item.isReassigned && item.measurementStale && (
+                            <span
+                              title={`No body or weight measurement logged in the last ${measurementReminderDays} days`}
+                              className="flex items-center gap-1 shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400"
+                            >
+                              <Ruler className="h-2.5 w-2.5" />
+                              No measurements
+                            </span>
                           )}
                         </div>
                         {item.clientProfile.fitnessGoals && (

@@ -46,6 +46,28 @@ export async function GET() {
 
     const primaryClientIds = new Set(packages.map((p) => p.clientProfileId));
 
+    // ── Measurement recency ────────────────────────────────────
+    // Flag primary clients who have no body/weight measurement logged within
+    // the branch-configured window (default 30 days). The threshold is admin-
+    // configurable via BranchSettings → "Measurement Reminder Window".
+    const branchSettings = await prisma.branchSettings.findUnique({
+      where: { branchId },
+      select: { measurementReminderDays: true },
+    });
+    const measurementReminderDays = branchSettings?.measurementReminderDays ?? 30;
+    const measurementStaleBefore = new Date(
+      now.getTime() - measurementReminderDays * 24 * 60 * 60 * 1000,
+    );
+
+    const latestMeasurements = await prisma.progressEntry.groupBy({
+      by: ['clientProfileId'],
+      where: { clientProfileId: { in: [...primaryClientIds] } },
+      _max: { recordedAt: true },
+    });
+    const lastMeasurementByClient = new Map(
+      latestMeasurements.map((m) => [m.clientProfileId, m._max.recordedAt]),
+    );
+
     const clientsWithStats = await Promise.all(
       packages.map(async (pkg) => {
         const sessions = await prisma.sessionInstance.findMany({
@@ -74,8 +96,12 @@ export async function GET() {
           select: { id: true, scheduledDate: true, scheduledTime: true },
         });
 
+        const lastMeasurementAt = lastMeasurementByClient.get(pkg.clientProfileId) ?? null;
+
         return {
           clientProfile: pkg.client,
+          lastMeasurementAt: lastMeasurementAt?.toISOString() ?? null,
+          measurementStale: !lastMeasurementAt || lastMeasurementAt < measurementStaleBefore,
           package: {
             id: pkg.id,
             sessionsPerMonth: pkg.sessionsPerMonth,
@@ -235,6 +261,7 @@ export async function GET() {
     return NextResponse.json({
       data: [...clientsWithStats, ...reassignedClients],
       pastClients,
+      measurementReminderDays,
     });
   } catch (error) {
     console.error('[GET /api/trainer/clients] Error:', error);

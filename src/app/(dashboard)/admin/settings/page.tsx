@@ -8,6 +8,7 @@ import {
   Clock,
   Loader2,
   RefreshCw,
+  Ruler,
   Shield,
   Users,
   XCircle,
@@ -28,6 +29,7 @@ interface BranchSettings {
   kickboxingClassSizeLimit: number;
   monthlyRegularLeaveQuota: number;
   monthlyEmergencyLeaveQuota: number;
+  measurementReminderDays: number;
 }
 
 function SettingField({
@@ -259,6 +261,31 @@ export default function SettingsPage() {
               className="w-24"
             />
             <span className="text-sm text-muted-foreground">sessions</span>
+          </div>
+        </SettingField>
+      </SectionCard>
+
+      {/* Progress Tracking */}
+      <SectionCard
+        icon={Ruler}
+        iconColor="bg-teal-500/10 text-teal-500"
+        title="Progress Tracking"
+        description="When to flag clients with stale measurements"
+      >
+        <SettingField
+          label="Measurement Reminder Window"
+          description="Clients with no body or weight measurement logged within this many days are flagged with a “No measurements” badge on the trainer and admin client lists"
+        >
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={1}
+              max={365}
+              value={settings.measurementReminderDays}
+              onChange={(e) => updateField('measurementReminderDays', Number(e.target.value))}
+              className="w-24"
+            />
+            <span className="text-sm text-muted-foreground">days</span>
           </div>
         </SettingField>
       </SectionCard>

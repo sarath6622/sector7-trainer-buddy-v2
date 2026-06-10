@@ -432,6 +432,7 @@ export const updateSettingsSchema = z.object({
   kickboxingClassSizeLimit: z.number().int().positive().optional(),
   monthlyRegularLeaveQuota: z.number().int().min(0).max(31).optional(),
   monthlyEmergencyLeaveQuota: z.number().int().min(0).max(5).optional(),
+  measurementReminderDays: z.number().int().min(1).max(365).optional(),
 });
 
 // ─── ADMIN: AUDIT LOGS ──────────────────────────────

@@ -367,6 +367,33 @@ export async function getUsers(input: ListUsersInput) {
     prisma.user.count({ where: { ...baseWhere, isActive: true } }),
   ]);
 
+  // Measurement recency — flag client profiles with no body/weight measurement
+  // logged within the branch-configured window (default 30 days). Threshold is
+  // admin-configurable via BranchSettings → "Measurement Reminder Window".
+  const branchSettings = await prisma.branchSettings.findUnique({
+    where: { branchId },
+    select: { measurementReminderDays: true },
+  });
+  const measurementReminderDays = branchSettings?.measurementReminderDays ?? 30;
+  const measurementStaleBefore = new Date(
+    Date.now() - measurementReminderDays * 24 * 60 * 60 * 1000,
+  );
+
+  const clientProfileIds = users
+    .map((u) => u.clientProfile?.id)
+    .filter((id): id is string => Boolean(id));
+  const lastMeasurementByClient = new Map<string, Date | null>();
+  if (clientProfileIds.length > 0) {
+    const latestMeasurements = await prisma.progressEntry.groupBy({
+      by: ['clientProfileId'],
+      where: { clientProfileId: { in: clientProfileIds } },
+      _max: { recordedAt: true },
+    });
+    for (const m of latestMeasurements) {
+      lastMeasurementByClient.set(m.clientProfileId, m._max.recordedAt);
+    }
+  }
+
   // Compute sessions-used per active package so the UI can show
   // sessions-based progress (paid-for sessions, not time).
   const activePackages = users.flatMap((u) => u.clientProfile?.ptPackages ?? []);
@@ -406,7 +433,8 @@ export async function getUsers(input: ListUsersInput) {
   }
 
   const data = users.map((u) => {
-    if (!u.clientProfile?.ptPackages?.length) return u;
+    if (!u.clientProfile) return u;
+    const lastMeasurementAt = lastMeasurementByClient.get(u.clientProfile.id) ?? null;
     return {
       ...u,
       clientProfile: {
@@ -415,6 +443,8 @@ export async function getUsers(input: ListUsersInput) {
           ...pkg,
           usedSessions: usedByPackageId.get(pkg.id) ?? pkg.onboardingUsedSessions,
         })),
+        lastMeasurementAt: lastMeasurementAt ? lastMeasurementAt.toISOString() : null,
+        measurementStale: !lastMeasurementAt || lastMeasurementAt < measurementStaleBefore,
       },
     };
   });
@@ -430,6 +460,8 @@ export async function getUsers(input: ListUsersInput) {
     // Stable branch-wide active tally (ignores search/status) so the header
     // can show roster health without flickering as the admin types.
     activeCount,
+    // Branch-configured window that drives the "No measurements" badge.
+    measurementReminderDays,
   };
 }
 

@@ -10,6 +10,7 @@ interface UpdateSettingsInput {
   reminderTimingMin?: number;
   noShowThresholdMin?: number;
   kickboxingClassSizeLimit?: number;
+  measurementReminderDays?: number;
 }
 
 /**
@@ -52,6 +53,8 @@ export async function updateSettings(
     updateData.noShowThresholdMin = input.noShowThresholdMin;
   if (input.kickboxingClassSizeLimit !== undefined)
     updateData.kickboxingClassSizeLimit = input.kickboxingClassSizeLimit;
+  if (input.measurementReminderDays !== undefined)
+    updateData.measurementReminderDays = input.measurementReminderDays;
 
   if (Object.keys(updateData).length === 0) {
     return existing;
@@ -76,6 +79,7 @@ export async function updateSettings(
       reminderTimingMin: existing.reminderTimingMin,
       noShowThresholdMin: existing.noShowThresholdMin,
       kickboxingClassSizeLimit: existing.kickboxingClassSizeLimit,
+      measurementReminderDays: existing.measurementReminderDays,
     },
     newValue: { ...input },
   });
