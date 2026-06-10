@@ -155,8 +155,14 @@ async function getClientIdsBySessionBucket(
 export async function createUser(input: CreateUserInput) {
   const { branchId, actorId, password, roles, ...userData } = input;
 
-  // Check for duplicate email
-  const existing = await prisma.user.findUnique({ where: { email: userData.email } });
+  // Normalize email to lowercase so accounts are case-insensitive end-to-end
+  // (the login lookup matches case-insensitively too — see lib/auth.ts).
+  const email = userData.email.trim().toLowerCase();
+
+  // Check for duplicate email (case-insensitive, to catch any legacy mixed-case rows)
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+  });
   if (existing) {
     throw new AppError('DUPLICATE_EMAIL', 'A user with this email already exists', 409);
   }
@@ -166,7 +172,7 @@ export async function createUser(input: CreateUserInput) {
   const user = await prisma.user.create({
     data: {
       branchId,
-      email: userData.email,
+      email,
       passwordHash,
       firstName: userData.firstName,
       lastName: userData.lastName,

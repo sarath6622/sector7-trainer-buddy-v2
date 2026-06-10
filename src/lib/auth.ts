@@ -47,8 +47,10 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        // Email is matched case-insensitively (and whitespace-trimmed) so
+        // "Admin@Sector7.com" logs in the same as "admin@sector7.com".
+        const user = await prisma.user.findFirst({
+          where: { email: { equals: credentials.email.trim(), mode: 'insensitive' } },
           include: {
             trainerProfile: { select: { id: true } },
             clientProfile: { select: { id: true } },

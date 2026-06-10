@@ -248,6 +248,25 @@
     opacity: 0.7;
     cursor: pointer;
   }
+
+  /* Chrome/Safari autofill — repaint the browser's light-blue/lavender fill
+     to match our dark inputs. A SOLID color is used (not alpha) because the
+     inset-shadow trick can't reliably blend translucency, and !important +
+     the standard `:autofill` selector ensure every field is caught. The long
+     transition defeats Chrome's fill background animation. #212124 is
+     white/4% over the card so filled fields match the empty ones. */
+  .dark input:-webkit-autofill,
+  .dark input:-webkit-autofill:hover,
+  .dark input:-webkit-autofill:focus,
+  .dark input:-webkit-autofill:active,
+  .dark input:autofill {
+    -webkit-text-fill-color: #fff !important;
+    caret-color: #fff;
+    -webkit-box-shadow: 0 0 0 1000px #212124 inset !important;
+    box-shadow: 0 0 0 1000px #212124 inset !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    transition: background-color 9999s ease-in-out 0s;
+  }
 }
 
 /* ── FullCalendar Theme Overrides ── */
