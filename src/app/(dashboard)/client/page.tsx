@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { SessionTimer } from '@/components/timer/SessionTimer';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
+import { WorkoutCalendarCard } from '@/components/calendar/WorkoutCalendarCard';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -351,6 +352,9 @@ export default function ClientDashboard() {
         </button>
       )}
 
+      {/* ── Workout calendar (PT session days + PR days) ── */}
+      <WorkoutCalendarCard />
+
       {/* ── Engagement stats strip ── */}
       <EngagementStrip stats={engagementStats} />
 
@@ -537,7 +541,7 @@ export default function ClientDashboard() {
           </h2>
           <span className="text-xs text-muted-foreground">This month</span>
         </div>
-        <div className="mt-4 flex items-center gap-6">
+        <div className="mt-4 flex items-center gap-4">
           {/* Progress ring — arc + centre both reflect session usage */}
           <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
             <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
@@ -568,7 +572,7 @@ export default function ClientDashboard() {
             </div>
           </div>
           {/* Stats grid */}
-          <div className="grid flex-1 grid-cols-2 gap-3">
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
             <StatPill
               icon={<Dumbbell className="h-3.5 w-3.5" />}
               label="Used"
@@ -701,6 +705,16 @@ function DashboardSkeleton() {
         <Bone className="h-4 w-52" />
       </div>
 
+      {/* Workout calendar card */}
+      <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50 space-y-3">
+        <Bone className="mx-auto h-5 w-32" />
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: 28 }).map((_, i) => (
+            <Bone key={i} className="mx-auto h-9 w-9 rounded-full" />
+          ))}
+        </div>
+      </div>
+
       {/* Engagement strip — 3 tiles */}
       <div className="grid grid-cols-3 gap-3">
         {[0, 1, 2].map((i) => (
@@ -757,16 +771,16 @@ function DashboardSkeleton() {
           <Bone className="h-3.5 w-20" />
           <Bone className="h-3.5 w-20" />
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <Bone className="h-28 w-28 shrink-0 rounded-full" />
-          <div className="grid flex-1 grid-cols-2 gap-3">
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2.5">
-                <Bone className="h-7 w-7 shrink-0 rounded-lg" />
-                <div className="space-y-1.5">
+              <div key={i} className="min-w-0 rounded-xl bg-muted/40 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Bone className="h-7 w-7 shrink-0 rounded-lg" />
                   <Bone className="h-5 w-6" />
-                  <Bone className="h-2.5 w-12" />
                 </div>
+                <Bone className="mt-1.5 h-2.5 w-12" />
               </div>
             ))}
           </div>
@@ -1042,16 +1056,16 @@ function StatPill({
   bgColor: string;
 }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2.5">
-      <div
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${bgColor} ${color}`}
-      >
-        {icon}
-      </div>
-      <div className="min-w-0">
+    <div className="min-w-0 rounded-xl bg-muted/40 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <div
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${bgColor} ${color}`}
+        >
+          {icon}
+        </div>
         <p className="text-lg font-bold leading-none">{value}</p>
-        <p className="mt-0.5 text-[10px] text-muted-foreground">{label}</p>
       </div>
+      <p className="mt-1.5 truncate text-[10px] text-muted-foreground">{label}</p>
     </div>
   );
 }

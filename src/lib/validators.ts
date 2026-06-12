@@ -634,6 +634,12 @@ export const listClientWorkoutsSchema = z.object({
   muscleGroup: z.string().optional(),
 });
 
+// ─── CLIENT: WORKOUT CALENDAR ───────────────────────
+
+export const workoutCalendarQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'Must be YYYY-MM format'),
+});
+
 // ─── NOTIFICATIONS ───────────────────────────────────
 
 export const listNotificationsSchema = paginationSchema.extend({

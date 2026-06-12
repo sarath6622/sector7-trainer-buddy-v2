@@ -381,6 +381,12 @@ GET    /api/client/sessions              → ?month → SessionInstance[] (own s
 GET    /api/client/sessions/[id]         → {} → SessionInstance (with workout details, exerciseType included)
 GET    /api/client/attendance             → ?month → AttendanceRecord[]
 GET    /api/client/workouts              → ?dateFrom&dateTo&exerciseId&muscleGroup → WorkoutLog[]
+GET    /api/client/workout-calendar      → ?month=YYYY-MM → { days: [{ date, sessionIds, isPR }], totalDays }
+       Role: CLIENT only. Calendar view of completed PT session days for the month.
+       date: YYYY-MM-DD. isPR mirrors the community auto-post PR rule: a compound
+       lift on that day strictly beat the client's all-time best (first-ever lift counts).
+       Validation: workoutCalendarQuerySchema
+       Added: 2026-06-12
 GET    /api/client/progress              → {} → ProgressEntry[]
 POST   /api/client/progress             → { weightKg?, bodyFatPercent?, muscleMass?, chest?, waist?, hips?, bicepLeft?, bicepRight?, thighLeft?, thighRight?, notes? } → { data: ProgressEntry } 201
        Role: CLIENT only. Creates a new progress entry owned by the authenticated client.

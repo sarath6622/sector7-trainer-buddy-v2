@@ -1477,3 +1477,12 @@
 - Used Next.js 16.2.0 (latest available via create-next-app)
 - shadcn/ui latest uses base-ui instead of Radix — no `asChild` prop, different API
 - TypeScript type-check and Next.js build both pass with zero errors
+
+#### Ad-hoc (2026-06-12): Client dashboard workout calendar card
+
+- `GET /api/client/workout-calendar?month=YYYY-MM` — completed PT session days + PR-day flags (contract added to `memory/api-contracts.md`, validated by `workoutCalendarQuerySchema`)
+- `getWorkoutCalendar()` in `src/services/workout.service.ts` — PR detection mirrors the community auto-post rule (compound lift day-max strictly beats all-time best; history bounded at month end so past months stay accurate)
+- `src/components/calendar/WorkoutCalendarCard.tsx` — Monday-first month grid (green ring = workout day, amber star = PR day, orange ring = today), month navigation capped at current month, day click opens a Dialog with the session summary (time, trainer, muscle chips, per-exercise set summary) + link to full session
+- Placed as the 3rd card on `/client` dashboard, before the engagement stats strip; skeleton updated
+- Tests: `tests/unit/workout-calendar.test.ts` (7 passing); lint + type-check clean
+- Scope cut per operator: no double-session / high-intensity markers

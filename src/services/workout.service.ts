@@ -702,3 +702,96 @@ export async function getClientWorkouts({
     orderBy: [{ sessionInstance: { scheduledDate: 'desc' } }, { orderIndex: 'asc' }],
   });
 }
+
+// ─── Workout calendar (client dashboard) ─────────────────────────────────────
+
+export interface WorkoutCalendarDay {
+  /** YYYY-MM-DD (same key format as session generation: ISO date part) */
+  date: string;
+  sessionIds: string[];
+  isPR: boolean;
+}
+
+export async function getWorkoutCalendar({
+  clientProfileId,
+  branchId,
+  month,
+}: {
+  clientProfileId: string;
+  branchId: string;
+  month: string; // YYYY-MM
+}): Promise<{ days: WorkoutCalendarDay[]; totalDays: number }> {
+  const [yearStr, monthStr] = month.split('-');
+  const year = parseInt(yearStr!, 10);
+  const m = parseInt(monthStr!, 10);
+  const monthStart = new Date(year, m - 1, 1);
+  const monthEnd = new Date(year, m, 0, 23, 59, 59);
+
+  const sessions = await prisma.sessionInstance.findMany({
+    where: {
+      branchId,
+      clientProfileId,
+      status: 'COMPLETED',
+      scheduledDate: { gte: monthStart, lte: monthEnd },
+    },
+    select: { id: true, scheduledDate: true },
+    orderBy: { scheduledDate: 'asc' },
+  });
+
+  // PR days mirror the community auto-post rule above: a compound lift whose
+  // day-max strictly beats the client's all-time best (first-ever lift counts).
+  // History is bounded at monthEnd so browsing a past month doesn't credit a
+  // PR to a day that was only beaten later.
+  const sets = await prisma.workoutSet.findMany({
+    where: {
+      weightKg: { not: null },
+      workoutLog: {
+        exercise: { isCompound: true },
+        sessionInstance: { branchId, clientProfileId, scheduledDate: { lte: monthEnd } },
+      },
+    },
+    select: {
+      weightKg: true,
+      workoutLog: {
+        select: {
+          exerciseId: true,
+          sessionInstance: { select: { scheduledDate: true } },
+        },
+      },
+    },
+  });
+
+  // Best lift per exercise per day
+  const dayMax = new Map<string, Map<string, number>>();
+  for (const s of sets) {
+    const date = s.workoutLog.sessionInstance.scheduledDate.toISOString().split('T')[0]!;
+    const byExercise = dayMax.get(date) ?? new Map<string, number>();
+    const kg = s.weightKg ?? 0;
+    if (kg > (byExercise.get(s.workoutLog.exerciseId) ?? 0)) {
+      byExercise.set(s.workoutLog.exerciseId, kg);
+    }
+    dayMax.set(date, byExercise);
+  }
+
+  // Walk days chronologically tracking the running all-time best per exercise
+  const prDays = new Set<string>();
+  const allTimeBest = new Map<string, number>();
+  for (const date of [...dayMax.keys()].sort()) {
+    for (const [exerciseId, kg] of dayMax.get(date)!) {
+      if (kg > (allTimeBest.get(exerciseId) ?? 0)) {
+        prDays.add(date);
+        allTimeBest.set(exerciseId, kg);
+      }
+    }
+  }
+
+  const dayMap = new Map<string, WorkoutCalendarDay>();
+  for (const s of sessions) {
+    const date = s.scheduledDate.toISOString().split('T')[0]!;
+    const day = dayMap.get(date) ?? { date, sessionIds: [], isPR: prDays.has(date) };
+    day.sessionIds.push(s.id);
+    dayMap.set(date, day);
+  }
+
+  return { days: [...dayMap.values()], totalDays: dayMap.size };
+}
