@@ -13,6 +13,9 @@ interface SessionTimerProps {
   pausedAt?: number | null;
   /** Server-recorded total paused seconds across previous cycles. */
   accumulatedPausedSec?: number;
+  /** 'onAccent' renders white/amber tones for colored gradient backgrounds
+   *  where the default theme tokens (muted ring, destructive red) lack contrast. */
+  variant?: 'default' | 'onAccent';
 }
 
 function pausedMsAtNow(
@@ -93,6 +96,7 @@ export function SessionTimer({
   size = 'lg',
   pausedAt = null,
   accumulatedPausedSec = 0,
+  variant = 'default',
 }: SessionTimerProps) {
   const expectedSec = expectedDurationMin * 60;
   const elapsedSec = useElapsedTimer(
@@ -106,11 +110,31 @@ export function SessionTimer({
   const isOvertime = elapsedSec >= expectedSec;
   const progressPercent = Math.min((elapsedSec / expectedSec) * 100, 100);
 
+  // Once the timer crosses an hour the string grows to h:mm:ss (7 chars),
+  // which no longer fits inside the ring at the mm:ss font size.
+  const hasHours = elapsedSec >= 3600;
   const sizeClasses = {
-    sm: 'text-lg',
-    md: 'text-3xl',
-    lg: 'text-5xl',
+    sm: hasHours ? 'text-sm' : 'text-lg',
+    md: hasHours ? 'text-2xl' : 'text-3xl',
+    lg: hasHours ? 'text-4xl' : 'text-5xl',
   };
+
+  const colors =
+    variant === 'onAccent'
+      ? {
+          track: 'text-white/25',
+          progress: isOvertime ? 'text-amber-300' : 'text-white',
+          time: 'text-white',
+          expected: 'text-white/70',
+          overtimeMsg: 'text-amber-200',
+        }
+      : {
+          track: 'text-muted',
+          progress: isOvertime ? 'text-destructive' : 'text-primary',
+          time: isOvertime ? 'text-destructive' : 'text-foreground',
+          expected: 'text-muted-foreground',
+          overtimeMsg: 'text-destructive',
+        };
 
   const ringSize = {
     sm: 80,
@@ -137,7 +161,7 @@ export function SessionTimer({
             fill="none"
             stroke="currentColor"
             strokeWidth={strokeWidth}
-            className="text-muted"
+            className={colors.track}
           />
           {/* Progress ring */}
           <circle
@@ -150,26 +174,24 @@ export function SessionTimer({
             strokeDasharray={circumference}
             strokeDashoffset={offset}
             strokeLinecap="round"
-            className={isOvertime ? 'text-destructive' : 'text-primary'}
+            className={colors.progress}
             style={{ transition: 'stroke-dashoffset 1s linear' }}
           />
         </svg>
         {/* Timer display centered */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span
-            className={`font-mono font-bold tabular-nums ${sizeClasses[size]} ${isOvertime ? 'text-destructive' : 'text-foreground'}`}
-          >
+          <span className={`font-mono font-bold tabular-nums ${sizeClasses[size]} ${colors.time}`}>
             {formatTime(elapsedSec)}
           </span>
           {size !== 'sm' && (
-            <span className="text-xs text-muted-foreground mt-1">/ {formatTime(expectedSec)}</span>
+            <span className={`text-xs mt-1 ${colors.expected}`}>/ {formatTime(expectedSec)}</span>
           )}
         </div>
       </div>
 
       {/* Status message */}
       {isOvertime && (
-        <p className="text-sm font-medium text-destructive animate-pulse">
+        <p className={`text-center text-sm font-medium ${colors.overtimeMsg}`}>
           PT time completed — overtime by {formatTime(elapsedSec - expectedSec)}
         </p>
       )}

@@ -345,6 +345,7 @@ export default function ClientDashboard() {
                   startedAt={activeSession.startedAt}
                   expectedDurationMin={activeSession.durationMin}
                   size="lg"
+                  variant="onAccent"
                 />
               </div>
             </div>
