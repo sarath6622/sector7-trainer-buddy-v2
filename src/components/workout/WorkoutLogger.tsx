@@ -17,7 +17,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
-  BedDouble,
+  Clock,
   Sparkles,
   Loader2,
   AlertCircle,
@@ -2011,7 +2011,7 @@ export function WorkoutLogger({
                                         }
                                         className="flex h-11 items-center justify-center rounded-xl border border-blue-500/30 text-blue-400/70 transition-colors active:bg-blue-500/10 active:text-blue-400 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-muted-foreground/30 disabled:active:bg-transparent"
                                       >
-                                        <BedDouble className="h-4 w-4" />
+                                        <Clock className="h-4 w-4" />
                                       </button>
                                     );
                                   }
@@ -2133,11 +2133,13 @@ export function WorkoutLogger({
                                   );
                                 })()}
 
-                                {/* Remove set */}
+                                {/* Remove set — red so it reads clearly as a
+                                destructive action, distinct from the per-set
+                                save tick to its left. */}
                                 <button
                                   onClick={() => removeSet(exIdx, setIdx)}
                                   disabled={entry.sets.length <= 1}
-                                  className="flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground/40 transition-colors active:bg-destructive/10 active:text-destructive disabled:pointer-events-none disabled:opacity-20"
+                                  className="flex h-11 w-11 items-center justify-center rounded-xl text-red-500/70 transition-colors active:bg-red-500/10 active:text-red-500 disabled:pointer-events-none disabled:opacity-20"
                                 >
                                   <X className="h-4 w-4" />
                                 </button>
