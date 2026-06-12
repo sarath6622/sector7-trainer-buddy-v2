@@ -28,6 +28,7 @@ import {
 import { SessionTimer } from '@/components/timer/SessionTimer';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 import { WorkoutCalendarCard } from '@/components/calendar/WorkoutCalendarCard';
+import { MetricDetailSheet, type BodyMetric } from '@/components/progress/MetricDetailSheet';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -172,6 +173,7 @@ export default function ClientDashboard() {
   const [celebrationBadges, setCelebrationBadges] = useState<
     { name: string; icon: string; description?: string; imageUrl?: string }[]
   >([]);
+  const [metricSheet, setMetricSheet] = useState<BodyMetric | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -377,12 +379,17 @@ export default function ClientDashboard() {
           {hasBodyMetrics && (
             <div className="grid grid-cols-2 gap-3">
               {hasWeight && (
-                <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+                <button
+                  type="button"
+                  onClick={() => setMetricSheet('weight')}
+                  className="rounded-2xl bg-card p-4 text-left ring-1 ring-border/50 transition hover:ring-primary/40 active:scale-[0.98]"
+                >
                   <div className="flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/10">
                       <Scale className="h-4 w-4 text-blue-500" />
                     </div>
                     <span className="text-xs font-medium text-muted-foreground">Weight</span>
+                    <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground/40" />
                   </div>
                   <p className="mt-3 text-2xl font-bold">
                     {latestProgress!.weightKg!.toFixed(1)}
@@ -396,16 +403,21 @@ export default function ClientDashboard() {
                       lowerIsBetter
                     />
                   </div>
-                </div>
+                </button>
               )}
 
               {hasBodyFat && (
-                <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+                <button
+                  type="button"
+                  onClick={() => setMetricSheet('bodyFat')}
+                  className="rounded-2xl bg-card p-4 text-left ring-1 ring-border/50 transition hover:ring-primary/40 active:scale-[0.98]"
+                >
                   <div className="flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10">
                       <Activity className="h-4 w-4 text-amber-500" />
                     </div>
                     <span className="text-xs font-medium text-muted-foreground">Body Fat</span>
+                    <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground/40" />
                   </div>
                   <p className="mt-3 text-2xl font-bold">
                     {latestProgress!.bodyFatPercent!.toFixed(1)}
@@ -419,18 +431,21 @@ export default function ClientDashboard() {
                       lowerIsBetter
                     />
                   </div>
-                </div>
+                </button>
               )}
 
               {hasMuscle && (
-                <div
-                  className={`rounded-2xl bg-card p-4 ring-1 ring-border/50 ${!hasWeight && !hasBodyFat ? 'col-span-2' : ''}`}
+                <button
+                  type="button"
+                  onClick={() => setMetricSheet('muscleMass')}
+                  className={`rounded-2xl bg-card p-4 text-left ring-1 ring-border/50 transition hover:ring-primary/40 active:scale-[0.98] ${!hasWeight && !hasBodyFat ? 'col-span-2' : ''}`}
                 >
                   <div className="flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10">
                       <Dumbbell className="h-4 w-4 text-emerald-500" />
                     </div>
                     <span className="text-xs font-medium text-muted-foreground">Muscle Mass</span>
+                    <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground/40" />
                   </div>
                   <p className="mt-3 text-2xl font-bold">
                     {latestProgress!.muscleMass!.toFixed(1)}
@@ -443,7 +458,7 @@ export default function ClientDashboard() {
                       unit="kg"
                     />
                   </div>
-                </div>
+                </button>
               )}
             </div>
           )}
@@ -687,6 +702,13 @@ export default function ClientDashboard() {
           </div>
         </div>
       )}
+
+      {/* ── Body metric detail (chart + quick log) ── */}
+      <MetricDetailSheet
+        metric={metricSheet}
+        onClose={() => setMetricSheet(null)}
+        onLogged={fetchDashboard}
+      />
     </div>
   );
 }
