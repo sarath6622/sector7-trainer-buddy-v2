@@ -1,33 +1,34 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Bell, Check, CheckCheck } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { Bell, BellOff, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
+  DropdownMenuBackdrop,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useFcmToken } from '@/hooks/useFcmToken';
-
-interface Notification {
-  id: string;
-  title: string;
-  body: string;
-  readAt: string | null;
-  createdAt: string;
-  metadata: Record<string, unknown> | null;
-}
+import {
+  NotificationCard,
+  type AppNotification,
+} from '@/components/notifications/NotificationItem';
 
 const POLL_INTERVAL = 10_000; // 10 seconds
 
 export function NotificationBell() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const { data: session } = useSession();
+  const role = session?.user?.role ?? '';
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // -1 = not yet initialised (skip toast on first load)
   const prevUnreadRef = useRef(-1);
@@ -36,14 +37,15 @@ export function NotificationBell() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications?pageSize=10');
+      // The dropdown is an inbox: unread only. Read history lives on /notifications.
+      const res = await fetch('/api/notifications?unreadOnly=true&pageSize=10');
       if (res.ok) {
         const json = await res.json();
         const newCount: number = json.unreadCount;
 
         // Show toast when new notifications arrive (skip very first fetch)
         if (prevUnreadRef.current >= 0 && newCount > prevUnreadRef.current) {
-          const newest: Notification = json.data[0];
+          const newest: AppNotification = json.data[0];
           if (newest && !newest.readAt) {
             toast.message(newest.title, { description: newest.body });
           }
@@ -78,9 +80,7 @@ export function NotificationBell() {
     try {
       const res = await fetch(`/api/notifications/${id}/read`, { method: 'PUT' });
       if (res.ok) {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
-        );
+        setNotifications((prev) => prev.filter((n) => n.id !== id));
         setUnreadCount((c) => Math.max(0, c - 1));
       }
     } catch {
@@ -92,9 +92,7 @@ export function NotificationBell() {
     try {
       const res = await fetch('/api/notifications/read-all', { method: 'PUT' });
       if (res.ok) {
-        setNotifications((prev) =>
-          prev.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })),
-        );
+        setNotifications([]);
         setUnreadCount(0);
       }
     } catch {
@@ -102,17 +100,10 @@ export function NotificationBell() {
     }
   }
 
-  function formatTime(dateStr: string) {
-    const d = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMin = Math.floor(diffMs / 60_000);
-    if (diffMin < 1) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    const diffDay = Math.floor(diffHr / 24);
-    return `${diffDay}d ago`;
+  function navigateTo(href: string, notification?: AppNotification) {
+    if (notification && !notification.readAt) markRead(notification.id);
+    setOpen(false);
+    router.push(href);
   }
 
   return (
@@ -131,53 +122,60 @@ export function NotificationBell() {
         )}
         <span className="sr-only">Notifications</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
-          <p className="text-sm font-medium">Notifications</p>
+      {/* Blur the page behind the panel — mobile only, and never the top nav
+          (header is h-12 on mobile, plus the iOS safe-area inset above it) */}
+      <DropdownMenuBackdrop className="top-[calc(3rem+env(safe-area-inset-top))] lg:hidden" />
+      <DropdownMenuContent
+        align="end"
+        collisionPadding={8}
+        collisionAvoidance={{ align: 'shift' }}
+        className="w-[min(var(--available-width),380px)] rounded-2xl bg-popover/90 p-0 shadow-xl backdrop-blur-xl"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
+          <p className="text-base font-semibold">Notifications</p>
           {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllRead}>
-              <CheckCheck className="h-3.5 w-3.5 mr-1" />
+            <button
+              type="button"
+              className="text-xs font-semibold text-primary transition-opacity hover:opacity-80"
+              onClick={markAllRead}
+            >
               Mark all read
-            </Button>
+            </button>
           )}
         </div>
-        <div className="max-h-80 overflow-y-auto">
+
+        {/* List */}
+        <div className="max-h-[26rem] overflow-y-auto px-2 pb-1">
           {notifications.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-sm text-muted-foreground">No notifications</p>
+            <div className="flex flex-col items-center gap-2 py-10">
+              <BellOff className="h-6 w-6 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">You&apos;re all caught up</p>
             </div>
           ) : (
-            notifications.map((n) => (
-              <div
-                key={n.id}
-                className={`flex items-start gap-2 border-b border-border/30 px-3 py-2.5 last:border-0 ${
-                  !n.readAt ? 'bg-primary/5' : ''
-                }`}
-              >
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${!n.readAt ? 'font-medium' : ''}`}>{n.title}</p>
-                  <p className="text-xs text-muted-foreground line-clamp-2">{n.body}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {formatTime(n.createdAt)}
-                  </p>
-                </div>
-                {!n.readAt && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      markRead(n.id);
-                    }}
-                  >
-                    <Check className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            ))
+            <div className="space-y-1.5 py-1">
+              {notifications.map((n) => (
+                <NotificationCard
+                  key={n.id}
+                  notification={n}
+                  role={role}
+                  onNavigate={(href) => navigateTo(href, n)}
+                  onDismiss={() => markRead(n.id)}
+                />
+              ))}
+            </div>
           )}
         </div>
+
+        {/* Footer */}
+        <button
+          type="button"
+          className="flex w-full items-center justify-between rounded-b-2xl border-t border-border/50 px-4 py-3 text-sm font-semibold text-primary transition-colors hover:bg-accent/40"
+          onClick={() => navigateTo('/notifications')}
+        >
+          View all notifications
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </DropdownMenuContent>
     </DropdownMenu>
   );
