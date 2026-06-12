@@ -7,9 +7,14 @@ import { triggerWorkoutUpdatedEvent } from '@/lib/pusher';
 import * as workoutService from '@/services/workout.service';
 
 // Body shape: same as legacy /api/trainer/workouts minus the sessionInstanceId
-// which now lives in the URL.
+// which now lives in the URL. `dirtyExerciseIds`/`removedExerciseIds` scope the
+// write to what this device actually changed since its last sync (ADR-036) so a
+// stale full-snapshot from a peer can't clobber concurrent edits. Both optional
+// — when omitted the service falls back to full-replace (legacy callers).
 const bodySchema = z.object({
   exercises: z.array(workoutEntrySchema).min(1),
+  dirtyExerciseIds: z.array(z.string()).optional(),
+  removedExerciseIds: z.array(z.string()).optional(),
 });
 
 /**
@@ -38,6 +43,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       {
         sessionInstanceId,
         exercises: input.exercises,
+        dirtyExerciseIds: input.dirtyExerciseIds,
+        removedExerciseIds: input.removedExerciseIds,
         actorUserId,
         actorTrainerProfileId: trainerProfileId ?? null,
         actorClientProfileId: clientProfileId ?? null,

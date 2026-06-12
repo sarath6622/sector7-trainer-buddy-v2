@@ -68,6 +68,22 @@ export interface SetData {
   notes: string;
 }
 
+// A fresh, blank set row — every metric empty. Shared by the "add exercise"
+// and "Add Set" paths, and used as the single placeholder row when an exercise
+// is hydrated from the server with no logged sets yet (added-but-not-logged).
+export function emptySet(setNumber: number): SetData {
+  return {
+    setNumber,
+    reps: undefined,
+    weightKg: undefined,
+    durationSec: undefined,
+    rpe: undefined,
+    restSec: undefined,
+    stepsCount: undefined,
+    notes: '',
+  };
+}
+
 type SecondaryMetric = 'KM' | 'STEPS' | 'METERS' | 'NONE';
 
 interface LastSetSnapshot {
@@ -321,24 +337,20 @@ type SavePayloadEntry = {
   sets: ReturnType<typeof normalizeSet>[];
 };
 
-// Build the POST body: keep each exercise's original position as orderIndex
-// (the backend tolerates gaps), drop incomplete sets, and drop any exercise
-// left with no complete set. The backend replaces the session's logs with
-// exactly this, so excluding partial sets is what makes "only save once both
-// kg and reps are entered" true end-to-end.
+// Build the POST body. An exercise is persisted as soon as it's added — its
+// row (position + completion flag) survives a tab switch or navigation even
+// before any set is logged, so the trainer never has to re-add it. Within each
+// exercise only *complete* sets are included; a half-typed set (e.g. WEIGHTED
+// kg without reps) is dropped so it never hits the DB. The backend replaces the
+// session's logs with exactly this, so an exercise with no complete set yet
+// persists as a zero-set log. `orderIndex` is the entry's position in the list.
 export function buildSavePayload(exercises: ExerciseEntry[]): SavePayloadEntry[] {
-  const out: SavePayloadEntry[] = [];
-  exercises.forEach((entry, idx) => {
-    const completeSets = entry.sets.filter((s) => isSetComplete(s, entry.exerciseType));
-    if (completeSets.length === 0) return;
-    out.push({
-      exerciseId: entry.exerciseId,
-      orderIndex: idx,
-      isCompleted: entry.isCompleted,
-      sets: completeSets.map(normalizeSet),
-    });
-  });
-  return out;
+  return exercises.map((entry, idx) => ({
+    exerciseId: entry.exerciseId,
+    orderIndex: idx,
+    isCompleted: entry.isCompleted,
+    sets: entry.sets.filter((s) => isSetComplete(s, entry.exerciseType)).map(normalizeSet),
+  }));
 }
 
 // Per-set identity used to flag a row as saved. Encodes the exercise plus the
@@ -351,6 +363,32 @@ export function signaturesOf(payload: SavePayloadEntry[]): Set<string> {
   const out = new Set<string>();
   for (const e of payload) for (const s of e.sets) out.add(setSignature(e.exerciseId, s));
   return out;
+}
+
+// Diff the last-saved snapshot against the current one so the server can scope
+// the write to exactly what THIS device changed (ADR-036 shared write path).
+// Without scoping, two writers each POST a full snapshot and the last one wins —
+// a trainer saving a stale view silently deletes a set the client just logged.
+// With it:
+//   • dirtyExerciseIds — exercises whose values changed (or are brand new); the
+//     server reconciles only these (upsert sets + drop the ones removed within).
+//   • removedExerciseIds — exercises that were saved before but the user has
+//     since deleted; the server drops exactly these.
+// Everything the writer didn't touch is left alone, so a peer's concurrent edit
+// to a different exercise survives.
+export function diffExercises(
+  lastSaved: SavePayloadEntry[],
+  current: SavePayloadEntry[],
+): { dirtyExerciseIds: string[]; removedExerciseIds: string[] } {
+  const lastById = new Map(lastSaved.map((e) => [e.exerciseId, JSON.stringify(e)]));
+  const currentIds = new Set(current.map((e) => e.exerciseId));
+  const dirtyExerciseIds = current
+    .filter((e) => lastById.get(e.exerciseId) !== JSON.stringify(e))
+    .map((e) => e.exerciseId);
+  const removedExerciseIds = lastSaved
+    .filter((e) => !currentIds.has(e.exerciseId))
+    .map((e) => e.exerciseId);
+  return { dirtyExerciseIds, removedExerciseIds };
 }
 
 // ─── WorkoutLogger ────────────────────────────────────────────────────────────
@@ -401,6 +439,10 @@ export function WorkoutLogger({
   // current payload against this to decide whether anything is unsaved —
   // covers add/edit/remove/reorder uniformly without a per-entry dirty flag.
   const lastSavedHashRef = useRef<string>('[]');
+  // The structured payload behind `lastSavedHashRef`. `diffExercises` reads it
+  // to tell the server which exercises this device changed vs the last sync, so
+  // the write merges with a peer's concurrent edits instead of replacing them.
+  const lastSavedPayloadRef = useRef<SavePayloadEntry[]>([]);
   // In-flight tracking so the debounced auto-save never fires concurrent
   // POSTs (which could race and clobber each other).
   const inFlightRef = useRef(false);
@@ -556,16 +598,22 @@ export function WorkoutLogger({
           category: log.exercise.category,
           exerciseType: log.exercise.exerciseType,
           secondaryMetric: log.exercise.secondaryMetric ?? 'KM',
-          sets: log.sets.map((s) => ({
-            setNumber: s.setNumber,
-            reps: s.reps ?? undefined,
-            weightKg: s.weightKg ?? undefined,
-            durationSec: s.durationSec ?? undefined,
-            rpe: s.rpe ?? undefined,
-            restSec: s.restSec ?? undefined,
-            stepsCount: s.stepsCount ?? undefined,
-            notes: s.notes ?? '',
-          })),
+          // A zero-set log is an exercise that was added but not yet logged.
+          // Give it one blank placeholder row so the card shows an editable
+          // set, matching a freshly-added exercise.
+          sets:
+            log.sets.length > 0
+              ? log.sets.map((s) => ({
+                  setNumber: s.setNumber,
+                  reps: s.reps ?? undefined,
+                  weightKg: s.weightKg ?? undefined,
+                  durationSec: s.durationSec ?? undefined,
+                  rpe: s.rpe ?? undefined,
+                  restSec: s.restSec ?? undefined,
+                  stepsCount: s.stepsCount ?? undefined,
+                  notes: s.notes ?? '',
+                }))
+              : [emptySet(1)],
           // Collapse rules:
           //   - Re-hydration: preserve the user's last choice for this exerciseId.
           //   - First hydration of a completed log: collapsed.
@@ -582,9 +630,13 @@ export function WorkoutLogger({
         };
       });
 
-      // Seed the last-saved hash so auto-save doesn't re-POST the data we
-      // just hydrated. Shape must match the payload built in `currentPayload`.
-      lastSavedHashRef.current = JSON.stringify(buildSavePayload(initial));
+      // Seed the last-saved snapshot (hash + structured payload) so auto-save
+      // doesn't re-POST the data we just hydrated, and so the next diff is
+      // measured against the freshly-synced server state. Shape must match the
+      // payload built in `currentPayload`.
+      const hydratedPayload = buildSavePayload(initial);
+      lastSavedHashRef.current = JSON.stringify(hydratedPayload);
+      lastSavedPayloadRef.current = hydratedPayload;
       return initial;
     });
 
@@ -772,18 +824,7 @@ export function WorkoutLogger({
         category: p.category,
         exerciseType: p.exerciseType,
         secondaryMetric: p.secondaryMetric,
-        sets: [
-          {
-            setNumber: 1,
-            reps: undefined,
-            weightKg: undefined,
-            durationSec: undefined,
-            rpe: undefined,
-            restSec: undefined,
-            stepsCount: undefined,
-            notes: '',
-          },
-        ],
+        sets: [emptySet(1)],
         // Expand only the last addition so the trainer lands on a fresh card
         collapsed: idx !== fresh.length - 1,
         isCompleted: false,
@@ -883,19 +924,7 @@ export function WorkoutLogger({
       if (prefillRest !== undefined && sets.length > 0) {
         sets = sets.map((s, i) => (i === sets.length - 1 ? { ...s, restSec: prefillRest } : s));
       }
-      entry.sets = [
-        ...sets,
-        {
-          setNumber: sets.length + 1,
-          reps: undefined,
-          weightKg: undefined,
-          durationSec: undefined,
-          rpe: undefined,
-          restSec: undefined,
-          stepsCount: undefined,
-          notes: '',
-        },
-      ];
+      entry.sets = [...sets, emptySet(sets.length + 1)];
       updated[exerciseIndex] = entry;
       return updated;
     });
@@ -970,10 +999,10 @@ export function WorkoutLogger({
   const currentHash = useMemo(() => JSON.stringify(currentPayload), [currentPayload]);
   const hasUnsaved = currentHash !== lastSavedHashRef.current;
 
-  // Persist to the server. Idempotent on the backend — every POST atomically
-  // replaces the session's logs with the payload, so calling this on every
-  // keystroke (debounced) is safe. Serialized via inFlight/pending refs so a
-  // mid-save edit doesn't race the in-flight request.
+  // Persist to the server. The write is scoped to what this device changed
+  // since its last sync (see `diffExercises`) so a debounced save from a stale
+  // peer can't clobber the other side's concurrent edits. Serialized via
+  // inFlight/pending refs so a mid-save edit doesn't race the in-flight request.
   const saveWorkout = useCallback(async () => {
     if (currentPayload.length === 0) return; // schema requires ≥1 exercise
     if (inFlightRef.current) {
@@ -982,7 +1011,12 @@ export function WorkoutLogger({
     }
     inFlightRef.current = true;
     setAutoSaveStatus('saving');
-    const sentHash = JSON.stringify(currentPayload);
+    const sentPayload = currentPayload;
+    const sentHash = JSON.stringify(sentPayload);
+    const { dirtyExerciseIds, removedExerciseIds } = diffExercises(
+      lastSavedPayloadRef.current,
+      sentPayload,
+    );
     try {
       // Shared trainer/client write path (ADR-036). The route uses
       // assertSessionAccess so either the session's trainer or its client
@@ -990,14 +1024,15 @@ export function WorkoutLogger({
       const res = await fetch(`/api/sessions/${sessionInstanceId}/workouts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ exercises: currentPayload }),
+        body: JSON.stringify({ exercises: sentPayload, dirtyExerciseIds, removedExerciseIds }),
       });
       if (res.ok) {
         lastSavedHashRef.current = sentHash;
+        lastSavedPayloadRef.current = sentPayload;
         // Flip every set we just persisted to its saved (green) state. The
         // writer doesn't get its own Pusher echo, so we can't wait for a
         // refetch — record signatures straight from the payload we sent.
-        setSavedSignatures(signaturesOf(currentPayload));
+        setSavedSignatures(signaturesOf(sentPayload));
         const body = await res.json();
         const newBadges: { name: string; icon: string; description?: string }[] =
           body?.newBadges ?? [];
@@ -1026,6 +1061,18 @@ export function WorkoutLogger({
       }
     }
   }, [currentPayload, sessionInstanceId]);
+
+  // Force an immediate save, bypassing the 5s debounce. Wired to the per-set
+  // save tick so the user can persist a row the instant they finish it instead
+  // of waiting on (or trusting) the auto-save. Cancels the pending debounce so
+  // the same payload doesn't get POSTed twice.
+  const saveNow = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    void saveWorkout();
+  }, [saveWorkout]);
 
   // Debounce: wait 5s for typing / corrections to settle, then auto-save.
   // Cancels and resets on every change so a flurry of keystrokes results
@@ -1082,10 +1129,16 @@ export function WorkoutLogger({
     const payload = currentPayloadRef.current;
     const hashAtFlush = currentHashRef.current;
     if (payload.length === 0 || hashAtFlush === lastSavedHashRef.current) return;
+    // Scope the teardown flush the same way as a normal save so it can't
+    // full-replace over a peer's edits on the way out.
+    const { dirtyExerciseIds, removedExerciseIds } = diffExercises(
+      lastSavedPayloadRef.current,
+      payload,
+    );
     void fetch(`/api/sessions/${sessionInstanceId}/workouts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ exercises: payload }),
+      body: JSON.stringify({ exercises: payload, dirtyExerciseIds, removedExerciseIds }),
       keepalive: true,
     });
   }, [sessionInstanceId]);
@@ -1855,6 +1908,8 @@ export function WorkoutLogger({
                               {col.label}
                             </span>
                           ))}
+                          {/* save-tick + remove columns (no labels) */}
+                          <span />
                           <span />
                         </div>
 
@@ -2043,6 +2098,41 @@ export function WorkoutLogger({
                                   }
                                 })}
 
+                                {/* Save tick — persist this row instantly
+                                instead of waiting on the 5s auto-save. Shows a
+                                steady green check once the row's values are
+                                saved; an actionable (tappable) check while the
+                                set is complete but not yet persisted; disabled
+                                until the work fields are filled in. The
+                                auto-save still runs if it's never tapped. */}
+                                {(() => {
+                                  const setComplete = isSetComplete(set, entry.exerciseType);
+                                  return (
+                                    <button
+                                      onClick={saveNow}
+                                      disabled={
+                                        !setComplete || setSaved || autoSaveStatus === 'saving'
+                                      }
+                                      aria-label={
+                                        setSaved
+                                          ? `Set ${set.setNumber} saved`
+                                          : setComplete
+                                            ? `Save set ${set.setNumber} now`
+                                            : `Log this set before saving`
+                                      }
+                                      className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed ${
+                                        setSaved
+                                          ? 'border-emerald-600/40 bg-emerald-500/10 text-emerald-400'
+                                          : setComplete
+                                            ? 'border-emerald-500/50 text-emerald-400 active:bg-emerald-500/15'
+                                            : 'border-zinc-800 text-muted-foreground/30'
+                                      }`}
+                                    >
+                                      <Check className="h-4 w-4" />
+                                    </button>
+                                  );
+                                })()}
+
                                 {/* Remove set */}
                                 <button
                                   onClick={() => removeSet(exIdx, setIdx)}
@@ -2209,12 +2299,13 @@ export function WorkoutLogger({
 }
 
 function getGridClass(colCount: number) {
-  // set-badge + N data cols + remove btn. The Rest column is one of the
-  // data cols; it carries its own state-aware control (idle button / live
-  // countdown / done label) so we don't need an extra grid slot for it.
-  if (colCount === 1) return 'grid-cols-[2rem_1fr_2rem]';
-  if (colCount === 2) return 'grid-cols-[2rem_1fr_1fr_2rem]';
-  return 'grid-cols-[2rem_1fr_1fr_1fr_2rem]';
+  // set-badge + N data cols + save tick + remove btn. The Rest column is one
+  // of the data cols; it carries its own state-aware control (idle button /
+  // live countdown / done label) so we don't need an extra grid slot for it.
+  // The save tick sits right after the last data col (the Rest cell).
+  if (colCount === 1) return 'grid-cols-[2rem_1fr_2rem_2rem]';
+  if (colCount === 2) return 'grid-cols-[2rem_1fr_1fr_2rem_2rem]';
+  return 'grid-cols-[2rem_1fr_1fr_1fr_2rem_2rem]';
 }
 
 function AutoSaveIndicator({ status, onRetry }: { status: AutoSaveStatus; onRetry: () => void }) {

@@ -55,6 +55,18 @@ interface WorkoutActor {
 interface CreateWorkoutInput extends WorkoutActor {
   sessionInstanceId: string;
   exercises: WorkoutEntryInput[];
+  // Concurrency scoping (ADR-036). When provided, the write touches ONLY these
+  // exercises instead of replacing the session's whole log set, so two devices
+  // (trainer + client) editing different exercises don't clobber each other:
+  //   • dirtyExerciseIds — exercises whose sets/order/completion this device
+  //     changed; only these get reconciled (upsert + drop sets removed within).
+  //   • removedExerciseIds — exercises this device explicitly deleted; only
+  //     these logs are dropped.
+  // Exercises in `exercises` but absent from `dirtyExerciseIds` are left
+  // untouched on the server. When `dirtyExerciseIds` is undefined the service
+  // falls back to legacy full-replace (delete-by-absence) for older callers.
+  dirtyExerciseIds?: string[];
+  removedExerciseIds?: string[];
 }
 
 interface UpdateWorkoutLogInput extends WorkoutActor {
@@ -90,6 +102,8 @@ interface ListClientWorkoutsInput {
 export async function createWorkoutLogs({
   sessionInstanceId,
   exercises,
+  dirtyExerciseIds,
+  removedExerciseIds,
   actorUserId,
   actorTrainerProfileId,
   actorClientProfileId,
@@ -165,10 +179,19 @@ export async function createWorkoutLogs({
     const existingByExId = new Map(existingLogs.map((l) => [l.exerciseId, l]));
     const incomingExIds = new Set(exercises.map((e) => e.exerciseId));
 
-    // Drop logs (and their sets) for exercises the trainer removed since
-    // the last save.
+    // Scoped mode (ADR-036): the caller told us exactly what it changed, so we
+    // only touch those exercises and a stale peer snapshot can't clobber the
+    // other side's concurrent edits. Legacy mode (no diff supplied) keeps the
+    // old full-replace semantics where absence from the payload means delete.
+    const scoped = dirtyExerciseIds !== undefined;
+    const dirtySet = scoped ? new Set(dirtyExerciseIds) : null;
+    const removedSet = new Set(removedExerciseIds ?? []);
+
+    // Drop logs (and their sets) the user removed: in scoped mode that's
+    // exactly `removedExerciseIds`; in legacy mode it's anything absent from
+    // the incoming snapshot.
     const toDeleteLogIds = existingLogs
-      .filter((l) => !incomingExIds.has(l.exerciseId))
+      .filter((l) => (scoped ? removedSet.has(l.exerciseId) : !incomingExIds.has(l.exerciseId)))
       .map((l) => l.id);
     if (toDeleteLogIds.length > 0) {
       await tx.workoutSet.deleteMany({ where: { workoutLogId: { in: toDeleteLogIds } } });
@@ -177,6 +200,9 @@ export async function createWorkoutLogs({
 
     const results = [];
     for (const entry of exercises) {
+      // In scoped mode, skip exercises this device didn't change — leave the
+      // server's copy (which may hold a peer's newer edits) untouched.
+      if (dirtySet && !dirtySet.has(entry.exerciseId)) continue;
       const existing = existingByExId.get(entry.exerciseId);
       let logId: string;
 

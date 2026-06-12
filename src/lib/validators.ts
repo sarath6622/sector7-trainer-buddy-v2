@@ -468,7 +468,10 @@ export const workoutSetSchema = z.object({
 export const workoutEntrySchema = z.object({
   exerciseId: cuidSchema,
   orderIndex: z.number().int().min(0),
-  sets: z.array(workoutSetSchema).min(1),
+  // Zero sets is valid: an exercise added to the workout but not yet logged is
+  // persisted as a structural row (so it survives a tab switch / navigation),
+  // with set rows added only once their work fields are filled in.
+  sets: z.array(workoutSetSchema),
   // ADR-037: mark-complete flag. When omitted, the service leaves the
   // existing completion state untouched (auto-save fires every 800ms; we
   // don't want a keystroke that doesn't touch the toggle to clobber it).

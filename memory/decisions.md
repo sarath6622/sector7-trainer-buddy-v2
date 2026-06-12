@@ -568,3 +568,32 @@ Cost was the explicit blocker that drove ADR-033 and a related deferral (the cro
 Both applied to local Docker first per Rule 0, then `prisma migrate deploy` to Neon.
 
 **Placeholder hints + history reads:** `LastSetSnapshot` gained `stepsCount: number | null` and both `getLastSetsByExercise` and `getRecentExercisesByMuscleGroup` now select + return it. `placeholderFor` in WorkoutLogger uses it so the trainer sees last session's step count as a faint hint when adding a new set.
+
+## ADR-041: Scoped (Diff-Based) Workout Writes to Close the ADR-036 Last-Write-Wins Race
+
+**Date:** 2026-06-12
+**Status:** Accepted
+
+**Context:** ADR-036 made workout logging a shared write path — both the trainer and the client of a PT session can POST to `/api/sessions/[id]/workouts`. The handler took a **full snapshot** of the session's exercises and atomically replaced all logs with it (`createWorkoutLogs` deleted any log absent from the payload and reconciled the rest). With two writers this loses data: a debounced auto-save from a device holding a stale snapshot (e.g. the trainer's tab saving while the client logs a set on their own phone) silently deletes the row the peer just created. The reported symptom: the client enters a set, sees it saved (green border, real 201), and on next page open the set has vanished. The `WORKOUT_UPDATED` Pusher refetch narrows but does not close the window — the rehydration guard intentionally drops server updates while the local copy has unsaved edits, so a mid-edit device keeps a stale snapshot and then overwrites with it.
+
+Options considered: (a) optimistic concurrency / version check with 409 + client rebase — correct but the rebase is a 3-way merge of positional, renumber-on-delete sets, high complexity; (b) restructure to stable set IDs + explicit per-set delete endpoints + merge-only server — large blast radius; (c) keep the full-snapshot wire shape but have the client tell the server which exercises it actually changed, and scope the write to those.
+
+**Decision:** Option (c). The POST body gains two **optional** fields:
+
+- `dirtyExerciseIds: string[]` — exercises whose sets / order / completion this device changed since its last sync, plus brand-new ones. The service reconciles **only** these (upsert sets + drop sets removed within them).
+- `removedExerciseIds: string[]` — exercises that were saved before but the user has since deleted. The service drops **exactly** these logs.
+
+Exercises present in `exercises` but absent from `dirtyExerciseIds` are left untouched on the server, so a peer's concurrent edit to a _different_ exercise survives. The client computes both lists with `diffExercises(lastSavedPayload, currentPayload)` — a pure diff of the last synced server snapshot against the current one (no explicit dirty flags; removal is derived from "was saved, now gone"). A new `lastSavedPayloadRef` holds the synced baseline; it is seeded on hydration and updated on every successful save, and the keepalive teardown flush sends the diff too (so backgrounding/unmount can't full-replace either).
+
+- **Backward compatibility is the gate, not a feature flag.** When `dirtyExerciseIds` is `undefined`, the service keeps the legacy full-replace (delete-by-absence) path. The offline `/api/trainer/workouts/sync` and legacy `/api/trainer/workouts` callers send no diff and are unaffected.
+- **Granularity is per-exercise, not per-set.** The dominant real-world conflict is two devices touching _different_ exercises (one adds Legs work while the other has a stale list). Per-exercise scoping fixes that. Two devices editing the _same_ exercise's sets at the same moment still resolve last-write-wins — accepted as rare and not worth the stable-set-ID refactor.
+
+**Consequences:**
+
+- The reported data-loss is fixed for the common case without a schema migration or a new endpoint — purely two optional body fields + a branch in `createWorkoutLogs`.
+- Badge/PR evaluation now runs only over the dirty exercises actually written (previously re-ran for the whole snapshot every save) — a minor efficiency win.
+- The POST `data` in scoped mode reflects only the exercises written, not the whole session. The sole consumer (`WorkoutLogger`) ignores `data` (it tracks saved state from the payload it sent + Pusher/poll), so this is invisible in practice; documented in case a future caller relies on it.
+- Edge: if a peer deletes exercise X while this device is mid-edit and later edits X, this device's save re-creates X (dirty → upsert). "Last action on the same exercise wins" — acceptable.
+- Pairs with the same-day change that lets an added-but-unlogged exercise persist as a **zero-set** log (`WorkoutEntry.sets` relaxed from `≥1` to `≥0`), so the exercise row survives a tab switch / reload while only complete sets are ever saved.
+
+**Migrations:** none — request-shape change only.

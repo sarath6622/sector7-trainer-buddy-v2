@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildSavePayload,
+  diffExercises,
   isSetComplete,
   normalizeSet,
   setSignature,
@@ -11,9 +12,10 @@ import {
 
 // Covers the "only save once the work fields are entered" rule and the per-set
 // "saved" signatures that drive the green state in the workout logger.
-//   - buildSavePayload drops partial sets (e.g. WEIGHTED kg without reps) and
-//     exercises left with no complete set, while keeping each kept exercise's
-//     original position as orderIndex.
+//   - buildSavePayload drops partial sets (e.g. WEIGHTED kg without reps) but
+//     keeps every exercise — an exercise with no complete set yet persists as a
+//     zero-set row so it survives a tab switch / navigation. orderIndex is the
+//     entry's position in the list.
 //   - a row's signature changes the moment any value is edited, so the green
 //     state only sticks while the on-screen values match what was saved.
 
@@ -80,21 +82,29 @@ describe('buildSavePayload', () => {
     expect(payload[0]!.sets[0]!.setNumber).toBe(1);
   });
 
-  it('drops exercises with no complete set entirely', () => {
+  it('keeps an exercise with no complete set as a zero-set row', () => {
     const entry = makeEntry({ sets: [makeSet({ weightKg: 10 })] }); // kg, no reps
-    expect(buildSavePayload([entry])).toEqual([]);
+    const payload = buildSavePayload([entry]);
+    expect(payload).toHaveLength(1);
+    expect(payload[0]!.exerciseId).toBe('ex-1');
+    expect(payload[0]!.orderIndex).toBe(0);
+    expect(payload[0]!.sets).toEqual([]); // structure persists, the partial set does not
   });
 
-  it('preserves original position as orderIndex when an earlier exercise is dropped', () => {
+  it('keeps every exercise and uses list position as orderIndex', () => {
     const empty = makeEntry({ exerciseId: 'ex-empty', sets: [makeSet()] });
     const logged = makeEntry({
       exerciseId: 'ex-logged',
       sets: [makeSet({ weightKg: 20, reps: 8 })],
     });
     const payload = buildSavePayload([empty, logged]);
-    expect(payload).toHaveLength(1);
-    expect(payload[0]!.exerciseId).toBe('ex-logged');
-    expect(payload[0]!.orderIndex).toBe(1); // its index in the full array, not 0
+    expect(payload).toHaveLength(2);
+    expect(payload[0]!.exerciseId).toBe('ex-empty');
+    expect(payload[0]!.orderIndex).toBe(0);
+    expect(payload[0]!.sets).toEqual([]);
+    expect(payload[1]!.exerciseId).toBe('ex-logged');
+    expect(payload[1]!.orderIndex).toBe(1);
+    expect(payload[1]!.sets).toHaveLength(1);
   });
 });
 
@@ -109,5 +119,44 @@ describe('set signatures', () => {
     // Edited reps → signature no longer matches (green drops).
     const edited = { ...entry.sets[0]!, reps: 12 };
     expect(saved.has(setSignature(entry.exerciseId, normalizeSet(edited)))).toBe(false);
+  });
+});
+
+// diffExercises scopes each write to what THIS device changed since its last
+// sync, so a stale snapshot from a peer (ADR-036 trainer↔client write path)
+// can't full-replace over the other side's concurrent edits.
+describe('diffExercises', () => {
+  const A = buildSavePayload([
+    makeEntry({ exerciseId: 'ex-a', sets: [makeSet({ weightKg: 10, reps: 10 })] }),
+  ]);
+  const Aedited = buildSavePayload([
+    makeEntry({ exerciseId: 'ex-a', sets: [makeSet({ weightKg: 20, reps: 10 })] }),
+  ]);
+  const B = buildSavePayload([
+    makeEntry({ exerciseId: 'ex-b', sets: [makeSet({ weightKg: 5, reps: 5 })] }),
+  ]);
+
+  it('flags only the exercises whose values changed', () => {
+    const { dirtyExerciseIds, removedExerciseIds } = diffExercises(A, Aedited);
+    expect(dirtyExerciseIds).toEqual(['ex-a']);
+    expect(removedExerciseIds).toEqual([]);
+  });
+
+  it('treats a brand-new exercise as dirty and leaves the untouched one alone', () => {
+    const { dirtyExerciseIds, removedExerciseIds } = diffExercises(A, [...A, ...B]);
+    expect(dirtyExerciseIds).toEqual(['ex-b']); // ex-a unchanged → not re-sent
+    expect(removedExerciseIds).toEqual([]);
+  });
+
+  it('reports an exercise present last time but now gone as removed', () => {
+    const { dirtyExerciseIds, removedExerciseIds } = diffExercises([...A, ...B], A);
+    expect(dirtyExerciseIds).toEqual([]);
+    expect(removedExerciseIds).toEqual(['ex-b']);
+  });
+
+  it('first save (no prior snapshot) marks everything dirty, nothing removed', () => {
+    const { dirtyExerciseIds, removedExerciseIds } = diffExercises([], [...A, ...B]);
+    expect(dirtyExerciseIds).toEqual(['ex-a', 'ex-b']);
+    expect(removedExerciseIds).toEqual([]);
   });
 });
