@@ -65,7 +65,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="dark flex min-h-dvh w-full bg-zinc-950 text-white">
+    <div className="dark flex min-h-[var(--app-height)] w-full bg-zinc-950 text-white">
       {/* Left — brand panel (desktop only) */}
       <div className="hidden lg:flex lg:w-[45%] items-center justify-center relative overflow-hidden border-r border-white/[0.06]">
         {/* Gradient glow behind logo */}
@@ -84,7 +84,7 @@ function LoginForm() {
 
       {/* Right — login form */}
       <div
-        className="relative z-10 flex min-h-dvh flex-1 flex-col items-center justify-center px-6"
+        className="relative z-10 flex min-h-[var(--app-height)] flex-1 flex-col items-center justify-center px-6"
         style={{
           paddingTop: 'max(2rem, env(safe-area-inset-top))',
           paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',

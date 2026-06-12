@@ -211,6 +211,14 @@
 }
 
 @layer base {
+  /* True on-screen height of the app. On iOS standalone cold start WebKit
+     mis-sizes the layout viewport (so 100dvh/100vh resolve wrong); the inline
+     script in app/layout.tsx overrides this from visualViewport.height, which
+     reports correctly. 100dvh here is the no-JS / no-VisualViewport fallback. */
+  :root {
+    --app-height: 100dvh;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }

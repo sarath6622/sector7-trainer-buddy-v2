@@ -229,7 +229,7 @@ export function TopNav({
                 className="w-[80vw] max-w-sm border-none bg-sidebar p-0"
               >
                 <div
-                  className="flex h-dvh flex-col overflow-hidden"
+                  className="flex h-[var(--app-height)] flex-col overflow-hidden"
                   style={{ paddingTop: 'env(safe-area-inset-top)' }}
                 >
                   {/* Header — logo + close */}

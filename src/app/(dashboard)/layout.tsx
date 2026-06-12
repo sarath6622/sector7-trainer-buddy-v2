@@ -86,7 +86,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (status === 'loading' || !session?.user) {
     return (
-      <div className="flex h-dvh overflow-hidden">
+      <div className="flex h-[var(--app-height)] overflow-hidden">
         {/* Sidebar placeholder */}
         <div className="hidden lg:flex lg:w-64 lg:flex-col lg:gap-3 lg:p-4 border-r border-border/50">
           <div className="h-8 w-32 animate-pulse rounded-xl bg-muted/60" />
@@ -196,7 +196,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-dvh max-h-dvh overflow-hidden">
+    <div className="flex h-[var(--app-height)] max-h-[var(--app-height)] overflow-hidden">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
         <Sidebar navItems={navItems} navBadges={navBadges} />

@@ -63,10 +63,19 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} ${chakraPetch.variable} h-dvh antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${chakraPetch.variable} h-[var(--app-height)] antialiased`}
       suppressHydrationWarning
     >
       <head>
+        {/* Keep --app-height synced to the real on-screen height. On iOS
+            standalone cold start the layout viewport (and thus 100dvh) is
+            mis-sized and no resize event corrects it; visualViewport.height
+            is accurate. Must run inline before first paint. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var d=document.documentElement;function s(){var v=window.visualViewport;if(!v)return;d.style.setProperty('--app-height',v.height+'px')}s();if(window.visualViewport){window.visualViewport.addEventListener('resize',s)}window.addEventListener('orientationchange',s);window.addEventListener('pageshow',s);window.addEventListener('load',function(){setTimeout(s,300)})})();`,
+          }}
+        />
         {/* Preload splash letter images — fetched in parallel before JS runs */}
         {['s', 'e', 'c', 't', 'o', 'r', '7'].map((l) => (
           <link key={l} rel="preload" as="image" href={`/splash-vector/${l}.png`} />
@@ -74,7 +83,7 @@ export default function RootLayout({
         <link rel="preload" as="image" href="/splash-vector/fitness.png" />
         <link rel="preload" as="image" href="/splash-vector/gym-crossfit.png" />
       </head>
-      <body className="min-h-dvh flex flex-col">
+      <body className="min-h-[var(--app-height)] flex flex-col">
         <SplashScreen />
         <NavigationProgress />
         <SplashGate>
