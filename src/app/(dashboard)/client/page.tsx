@@ -10,7 +10,6 @@ import {
   ArrowRight,
   Award,
   Calendar,
-  CheckCircle,
   Clock,
   Dumbbell,
   Flame,
@@ -313,9 +312,6 @@ export default function ClientDashboard() {
       {/* ── Package status card (always shown when end date is set) ── */}
       {hasPackageExpiry && packageExpiry && <PackageStatusCard expiry={packageExpiry} />}
 
-      {/* ── Engagement stats strip ── */}
-      <EngagementStrip stats={engagementStats} />
-
       {/* Active session — hero banner */}
       {activeSession && (
         <button
@@ -354,6 +350,9 @@ export default function ClientDashboard() {
           </div>
         </button>
       )}
+
+      {/* ── Engagement stats strip ── */}
+      <EngagementStrip stats={engagementStats} />
 
       {/* ── Fitness Journey ── */}
       {showFitnessJourney && (
@@ -987,19 +986,6 @@ function EngagementStrip({ stats }: { stats: EngagementStats }) {
       sub: stats.allTimeCompleted === 1 ? 'session' : 'sessions',
       color: 'text-violet-500',
       bg: 'bg-violet-500/10',
-    });
-  }
-
-  // Attendance rate
-  if (stats.monthAttendanceRate != null) {
-    const good = stats.monthAttendanceRate >= 80;
-    tiles.push({
-      icon: <CheckCircle className="h-4 w-4" />,
-      label: 'Attendance',
-      value: `${stats.monthAttendanceRate}%`,
-      sub: 'this month',
-      color: good ? 'text-emerald-500' : 'text-amber-500',
-      bg: good ? 'bg-emerald-500/10' : 'bg-amber-500/10',
     });
   }
 
