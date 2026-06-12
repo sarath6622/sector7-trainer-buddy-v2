@@ -85,15 +85,18 @@ export default function RootLayout({
             standalone cold start the whole viewport geometry (layout viewport,
             100dvh, even visualViewport.height) settles a few frames after
             first paint with no resize event, so any value sampled pre-paint
-            can be safe-area-short. Installed PWAs are always exactly
-            fullscreen, so in standalone mode use screen dimensions — correct
+            can be safe-area-short. iOS installed PWAs are always exactly
+            fullscreen, so in iOS standalone mode use screen dimensions — correct
             from t=0 and immune to keyboard-driven vv shrinkage (session pages
-            handle the keyboard via useKeyboardInset instead). In-browser,
-            fall back to visualViewport.height with a short settle poll to
-            catch silent corrections. Must run inline before first paint. */}
+            handle the keyboard via useKeyboardInset instead). Android standalone
+            is NOT fullscreen (status/navigation bars sit outside the viewport,
+            so screen.height overshoots and pushes the tab bar off-screen) and
+            doesn't have the cold-start bug — it uses the visualViewport path
+            like in-browser, with a short settle poll to catch silent
+            corrections. Must run inline before first paint. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var d=document.documentElement;var sa=navigator.standalone||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);function s(){if(sa){var l=matchMedia('(orientation: landscape)').matches;d.style.setProperty('--app-height',(l?Math.min(screen.width,screen.height):Math.max(screen.width,screen.height))+'px');return}var v=window.visualViewport;if(!v)return;d.style.setProperty('--app-height',v.height+'px')}s();if(window.visualViewport){window.visualViewport.addEventListener('resize',s)}window.addEventListener('orientationchange',s);window.addEventListener('pageshow',s);var n=0;var iv=setInterval(function(){s();if(++n>=10)clearInterval(iv)},150)})();`,
+            __html: `(function(){var d=document.documentElement;var ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);var sa=ios&&(navigator.standalone||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches));function s(){if(sa){var l=matchMedia('(orientation: landscape)').matches;d.style.setProperty('--app-height',(l?Math.min(screen.width,screen.height):Math.max(screen.width,screen.height))+'px');return}var v=window.visualViewport;if(!v)return;d.style.setProperty('--app-height',v.height+'px')}s();if(window.visualViewport){window.visualViewport.addEventListener('resize',s)}window.addEventListener('orientationchange',s);window.addEventListener('pageshow',s);var n=0;var iv=setInterval(function(){s();if(++n>=10)clearInterval(iv)},150)})();`,
           }}
         />
         {/* Preload splash letter images — fetched in parallel before JS runs */}
