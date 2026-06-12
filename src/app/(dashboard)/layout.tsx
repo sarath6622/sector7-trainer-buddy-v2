@@ -47,6 +47,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [status, session, router]);
 
+  // iOS standalone PWA cold-start: WebKit briefly lays the document out taller
+  // than the screen, leaving a phantom scrollable region that drags the whole
+  // layout when swiped. The document never legitimately scrolls here — only
+  // <main> does — so snap any stray document scroll back to 0.
+  useEffect(() => {
+    const reset = () => {
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    window.addEventListener('scroll', reset, { passive: true });
+    window.visualViewport?.addEventListener('resize', reset);
+    reset();
+    return () => {
+      window.removeEventListener('scroll', reset);
+      window.visualViewport?.removeEventListener('resize', reset);
+    };
+  }, []);
+
   const fetchPendingLeaveCount = useCallback(async () => {
     if (!isAdmin) return;
     try {
@@ -188,13 +205,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopNav user={user} navItems={navItems} onLogout={handleLogout} />
-        <main
-          className={
-            hideTabBar
-              ? 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6'
-              : 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] md:p-6 lg:pb-6'
-          }
-        >
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
           {children}
         </main>
         {!hideTabBar && <RoleTabBar role={role} navItems={navItems} navBadges={navBadges} />}

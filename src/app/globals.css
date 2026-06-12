@@ -221,6 +221,14 @@
     @apply bg-background font-sans;
   }
 
+  /* Stop iOS document-level rubber-banding, which drags fixed/flex chrome
+     (e.g. the bottom tab bar) along with the bounce. Inner scrollers like
+     the dashboard <main> keep their own natural overscroll. */
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+
   /* Touch feedback — remove native iOS tap highlight, eliminate 300ms delay */
   button,
   [role='button'],
