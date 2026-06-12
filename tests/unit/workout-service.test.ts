@@ -344,6 +344,139 @@ describe('createWorkoutLogs — scoped merge', () => {
 
     expect(deleteLogs).toHaveBeenCalledWith({ where: { id: { in: ['wl-old'] } } });
   });
+
+  // Per-set scoping within a dirty exercise. Without it, a device holding a
+  // stale 3-set copy deletes the peer's just-typed set 4 the moment anything
+  // dirties that exercise (tick, rest autofill, reorder) — set reconciliation
+  // was delete-by-absence even in scoped mode.
+  function wirePerSetTx(existingLogs: unknown[]) {
+    const setDeleteMany = vi.fn().mockResolvedValue({});
+    const setUpdate = vi.fn().mockResolvedValue({});
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          workoutLog: {
+            findMany: vi.fn().mockResolvedValue(existingLogs),
+            deleteMany: vi.fn().mockResolvedValue({}),
+            create: vi.fn(),
+            update: vi.fn().mockResolvedValue({}),
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'wl-a',
+              exercise: {
+                id: 'ex-a',
+                name: 'Bench',
+                targetMuscleGroup: 'Chest',
+                category: 'X',
+                exerciseType: 'WEIGHTED',
+              },
+              sets: [],
+            }),
+          },
+          workoutSet: { deleteMany: setDeleteMany, update: setUpdate, create: vi.fn() },
+        }),
+    );
+    return { setDeleteMany, setUpdate };
+  }
+
+  const threeSetLog = () => [
+    {
+      id: 'wl-a',
+      exerciseId: 'ex-a',
+      orderIndex: 0,
+      sets: [
+        { id: 's-1', setNumber: 1, reps: 15, weightKg: 30 },
+        { id: 's-2', setNumber: 2, reps: 15, weightKg: 37.5 },
+        // The peer's freshly typed set — this writer's copy doesn't have it.
+        { id: 's-3', setNumber: 3, reps: 15, weightKg: 45 },
+      ],
+    },
+  ];
+
+  it('keeps a peer set absent from the writer copy when removedSetsByExerciseId is supplied', async () => {
+    wireSession();
+    (prisma.exercise.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'ex-a' }]);
+    const { setDeleteMany, setUpdate } = wirePerSetTx(threeSetLog());
+
+    await workoutService.createWorkoutLogs({
+      sessionInstanceId: 'sess-1',
+      // Stale 2-set copy: the writer edited set 1 but never saw set 3.
+      exercises: [
+        {
+          exerciseId: 'ex-a',
+          orderIndex: 0,
+          sets: [
+            { setNumber: 1, reps: 12, weightKg: 35 },
+            { setNumber: 2, reps: 15, weightKg: 37.5 },
+          ],
+        },
+      ],
+      dirtyExerciseIds: ['ex-a'],
+      removedExerciseIds: [],
+      removedSetsByExerciseId: {}, // writer removed nothing — set 3 must survive
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER,
+      actorClientProfileId: null,
+      branchId: BRANCH,
+    });
+
+    expect(setDeleteMany).not.toHaveBeenCalled();
+    expect(setUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 's-1' } }));
+  });
+
+  it('deletes exactly the set numbers named in removedSetsByExerciseId', async () => {
+    wireSession();
+    (prisma.exercise.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'ex-a' }]);
+    const { setDeleteMany } = wirePerSetTx(threeSetLog());
+
+    await workoutService.createWorkoutLogs({
+      sessionInstanceId: 'sess-1',
+      exercises: [
+        {
+          exerciseId: 'ex-a',
+          orderIndex: 0,
+          sets: [
+            { setNumber: 1, reps: 15, weightKg: 30 },
+            { setNumber: 2, reps: 15, weightKg: 37.5 },
+          ],
+        },
+      ],
+      dirtyExerciseIds: ['ex-a'],
+      removedExerciseIds: [],
+      removedSetsByExerciseId: { 'ex-a': [3] },
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER,
+      actorClientProfileId: null,
+      branchId: BRANCH,
+    });
+
+    expect(setDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ['s-3'] } } });
+  });
+
+  it('without removedSetsByExerciseId a dirty exercise still reconciles sets by absence', async () => {
+    wireSession();
+    (prisma.exercise.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'ex-a' }]);
+    const { setDeleteMany } = wirePerSetTx(threeSetLog());
+
+    await workoutService.createWorkoutLogs({
+      sessionInstanceId: 'sess-1',
+      exercises: [
+        {
+          exerciseId: 'ex-a',
+          orderIndex: 0,
+          sets: [{ setNumber: 1, reps: 15, weightKg: 30 }],
+        },
+      ],
+      dirtyExerciseIds: ['ex-a'],
+      removedExerciseIds: [],
+      // pre-per-set bundle: field omitted → legacy delete-by-absence
+      actorUserId: ACTOR,
+      actorTrainerProfileId: TRAINER,
+      actorClientProfileId: null,
+      branchId: BRANCH,
+    });
+
+    expect(setDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ['s-2', 's-3'] } } });
+  });
 });
 
 // ─── updateWorkoutLog ──────────────────────────────

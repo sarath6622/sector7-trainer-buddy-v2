@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSavePayload,
   diffExercises,
+  hasDraftRows,
   isSetComplete,
   normalizeSet,
   setSignature,
@@ -158,5 +159,66 @@ describe('diffExercises', () => {
     const { dirtyExerciseIds, removedExerciseIds } = diffExercises([], [...A, ...B]);
     expect(dirtyExerciseIds).toEqual(['ex-a', 'ex-b']);
     expect(removedExerciseIds).toEqual([]);
+  });
+
+  // Per-set scoping: the writer names every set it deleted within a dirty
+  // exercise so the server drops exactly those — set rows the writer never
+  // saw (a peer's concurrent additions to the same exercise) survive.
+  it('reports set numbers removed within a dirty exercise', () => {
+    const twoSets = buildSavePayload([
+      makeEntry({
+        exerciseId: 'ex-a',
+        sets: [
+          makeSet({ setNumber: 1, weightKg: 10, reps: 10 }),
+          makeSet({ setNumber: 2, weightKg: 20, reps: 8 }),
+        ],
+      }),
+    ]);
+    const oneSet = buildSavePayload([
+      makeEntry({ exerciseId: 'ex-a', sets: [makeSet({ setNumber: 1, weightKg: 10, reps: 10 })] }),
+    ]);
+    const { dirtyExerciseIds, removedSetsByExerciseId } = diffExercises(twoSets, oneSet);
+    expect(dirtyExerciseIds).toEqual(['ex-a']);
+    expect(removedSetsByExerciseId).toEqual({ 'ex-a': [2] });
+  });
+
+  it('value edits and brand-new exercises report no removed sets', () => {
+    expect(diffExercises(A, Aedited).removedSetsByExerciseId).toEqual({});
+    expect(diffExercises(A, [...A, ...B]).removedSetsByExerciseId).toEqual({});
+  });
+});
+
+// hasDraftRows flags local work the save payload can't carry — a half-typed
+// set or an extra blank "Add Set" row. Both used to read as "nothing unsaved",
+// letting the 10s poll / Pusher refetch rehydrate from the server and wipe the
+// row while the trainer was still typing.
+describe('hasDraftRows', () => {
+  it('a half-typed set (kg without reps) is a draft', () => {
+    const entry = makeEntry({ sets: [makeSet({ weightKg: 52.5 })] });
+    expect(hasDraftRows([entry], buildSavePayload([entry]))).toBe(true);
+  });
+
+  it('fully typed sets matching the saved snapshot are not drafts', () => {
+    const entry = makeEntry({ sets: [makeSet({ weightKg: 10, reps: 10 })] });
+    expect(hasDraftRows([entry], buildSavePayload([entry]))).toBe(false);
+  });
+
+  it('the single blank placeholder row on a zero-set exercise is not a draft', () => {
+    const entry = makeEntry({ sets: [makeSet()] });
+    // Saved payload holds the exercise as a zero-set row.
+    expect(hasDraftRows([entry], buildSavePayload([entry]))).toBe(false);
+  });
+
+  it('an extra blank row beyond the saved sets (fresh "Add Set") is a draft', () => {
+    const saved = makeEntry({ sets: [makeSet({ setNumber: 1, weightKg: 10, reps: 10 })] });
+    const withBlank = makeEntry({
+      sets: [makeSet({ setNumber: 1, weightKg: 10, reps: 10 }), makeSet({ setNumber: 2 })],
+    });
+    expect(hasDraftRows([withBlank], buildSavePayload([saved]))).toBe(true);
+  });
+
+  it('rest-only autofill on an incomplete row is a draft', () => {
+    const entry = makeEntry({ sets: [makeSet({ restSec: 90 })] });
+    expect(hasDraftRows([entry], buildSavePayload([entry]))).toBe(true);
   });
 });

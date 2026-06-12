@@ -11,10 +11,15 @@ import * as workoutService from '@/services/workout.service';
 // write to what this device actually changed since its last sync (ADR-036) so a
 // stale full-snapshot from a peer can't clobber concurrent edits. Both optional
 // — when omitted the service falls back to full-replace (legacy callers).
+// `removedSetsByExerciseId` narrows the scoping to per-set: within a dirty
+// exercise only the named set numbers are deleted, so a peer's concurrent rows
+// in the SAME exercise survive. When omitted (pre-per-set bundles) a dirty
+// exercise's sets reconcile by absence, as before.
 const bodySchema = z.object({
   exercises: z.array(workoutEntrySchema).min(1),
   dirtyExerciseIds: z.array(z.string()).optional(),
   removedExerciseIds: z.array(z.string()).optional(),
+  removedSetsByExerciseId: z.record(z.string(), z.array(z.number().int().min(1))).optional(),
 });
 
 /**
@@ -45,6 +50,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         exercises: input.exercises,
         dirtyExerciseIds: input.dirtyExerciseIds,
         removedExerciseIds: input.removedExerciseIds,
+        removedSetsByExerciseId: input.removedSetsByExerciseId,
         actorUserId,
         actorTrainerProfileId: trainerProfileId ?? null,
         actorClientProfileId: clientProfileId ?? null,

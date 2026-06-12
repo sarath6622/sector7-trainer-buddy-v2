@@ -67,6 +67,13 @@ interface CreateWorkoutInput extends WorkoutActor {
   // falls back to legacy full-replace (delete-by-absence) for older callers.
   dirtyExerciseIds?: string[];
   removedExerciseIds?: string[];
+  // Per-set scoping within dirty exercises: the set numbers this device
+  // explicitly deleted. When present (even as an empty object) set deletion
+  // inside a dirty exercise is limited to exactly these — set rows the writer
+  // has never seen (a peer's concurrent additions to the same exercise)
+  // survive. When absent (pre-per-set bundles) a dirty exercise's sets
+  // reconcile by absence from the payload, as before.
+  removedSetsByExerciseId?: Record<string, number[]>;
 }
 
 interface UpdateWorkoutLogInput extends WorkoutActor {
@@ -104,6 +111,7 @@ export async function createWorkoutLogs({
   exercises,
   dirtyExerciseIds,
   removedExerciseIds,
+  removedSetsByExerciseId,
   actorUserId,
   actorTrainerProfileId,
   actorClientProfileId,
@@ -186,6 +194,13 @@ export async function createWorkoutLogs({
     const scoped = dirtyExerciseIds !== undefined;
     const dirtySet = scoped ? new Set(dirtyExerciseIds) : null;
     const removedSet = new Set(removedExerciseIds ?? []);
+    // Per-set merge: a writer that supplies removedSetsByExerciseId promises
+    // to name every set it deleted, so within a dirty exercise we drop exactly
+    // those and leave unknown set numbers (a peer's concurrent rows in the
+    // SAME exercise) untouched. Without it, a device holding a stale 3-set
+    // copy of an exercise would delete the peer's just-typed set 4 the moment
+    // it dirtied that exercise (tick, rest autofill, reorder).
+    const perSetScoped = scoped && removedSetsByExerciseId !== undefined;
 
     // Drop logs (and their sets) the user removed: in scoped mode that's
     // exactly `removedExerciseIds`; in legacy mode it's anything absent from
@@ -231,9 +246,15 @@ export async function createWorkoutLogs({
         const existingBySetNum = new Map(existing.sets.map((s) => [s.setNumber, s]));
         const incomingSetNums = new Set(entry.sets.map((s) => s.setNumber));
 
-        // Drop sets the trainer removed.
+        // Drop sets the writer removed: exactly the named set numbers in
+        // per-set scoped mode, by absence from the payload otherwise.
+        const removedSetNums = perSetScoped
+          ? new Set(removedSetsByExerciseId?.[entry.exerciseId] ?? [])
+          : null;
         const setIdsToDelete = existing.sets
-          .filter((s) => !incomingSetNums.has(s.setNumber))
+          .filter((s) =>
+            removedSetNums ? removedSetNums.has(s.setNumber) : !incomingSetNums.has(s.setNumber),
+          )
           .map((s) => s.id);
         if (setIdsToDelete.length > 0) {
           await tx.workoutSet.deleteMany({ where: { id: { in: setIdsToDelete } } });

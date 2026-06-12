@@ -337,6 +337,35 @@ type SavePayloadEntry = {
   sets: ReturnType<typeof normalizeSet>[];
 };
 
+// A row "has ink" once the user typed anything into it, even if it isn't
+// complete enough to save (kg without reps). Such rows live only in local
+// state — buildSavePayload drops them.
+const setHasAnyValue = (s: SetData) =>
+  hasValue(s.reps) ||
+  hasValue(s.weightKg) ||
+  hasValue(s.durationSec) ||
+  hasValue(s.rpe) ||
+  hasValue(s.restSec) ||
+  hasValue(s.stepsCount) ||
+  (s.notes ?? '').trim() !== '';
+
+// True when local state holds work the save payload can't carry: a half-typed
+// set, or extra blank rows beyond what's saved (a fresh "Add Set"). The
+// payload-hash comparison alone reports both as "nothing unsaved", which let
+// the 10s poll / Pusher refetch rehydrate from the server and wipe a row the
+// user was mid-way through typing. Every card renders one blank placeholder
+// row even for a zero-set log, so a single empty row is never a draft.
+export function hasDraftRows(exercises: ExerciseEntry[], lastSaved: SavePayloadEntry[]): boolean {
+  const savedSetCount = new Map(lastSaved.map((e) => [e.exerciseId, e.sets.length]));
+  for (const e of exercises) {
+    if (e.sets.length > Math.max(1, savedSetCount.get(e.exerciseId) ?? 0)) return true;
+    for (const s of e.sets) {
+      if (!isSetComplete(s, e.exerciseType) && setHasAnyValue(s)) return true;
+    }
+  }
+  return false;
+}
+
 // Build the POST body. An exercise is persisted as soon as it's added — its
 // row (position + completion flag) survives a tab switch or navigation even
 // before any set is logged, so the trainer never has to re-add it. Within each
@@ -379,16 +408,37 @@ export function signaturesOf(payload: SavePayloadEntry[]): Set<string> {
 export function diffExercises(
   lastSaved: SavePayloadEntry[],
   current: SavePayloadEntry[],
-): { dirtyExerciseIds: string[]; removedExerciseIds: string[] } {
-  const lastById = new Map(lastSaved.map((e) => [e.exerciseId, JSON.stringify(e)]));
+): {
+  dirtyExerciseIds: string[];
+  removedExerciseIds: string[];
+  removedSetsByExerciseId: Record<string, number[]>;
+} {
+  const lastById = new Map(lastSaved.map((e) => [e.exerciseId, e]));
   const currentIds = new Set(current.map((e) => e.exerciseId));
-  const dirtyExerciseIds = current
-    .filter((e) => lastById.get(e.exerciseId) !== JSON.stringify(e))
-    .map((e) => e.exerciseId);
+  const dirty = current.filter(
+    (e) => JSON.stringify(lastById.get(e.exerciseId)) !== JSON.stringify(e),
+  );
   const removedExerciseIds = lastSaved
     .filter((e) => !currentIds.has(e.exerciseId))
     .map((e) => e.exerciseId);
-  return { dirtyExerciseIds, removedExerciseIds };
+  // Set numbers this device explicitly dropped within each dirty exercise.
+  // The server's per-set merge deletes ONLY these, so set rows the writer has
+  // never seen — a peer's concurrent additions to the SAME exercise — survive
+  // a save from a stale copy. Always sent (even when empty) so the server can
+  // tell a per-set-aware writer from a legacy bundle.
+  const removedSetsByExerciseId: Record<string, number[]> = {};
+  for (const e of dirty) {
+    const prev = lastById.get(e.exerciseId);
+    if (!prev) continue;
+    const currentSetNums = new Set(e.sets.map((s) => s.setNumber));
+    const removed = prev.sets.map((s) => s.setNumber).filter((n) => !currentSetNums.has(n));
+    if (removed.length > 0) removedSetsByExerciseId[e.exerciseId] = removed;
+  }
+  return {
+    dirtyExerciseIds: dirty.map((e) => e.exerciseId),
+    removedExerciseIds,
+    removedSetsByExerciseId,
+  };
 }
 
 // ─── WorkoutLogger ────────────────────────────────────────────────────────────
@@ -572,17 +622,23 @@ export function WorkoutLogger({
       // Two preservation rules across server re-hydration (this effect fires
       // every time `existingLogs` changes — e.g. on each 10s/30s poll):
       //
-      //   1. If the local copy has unsaved changes, drop the server payload
-      //      on the floor. Auto-save will push our local state up within
-      //      ~800ms; the next poll will then reflect it. Without this the
-      //      poll's stale snapshot stomps the user's mid-type values.
+      //   1. If the local copy has unsaved changes — a payload diff OR a
+      //      draft row the payload can't carry (half-typed set, fresh blank
+      //      "Add Set" row; see hasDraftRows) — drop the server payload on
+      //      the floor. Saveable changes reach the server via auto-save and
+      //      the next poll reflects them; draft rows simply survive locally
+      //      until they're complete. Without this the poll's stale snapshot
+      //      stomps the user's mid-type values.
       //   2. Otherwise preserve `collapsed` per exerciseId — the server
       //      doesn't track UI state, so the freshly-built `initial` array
       //      would re-collapse everything except the last exercise on every
       //      tick. The reported bug: expanding one card auto-collapses it on
       //      the next poll and expands the bottom one.
       const currentHash = JSON.stringify(buildSavePayload(prev));
-      const hasUnsavedLocal = prev.length > 0 && currentHash !== lastSavedHashRef.current;
+      const hasUnsavedLocal =
+        prev.length > 0 &&
+        (currentHash !== lastSavedHashRef.current ||
+          hasDraftRows(prev, lastSavedPayloadRef.current));
       if (hasUnsavedLocal) return prev;
 
       const prevCollapsedById = new Map(prev.map((e) => [e.exerciseId, e.collapsed]));
@@ -997,7 +1053,16 @@ export function WorkoutLogger({
   // logged workout, which keeps the auto-save effect from churning.
   const currentPayload = useMemo(() => buildSavePayload(exercises), [exercises]);
   const currentHash = useMemo(() => JSON.stringify(currentPayload), [currentPayload]);
-  const hasUnsaved = currentHash !== lastSavedHashRef.current;
+  // Two tiers of "unsaved":
+  //   • hasUnsavedPayload — the saveable snapshot differs from the last save;
+  //     drives the auto-save debounce (no point POSTing an unchanged payload).
+  //   • hasUnsaved — adds draft rows the payload can't carry (half-typed set,
+  //     fresh blank "Add Set" row). Reported to the parent so it pauses the
+  //     10s poll / Pusher refetch, and mirrored by the rehydration guard —
+  //     otherwise a refetch wipes the row mid-type even though nothing is
+  //     POSTable yet (the bug trainers hit after "only persist complete sets").
+  const hasUnsavedPayload = currentHash !== lastSavedHashRef.current;
+  const hasUnsaved = hasUnsavedPayload || hasDraftRows(exercises, lastSavedPayloadRef.current);
 
   // Persist to the server. The write is scoped to what this device changed
   // since its last sync (see `diffExercises`) so a debounced save from a stale
@@ -1013,7 +1078,7 @@ export function WorkoutLogger({
     setAutoSaveStatus('saving');
     const sentPayload = currentPayload;
     const sentHash = JSON.stringify(sentPayload);
-    const { dirtyExerciseIds, removedExerciseIds } = diffExercises(
+    const { dirtyExerciseIds, removedExerciseIds, removedSetsByExerciseId } = diffExercises(
       lastSavedPayloadRef.current,
       sentPayload,
     );
@@ -1024,7 +1089,12 @@ export function WorkoutLogger({
       const res = await fetch(`/api/sessions/${sessionInstanceId}/workouts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ exercises: sentPayload, dirtyExerciseIds, removedExerciseIds }),
+        body: JSON.stringify({
+          exercises: sentPayload,
+          dirtyExerciseIds,
+          removedExerciseIds,
+          removedSetsByExerciseId,
+        }),
       });
       if (res.ok) {
         lastSavedHashRef.current = sentHash;
@@ -1085,7 +1155,7 @@ export function WorkoutLogger({
   // `flushImmediatelyRef`, dropping the delay to 0 so the peer sees the new
   // shape in ~1s via Pusher rather than waiting on the debounce.
   useEffect(() => {
-    if (!hasUnsaved) return;
+    if (!hasUnsavedPayload) return;
     if (currentPayload.length === 0) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const delay = flushImmediatelyRef.current ? 0 : 5000;
@@ -1096,7 +1166,7 @@ export function WorkoutLogger({
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [hasUnsaved, currentHash, currentPayload.length, saveWorkout]);
+  }, [hasUnsavedPayload, currentHash, currentPayload.length, saveWorkout]);
 
   // Keep refs aligned with latest values so the flush/visibility effects
   // (which bind once) can read the most recent payload + hash + callbacks
@@ -1131,14 +1201,19 @@ export function WorkoutLogger({
     if (payload.length === 0 || hashAtFlush === lastSavedHashRef.current) return;
     // Scope the teardown flush the same way as a normal save so it can't
     // full-replace over a peer's edits on the way out.
-    const { dirtyExerciseIds, removedExerciseIds } = diffExercises(
+    const { dirtyExerciseIds, removedExerciseIds, removedSetsByExerciseId } = diffExercises(
       lastSavedPayloadRef.current,
       payload,
     );
     void fetch(`/api/sessions/${sessionInstanceId}/workouts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ exercises: payload, dirtyExerciseIds, removedExerciseIds }),
+      body: JSON.stringify({
+        exercises: payload,
+        dirtyExerciseIds,
+        removedExerciseIds,
+        removedSetsByExerciseId,
+      }),
       keepalive: true,
     });
   }, [sessionInstanceId]);
