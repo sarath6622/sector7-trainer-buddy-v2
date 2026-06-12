@@ -48,7 +48,7 @@ export function RoleTabBar({ role, navItems, navBadges }: RoleTabBarProps) {
   return (
     <div
       className="shrink-0 border-t border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden"
-      style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.5rem)' }}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <nav
         role="tablist"
