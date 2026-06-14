@@ -960,6 +960,29 @@ Errors:
 - `CLOUDINARY_NOT_CONFIGURED` (500) — env vars missing
 - `NOT_FOUND` (404) — user not in caller's branch
 
+### Self profile edit (Added 2026-06-14, mobile Settings)
+
+> Lets a CLIENT edit their own name + phone. Reuses the audited, branch-scoped
+> `updateUser` service; the narrow `updateOwnProfileSchema` (firstName? / lastName? /
+> phone?, ≥1 required) guarantees a client cannot change roles or email here.
+> Audit: `USER_UPDATED`. Guard: `requireRole(['CLIENT'])` (401 no/expired token, 403 wrong role).
+
+```
+GET    /api/client/profile  → {} → { firstName, lastName, phone: string | null }
+       Role: CLIENT only. Reads from DB (token name claim can be stale) so the
+       Settings form prefills correctly.
+PATCH  /api/client/profile  → { firstName?, lastName?, phone? } → { firstName, lastName, phone }
+       Role: CLIENT only. Always scoped to the caller's own user row.
+```
+
+> **ADR-043 migration (extended 2026-06-14):** the trainer client-detail
+> (`clients/[id]/{workout-history,progress,badges}`), `leaves`(+`/balance`),
+> `reschedule-requests`(+`[id]/{approve,reject}`) and community
+> (`feed`,`leaderboard`,`posts/[id]/{react,comments,comments/[commentId]}`) routes
+> the mobile app calls were moved from the old `getServerSession`+`hasRole`→403
+> guard to `requireRole`→**401-vs-403**, so the app's refresh-on-401 fires on an
+> expired token. Role lists unchanged; web unaffected.
+
 ### Client opt-in toggle
 
 ```

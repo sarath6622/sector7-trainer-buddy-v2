@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { applyLeaveSchema } from '@/lib/validators';
 import * as leaveService from '@/services/leave.service';
@@ -9,10 +9,7 @@ import * as leaveService from '@/services/leave.service';
  */
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER', 'KICKBOXING_TRAINER'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['TRAINER', 'KICKBOXING_TRAINER']);
 
     const trainerProfileId = session.user.trainerProfileId;
     if (!trainerProfileId) {
@@ -51,10 +48,7 @@ export async function POST(req: Request) {
  */
 export async function GET() {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER', 'KICKBOXING_TRAINER'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['TRAINER', 'KICKBOXING_TRAINER']);
 
     const trainerProfileId = session.user.trainerProfileId;
     if (!trainerProfileId) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { getCompoundLeaderboard, getCompoundExercises } from '@/services/leaderboard.service';
 
@@ -7,13 +7,9 @@ import { getCompoundLeaderboard, getCompoundExercises } from '@/services/leaderb
 // GET /api/community/leaderboard (no exerciseId) → returns list of compound exercises
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (
-      !session ||
-      !hasRole(session.user.roles, ['CLIENT', 'TRAINER', 'BRANCH_ADMIN', 'SUPER_ADMIN'])
-    ) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['CLIENT', 'TRAINER', 'BRANCH_ADMIN', 'SUPER_ADMIN'], {
+      matchAllRoles: true,
+    });
 
     const { searchParams } = new URL(req.url);
     const exerciseId = searchParams.get('exerciseId');

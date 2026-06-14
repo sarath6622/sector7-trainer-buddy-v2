@@ -133,6 +133,18 @@ export const createUserSchema = z.object({
 
 export const updateUserSchema = createUserSchema.partial().omit({ password: true, email: true });
 
+// Self-service profile edit (mobile client Settings). Deliberately narrow —
+// a client may only change their own name and phone, never roles/email/etc.
+export const updateOwnProfileSchema = z
+  .object({
+    firstName: z.string().min(1).max(100).optional(),
+    lastName: z.string().min(1).max(100).optional(),
+    phone: phoneSchema,
+  })
+  .refine((d) => d.firstName !== undefined || d.lastName !== undefined || d.phone !== undefined, {
+    message: 'At least one field must be provided',
+  });
+
 export const listUsersSchema = paginationSchema.extend({
   role: userRoleSchema.optional(),
   search: z.string().trim().max(100).optional(),
@@ -909,6 +921,7 @@ export type CreateTrainerShiftApiInput = z.infer<typeof createTrainerShiftApiSch
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type UpdateOwnProfileInput = z.infer<typeof updateOwnProfileSchema>;
 export type CreateMappingInput = z.infer<typeof createMappingSchema>;
 export type UpdateMappingInput = z.infer<typeof updateMappingSchema>;
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;

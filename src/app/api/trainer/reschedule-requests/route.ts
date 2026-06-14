@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { listRescheduleRequestsSchema } from '@/lib/validators';
 import * as rescheduleService from '@/services/reschedule.service';
@@ -10,10 +10,7 @@ import * as rescheduleService from '@/services/reschedule.service';
  */
 export async function GET(req: Request) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['TRAINER']);
 
     const trainerProfileId = session.user.trainerProfileId;
     if (!trainerProfileId) {
