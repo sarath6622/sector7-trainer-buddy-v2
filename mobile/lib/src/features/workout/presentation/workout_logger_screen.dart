@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,14 +7,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../../client/data/client_repository.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
-import '../data/workout_repository.dart';
+import '../data/local/local_providers.dart';
+import '../data/local/workout_local_store.dart';
+import '../data/workout_sync_service.dart';
+import '../domain/save_payload.dart';
 import '../domain/workout_draft.dart';
 import 'exercise_picker_sheet.dart';
 
 /// Shared workout logger (ADR-036). Reachable by the session's **client** (their
-/// own PT session) or, later, the trainer. v1 is online-only — the offline
-/// Drift queue is the next increment. Seeds an editable draft from the session
-/// detail, then full-snapshot saves to `POST /api/sessions/[id]/workouts`.
+/// own PT session) or, later, the trainer. Offline-first: edits save to the
+/// local store immediately and a scoped diff (ADR-041) flushes to
+/// `POST /api/sessions/[id]/workouts` when connectivity allows
+/// ([WorkoutSyncService]). On open it restores an unsynced local draft if one
+/// exists, otherwise seeds from the server session detail.
 class WorkoutLoggerScreen extends ConsumerStatefulWidget {
   const WorkoutLoggerScreen({super.key, required this.sessionId});
   final String sessionId;
@@ -26,6 +33,16 @@ class _WorkoutLoggerScreenState extends ConsumerState<WorkoutLoggerScreen> {
   Object? _seedError;
   bool _saving = false;
 
+  /// Last-synced snapshot the scoped diff is computed against. Seeded from the
+  /// server (or a restored local draft) and advanced on a confirmed sync.
+  List<Map<String, dynamic>> _baseline = const [];
+
+  /// Outcome of the most recent save — drives the offline / queued banner.
+  SyncOutcome? _lastOutcome;
+
+  /// True when we re-opened into edits that hadn't reached the server yet.
+  bool _restoredUnsynced = false;
+
   @override
   void initState() {
     super.initState();
@@ -34,14 +51,60 @@ class _WorkoutLoggerScreenState extends ConsumerState<WorkoutLoggerScreen> {
 
   Future<void> _seed() async {
     setState(() => _seedError = null);
+
+    // An unsynced local draft is the freshest truth — restore it verbatim so a
+    // server poll can't clobber edits made offline.
+    final local =
+        await ref.read(workoutDraftStoreProvider).getDraft(widget.sessionId);
+    if (local != null && local.syncStatus != WorkoutSyncStatus.synced) {
+      setState(() {
+        _drafts = decodeDrafts(local.draftJson);
+        _baseline = decodeSavePayload(local.baselineJson);
+        _restoredUnsynced = true;
+        _lastOutcome = local.syncStatus == WorkoutSyncStatus.failed
+            ? SyncOutcome.failed
+            : SyncOutcome.queuedOffline;
+      });
+      return;
+    }
+
     try {
       final detail =
           await ref.read(clientSessionProvider(widget.sessionId).future);
+      final drafts = detail.workoutLogs.map(DraftExercise.fromLog).toList();
+      final baseline = buildSavePayload(drafts);
+
+      // Anchor the local record to the server truth at open time. This keeps a
+      // later save diffing against the *current* server state (not a stale
+      // baseline from a prior session) and caches the session so it stays
+      // editable if connectivity drops mid-edit. Only reached when there's no
+      // unsynced local draft (those are restored above and never overwritten).
+      final now = DateTime.now();
+      await ref.read(workoutDraftStoreProvider).putDraft(WorkoutDraftRecord(
+            sessionId: widget.sessionId,
+            draftJson: encodeDrafts(drafts),
+            baselineJson: jsonEncode(baseline),
+            syncStatus: WorkoutSyncStatus.synced,
+            updatedAt: now,
+            lastSyncedAt: now,
+          ));
+
       setState(() {
-        _drafts = detail.workoutLogs.map(DraftExercise.fromLog).toList();
+        _drafts = drafts;
+        _baseline = baseline; // server state = our baseline
+        _restoredUnsynced = false;
+        _lastOutcome = null;
       });
     } catch (e) {
-      setState(() => _seedError = e);
+      // Offline with a previously-synced local copy → open it read-for-edit.
+      if (local != null) {
+        setState(() {
+          _drafts = decodeDrafts(local.draftJson);
+          _baseline = decodeSavePayload(local.baselineJson);
+        });
+      } else {
+        setState(() => _seedError = e);
+      }
     }
   }
 
@@ -53,33 +116,50 @@ class _WorkoutLoggerScreenState extends ConsumerState<WorkoutLoggerScreen> {
 
   Future<void> _save() async {
     final drafts = _drafts!;
-    // Drop exercises with no logged sets so we don't persist empty structure.
-    final payload = drafts
-        .where((d) => d.sets.any((s) =>
-            (s.reps ?? 0) > 0 ||
-            (s.weightKg ?? 0) > 0 ||
-            (s.durationSec ?? 0) > 0 ||
-            (s.stepsCount ?? 0) > 0))
-        .toList();
-
     setState(() => _saving = true);
+
+    SyncOutcome outcome;
     try {
-      await ref.read(workoutRepositoryProvider).saveWorkout(widget.sessionId, payload);
-      ref.invalidate(clientSessionProvider(widget.sessionId));
-      ref.invalidate(workoutHistoryProvider);
-      if (mounted) {
-        Navigator.pop(context, true);
-      }
-    } on ApiException catch (e) {
-      _fail(e.message);
-    } catch (_) {
-      _fail('Could not save workout.');
+      // Write-local-first, then flush a scoped diff if online. Empty exercises
+      // are dropped at the wire by buildSavePayload, so we hand over the full
+      // working copy (structural rows survive a re-open).
+      outcome = await ref.read(workoutSyncServiceProvider).saveLocalAndSync(
+            widget.sessionId,
+            drafts: drafts,
+            baseline: _baseline,
+          );
+    } catch (e) {
+      outcome = SyncOutcome.failed;
+      _toast(e is ApiException ? e.message : 'Could not save workout.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+
+    if (!mounted) return;
+    switch (outcome) {
+      case SyncOutcome.synced:
+        ref.invalidate(clientSessionProvider(widget.sessionId));
+        ref.invalidate(workoutHistoryProvider);
+        Navigator.pop(context, true);
+      case SyncOutcome.queuedOffline:
+        // Stay put — the session detail can't refetch offline. The banner +
+        // toast tell the user it's safe on the device and will sync later.
+        // NB: _baseline is NOT advanced — the stored record keeps the real
+        // last-synced baseline so the eventual flush still sends the full diff.
+        setState(() {
+          _lastOutcome = outcome;
+          _restoredUnsynced = true;
+        });
+        _toast('Saved on this device — will sync when back online.');
+      case SyncOutcome.failed:
+        setState(() => _lastOutcome = outcome);
+        _toast('Saved on device, but the server rejected the sync.');
+      case SyncOutcome.noop:
+        break;
+    }
   }
 
-  void _fail(String msg) {
+  void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
@@ -113,21 +193,58 @@ class _WorkoutLoggerScreenState extends ConsumerState<WorkoutLoggerScreen> {
           ? ErrorRetry(message: _seedError.toString(), onRetry: _seed)
           : drafts == null
               ? const Center(child: CircularProgressIndicator())
-              : drafts.isEmpty
-                  ? const EmptyState(
-                      icon: Icons.fitness_center,
-                      message: 'No exercises yet.\nTap "Add exercise" to start logging.',
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-                      itemCount: drafts.length,
-                      itemBuilder: (_, i) => _ExerciseCard(
-                        key: ValueKey('${drafts[i].exerciseId}-$i'),
-                        draft: drafts[i],
-                        onChanged: () => setState(() {}),
-                        onRemove: () => setState(() => drafts.removeAt(i)),
-                      ),
+              : Column(
+                  children: [
+                    ?_syncBanner,
+                    Expanded(
+                      child: drafts.isEmpty
+                          ? const EmptyState(
+                              icon: Icons.fitness_center,
+                              message:
+                                  'No exercises yet.\nTap "Add exercise" to start logging.',
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+                              itemCount: drafts.length,
+                              itemBuilder: (_, i) => _ExerciseCard(
+                                key: ValueKey('${drafts[i].exerciseId}-$i'),
+                                draft: drafts[i],
+                                onChanged: () => setState(() {}),
+                                onRemove: () => setState(() => drafts.removeAt(i)),
+                              ),
+                            ),
                     ),
+                  ],
+                ),
+    );
+  }
+
+  /// A thin status strip shown while the workout is held on-device — either
+  /// restored from an earlier offline save, queued for sync, or rejected.
+  Widget? get _syncBanner {
+    if (!_restoredUnsynced && _lastOutcome != SyncOutcome.failed) return null;
+    final failed = _lastOutcome == SyncOutcome.failed;
+    final scheme = Theme.of(context).colorScheme;
+    final color = failed ? scheme.errorContainer : scheme.secondaryContainer;
+    final onColor = failed ? scheme.onErrorContainer : scheme.onSecondaryContainer;
+    return Container(
+      width: double.infinity,
+      color: color,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          Icon(failed ? Icons.sync_problem : Icons.cloud_off, size: 18, color: onColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              failed
+                  ? 'Saved on device — last sync was rejected. It will retry.'
+                  : 'Saved on device — waiting to sync.',
+              style: TextStyle(color: onColor, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -31,10 +31,20 @@ dependencies:
   # Profile image picking (gallery/camera) → uploads via /api/client/profile/image
   image_picker: ^1.1.2
 
+  # ── Phase 3 offline workout logger (write-local-first + diff sync; ADR-041) ──
+  # Local SQLite store for workout drafts + exercise-library cache (replaces Dexie).
+  drift: ^2.20.0
+  sqlite3_flutter_libs: ^0.5.26
+  path_provider: ^2.1.5
+  path: ^1.9.0
+  # Online/offline detection that drives the sync flush.
+  connectivity_plus: ^6.1.0
+
   # ── Added in later phases (need native config; see docs/flutter-migration-plan.md) ──
-  # drift + sqlite3_flutter_libs   → Phase 3 offline workout queue (replaces Dexie)
-  # connectivity_plus             → Phase 3 online/offline detection
-  # workmanager                   → Phase 3 background sync
+  # workmanager                   → true OS-background sync (deferred; needs iOS BGTaskScheduler
+  #                                 config + can't verify on a simulator — the foreground /
+  #                                 resume / connectivity-driven sync below covers the
+  #                                 gym-floor flaky-wifi case). Seam: WorkoutSyncService.flushPending.
   # firebase_core + firebase_messaging → Phase 4 native push (replaces FCM web-push)
   # pusher_channels_flutter       → Phase 2/4 real-time session timer (reuses existing Pusher app)
 
@@ -42,6 +52,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+  # Drift codegen for the local store (run: dart run build_runner build).
+  drift_dev: ^2.20.0
+  build_runner: ^2.4.13
 
 flutter:
   uses-material-design: true

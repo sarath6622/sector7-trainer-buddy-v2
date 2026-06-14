@@ -187,7 +187,39 @@ Each screen maps to existing endpoints — no new business logic, just presentat
 
 ## 5. Offline-first workout logging (the riskiest feature)
 
-Mirror `src/lib/offline-db.ts` + `useOfflineWorkout.ts` in Flutter:
+> **Built (2026-06-14) — core offline layer shipped in `mobile/lib/src/features/workout/`.**
+> The logger is now write-local-first + connectivity-driven diff sync. What landed and
+> where it diverged from the original sketch below:
+>
+> - **Local store (Drift):** `app_database.dart` — `WorkoutDraftRows` (one row per session:
+>   `draftJson` full editable snapshot, `baselineJson` last-synced save payload, `syncStatus`
+>   pending|synced|failed) + `CachedExerciseRows`. **Per-session snapshot + baseline, not a
+>   per-set `workout_queue`** — this matches how the web logger actually works post-ADR-041
+>   (a `lastSavedPayloadRef` diffed against the current payload). Codegen needs
+>   `dart run build_runner build --force-jit` (sqlite3's native-asset hook breaks the default
+>   AOT entrypoint compile). Store contracts live in `local/workout_local_store.dart` with an
+>   `InMemoryWorkoutStore` for tests.
+> - **Write path:** the logger saves to Drift first, then `WorkoutSyncService.saveLocalAndSync`
+>   flushes if online. Offline saves stay `pending` and show an on-device banner.
+> - **Sync = scoped diff, not full-replace (ADR-041).** `diffExercises(baseline, current)` in
+>   `domain/save_payload.dart` derives `dirtyExerciseIds` / `removedExerciseIds` /
+>   `removedSetsByExerciseId` and POSTs those. **Idempotency comes from the diff being net-zero
+>   on re-send** (sets upsert by number, deletes are explicit) — so no server `localId` upsert
+>   was needed (the route doesn't accept one anyway). `connectivity_plus` drives the flush;
+>   foreground save + app-resume + connectivity-return all trigger it.
+> - **Exercise library cache:** `WorkoutRepository` searches the server online (caching results)
+>   and falls back to the Drift cache offline; `prefetchExerciseLibrary()` warms it on login.
+> - **Session continuity:** opening the logger _anchors_ a synced record (server snapshot) so
+>   the session is editable if connectivity drops mid-edit, and a re-open restores unsynced edits.
+>
+> **Deferred:** `workmanager` true OS-background sync (needs iOS BGTaskScheduler config + can't
+> verify on a simulator; the foreground/resume/connectivity path covers the gym-floor case —
+> `WorkoutSyncService.flushPending` is the seam a headless task would call). Live session-timer
+> continuity (the rest-timer pill) is Phase 4 real-time work, not part of this increment.
+> **Not yet verified in airplane mode on the sim** — unit-tested (diff + sync engine, 18 cases);
+> needs a real on-device offline→online E2E pass.
+
+Original sketch (kept for reference):
 
 - **Local store (Drift):** `workout_queue` (localId UUID, sessionInstanceId, exerciseId,
   sets JSON, syncStatus pending|synced|failed), `exercise_cache`, `session_state`.
