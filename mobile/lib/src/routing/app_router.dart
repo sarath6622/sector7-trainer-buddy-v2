@@ -4,7 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/presentation/login_screen.dart';
-import '../features/client/presentation/client_dashboard_screen.dart';
+import '../features/client/presentation/badges_screen.dart';
+import '../features/client/presentation/client_shell.dart';
+import '../features/client/presentation/reschedule_requests_screen.dart';
+import '../features/client/presentation/session_detail_screen.dart';
+import '../features/client/presentation/unavailability_screen.dart';
+import '../features/client/presentation/workout_history_screen.dart';
+import '../features/workout/presentation/workout_logger_screen.dart';
 import '../features/shared/presentation/splash_screen.dart';
 import '../features/trainer/presentation/trainer_home_screen.dart';
 
@@ -24,7 +30,40 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/trainer', builder: (_, _) => const TrainerHomeScreen()),
-      GoRoute(path: '/client', builder: (_, _) => const ClientDashboardScreen()),
+      GoRoute(
+        path: '/client',
+        builder: (_, _) => const ClientShell(),
+        routes: [
+          GoRoute(
+            path: 'sessions/:id',
+            builder: (_, state) =>
+                SessionDetailScreen(sessionId: state.pathParameters['id']!),
+            routes: [
+              GoRoute(
+                path: 'log',
+                builder: (_, state) =>
+                    WorkoutLoggerScreen(sessionId: state.pathParameters['id']!),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: 'workouts',
+            builder: (_, _) => const WorkoutHistoryScreen(),
+          ),
+          GoRoute(
+            path: 'badges',
+            builder: (_, _) => const BadgesScreen(),
+          ),
+          GoRoute(
+            path: 'unavailability',
+            builder: (_, _) => const UnavailabilityScreen(),
+          ),
+          GoRoute(
+            path: 'reschedule-requests',
+            builder: (_, _) => const RescheduleRequestsScreen(),
+          ),
+        ],
+      ),
       GoRoute(path: '/unsupported', builder: (_, _) => const _UnsupportedRoleScreen()),
     ],
     redirect: (context, state) {

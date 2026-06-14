@@ -28,13 +28,15 @@ dependencies:
   # Date/number formatting
   intl: ^0.19.0
 
+  # Profile image picking (gallery/camera) → uploads via /api/client/profile/image
+  image_picker: ^1.1.2
+
   # ── Added in later phases (need native config; see docs/flutter-migration-plan.md) ──
   # drift + sqlite3_flutter_libs   → Phase 3 offline workout queue (replaces Dexie)
   # connectivity_plus             → Phase 3 online/offline detection
   # workmanager                   → Phase 3 background sync
   # firebase_core + firebase_messaging → Phase 4 native push (replaces FCM web-push)
   # pusher_channels_flutter       → Phase 2/4 real-time session timer (reuses existing Pusher app)
-  # image_picker                  → Phase 3 profile image upload (Cloudinary signed)
 
 dev_dependencies:
   flutter_test:

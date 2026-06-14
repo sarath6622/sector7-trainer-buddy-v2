@@ -4,6 +4,34 @@
 
 ---
 
+## Flutter Migration — Phase 0: Mobile Auth Backend (2026-06-13)
+
+Unblocks the scaffolded Flutter app (`mobile/`). Scope = **auth core only** (login/refresh/logout + Bearer shim + middleware); signed upload / Pusher auth / FCM platform deferred. See ADR-042 and `docs/flutter-migration-plan.md`.
+
+### Schema
+
+- New `MobileRefreshToken` model + `User.mobileRefreshTokens` relation; migration `20260613073832_add_mobile_refresh_token` applied to Neon (`migrate dev`) **and** local Docker (`migrate deploy`). Additive only.
+
+### Backend
+
+- `src/lib/mobile-auth.ts` (new, pure) — jose HS256 sign/verify for access (~15m) + refresh (~30d) tokens, `sessionFromAccessToken` (rebuilds the NextAuth `Session` shape), `hashToken`, `isMobileAllowed`. Signed with `MOBILE_JWT_SECRET`.
+- `getServerSession()` (`src/lib/auth.ts`) made Bearer-aware — reads `Authorization: Bearer` first, falls back to cookie. **All 159 routes accept a mobile token with zero call-site changes.** Exported `computePrimaryRole`.
+- `src/app/api/mobile/auth/{login,refresh,logout}/route.ts` + co-located `_issue.ts` (token issue/rotate helpers). Login reuses the web bcrypt check, rejects admin-only accounts (403 MOBILE_NOT_ALLOWED). Refresh rotates with **reuse detection** (revoked-token replay revokes the whole `familyId`). Logout is Bearer-authed + idempotent (`?all=true` = logout everywhere). Audit logs `MOBILE_LOGIN` / `MOBILE_LOGOUT`.
+- `src/middleware.ts` — `/api/mobile/auth` public; `/api/*` requests with a Bearer header pass through to handlers.
+- Env: `MOBILE_JWT_SECRET` added to `.env`, `.env.local`, `.env.example`.
+
+### Flutter (`mobile/`)
+
+- `api_client.dart` — one-shot refresh-on-401 + retry, concurrency-guarded; `revokeRefreshToken` (loop-safe server logout).
+- `auth_repository.dart` — `logout()` now revokes server-side before clearing the keychain.
+
+### Tests / verification
+
+- `tests/unit/mobile-auth.test.ts` (10 tests, node env for jose). Repaired pre-existing drift in `tests/unit/auth.test.ts` (mock used `findUnique`/single-`role`; code uses `findFirst`/`roles[]`). 25 tests green; lint + type-check clean.
+- End-to-end curl against local DB: login → Bearer `/api/auth/me` + `/api/client/dashboard` (200) → refresh rotation → reuse-revokes-family (401) → admin rejected (403) → wrong password (401) → logout (200) → web cookie path still redirects to `/login`.
+
+---
+
 ## Phase 23 — Kickboxing Sessions & Attendance (2026-04-24)
 
 ### S7-KB-01: Schema

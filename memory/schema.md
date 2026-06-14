@@ -1072,3 +1072,46 @@ enum SecondaryMetric {
 DEFAULT ARRAY[]::TEXT[]`, backfills it from the old single `pinnedPanel`
   (one-element array where set), then drops `pinnedPanel`. Applied to local
   Docker and Neon.
+
+## Mobile Refresh Tokens (2026-06-13, Flutter Phase 0)
+
+### New Model: MobileRefreshToken
+
+Server-side store for the Flutter app's rotating refresh tokens. The raw token is
+**never** stored — only its sha256 hash. One row = one refresh token in a rotation
+chain (`familyId`). On rotation the presented row is revoked (`revokedAt`,
+`replacedByJti`) and a successor row is created in the same family. Presenting an
+already-revoked token (reuse) revokes the whole family. See ADR-042.
+
+```prisma
+model MobileRefreshToken {
+  id            String    @id @default(cuid())
+  userId        String
+  jti           String    @unique   // matches the refresh JWT's jti claim
+  tokenHash     String              // sha256(rawRefreshToken) hex
+  familyId      String              // rotation chain; reuse revokes the whole family
+  platform      String?             // "ios" | "android"
+  deviceId      String?
+  userAgent     String?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  replacedByJti String?
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([familyId])
+  @@map("mobile_refresh_tokens")
+}
+```
+
+`User` gains `mobileRefreshTokens MobileRefreshToken[]`.
+
+### Migration
+
+- `20260613073832_add_mobile_refresh_token` — creates `mobile_refresh_tokens` (+ unique
+  index on `jti`, indexes on `userId`/`familyId`, FK to `users` ON DELETE CASCADE).
+  Additive only. Applied to Neon (via `prisma migrate dev`, which reads `.env`) **and**
+  local Docker (via `prisma migrate deploy` with the local `DATABASE_URL`). ⚠️ Note the
+  tooling footgun: Prisma reads `.env` (Neon); the Next dev server reads `.env.local`
+  (local Docker). `prisma migrate dev` therefore hits Neon by default — apply to local
+  Docker explicitly to keep both in sync.

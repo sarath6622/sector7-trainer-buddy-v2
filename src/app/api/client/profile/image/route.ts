@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import * as profileImageService from '@/services/profile-image.service';
 
 export async function GET(_request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.roles ?? [session.user.role], ['CLIENT'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['CLIENT'], { matchAllRoles: true });
 
     const result = await profileImageService.getProfileImageUrl(
       session.user.id,
@@ -24,10 +21,7 @@ export async function GET(_request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.roles ?? [session.user.role], ['CLIENT'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['CLIENT'], { matchAllRoles: true });
 
     const form = await request.formData();
     const file = form.get('file');
@@ -58,10 +52,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(_request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.roles ?? [session.user.role], ['CLIENT'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['CLIENT'], { matchAllRoles: true });
 
     const result = await profileImageService.removeProfileImage({
       userId: session.user.id,

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { submitRescheduleRequestSchema, listRescheduleRequestsSchema } from '@/lib/validators';
 import * as rescheduleService from '@/services/reschedule.service';
@@ -10,10 +10,7 @@ import * as rescheduleService from '@/services/reschedule.service';
  */
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['CLIENT'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['CLIENT']);
 
     const clientProfileId = session.user.clientProfileId;
     if (!clientProfileId) {
@@ -50,10 +47,7 @@ export async function POST(req: Request) {
  */
 export async function GET(req: Request) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['CLIENT'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['CLIENT']);
 
     const clientProfileId = session.user.clientProfileId;
     if (!clientProfileId) {

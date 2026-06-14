@@ -1,9 +1,19 @@
 # Sector 7 — Flutter Mobile Migration Plan
 
-> Status: Planning + Phase 1 scaffold complete
+> Status: Phase 1 scaffold complete · **Phase 0 auth core shipped (2026-06-13)** ·
+> **Phase 2 Client MVP started (2026-06-14)** — shell + dashboard + sessions + profile live
 > Scope decision (2026-06-11): **Mobile = Trainer + Client.** Admin & TV stay on the
 > existing Next.js web app. Next.js becomes the **shared backend** for web + mobile.
 > No business-logic rewrite — Flutter is a new client over the existing REST API.
+>
+> **Phase 0 done (2026-06-13):** mobile JWT auth (`/api/mobile/auth/{login,refresh,logout}`),
+> a Bearer-aware `getServerSession()` (all routes accept a mobile token, zero call-site
+> changes), middleware Bearer passthrough, and a rotating `MobileRefreshToken` store with
+> reuse detection. Flutter auto-refresh-on-401 + server logout wired. Verified end-to-end
+> against the local DB (login → Bearer `/api/client/dashboard` → refresh rotation →
+> reuse-revokes-family → admin rejected → web cookie path intact). Remaining Phase 0 items
+> (Pusher Bearer auth, FCM platform field) are deferred to their phases; **signed
+> upload is now done (ADR-044)**.
 
 ---
 
@@ -105,8 +115,10 @@ returned session user exactly as today.
 - **FCM device tokens:** native tokens register through the existing `FcmToken` model /
   notification endpoints. Confirm the register/unregister route accepts a `platform`
   field (ios/android) and Bearer auth.
-- **Cloudinary signed upload:** add `POST /api/mobile/upload/sign` returning a signature
-  so the app uploads directly (don't ship the API secret to the client).
+- **Cloudinary signed upload:** ✅ **done (2026-06-14, ADR-044)** — `POST /api/mobile/upload/sign`
+  returns branch-scoped signed params (`kind: profile|progress`); the app uploads directly to
+  Cloudinary, secret stays server-side. Verified end-to-end against real Cloudinary. Profile-image
+  can alternatively reuse the existing server-proxy `POST /api/client/profile/image`.
 - **CORS:** allow the app origins for any browser-context calls; native dio calls are
   not CORS-bound but staging/web-debug builds are.
 - **Pusher auth:** private/presence channels need an auth endpoint that accepts Bearer.
@@ -119,18 +131,44 @@ Each screen maps to existing endpoints — no new business logic, just presentat
 
 ### Client (Phase 2 — read-heavy, lowest risk)
 
-| Screen                                  | Endpoint(s)                                          |
-| --------------------------------------- | ---------------------------------------------------- |
-| Dashboard (counts, next/active session) | `GET /api/client/dashboard`                          |
-| Sessions list & detail                  | `GET /api/client/sessions`, `/api/sessions/[id]`     |
-| Live session timer                      | Pusher channel + session detail                      |
-| Workout history                         | `GET /api/client/workouts`                           |
-| Progress charts                         | `GET /api/client/progress` (+ `/charts`) → fl_chart  |
-| Badges                                  | `GET /api/client/badges`                             |
-| Mark unavailability                     | `GET/POST /api/client/unavailability`                |
-| Reschedule requests                     | `GET/POST /api/client/reschedule-requests`           |
-| Community feed (if in scope)            | `GET /api/community/feed`, posts/react/comments      |
-| Settings / profile image                | `GET/PUT /api/admin/users/[id]` shape, signed upload |
+> **Phase 2 nearly complete (2026-06-14):** bottom-nav shell (Home/Sessions/
+> Progress/Profile) + enriched dashboard + sessions list/detail + profile +
+> Progress charts (fl_chart) + workout history + **badges** + **availability
+> (mark/remove)** + **reschedule (list + submit)** shipped and verified live
+> against the local backend (incl. the app's first writes — unavailability
+> POST/DELETE verified E2E). The Cloudinary **signed-upload backend is now done**
+> (ADR-044); only the **settings/profile-image UI** remains (wire `image_picker`).
+>
+> Also fixed an auth gotcha surfaced here (**ADR-043**): client routes returned
+> `403` for an _expired_ token, so the app's refresh-on-401 never fired (stuck on
+> "Forbidden" until re-login). Now `requireRole()` returns **401** for no/expired
+> session vs **403** for wrong role across all `/api/client/*`; the app also
+> proactively refreshes on token `exp`. Trainer/admin routes migrate in Phase 3.
+
+| Screen                                  | Endpoint(s)                                                      | Status        |
+| --------------------------------------- | ---------------------------------------------------------------- | ------------- |
+| Dashboard (counts, next/active session) | `GET /api/client/dashboard`                                      | ✅ done       |
+| Sessions list & detail                  | `GET /api/client/sessions`, `/api/client/sessions/[id]`          | ✅ done       |
+| Profile (info + sign out)               | from `/api/auth/me` session                                      | ✅ done       |
+| Live session timer                      | Pusher channel + session detail                                  | ☐ Phase 4     |
+| Workout history                         | `GET /api/client/workouts`                                       | ✅ done       |
+| Progress charts                         | `GET /api/client/progress` (+ `/charts`) → fl_chart              | ✅ done       |
+| Badges                                  | `GET /api/client/badges`                                         | ✅ done       |
+| Mark unavailability                     | `GET/POST/DELETE /api/client/unavailability`                     | ✅ done       |
+| Reschedule requests                     | `GET/POST /api/client/reschedule-requests`                       | ✅ done       |
+| Community feed (if in scope)            | `GET /api/community/feed`, posts/react/comments                  | ☐ TBD         |
+| Profile image (avatar)                  | proxy `GET/POST/DELETE /api/client/profile/image` (image_picker) | ✅ done       |
+| Settings (edit name/phone/etc.)         | `PUT` user shape                                                 | ☐ not started |
+
+> **Phase 3 started early (2026-06-14):** the **shared workout logger** (ADR-036 —
+> the session's client _or_ trainer may save) was built **client-first, online**,
+> since it unlocks client self-logging in the already-shipped Client app. The
+> client session-detail now has a **Log/Edit workout** button → logger screen
+> (exercise-library search/picker, add/edit/remove exercises + sets, mark-complete,
+> full-snapshot save to `POST /api/sessions/[id]/workouts`). Verified E2E: a client
+> token writes (201), idempotent net-zero re-post. **Still online-only** — the
+> offline Drift queue (§5) is the next increment and is required by rule #3 before
+> gym-floor use. The Trainer shell will reuse this same logger.
 
 ### Trainer (Phase 3 — includes the hard offline path)
 
@@ -228,22 +266,24 @@ flutter run --dart-define=API_BASE_URL=http://localhost:3000
 
 ## 9. Phases & effort (1–2 Flutter devs)
 
-| Phase | Work                                                                                 | Est.            |
-| ----- | ------------------------------------------------------------------------------------ | --------------- |
-| 0     | Backend mobile auth + Bearer shim, signed upload, Pusher/FCM auth                    | 2–3 wks         |
-| 1     | Flutter foundation (**scaffolded**) — finish design system, dio refresh, CI, flavors | 2–3 wks         |
-| 2     | Client role MVP → TestFlight/Internal                                                | 3–4 wks         |
-| 3     | Trainer role + **offline workout logger**                                            | 4–6 wks         |
-| 4     | Real-time + native push hardening                                                    | 1–2 wks         |
-| 5     | Store launch (App Store + Play)                                                      | 1–2 wks         |
-| —     | **Trainer + Client mobile, end-to-end**                                              | **~4–5 months** |
+| Phase | Work                                                                                                      | Est.            |
+| ----- | --------------------------------------------------------------------------------------------------------- | --------------- |
+| 0     | Backend mobile auth + Bearer shim **(✅ done)** + signed upload **(✅ done)**; Pusher/FCM auth (deferred) | 2–3 wks         |
+| 1     | Flutter foundation (**scaffolded**) — finish design system, dio refresh, CI, flavors                      | 2–3 wks         |
+| 2     | Client role MVP → TestFlight/Internal **(in progress: shell+dashboard+sessions+profile done)**            | 3–4 wks         |
+| 3     | Trainer role + **offline workout logger**                                                                 | 4–6 wks         |
+| 4     | Real-time + native push hardening                                                                         | 1–2 wks         |
+| 5     | Store launch (App Store + Play)                                                                           | 1–2 wks         |
+| —     | **Trainer + Client mobile, end-to-end**                                                                   | **~4–5 months** |
 
 ---
 
 ## 10. Open risks / decisions
 
-- **Refresh-token strategy** — rotating refresh + denylist vs `tokenVersion` on `User`.
-  Pick one in Phase 0.
+- ~~**Refresh-token strategy**~~ — **RESOLVED (2026-06-13):** dedicated `MobileRefreshToken`
+  table with rotation chains (`familyId`) + reuse detection (presenting a revoked token
+  revokes the whole family). Per-device revoke + `?all=true` logout-everywhere. Raw tokens
+  are never stored (only sha256 hash).
 - **Offline write idempotency** — server upsert keyed on `localId` is required for safe
   retries; confirm `POST /api/sessions/[id]/workouts` supports it.
 - **Community module** — in scope for mobile or web-only? (not yet decided)

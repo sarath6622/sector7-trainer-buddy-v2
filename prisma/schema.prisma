@@ -284,6 +284,7 @@ model User {
   auditLogsAsActor      AuditLog[]        @relation("AuditActor")
   notificationsReceived NotificationLog[] @relation("NotificationRecipient")
   fcmTokens             FcmToken[]
+  mobileRefreshTokens   MobileRefreshToken[]
   shiftSwapRequests     ShiftSwap[]       @relation("SwapRequests")
 
   @@index([branchId])
@@ -1077,6 +1078,36 @@ model FcmToken {
 
   @@index([userId])
   @@map("fcm_tokens")
+}
+
+// ─── MOBILE REFRESH TOKENS ───────────────────────────
+
+/// Server-side store for the Flutter app's rotating refresh tokens (Phase 0
+/// mobile auth — see docs/flutter-migration-plan.md). The raw token is never
+/// stored; only its sha256 hash. Each row is one refresh token in a rotation
+/// chain identified by `familyId`. On rotation the current row is revoked and
+/// a successor row is created with the same `familyId`. Presenting an already
+/// revoked token (reuse) revokes the entire family — the standard
+/// refresh-token reuse-detection defense.
+model MobileRefreshToken {
+  id            String    @id @default(cuid())
+  userId        String
+  jti           String    @unique // matches the `jti` claim in the refresh JWT
+  tokenHash     String // sha256(rawRefreshToken) hex — never store the token itself
+  familyId      String // rotation chain id; reuse detection revokes the whole family
+  platform      String? // "ios" | "android"
+  deviceId      String?
+  userAgent     String?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  replacedByJti String? // jti of the successor token after rotation
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("mobile_refresh_tokens")
 }
 
 // ─── NOTIFICATIONS ───────────────────────────────────

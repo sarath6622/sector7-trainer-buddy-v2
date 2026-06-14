@@ -14,6 +14,7 @@
 - **Pagination:** `{ data: T[], pagination: { page, pageSize, total, totalPages } }`
 - **All dates:** ISO 8601 strings
 - **All IDs:** CUID strings
+- **Auth status codes (ADR-043):** `401 UNAUTHORIZED` = no/expired/invalid session (re-authenticate or refresh the token); `403 FORBIDDEN` = authenticated but role/branch not allowed. Use `requireRole(allowedRoles, { matchAllRoles? })` from `@/lib/auth` — it returns the session or throws the right `AppError`, which the route's `catch → toErrorResponse` maps to the status. **Do not** revert to the old conflated `if (!session || !hasRole(...)) → 403`: it makes an expired mobile token look like a permission error, defeating the app's refresh-on-401. Migrated for all `/api/client/*` routes; trainer/admin routes still conflate (→403) until their phases.
 
 ---
 
@@ -1013,3 +1014,54 @@ Auth: channel is public. Payloads are non-sensitive (first/last name + lift
 weight — same as the wall display already broadcasts via polling). The TV
 client auths to the polling endpoints with its bearer token; the Pusher
 channel is just a notification stream.
+
+---
+
+## Mobile Auth Routes — Flutter app (2026-06-13, Phase 0; see ADR-042)
+
+Native clients can't use NextAuth cookies + CSRF, so the Flutter app authenticates
+with JWTs. These three routes are the **only** mobile-specific endpoints — every other
+route is shared with web and accepts a mobile token because `getServerSession()` is now
+Bearer-aware (it returns the same session shape from either a cookie or an
+`Authorization: Bearer <accessToken>` header). Tokens are signed with `MOBILE_JWT_SECRET`
+(distinct from `NEXTAUTH_SECRET`).
+
+```
+POST /api/mobile/auth/login
+  body: { email, password, platform?: "ios"|"android", deviceId?: string }
+  → { data: { accessToken (JWT ~15m), refreshToken (JWT ~30d), user: {
+        id, email, role, branchId, firstName, lastName,
+        trainerProfileId, clientProfileId } } }
+  401 INVALID_CREDENTIALS · 403 MOBILE_NOT_ALLOWED (admin-only accounts)
+
+POST /api/mobile/auth/refresh
+  body: { refreshToken }
+  → { data: { accessToken, refreshToken } }      // rotates: old refresh is revoked
+  401 INVALID_REFRESH_TOKEN. Reuse of an already-revoked token revokes the whole
+  rotation family (familyId) — forces a fresh login.
+
+POST /api/mobile/auth/logout   (Authorization: Bearer <accessToken>)
+  body: { refreshToken? }   query: ?all=true
+  → { data: { success: true, revoked: <count> } }   // idempotent
+```
+
+Calling any shared route from mobile: send `Authorization: Bearer <accessToken>`. The
+middleware lets `/api/*` requests carrying a Bearer header through; the handler enforces
+RBAC + branch scoping via `getServerSession()` exactly as for web. On `/api/client/*`
+(migrated to `requireRole`, ADR-043) a missing/expired token yields **401 UNAUTHORIZED**
+(→ the app silently refreshes); a wrong role yields **403 FORBIDDEN**.
+
+### Mobile signed upload (2026-06-14, Phase 0 §3.3; see ADR-044)
+
+```
+POST /api/mobile/upload/sign   (Authorization: Bearer <accessToken>)
+  body: { kind?: 'profile' | 'progress' }   // default 'profile'
+  → { data: { cloudName, apiKey, timestamp, folder, publicId?, signature, uploadUrl } }
+```
+
+Returns Cloudinary **signed-upload** params (secret stays server-side). The app then POSTs
+multipart `{ file, api_key, timestamp, folder, public_id?, signature }` to `uploadUrl`
+(Cloudinary) and persists the returned `secure_url` — avatar via `POST /api/client/profile/image`
+(or the proxy upload there), progress photos via the progress POST. Folder is branch-scoped
+server-side; `profile` pins `public_id=userId` (overwrites the avatar), `progress` auto-names.
+Mobile roles only.

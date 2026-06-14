@@ -602,3 +602,57 @@ Exercises present in `exercises` but absent from `dirtyExerciseIds` are left unt
 
 1. **Per-set removal scoping.** The POST body gains optional `removedSetsByExerciseId: Record<string, number[]>` — per dirty exercise, the set numbers this device explicitly deleted. When present (the WorkoutLogger always sends it, even empty), set deletion inside a dirty exercise is limited to exactly those numbers, so set rows the writer never saw survive. Incoming sets still upsert by `setNumber` (same-set conflicts stay last-writer-wins per set). Omitted → old delete-by-absence, so pre-per-set bundles and legacy callers are unaffected.
 2. **Draft rows count as unsaved (client only).** The "only persist complete sets" change (2026-06-10) made half-typed rows invisible to the payload-hash dirty check, so the 10s poll / Pusher refetch rehydrated over them mid-type — the reported "typed workout gets deleted" bug. `hasDraftRows()` now flags half-typed sets and extra blank rows; it extends `hasUnsaved` (poll pause + rehydration guard) while the auto-save debounce stays keyed to the saveable-payload hash so unchanged payloads are never re-POSTed.
+
+## ADR-042: Mobile JWT Auth via a Bearer-Aware `getServerSession()` (Flutter Phase 0)
+
+**Status:** Accepted (2026-06-13). Implements Phase 0 of `docs/flutter-migration-plan.md`.
+
+**Context:** The Flutter app (Trainer + Client) is a new client over the existing Next.js backend. NextAuth's auth is cookie + CSRF, which native apps can't ride. We needed mobile auth **without** forking the 159 route handlers or touching the web auth path.
+
+**Decision:**
+
+1. **Three new routes** `POST /api/mobile/auth/{login,refresh,logout}` issue/rotate/revoke JWTs (access ~15m, refresh ~30d), signed with a separate `MOBILE_JWT_SECRET`. Login reuses the web credential check (case-insensitive email, `isActive`/`deletedAt`, bcrypt) and **rejects admin-only accounts** (`isMobileAllowed` — admins/TV use web). Token logic lives in `src/lib/mobile-auth.ts`, kept pure (jose + crypto, no `next/headers`) so it's unit-testable.
+2. **One shim, zero route churn:** `getServerSession()` (`src/lib/auth.ts`) now reads the request's `Authorization` header first — a `Bearer` token is verified and rebuilt into the **identical** NextAuth `Session` shape; otherwise it falls back to the cookie path. A Bearer that's present-but-invalid returns null (no cookie fallback). RBAC, branch scoping, and audit logging are unchanged because they read the same session-user.
+3. **Middleware** (`src/middleware.ts`): `/api/mobile/auth` is public; any `/api/*` request carrying a `Bearer` header is passed through to the handler (which enforces auth). Middleware does **not** verify the JWT — handlers do.
+4. **Refresh-token store** = `MobileRefreshToken` table (see schema.md): rotating chains keyed by `familyId`, sha256-hashed tokens (raw never stored), with **reuse detection** — presenting a revoked token revokes the entire family. Per-device revoke at logout; `?all=true` logs out everywhere.
+
+**Flutter side:** `api_client.dart` does one-shot refresh-on-401 + retry (concurrency-guarded); `auth_repository.logout()` revokes server-side before clearing the keychain.
+
+**Consequences / out of scope:** Signed Cloudinary upload, Pusher Bearer auth, and the FCM `platform` field are deferred to their phases. No login rate-limiting yet (web login isn't rate-limited either — shared follow-up). Access-token claims (role/branch) can be up to ~15m stale; acceptable given the short TTL.
+
+**Verified end-to-end (local DB):** login → Bearer `/api/auth/me` + `/api/client/dashboard` (200) → refresh rotation → reuse-revokes-family (401) → admin rejected (403) → web cookie path still redirects unauthenticated to `/login`.
+
+## ADR-043: Auth Routes Return 401 for No/Expired Session, 403 Only for Wrong Role (`requireRole`)
+
+**Status:** Accepted (2026-06-14). Builds on ADR-042; first applied across `/api/client/*` (Flutter Phase 2).
+
+**Context:** Every data route guarded with `if (!session || !hasRole(...)) return 403 FORBIDDEN`, conflating two distinct failures. The Flutter `ApiClient` silently refreshes only on **401**. So when a 15-minute mobile access token expired, `getServerSession()` returned null, the route answered **403**, the refresh-on-401 never fired, and the user got stuck on a "Forbidden" screen until a manual re-login (reproduced 2026-06-14: dashboard/list 200 while token valid, then session-detail 403 minutes later after expiry).
+
+**Decision:** Split the guard via a single helper `requireRole(allowedRoles, { matchAllRoles? })` in `src/lib/auth.ts` (pure core `assertSessionRole` for unit tests):
+
+- no session → throw `AppError('UNAUTHORIZED', 401)` → **401**
+- session lacks an allowed role → throw `AppError('FORBIDDEN', 403)` → **403**
+- else return the session (RBAC/branch-scoping/audit unchanged).
+
+`matchAllRoles` preserves the two pre-existing check styles (primary role vs `roles ?? [role]`). The route's existing `catch → toErrorResponse` maps the throw to the status — no new error plumbing. Mobile keeps a complementary **proactive refresh** (decode access-token `exp`, refresh before sending) so expiry is usually handled before a 401 even occurs; the backend 401 is the backstop and benefits any future client.
+
+**Scope:** Migrated all 24 guards across the 18 `/api/client/*` routes. The ~91 trainer/admin/shared routes still return 403-for-unauthenticated; they migrate to `requireRole` in Phase 3 (route-by-route, per the migration plan). **Web is unaffected** — it calls these with a valid cookie (→200) and has no global 401 handler, so the rare unauthenticated case simply returns a more-correct 401.
+
+**Verified (local, minted tokens):** expired client token → 401; valid client → 200; valid trainer on a client route → 403; plus `assertSessionRole` unit tests (401 vs 403 vs primary/all-roles) and `mobile/test/jwt_test.dart` for the client-side `exp` check.
+
+## ADR-044: Cloudinary Signed Direct Upload for Mobile (`POST /api/mobile/upload/sign`)
+
+**Status:** Accepted (2026-06-14). Closes the deferred Phase 0 item (migration plan §3.3).
+
+**Context:** Native apps need to upload images (avatars, progress photos). The web path proxies bytes through Next (`POST /api/client/profile/image` → `uploadProfileImage` → Cloudinary SDK), keeping the API secret server-side. That proxy is fine for one small avatar with a baked face-crop transform, but proxying many/large **progress photos** through the server wastes bandwidth, and we never want to ship `CLOUDINARY_API_SECRET` to the client.
+
+**Decision:** Add `POST /api/mobile/upload/sign` (mobile roles only, Bearer-aware via `requireRole([...MOBILE_ALLOWED_ROLES], { matchAllRoles: true })`). It returns Cloudinary **signed-upload params** — `{ cloudName, apiKey, timestamp, folder, publicId?, signature, uploadUrl }` — computed by `signUpload()` in `src/lib/cloudinary.ts` using `cloudinary.utils.api_sign_request(paramsToSign, apiSecret)`. The app echoes those params + the file + `api_key` + `signature` straight to Cloudinary; the secret only seeds the signature and never leaves the server. Key choices:
+
+- **Folder is server-decided + branch-scoped** (`sector7/{profile-images|progress-photos}/{branchId}`) — a client can't write outside their branch's space.
+- **`kind: 'profile'`** pins `public_id = userId` (re-uploads overwrite the one avatar); **`kind: 'progress'`** omits public_id (Cloudinary auto-names, multiple photos).
+- Only the echoed params (`folder`, `timestamp`, `public_id?`) are signed — they must match exactly or Cloudinary returns "Invalid Signature".
+- The caller still **persists the resulting `secure_url`** afterwards: avatars via the existing profile-image route (which also applies the face-crop transform + audit), progress photos via the progress POST. The sign endpoint does **not** touch the DB.
+
+**Consequences:** Profile-image MVP can use _either_ path — the existing server-proxy route (transform + audit, simplest) or this signed upload. Progress photos and Phase 3 media use the signed path. No rate-limiting on the sign endpoint yet (cheap, auth-gated). Validation via `signUploadSchema` (safeParse → 400, since `toErrorResponse` maps only `AppError`).
+
+**Verified end-to-end (local + real Cloudinary):** minted client token → `POST /api/mobile/upload/sign` (200, branch-scoped folder) → direct multipart upload to `api.cloudinary.com` with the signed params (**200, real `secure_url`**) → asset destroyed (cleanup ok). Unit tests in `tests/unit/cloudinary-sign.test.ts` (folder/public_id by kind, sha1 signature shape, secret-not-leaked, signature recomputation).

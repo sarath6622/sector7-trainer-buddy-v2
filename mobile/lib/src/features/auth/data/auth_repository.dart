@@ -38,7 +38,14 @@ class AuthRepository {
     return AuthUser.fromJson(data['user'] as Map<String, dynamic>);
   }
 
-  Future<void> logout() => _tokens.clear();
+  /// Revokes the refresh token server-side (best-effort) then clears the local
+  /// keychain. Server revocation is what makes the token unusable even if it
+  /// was captured; clearing local storage always happens regardless.
+  Future<void> logout() async {
+    final refreshToken = await _tokens.readRefreshToken();
+    await _api.revokeRefreshToken(refreshToken);
+    await _tokens.clear();
+  }
 
   Future<bool> hasStoredSession() async =>
       (await _tokens.readAccessToken()) != null;

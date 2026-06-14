@@ -5,7 +5,7 @@ import { hasRole } from '@/lib/auth';
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     user: {
-      findUnique: vi.fn(),
+      findFirst: vi.fn(),
       update: vi.fn(),
     },
   },
@@ -20,7 +20,9 @@ import { prisma } from '@/lib/prisma';
 import { compare } from 'bcryptjs';
 
 // We test the authorize logic by importing authOptions and calling the provider
-import { authOptions } from '@/lib/auth';
+import { authOptions, assertSessionRole } from '@/lib/auth';
+import { AppError } from '@/lib/errors';
+import type { Session } from 'next-auth';
 
 const mockedPrisma = vi.mocked(prisma);
 const mockedCompare = vi.mocked(compare);
@@ -71,13 +73,13 @@ describe('authorize (credentials provider)', () => {
   });
 
   it('returns null when user not found', async () => {
-    mockedPrisma.user.findUnique.mockResolvedValue(null);
+    mockedPrisma.user.findFirst.mockResolvedValue(null);
     const result = await authorize({ email: 'test@test.com', password: 'pass123' });
     expect(result).toBeNull();
   });
 
   it('returns null when user is inactive', async () => {
-    mockedPrisma.user.findUnique.mockResolvedValue({
+    mockedPrisma.user.findFirst.mockResolvedValue({
       id: 'u1',
       email: 'test@test.com',
       passwordHash: 'hashed',
@@ -86,6 +88,7 @@ describe('authorize (credentials provider)', () => {
       firstName: 'Test',
       lastName: 'User',
       role: 'CLIENT',
+      roles: ['CLIENT'],
       branchId: 'b1',
       phone: null,
       profileImageUrl: null,
@@ -101,7 +104,7 @@ describe('authorize (credentials provider)', () => {
   });
 
   it('returns null when user is soft-deleted', async () => {
-    mockedPrisma.user.findUnique.mockResolvedValue({
+    mockedPrisma.user.findFirst.mockResolvedValue({
       id: 'u1',
       email: 'test@test.com',
       passwordHash: 'hashed',
@@ -110,6 +113,7 @@ describe('authorize (credentials provider)', () => {
       firstName: 'Test',
       lastName: 'User',
       role: 'CLIENT',
+      roles: ['CLIENT'],
       branchId: 'b1',
       phone: null,
       profileImageUrl: null,
@@ -125,7 +129,7 @@ describe('authorize (credentials provider)', () => {
   });
 
   it('returns null when password is incorrect', async () => {
-    mockedPrisma.user.findUnique.mockResolvedValue({
+    mockedPrisma.user.findFirst.mockResolvedValue({
       id: 'u1',
       email: 'test@test.com',
       passwordHash: 'hashed',
@@ -134,6 +138,7 @@ describe('authorize (credentials provider)', () => {
       firstName: 'Test',
       lastName: 'User',
       role: 'CLIENT',
+      roles: ['CLIENT'],
       branchId: 'b1',
       phone: null,
       profileImageUrl: null,
@@ -160,6 +165,7 @@ describe('authorize (credentials provider)', () => {
       firstName: 'John',
       lastName: 'Trainer',
       role: 'TRAINER',
+      roles: ['TRAINER'],
       branchId: 'b1',
       phone: null,
       profileImageUrl: null,
@@ -171,7 +177,7 @@ describe('authorize (credentials provider)', () => {
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockedPrisma.user.findUnique.mockResolvedValue(mockUser as any);
+    mockedPrisma.user.findFirst.mockResolvedValue(mockUser as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockedCompare.mockResolvedValue(true as any);
     mockedPrisma.user.update.mockResolvedValue({} as never);
@@ -183,6 +189,7 @@ describe('authorize (credentials provider)', () => {
       email: 'trainer@sector7.com',
       name: 'John Trainer',
       role: 'TRAINER',
+      roles: ['TRAINER'],
       branchId: 'b1',
       firstName: 'John',
       lastName: 'Trainer',
@@ -201,6 +208,7 @@ describe('authorize (credentials provider)', () => {
       firstName: 'Test',
       lastName: 'User',
       role: 'CLIENT',
+      roles: ['CLIENT'],
       branchId: 'b1',
       phone: null,
       profileImageUrl: null,
@@ -212,7 +220,7 @@ describe('authorize (credentials provider)', () => {
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockedPrisma.user.findUnique.mockResolvedValue(mockUser as any);
+    mockedPrisma.user.findFirst.mockResolvedValue(mockUser as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockedCompare.mockResolvedValue(true as any);
     mockedPrisma.user.update.mockResolvedValue({} as never);
@@ -286,5 +294,51 @@ describe('JWT and session callbacks', () => {
     expect(result.user.branchId).toBe('b1');
     expect(result.user.firstName).toBe('Admin');
     expect(result.user.lastName).toBe('User');
+  });
+});
+
+// ─── assertSessionRole: 401 (no session) vs 403 (wrong role) ────────────
+describe('assertSessionRole', () => {
+  function session(role: string, roles?: string[]): Session {
+    return {
+      expires: '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      user: { id: 'u1', role, roles: roles ?? [role], branchId: 'b1' } as any,
+    };
+  }
+
+  it('returns the session when the primary role is allowed', () => {
+    const s = session('CLIENT');
+    expect(assertSessionRole(s, ['CLIENT'])).toBe(s);
+  });
+
+  it('throws 401 UNAUTHORIZED when there is no session (expired/invalid token)', () => {
+    try {
+      assertSessionRole(null, ['CLIENT']);
+      throw new Error('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(AppError);
+      expect((e as AppError).code).toBe('UNAUTHORIZED');
+      expect((e as AppError).statusCode).toBe(401);
+    }
+  });
+
+  it('throws 403 FORBIDDEN when authenticated but the role is not allowed', () => {
+    try {
+      assertSessionRole(session('TRAINER'), ['CLIENT']);
+      throw new Error('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(AppError);
+      expect((e as AppError).code).toBe('FORBIDDEN');
+      expect((e as AppError).statusCode).toBe(403);
+    }
+  });
+
+  it('default checks only the primary role; matchAllRoles widens to every held role', () => {
+    const multi = session('TRAINER', ['TRAINER', 'CLIENT']);
+    // Primary is TRAINER → a CLIENT-only route rejects by default…
+    expect(() => assertSessionRole(multi, ['CLIENT'])).toThrow(AppError);
+    // …but profile-style routes opt into all-roles and allow it.
+    expect(assertSessionRole(multi, ['CLIENT'], { matchAllRoles: true })).toBe(multi);
   });
 });

@@ -640,6 +640,12 @@ export const workoutCalendarQuerySchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, 'Must be YYYY-MM format'),
 });
 
+// ─── MOBILE: SIGNED UPLOAD ──────────────────────────
+
+export const signUploadSchema = z.object({
+  kind: z.enum(['profile', 'progress']).default('profile'),
+});
+
 // ─── NOTIFICATIONS ───────────────────────────────────
 
 export const listNotificationsSchema = paginationSchema.extend({
