@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../client/data/client_extras_models.dart';
 import '../../client/data/client_models.dart';
+import '../../client/data/progress_models.dart';
 import 'trainer_models.dart';
 
 /// Access to the Trainer-role endpoints. Each call maps 1:1 to an existing
@@ -76,6 +78,90 @@ class TrainerRepository {
   /// POST /api/trainer/sessions/[id]/no-show — mark the client a no-show.
   Future<void> markNoShow(String id) =>
       _api.post('/trainer/sessions/$id/no-show');
+
+  /// Client-detail snapshot: recent workout history + progress + badges, fetched
+  /// in parallel. Hits the three `/api/trainer/clients/[id]/*` read routes.
+  Future<TrainerClientDetail> clientDetail(String clientProfileId) async {
+    final results = await Future.wait([
+      _api.get('/trainer/clients/$clientProfileId/workout-history',
+          query: {'limit': 10}),
+      _api.get('/trainer/clients/$clientProfileId/progress'),
+      _api.get('/trainer/clients/$clientProfileId/badges'),
+    ]);
+    final history = (results[0] as List? ?? const [])
+        .whereType<Map>()
+        .map((m) => TrainerWorkoutSession.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+    final progress = (results[1] as List? ?? const [])
+        .whereType<Map>()
+        .map((m) => ProgressEntry.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+    final badges = results[2] is Map
+        ? BadgesData.fromJson(Map<String, dynamic>.from(results[2] as Map))
+        : const BadgesData(earned: [], locked: []);
+    return TrainerClientDetail(history: history, progress: progress, badges: badges);
+  }
+
+  // ── Leaves ──────────────────────────────────────────────────────────────
+
+  /// GET /api/trainer/leaves — the trainer's own leave requests.
+  Future<List<TrainerLeave>> leaves() async {
+    final data = await _api.get('/trainer/leaves') as List<dynamic>;
+    return data
+        .whereType<Map>()
+        .map((m) => TrainerLeave.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+  }
+
+  /// GET /api/trainer/leaves/balance — quota usage for [month] (default: current).
+  Future<LeaveBalance> leaveBalance({String? month}) async {
+    final data = await _api.get(
+      '/trainer/leaves/balance',
+      query: month != null ? {'month': month} : null,
+    ) as Map<String, dynamic>;
+    return LeaveBalance.fromJson(data);
+  }
+
+  /// POST /api/trainer/leaves — apply for a full-day leave over [startDate]..[endDate]
+  /// (inclusive, `YYYY-MM-DD`). Half-day/custom is deferred to the web console.
+  Future<void> applyLeave({
+    required String startDate,
+    required String endDate,
+    String? reason,
+  }) =>
+      _api.post('/trainer/leaves', body: {
+        'startDate': startDate,
+        'endDate': endDate,
+        'leaveType': 'FULL_DAY',
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      });
+
+  // ── Reschedule requests ───────────────────────────────────────────────────
+
+  /// GET /api/trainer/reschedule-requests — requests for this trainer's clients.
+  /// The `{ data, pagination }` envelope unwraps to the `data` array.
+  Future<List<TrainerRescheduleRequest>> rescheduleRequests({String? status}) async {
+    final data = await _api.get(
+      '/trainer/reschedule-requests',
+      query: status != null ? {'status': status} : null,
+    ) as List<dynamic>;
+    return data
+        .whereType<Map>()
+        .map((m) => TrainerRescheduleRequest.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+  }
+
+  /// PUT /api/trainer/reschedule-requests/[id]/approve.
+  Future<void> approveReschedule(String id, {String? notes}) => _api.put(
+        '/trainer/reschedule-requests/$id/approve',
+        body: notes != null && notes.isNotEmpty ? {'reviewNotes': notes} : null,
+      );
+
+  /// PUT /api/trainer/reschedule-requests/[id]/reject.
+  Future<void> rejectReschedule(String id, {String? notes}) => _api.put(
+        '/trainer/reschedule-requests/$id/reject',
+        body: notes != null && notes.isNotEmpty ? {'reviewNotes': notes} : null,
+      );
 }
 
 final trainerRepositoryProvider = Provider<TrainerRepository>(
@@ -106,4 +192,27 @@ final trainerClientsProvider =
 final trainerSessionProvider =
     FutureProvider.autoDispose.family<SessionDetail, String>(
   (ref, id) => ref.watch(trainerRepositoryProvider).session(id),
+);
+
+/// Client-detail snapshot (history + progress + badges), keyed by clientProfileId.
+final trainerClientDetailProvider =
+    FutureProvider.autoDispose.family<TrainerClientDetail, String>(
+  (ref, clientProfileId) =>
+      ref.watch(trainerRepositoryProvider).clientDetail(clientProfileId),
+);
+
+/// The trainer's own leave requests.
+final trainerLeavesProvider = FutureProvider.autoDispose<List<TrainerLeave>>(
+  (ref) => ref.watch(trainerRepositoryProvider).leaves(),
+);
+
+/// The trainer's leave-quota usage for the current month.
+final trainerLeaveBalanceProvider = FutureProvider.autoDispose<LeaveBalance>(
+  (ref) => ref.watch(trainerRepositoryProvider).leaveBalance(),
+);
+
+/// Pending reschedule requests for this trainer's clients (the actionable set).
+final trainerRescheduleProvider =
+    FutureProvider.autoDispose<List<TrainerRescheduleRequest>>(
+  (ref) => ref.watch(trainerRepositoryProvider).rescheduleRequests(status: 'PENDING'),
 );

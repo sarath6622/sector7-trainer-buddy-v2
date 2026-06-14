@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../auth/application/auth_controller.dart';
 
-/// Trainer "Profile" tab — identity + sign out. Kept minimal; trainers manage
-/// their own account details (name/phone, leaves) on the web console for now.
+/// Trainer "Profile" tab — identity, links to Leaves + Reschedule requests, and
+/// sign out. Name/phone editing still lives on the web console for trainers.
 class TrainerProfileScreen extends ConsumerWidget {
   const TrainerProfileScreen({super.key});
 
@@ -63,7 +64,28 @@ class TrainerProfileScreen extends ConsumerWidget {
               visualDensity: VisualDensity.compact,
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.beach_access_outlined),
+                  title: const Text('My Leaves'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/trainer/leaves'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.event_repeat_outlined),
+                  title: const Text('Reschedule Requests'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/trainer/reschedule-requests'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: () =>
                 ref.read(authControllerProvider.notifier).logout(),

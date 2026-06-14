@@ -67,9 +67,10 @@ class _ClientCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: next == null
-            ? null
-            : () => context.push('/trainer/sessions/${next.id}'),
+        onTap: () => context.push(
+          '/trainer/clients/${client.clientProfileId}',
+          extra: client,
+        ),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
