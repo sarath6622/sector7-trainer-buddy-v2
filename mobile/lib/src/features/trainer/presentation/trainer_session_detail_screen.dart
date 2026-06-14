@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/realtime/session_realtime.dart';
 import '../../../core/util/formatters.dart';
 import '../../client/data/client_models.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
@@ -21,8 +22,28 @@ class TrainerSessionDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _TrainerSessionDetailScreenState
-    extends ConsumerState<TrainerSessionDetailScreen> {
+    extends ConsumerState<TrainerSessionDetailScreen>
+    with SessionRealtimeMixin {
   bool _busy = false;
+
+  @override
+  String get realtimeSessionId => widget.sessionId;
+
+  @override
+  void onSessionChanged() =>
+      ref.invalidate(trainerSessionProvider(widget.sessionId));
+
+  @override
+  void initState() {
+    super.initState();
+    startSessionRealtime();
+  }
+
+  @override
+  void dispose() {
+    stopSessionRealtime();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +99,11 @@ class _TrainerSessionDetailScreenState
                   ],
                 ),
                 const SizedBox(height: 12),
+                if (s.status == SessionStatus.inProgress &&
+                    s.startedAt != null) ...[
+                  LiveSessionTimer(startedAt: s.startedAt!),
+                  const SizedBox(height: 12),
+                ],
                 _MetaRow(
                   icon: Icons.event,
                   text: Fmt.dayMonthYear(s.scheduledDate),

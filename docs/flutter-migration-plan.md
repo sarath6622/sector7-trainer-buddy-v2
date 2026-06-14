@@ -150,7 +150,7 @@ Each screen maps to existing endpoints — no new business logic, just presentat
 | Dashboard (counts, next/active session) | `GET /api/client/dashboard`                                      | ✅ done       |
 | Sessions list & detail                  | `GET /api/client/sessions`, `/api/client/sessions/[id]`          | ✅ done       |
 | Profile (info + sign out)               | from `/api/auth/me` session                                      | ✅ done       |
-| Live session timer                      | Pusher channel + session detail                                  | ☐ Phase 4     |
+| Live session timer                      | Pusher channel + session detail                                  | ✅ verified   |
 | Workout history                         | `GET /api/client/workouts`                                       | ✅ done       |
 | Progress charts                         | `GET /api/client/progress` (+ `/charts`) → fl_chart              | ✅ done       |
 | Badges                                  | `GET /api/client/badges`                                         | ✅ done       |
@@ -255,11 +255,29 @@ the trainer logs on the gym floor with flaky wifi.
 
 ## 6. Real-time & push
 
-- **Pusher:** reuse the existing app, cluster, channels, and event names. Subscribe on
-  the session/timer screens. Private channels authenticate via a Bearer-aware auth route.
+> **Phase 4 started (2026-06-14).** Live-timer real-time **built + unit-tested + DEVICE-VERIFIED**
+> on the iPhone 17 Pro sim (LIVE pill ticks; `WORKOUT_UPDATED` auto-refetch + self-echo skip
+> confirmed via the dev-server request log; server emit 200; `wss` handshake OK). FCM push track
+> is next — `GoogleService-Info.plist` parked at `mobile/ios/Runner/`, gated on a paid Apple
+> Developer account (push capability + APNs key).
+> Details + rationale in **ADR-045**. Correction to the sketch below: the existing channels are
+> **public** (no `private-`/`presence-`), so **no Pusher auth route is needed** — the app reuses
+> the same public `session-{id}` channel directly.
+
+- **Pusher (live session timer + workout sync):** reuse the existing app, cluster, public
+  channels, and event names. `core/realtime/pusher_service.dart` is a ref-counted, lazily-
+  connected wrapper (graceful no-op when `--dart-define=PUSHER_KEY/CLUSTER` are absent).
+  `core/realtime/session_realtime.dart` = the `SessionRealtimeMixin` (subscribe `session-{id}`,
+  refetch on `SESSION_STARTED`/`SESSION_ENDED`/`WORKOUT_UPDATED`, self-echo skipped) + the
+  `LiveSessionTimer` pill (ticks locally off `startedAt`). Wired into both the client and
+  trainer session-detail screens. To verify: set the Pusher app's `PUSHER_*` in `.env.local`
+  (server emit) + pass `--dart-define=PUSHER_KEY=… --dart-define=PUSHER_CLUSTER=…` (app subscribe).
 - **FCM:** `firebase_core` + `firebase_messaging`; iOS needs an APNs key in the Firebase
   console + push capability + background modes. Register the native token through the
-  existing `FcmToken` flow; the server already sends via `firebase-admin`.
+  existing `FcmToken` flow; the server already sends via `firebase-admin`. **Backend ready:**
+  `FcmToken.platform` added + `POST /api/notifications/fcm-token` accepts `{ token, platform }`
+  - an `apns` block in the send path (ADR-045). **Flutter client = next increment** (needs
+    `GoogleService-Info.plist` + APNs key).
 
 ---
 
@@ -321,7 +339,7 @@ flutter run --dart-define=API_BASE_URL=http://localhost:3000
 | 1     | Flutter foundation (**scaffolded**) — finish design system, dio refresh, CI, flavors                      | 2–3 wks         |
 | 2     | Client role MVP → TestFlight/Internal **(in progress: shell+dashboard+sessions+profile done)**            | 3–4 wks         |
 | 3     | Trainer role + **offline workout logger**                                                                 | 4–6 wks         |
-| 4     | Real-time + native push hardening                                                                         | 1–2 wks         |
+| 4     | Real-time + native push hardening **(started: live-timer built/tested; FCM next — ADR-045)**              | 1–2 wks         |
 | 5     | Store launch (App Store + Play)                                                                           | 1–2 wks         |
 | —     | **Trainer + Client mobile, end-to-end**                                                                   | **~4–5 months** |
 

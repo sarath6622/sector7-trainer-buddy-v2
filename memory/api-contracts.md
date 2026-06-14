@@ -433,6 +433,28 @@ Channel: user:{userId}
   → TRAINER_REASSIGNED { sessionId, newTrainerName, date, time }
 ```
 
+> Channel names on the wire are **hyphenated** (`session-{id}`, `user-{id}`) — Pusher
+> disallows colons (`src/lib/pusher.ts`). These are **public** channels (no
+> `private-`/`presence-` prefix, no `authEndpoint`), so the Flutter app subscribes with
+> the same `NEXT_PUBLIC_PUSHER_KEY`/cluster the web uses and needs **no auth endpoint**.
+
+### Mobile Push — FCM token register (Flutter Phase 4 — 2026-06-14)
+
+```
+POST   /api/notifications/fcm-token   → { token, platform? }  → { ok: true }   (platform: "ios"|"android"|"web")
+DELETE /api/notifications/fcm-token   → { token }             → { ok: true }
+```
+
+- Bearer-aware (`getServerSession` shim) so native tokens register with a mobile JWT;
+  web-push registers the same way and omits `platform`. Body validated by
+  `registerFcmTokenSchema` (400 on bad/extra). Upsert keyed on `token` (unique); `platform`
+  is `undefined` for web → no-op on update, null on create.
+- Send path (`src/lib/notifications.ts`) is one `sendEachForMulticast` to **all** of a
+  user's tokens; carries a cross-platform `notification` block + `webpush` (web) + `apns`
+  (`aps.sound=default`, native iOS) — each ignored on the wrong platform.
+- Real-time live timer: the Flutter session-detail screens subscribe to `session-{id}` and
+  refetch on `SESSION_STARTED`/`SESSION_ENDED`/`WORKOUT_UPDATED` (self-echo skipped). See ADR-045.
+
 ### Rest Timer (Phase 2 — 2026-05-10)
 
 ```

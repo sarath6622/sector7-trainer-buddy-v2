@@ -2,24 +2,52 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/realtime/session_realtime.dart';
 import '../../../core/util/formatters.dart';
 import '../data/client_models.dart';
 import '../data/client_repository.dart';
 import 'widgets/client_widgets.dart';
 import 'widgets/reschedule_sheet.dart';
 
-class SessionDetailScreen extends ConsumerWidget {
+class SessionDetailScreen extends ConsumerStatefulWidget {
   const SessionDetailScreen({super.key, required this.sessionId});
   final String sessionId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final detail = ref.watch(clientSessionProvider(sessionId));
+  ConsumerState<SessionDetailScreen> createState() =>
+      _SessionDetailScreenState();
+}
+
+class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen>
+    with SessionRealtimeMixin {
+  @override
+  String get realtimeSessionId => widget.sessionId;
+
+  @override
+  void onSessionChanged() =>
+      ref.invalidate(clientSessionProvider(widget.sessionId));
+
+  @override
+  void initState() {
+    super.initState();
+    startSessionRealtime();
+  }
+
+  @override
+  void dispose() {
+    stopSessionRealtime();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = ref.watch(clientSessionProvider(widget.sessionId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Session')),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(clientSessionProvider(sessionId).future),
+        onRefresh: () =>
+            ref.refresh(clientSessionProvider(widget.sessionId).future),
         child: detail.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => ListView(
@@ -27,7 +55,8 @@ class SessionDetailScreen extends ConsumerWidget {
               const SizedBox(height: 120),
               ErrorRetry(
                 message: e.toString(),
-                onRetry: () => ref.invalidate(clientSessionProvider(sessionId)),
+                onRetry: () =>
+                    ref.invalidate(clientSessionProvider(widget.sessionId)),
               ),
             ],
           ),
@@ -70,6 +99,11 @@ class _DetailBody extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
+                if (s.status == SessionStatus.inProgress &&
+                    s.startedAt != null) ...[
+                  LiveSessionTimer(startedAt: s.startedAt!),
+                  const SizedBox(height: 12),
+                ],
                 _MetaRow(icon: Icons.schedule, text: Fmt.time(s.scheduledTime)),
                 _MetaRow(
                   icon: Icons.timer_outlined,
