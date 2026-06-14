@@ -1115,3 +1115,24 @@ model MobileRefreshToken {
   tooling footgun: Prisma reads `.env` (Neon); the Next dev server reads `.env.local`
   (local Docker). `prisma migrate dev` therefore hits Neon by default — apply to local
   Docker explicitly to keep both in sync.
+
+## FcmToken Platform (2026-06-14, Flutter Phase 4 — push)
+
+### Altered: FcmToken
+
+- Added `platform String?` — `"ios" | "android" | "web"`. Native (Flutter)
+  device tokens set it via `POST /api/notifications/fcm-token { token, platform }`;
+  web-push registers without it (stays null). Purely additive, nullable; the FCM
+  send path (`src/lib/notifications.ts → sendEachForMulticast`) sends to all of a
+  user's tokens regardless of platform — `platform` is for diagnostics / future
+  platform-targeted payloads.
+
+### Migration
+
+- `20260614154012_add_fcm_token_platform` — `ALTER TABLE "fcm_tokens" ADD COLUMN "platform" TEXT;`.
+  Additive, nullable. ⚠️ **Local Docker ONLY so far** (operator chose to hold the Neon
+  deploy until release). Because `prisma migrate dev` hits Neon by default (reads `.env`)
+  and local Docker is migration-drifted (42 history rows vs 39 folder migrations — see
+  [[prisma-env-neon-vs-local]]), this was applied surgically: `prisma db execute --url <docker>`
+  to add the column, then the `_prisma_migrations` row was inserted manually (sha256 of the
+  migration.sql as the checksum). **Before deploy: run `prisma migrate deploy` against Neon.**

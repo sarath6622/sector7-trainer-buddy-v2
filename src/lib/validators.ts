@@ -664,6 +664,13 @@ export const listNotificationsSchema = paginationSchema.extend({
   unreadOnly: z.coerce.boolean().optional(),
 });
 
+// Native (Flutter) clients register their device push token here with a
+// `platform` tag; web-push registers the same way but omits `platform`.
+export const registerFcmTokenSchema = z.object({
+  token: z.string().min(1, 'token is required'),
+  platform: z.enum(['ios', 'android', 'web']).optional(),
+});
+
 // ─── BADGE DEFINITIONS ──────────────────────────────
 
 export const createBadgeDefinitionSchema = z
@@ -966,3 +973,4 @@ export type CreateTvAnnouncementInput = z.infer<typeof createTvAnnouncementSchem
 export type UpdateTvAnnouncementInput = z.infer<typeof updateTvAnnouncementSchema>;
 export type CreateTvEventInput = z.infer<typeof createTvEventSchema>;
 export type UpdateTvEventInput = z.infer<typeof updateTvEventSchema>;
+export type RegisterFcmTokenInput = z.infer<typeof registerFcmTokenSchema>;

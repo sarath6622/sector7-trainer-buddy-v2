@@ -1072,6 +1072,7 @@ model FcmToken {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique
+  platform  String? // "ios" | "android" | "web" — native (Flutter) tokens set this; web-push leaves it null
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
