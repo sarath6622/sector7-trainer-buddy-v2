@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../client/data/client_repository.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
+import '../../trainer/data/trainer_repository.dart';
 import '../data/local/local_providers.dart';
 import '../data/local/workout_local_store.dart';
 import '../data/workout_sync_service.dart';
@@ -69,8 +71,14 @@ class _WorkoutLoggerScreenState extends ConsumerState<WorkoutLoggerScreen> {
     }
 
     try {
-      final detail =
-          await ref.read(clientSessionProvider(widget.sessionId).future);
+      // The shared logger seeds from whichever session-detail endpoint the
+      // caller is authorized for: trainers hit /api/trainer/sessions/[id],
+      // clients hit /api/client/sessions/[id]. Both return the same
+      // SessionDetail shape; the save path is the shared route either way.
+      final user = ref.read(authControllerProvider).user;
+      final detail = user != null && user.isTrainer
+          ? await ref.read(trainerSessionProvider(widget.sessionId).future)
+          : await ref.read(clientSessionProvider(widget.sessionId).future);
       final drafts = detail.workoutLogs.map(DraftExercise.fromLog).toList();
       final baseline = buildSavePayload(drafts);
 
