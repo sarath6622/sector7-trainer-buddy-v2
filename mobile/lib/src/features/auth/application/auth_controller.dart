@@ -90,4 +90,16 @@ class AuthController extends Notifier<AuthState> {
     _repo.logout();
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
+
+  /// Reflect a self-service profile edit locally. `/api/auth/me` reads name from
+  /// the (unchanged) access-token claims, so a re-fetch wouldn't show the new
+  /// name until the token refreshes — we update the cached user directly so the
+  /// Profile tab stays in sync immediately after Settings saves.
+  void applyProfileUpdate({String? firstName, String? lastName}) {
+    final user = state.user;
+    if (user == null) return;
+    state = state.copyWith(
+      user: user.copyWith(firstName: firstName, lastName: lastName),
+    );
+  }
 }

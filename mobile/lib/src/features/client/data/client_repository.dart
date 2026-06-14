@@ -136,6 +136,26 @@ class ClientRepository {
 
   /// DELETE /api/client/profile/image — clear the avatar.
   Future<void> removeProfileImage() => _api.delete('/client/profile/image');
+
+  /// GET /api/client/profile → the caller's own editable name + phone, for the
+  /// Settings form (the access token's name claim can be stale, so we read it).
+  Future<({String firstName, String lastName, String? phone})> profileEdit() async {
+    final data = await _api.get('/client/profile') as Map<String, dynamic>;
+    return (
+      firstName: (data['firstName'] ?? '') as String,
+      lastName: (data['lastName'] ?? '') as String,
+      phone: data['phone'] as String?,
+    );
+  }
+
+  /// PATCH /api/client/profile — update the caller's own name / phone. Only the
+  /// provided (non-null) fields are sent.
+  Future<void> updateProfile({String? firstName, String? lastName, String? phone}) =>
+      _api.patch('/client/profile', body: {
+        'firstName': ?firstName,
+        'lastName': ?lastName,
+        'phone': ?phone,
+      });
 }
 
 final clientRepositoryProvider = Provider<ClientRepository>(
@@ -196,4 +216,10 @@ final rescheduleRequestsProvider =
 /// The current profile-image URL (null when unset).
 final profileImageProvider = FutureProvider.autoDispose<String?>(
   (ref) => ref.watch(clientRepositoryProvider).profileImageUrl(),
+);
+
+/// The caller's editable name + phone (for the Settings form).
+final clientProfileEditProvider = FutureProvider.autoDispose<
+    ({String firstName, String lastName, String? phone})>(
+  (ref) => ref.watch(clientRepositoryProvider).profileEdit(),
 );

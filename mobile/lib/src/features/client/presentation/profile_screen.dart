@@ -65,6 +65,14 @@ class ProfileScreen extends ConsumerWidget {
             child: Column(
               children: [
                 ListTile(
+                  leading: const Icon(Icons.manage_accounts_outlined),
+                  title: const Text('Edit profile'),
+                  subtitle: const Text('Name & phone'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/client/settings'),
+                ),
+                const Divider(height: 1),
+                ListTile(
                   leading: const Icon(Icons.workspace_premium_outlined),
                   title: const Text('Badges'),
                   trailing: const Icon(Icons.chevron_right),

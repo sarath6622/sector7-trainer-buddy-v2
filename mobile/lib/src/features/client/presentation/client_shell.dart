@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../community/presentation/community_screen.dart';
 import 'client_dashboard_screen.dart';
 import 'profile_screen.dart';
 import 'progress_screen.dart';
 import 'sessions_list_screen.dart';
 
-/// Client app shell: a 4-tab bottom navigation (Home / Sessions / Progress /
-/// Profile). Tabs are kept alive via [IndexedStack] so switching back preserves
-/// scroll position and avoids refetching. Detail screens push on top as routes.
+/// Client app shell: a 5-tab bottom navigation (Home / Sessions / Progress /
+/// Community / Profile). Tabs are kept alive via [IndexedStack] so switching back
+/// preserves scroll position and avoids refetching. Detail screens push on top.
 class ClientShell extends ConsumerStatefulWidget {
   const ClientShell({super.key});
 
@@ -23,6 +24,7 @@ class _ClientShellState extends ConsumerState<ClientShell> {
     ClientDashboardScreen(),
     SessionsListScreen(),
     ProgressScreen(),
+    CommunityScreen(),
     ProfileScreen(),
   ];
 
@@ -48,6 +50,11 @@ class _ClientShellState extends ConsumerState<ClientShell> {
             icon: Icon(Icons.insights_outlined),
             selectedIcon: Icon(Icons.insights),
             label: 'Progress',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.groups_outlined),
+            selectedIcon: Icon(Icons.groups),
+            label: 'Community',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
