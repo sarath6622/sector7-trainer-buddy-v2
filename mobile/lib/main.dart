@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'src/core/theme/app_theme.dart';
 import 'src/features/auth/application/auth_controller.dart';
@@ -8,6 +9,10 @@ import 'src/features/workout/data/workout_sync_service.dart';
 import 'src/routing/app_router.dart';
 
 void main() {
+  // Offline-first: Inter ships as a bundled asset (see pubspec + assets/fonts).
+  // Disable runtime fetching so a font is never pulled over the network — a
+  // missing variant surfaces loudly in dev instead of silently fetching.
+  GoogleFonts.config.allowRuntimeFetching = false;
   runApp(const ProviderScope(child: Sector7App()));
 }
 
@@ -64,7 +69,10 @@ class _Sector7AppState extends ConsumerState<Sector7App>
     return MaterialApp.router(
       title: 'Sector 7',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
+      // Dark-first, mirroring the PWA (next-themes defaultTheme="dark").
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.dark,
       routerConfig: router,
     );
   }

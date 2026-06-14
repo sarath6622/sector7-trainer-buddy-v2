@@ -25,6 +25,10 @@ dependencies:
   # Charts (replaces Recharts) — progress screens
   fl_chart: ^0.69.2
 
+  # Inter font — matches the PWA's --font-sans (next/font Inter). Fetched at
+  # runtime + cached; bundle the .ttf as an asset before release for offline.
+  google_fonts: ^6.2.1
+
   # Date/number formatting
   intl: ^0.19.0
 
@@ -59,3 +63,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Inter bundled locally so the offline-first app never fetches fonts at
+  # runtime. google_fonts matches these by the `Inter-<Variant>` filename and
+  # loads them from the bundle (allowRuntimeFetching is disabled in main.dart).
+  # These are the exact full TTFs google_fonts would otherwise download.
+  assets:
+    - assets/fonts/
