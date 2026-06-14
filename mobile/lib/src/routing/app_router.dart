@@ -12,7 +12,8 @@ import '../features/client/presentation/unavailability_screen.dart';
 import '../features/client/presentation/workout_history_screen.dart';
 import '../features/workout/presentation/workout_logger_screen.dart';
 import '../features/shared/presentation/splash_screen.dart';
-import '../features/trainer/presentation/trainer_home_screen.dart';
+import '../features/trainer/presentation/trainer_session_detail_screen.dart';
+import '../features/trainer/presentation/trainer_shell.dart';
 
 /// Role-based routing that mirrors src/middleware.ts:
 ///   TRAINER / KICKBOXING_TRAINER / CROSSFIT_TRAINER → /trainer
@@ -29,7 +30,25 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(path: '/trainer', builder: (_, _) => const TrainerHomeScreen()),
+      GoRoute(
+        path: '/trainer',
+        builder: (_, _) => const TrainerShell(),
+        routes: [
+          GoRoute(
+            path: 'sessions/:id',
+            builder: (_, state) => TrainerSessionDetailScreen(
+              sessionId: state.pathParameters['id']!,
+            ),
+            routes: [
+              GoRoute(
+                path: 'log',
+                builder: (_, state) =>
+                    WorkoutLoggerScreen(sessionId: state.pathParameters['id']!),
+              ),
+            ],
+          ),
+        ],
+      ),
       GoRoute(
         path: '/client',
         builder: (_, _) => const ClientShell(),

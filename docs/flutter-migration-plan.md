@@ -172,16 +172,33 @@ Each screen maps to existing endpoints — no new business logic, just presentat
 
 ### Trainer (Phase 3 — includes the hard offline path)
 
-| Screen                                       | Endpoint(s)                                              |
-| -------------------------------------------- | -------------------------------------------------------- |
-| Client list                                  | `GET /api/trainer/clients`                               |
-| Client detail (history, progress, last sets) | `/api/trainer/clients/[id]/*`                            |
-| Schedule                                     | `GET /api/trainer/schedule` → table_calendar             |
-| Session start / end / no-show                | `POST /api/trainer/sessions/[id]/{start,end,no-show}`    |
-| **Workout logger (offline-first)**           | `POST /api/sessions/[id]/workouts` (see §5)              |
-| Progress editing                             | `PUT` progress endpoints                                 |
-| Leaves                                       | `GET/POST /api/trainer/leaves`                           |
-| Reschedule approve/reject                    | `/api/trainer/reschedule-requests/[id]/{approve,reject}` |
+> **Trainer role MVP started (2026-06-14):** the `TrainerShell` (4-tab IndexedStack:
+> Today / Clients / Schedule / Profile) replaces the placeholder. **Today** lists the
+> day's sessions with inline Start/End quick actions; **Schedule** is an agenda of
+> upcoming sessions grouped by day; **Clients** is the active roster (primary +
+> reassigned) with this-month stats + a measurement-overdue flag; **session detail**
+> drives the full lifecycle (start / end-with-notes / no-show) and reuses the existing
+> offline-first **workout logger** (the shared `POST /api/sessions/[id]/workouts`
+> path). Data layer: `features/trainer/data/{trainer_models,trainer_repository}.dart`
+> (reuses the client `SessionDetail`/`SessionSummary`/`SessionStatus` models since the
+> trainer endpoints return the same SessionInstance shape). The six trainer routes the
+> app touches were migrated from `hasRole→403` to `requireRole→401/403` (ADR-043) so
+> the app's refresh-on-401 fires on an expired token. Verified end-to-end via a minted
+> trainer JWT (200 happy path on GETs; 401 on bad token; 403 on a client token — all
+> six routes). **Deferred:** client detail (history/progress/last-sets), leaves, and
+> reschedule approve/reject.
+
+| Screen                                       | Endpoint(s)                                              | Status     |
+| -------------------------------------------- | -------------------------------------------------------- | ---------- |
+| Today / Schedule (agenda)                    | `GET /api/trainer/schedule`                              | ✅ done    |
+| Client list (roster)                         | `GET /api/trainer/clients`                               | ✅ done    |
+| Session detail                               | `GET /api/trainer/sessions/[id]`                         | ✅ done    |
+| Session start / end / no-show                | `POST /api/trainer/sessions/[id]/{start,end,no-show}`    | ✅ done    |
+| **Workout logger (offline-first)**           | `POST /api/sessions/[id]/workouts` (see §5)              | ✅ reused  |
+| Client detail (history, progress, last sets) | `/api/trainer/clients/[id]/*`                            | ☐ deferred |
+| Progress editing                             | `PUT` progress endpoints                                 | ☐ deferred |
+| Leaves                                       | `GET/POST /api/trainer/leaves`                           | ☐ deferred |
+| Reschedule approve/reject                    | `/api/trainer/reschedule-requests/[id]/{approve,reject}` | ☐ deferred |
 
 ---
 

@@ -154,6 +154,89 @@ class ErrorRetry extends StatelessWidget {
   }
 }
 
+/// Read-only card for one logged exercise + its sets. Shared by the trainer
+/// session-detail screen (the client screen has its own private variant).
+class WorkoutLogCard extends StatelessWidget {
+  const WorkoutLogCard({super.key, required this.log});
+  final WorkoutLogEntry log;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    log.exerciseName,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (log.isCompleted)
+                  Icon(Icons.check_circle, size: 18, color: Colors.green.shade300),
+              ],
+            ),
+            if (log.muscleGroup != null)
+              Text(
+                log.muscleGroup!,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            const SizedBox(height: 10),
+            if (log.sets.isEmpty)
+              Text(
+                'No sets recorded',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              )
+            else
+              for (final set in log.sets)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 28,
+                        child: Text(
+                          '${set.setNumber}',
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Text(set.summary)),
+                      if (set.rpe != null)
+                        Text(
+                          'RPE ${set.rpe}',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Empty-state placeholder with an icon + message.
 class EmptyState extends StatelessWidget {
   const EmptyState({super.key, required this.icon, required this.message});
