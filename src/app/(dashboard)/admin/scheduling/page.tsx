@@ -341,6 +341,129 @@ function FormSearchSelect({
   );
 }
 
+/**
+ * Client picker backed by server-side search. Unlike FormSearchSelect (which
+ * filters a list handed to it), this queries /api/admin/users on each keystroke
+ * so it finds any client regardless of how many exist — the full client list is
+ * never loaded up front. The selected client's label is supplied by the parent
+ * so it stays visible even as the result set changes.
+ */
+function ClientSearchSelect({
+  value,
+  selectedLabel,
+  onChange,
+  placeholder,
+  icon: Icon,
+}: {
+  value: string;
+  selectedLabel: string | null;
+  onChange: (value: string, label: string) => void;
+  placeholder: string;
+  icon?: React.ComponentType<{ className?: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [results, setResults] = useState<{ value: string; label: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Debounced server-side search. An empty term returns the most recent clients
+  // as a starter list; typing narrows it via the API's `search` param.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoading(true);
+    const handle = setTimeout(async () => {
+      try {
+        const qs = new URLSearchParams({ role: 'CLIENT', pageSize: '20' });
+        const term = search.trim();
+        if (term) qs.set('search', term);
+        const res = await fetch(`/api/admin/users?${qs.toString()}`);
+        if (!res.ok) return;
+        const { data } = await res.json();
+        if (cancelled) return;
+        setResults(
+          (data as ClientOption[])
+            .filter((c) => c.clientProfile)
+            .map((c) => ({ value: c.clientProfile!.id, label: `${c.firstName} ${c.lastName}` })),
+        );
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [search, open]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((o) => !o);
+          setSearch('');
+        }}
+        className="flex h-10 w-full items-center gap-2 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors hover:bg-muted/50"
+      >
+        {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
+        <span
+          className={selectedLabel ? 'flex-1 text-left' : 'flex-1 text-left text-muted-foreground'}
+        >
+          {selectedLabel ?? placeholder}
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-lg bg-popover shadow-lg ring-1 ring-foreground/10">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <Search className="h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search clients..."
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          </div>
+          <div className="max-h-[200px] overflow-y-auto p-1">
+            {results.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value, opt.label);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center rounded-md px-2.5 py-2 text-sm transition-colors ${
+                  value === opt.value ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+            {!loading && results.length === 0 && (
+              <p className="px-2.5 py-3 text-center text-xs text-muted-foreground">No results</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const JS_DAY_MAP = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 
@@ -379,7 +502,9 @@ export default function SchedulingPage() {
   const [conflicts] = useState<Conflict[]>([]);
   const [crossfitClasses, setCrossfitClasses] = useState<CrossfitClassForCalendar[]>([]);
   const [trainers, setTrainers] = useState<TrainerOption[]>([]);
-  const [clients, setClients] = useState<ClientOption[]>([]);
+  // Clients are searched on demand (see ClientSearchSelect), so we only keep the
+  // label of the currently selected client for display — not the whole list.
+  const [selectedClientLabel, setSelectedClientLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionInstance | null>(null);
@@ -463,18 +588,18 @@ export default function SchedulingPage() {
 
   const fetchTrainersAndClients = useCallback(async () => {
     try {
-      const [tRes, cRes, cfRes] = await Promise.all([
-        fetch('/api/admin/users?role=TRAINER&pageSize=100'),
-        fetch('/api/admin/users?role=CLIENT&pageSize=100'),
+      // Trainers load eagerly — the set is bounded and the trainer picker needs
+      // the full list to cross-reference against a client's active mappings.
+      // Clients are NOT pre-loaded: they're fetched on demand via server-side
+      // search in ClientSearchSelect, so the picker scales past any page-size
+      // cap with no big up-front query.
+      const [tRes, cfRes] = await Promise.all([
+        fetch('/api/admin/users?role=TRAINER&pageSize=500'),
         fetch('/api/admin/crossfit/classes'),
       ]);
       if (tRes.ok) {
         const { data } = await tRes.json();
         setTrainers(data);
-      }
-      if (cRes.ok) {
-        const { data } = await cRes.json();
-        setClients(data);
       }
       if (cfRes.ok) {
         const { data } = await cfRes.json();
@@ -685,6 +810,7 @@ export default function SchedulingPage() {
           startTime: '07:00',
           durationMin: '60',
         });
+        setSelectedClientLabel(null);
         setSelectedDates(new Set());
         setPackageInfo(null);
         setClientMappings([]);
@@ -973,16 +1099,12 @@ export default function SchedulingPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-muted-foreground">Client</Label>
-                    <FormSearchSelect
-                      options={clients
-                        .filter((c) => c.clientProfile)
-                        .map((c) => ({
-                          value: c.clientProfile!.id,
-                          label: `${c.firstName} ${c.lastName}`,
-                        }))}
+                    <ClientSearchSelect
                       value={form.clientProfileId}
-                      onChange={(v) => {
+                      selectedLabel={selectedClientLabel}
+                      onChange={(v, label) => {
                         setForm((prev) => ({ ...prev, clientProfileId: v }));
+                        setSelectedClientLabel(label);
                         setSelectedDates(new Set());
                       }}
                       placeholder="Select client"
@@ -1258,6 +1380,7 @@ export default function SchedulingPage() {
                         startTime: '07:00',
                         durationMin: '60',
                       });
+                      setSelectedClientLabel(null);
                       setSelectedDates(new Set());
                       setPackageInfo(null);
                       setClientMappings([]);
