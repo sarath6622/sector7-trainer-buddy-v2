@@ -11,7 +11,7 @@ import { useRestTimer } from '@/hooks/useRestTimer';
 import { useSessionPause } from '@/hooks/useSessionPause';
 import { useRestAutofill } from '@/hooks/useRestAutofill';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
-import { useKeyboardInset } from '@/hooks/useKeyboardInset';
+import { useKeyboardViewport } from '@/hooks/useKeyboardInset';
 import type {
   SessionStartedPayload,
   SessionEndedPayload,
@@ -297,14 +297,30 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const restTimer = useRestTimer(activeId);
   const sessionPause = useSessionPause(activeId);
   const { lastFinishedRestSec, consumeRest } = useRestAutofill(activeId, restTimer);
-  // Keep the container at full height and instead hide the bottom rest-timer
-  // pill while the keyboard is up. The previous approach subtracted the
-  // measured keyboard inset from the container height, but iOS standalone PWAs
-  // don't shrink `dvh` for the keyboard, so `100dvh - keyboardInset` over-shrank
-  // the container and left a dead gap between the pill and the keyboard. The
-  // pill's rest state is still visible in the hero while typing.
-  const keyboardOpen = useKeyboardInset() > 0;
-  const containerHeight = 'calc(100dvh - 3.5rem - env(safe-area-inset-top))';
+  // Size the session container from the *visual* viewport height (the on-screen
+  // area above the keyboard) instead of `100dvh`. iOS standalone PWAs overlay
+  // the keyboard without shrinking `dvh`/`innerHeight`, so a full-height
+  // container leaves its scroll body running behind the keyboard and the
+  // focused cell hidden under it. visualViewport.height ends the scrollport
+  // exactly at the keyboard top, so the cell can scroll into view — the
+  // iOS-recommended PWA keyboard pattern. Falls back to `100dvh` until measured.
+  const { height: viewportHeight, inset: keyboardInset } = useKeyboardViewport();
+  const keyboardOpen = keyboardInset > 0;
+  const viewportBasis = viewportHeight != null ? `${viewportHeight}px` : '100dvh';
+  const containerHeight = `calc(${viewportBasis} - 3.5rem - env(safe-area-inset-top))`;
+
+  // When the keyboard opens, the container shrinks to the visual-viewport height
+  // a frame or two later. Re-scroll the focused cell into view once that's
+  // happened so it sits above the keyboard — the cell's own onFocus scroll can
+  // fire before the resize lands and miss. Keyed on the open/close transition
+  // (not the px) so it runs once per open and doesn't fight manual scrolling.
+  useEffect(() => {
+    if (!keyboardOpen) return;
+    const el = document.activeElement;
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      requestAnimationFrame(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    }
+  }, [keyboardOpen]);
 
   // Branch default session duration drives the hero progress ring so the ring
   // reflects the gym's standard slot length rather than an out-of-band per-row
