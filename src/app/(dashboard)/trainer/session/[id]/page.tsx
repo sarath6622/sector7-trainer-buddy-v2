@@ -297,11 +297,14 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const restTimer = useRestTimer(activeId);
   const sessionPause = useSessionPause(activeId);
   const { lastFinishedRestSec, consumeRest } = useRestAutofill(activeId, restTimer);
-  // Keyboard-aware container height. iOS standalone PWAs don't shrink `dvh`
-  // when the virtual keyboard opens, so without this the bottom rest-timer
-  // pill ends up hidden behind the keyboard while the trainer types.
-  const keyboardInset = useKeyboardInset();
-  const containerHeight = `calc(100dvh - 3.5rem - env(safe-area-inset-top) - ${keyboardInset}px)`;
+  // Keep the container at full height and instead hide the bottom rest-timer
+  // pill while the keyboard is up. The previous approach subtracted the
+  // measured keyboard inset from the container height, but iOS standalone PWAs
+  // don't shrink `dvh` for the keyboard, so `100dvh - keyboardInset` over-shrank
+  // the container and left a dead gap between the pill and the keyboard. The
+  // pill's rest state is still visible in the hero while typing.
+  const keyboardOpen = useKeyboardInset() > 0;
+  const containerHeight = 'calc(100dvh - 3.5rem - env(safe-area-inset-top))';
 
   // Branch default session duration drives the hero progress ring so the ring
   // reflects the gym's standard slot length rather than an out-of-band per-row
@@ -682,20 +685,22 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
       {/* ── Bottom dock — only the rest-timer pill lives here now. The End
           Session button moved into the hero to claim back the vertical
           space; the dock collapses to nothing when no rest is active. ── */}
-      {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
-        <div
-          className="shrink-0 px-4 pt-3"
-          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-        >
-          <RestTimerPillInline
-            remaining={restTimer.remaining}
-            isPaused={restTimer.isPaused}
-            isDone={restTimer.isDone}
-            onOpen={() => setRestTimerOpen(true)}
-            onStop={restTimer.stop}
-          />
-        </div>
-      )}
+      {!restTimerOpen &&
+        !keyboardOpen &&
+        (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
+          <div
+            className="shrink-0 px-4 pt-3"
+            style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+          >
+            <RestTimerPillInline
+              remaining={restTimer.remaining}
+              isPaused={restTimer.isPaused}
+              isDone={restTimer.isDone}
+              onOpen={() => setRestTimerOpen(true)}
+              onStop={restTimer.stop}
+            />
+          </div>
+        )}
 
       {/* Rest timer sheet */}
       {restTimerOpen && (
