@@ -63,7 +63,34 @@ function setSummary(sets: DayWorkoutLog['sets']) {
   return null;
 }
 
-export function WorkoutCalendarCard() {
+interface WorkoutCalendarCardProps {
+  /**
+   * Endpoint for the month grid. Defaults to the signed-in client's own data.
+   * Trainers/admins pass a client-scoped endpoint, e.g.
+   * `/api/trainer/clients/<id>/workout-calendar`.
+   */
+  calendarEndpoint?: string;
+  /**
+   * Endpoint for a single day's logged workouts (powers the detail modal).
+   * Defaults to the signed-in client's own data.
+   */
+  workoutsEndpoint?: string;
+  /** Builds the "View full session" link target for a session id. */
+  sessionHref?: (sessionId: string) => string;
+  /**
+   * When true, render without the card chrome (rounded ring + bg) so the
+   * calendar can sit inside a parent container (e.g. under a client picker)
+   * as one cohesive card instead of a detached second box.
+   */
+  embedded?: boolean;
+}
+
+export function WorkoutCalendarCard({
+  calendarEndpoint = '/api/client/workout-calendar',
+  workoutsEndpoint = '/api/client/workouts',
+  sessionHref = (id) => `/client/session/${id}`,
+  embedded = false,
+}: WorkoutCalendarCardProps = {}) {
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth()); // 0-based
@@ -78,7 +105,7 @@ export function WorkoutCalendarCard() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/client/workout-calendar?month=${monthParam}`)
+    fetch(`${calendarEndpoint}?month=${monthParam}`)
       .then((r) => r.json())
       .then(({ data }) => {
         if (cancelled || !data) return;
@@ -92,7 +119,7 @@ export function WorkoutCalendarCard() {
     return () => {
       cancelled = true;
     };
-  }, [monthParam]);
+  }, [monthParam, calendarEndpoint]);
 
   const todayStr = ymd(now);
   const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth();
@@ -131,7 +158,7 @@ export function WorkoutCalendarCard() {
   });
 
   return (
-    <div className="rounded-2xl bg-card p-4 ring-1 ring-border/50">
+    <div className={embedded ? 'p-4' : 'rounded-2xl bg-card p-4 ring-1 ring-border/50'}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <button
@@ -231,6 +258,8 @@ export function WorkoutCalendarCard() {
         date={selectedDate}
         isPR={selectedDate ? (days.get(selectedDate)?.isPR ?? false) : false}
         onClose={() => setSelectedDate(null)}
+        workoutsEndpoint={workoutsEndpoint}
+        sessionHref={sessionHref}
       />
     </div>
   );
@@ -242,10 +271,14 @@ function DayWorkoutModal({
   date,
   isPR,
   onClose,
+  workoutsEndpoint,
+  sessionHref,
 }: {
   date: string | null;
   isPR: boolean;
   onClose: () => void;
+  workoutsEndpoint: string;
+  sessionHref: (sessionId: string) => string;
 }) {
   const router = useRouter();
   const [logs, setLogs] = useState<DayWorkoutLog[]>([]);
@@ -256,7 +289,7 @@ function DayWorkoutModal({
   useEffect(() => {
     if (!date) return;
     let cancelled = false;
-    fetch(`/api/client/workouts?dateFrom=${date}&dateTo=${date}`)
+    fetch(`${workoutsEndpoint}?dateFrom=${date}&dateTo=${date}`)
       .then((r) => r.json())
       .then(({ data }) => {
         if (!cancelled) setLogs(data ?? []);
@@ -268,7 +301,7 @@ function DayWorkoutModal({
     return () => {
       cancelled = true;
     };
-  }, [date]);
+  }, [date, workoutsEndpoint]);
 
   const session = logs[0]?.sessionInstance;
   const totalSets = logs.reduce((sum, l) => sum + l.sets.length, 0);
@@ -372,7 +405,7 @@ function DayWorkoutModal({
             </div>
 
             <button
-              onClick={() => router.push(`/client/session/${session.id}`)}
+              onClick={() => router.push(sessionHref(session.id))}
               className="w-full rounded-xl bg-primary/10 py-2.5 text-center text-sm font-semibold text-primary transition-colors hover:bg-primary/15"
             >
               View full session
