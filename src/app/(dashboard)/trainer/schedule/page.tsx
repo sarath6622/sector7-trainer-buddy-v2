@@ -445,7 +445,7 @@ function ScheduleSessionsModal({
     >
       <DialogContent showCloseButton={false} className="sm:max-w-[580px] gap-0 overflow-hidden p-0">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10">
               <CalendarPlus className="h-4 w-4 text-blue-500" />
@@ -473,15 +473,15 @@ function ScheduleSessionsModal({
         </div>
 
         {/* Body */}
-        <div className="max-h-[68vh] space-y-4 overflow-y-auto px-5 py-4">
+        <div className="max-h-[72vh] space-y-3 overflow-y-auto px-4 py-3">
           {/* Single-slot booking summary */}
           {isSlotMode && (
-            <div className="flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/15">
+            <div className="flex items-center gap-2.5 rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/15">
                 <CalendarIconLucide className="h-4 w-4 text-blue-500" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Booking for</p>
+                <p className="text-[11px] text-muted-foreground">Booking for</p>
                 <p className="text-sm font-semibold">
                   {presetDateLabel} · {formatTime12(startTime)} –{' '}
                   {formatTime12(addMinutes(startTime, parseInt(durationMin, 10) || 0))}
@@ -527,15 +527,15 @@ function ScheduleSessionsModal({
                         ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                         : 'bg-muted text-muted-foreground';
                   return (
-                    <div className="space-y-2.5 rounded-lg border border-border/60 bg-muted/30 p-3">
+                    <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/30 p-2">
                       {/* Plan name + validity */}
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-xs font-semibold">
+                        <span className="truncate text-[11px] font-semibold">
                           {packageInfo!.planName ?? 'PT Package'}
                         </span>
                         <span
                           className={cn(
-                            'shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium',
+                            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium',
                             daysTone,
                           )}
                         >
@@ -544,31 +544,29 @@ function ScheduleSessionsModal({
                       </div>
 
                       {/* Capacity stats */}
-                      <div className="grid grid-cols-3 divide-x divide-border/60 overflow-hidden rounded-md border border-border/60 bg-background/50">
-                        <div className="px-2 py-2 text-center">
-                          <p className="text-base font-bold leading-none">{packageInfo!.used}</p>
-                          <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <div className="grid grid-cols-3 divide-x divide-border/60 overflow-hidden rounded border border-border/60 bg-background/50">
+                        <div className="px-1 py-1 text-center">
+                          <p className="text-sm font-bold leading-none">{packageInfo!.used}</p>
+                          <p className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
                             Used
                           </p>
                         </div>
-                        <div className="px-2 py-2 text-center">
-                          <p className="text-base font-bold leading-none">
-                            {packageInfo!.upcoming}
-                          </p>
-                          <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <div className="px-1 py-1 text-center">
+                          <p className="text-sm font-bold leading-none">{packageInfo!.upcoming}</p>
+                          <p className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
                             Scheduled
                           </p>
                         </div>
-                        <div className="px-2 py-2 text-center">
-                          <p className={cn('text-base font-bold leading-none', remTone)}>{rem}</p>
-                          <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <div className="px-1 py-1 text-center">
+                          <p className={cn('text-sm font-bold leading-none', remTone)}>{rem}</p>
+                          <p className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
                             Remaining
                           </p>
                         </div>
                       </div>
 
                       {/* Total + current selection */}
-                      <div className="flex items-center justify-between text-[11px]">
+                      <div className="flex items-center justify-between text-[10px]">
                         <span className="text-muted-foreground">
                           {packageInfo!.totalSessions} sessions total
                         </span>
@@ -581,7 +579,7 @@ function ScheduleSessionsModal({
 
                       {/* Expiry warning */}
                       {expired && (
-                        <div className="flex items-center gap-1.5 rounded-md bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-500">
+                        <div className="flex items-center gap-1.5 rounded bg-red-500/10 px-2 py-1 text-[10px] leading-tight text-red-500">
                           <AlertTriangle className="h-3 w-3 shrink-0" />
                           This package has expired — confirm with admin before booking.
                         </div>
@@ -691,8 +689,8 @@ function ScheduleSessionsModal({
             </div>
           )}
 
-          {/* Start Time & Duration */}
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* Start Time & Duration — always one row */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <Clock className="h-3 w-3" /> Start Time
@@ -723,7 +721,7 @@ function ScheduleSessionsModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
+        <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-2.5">
           <p className="text-xs text-muted-foreground">
             {selectedDates.size > 0
               ? `${selectedDates.size} date${selectedDates.size !== 1 ? 's' : ''} selected`
