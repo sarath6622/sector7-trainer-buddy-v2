@@ -695,7 +695,12 @@ function ScheduleSessionsModal({
               <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <Clock className="h-3 w-3" /> Start Time
               </Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <Input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="appearance-none [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:m-0"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
