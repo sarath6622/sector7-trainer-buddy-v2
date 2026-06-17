@@ -11,7 +11,6 @@ import {
   ChevronDown,
   Search,
   Users,
-  Timer,
   User,
   MoreHorizontal,
   CalendarClock,
@@ -689,31 +688,17 @@ function ScheduleSessionsModal({
             </div>
           )}
 
-          {/* Start Time & Duration — always one row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Clock className="h-3 w-3" /> Start Time
-              </Label>
-              <Input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="appearance-none [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:m-0"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Timer className="h-3 w-3" /> Duration (min)
-              </Label>
-              <Input
-                type="number"
-                min="15"
-                step="15"
-                value={durationMin}
-                onChange={(e) => setDurationMin(e.target.value)}
-              />
-            </div>
+          {/* Start Time — full width */}
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Clock className="h-3 w-3" /> Start Time
+            </Label>
+            <Input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className="w-full appearance-none [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:m-0"
+            />
           </div>
 
           {/* Error */}
