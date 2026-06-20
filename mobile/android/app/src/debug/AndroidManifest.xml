@@ -4,4 +4,12 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- DEV-ONLY: allow cleartext HTTP so debug builds can reach the local
+         Next.js dev server over plain http://
+           - Android emulator: http://10.0.2.2:3000 (host-machine alias)
+           - physical device:  http://<mac-LAN-ip>:3000
+         This overlay merges into DEBUG builds only, so release builds keep
+         cleartext blocked — no pre-release stripping needed (unlike the
+         global iOS ATS hack in ios/Runner/Info.plist). -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>
