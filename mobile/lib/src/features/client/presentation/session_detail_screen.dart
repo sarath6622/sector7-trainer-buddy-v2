@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/realtime/session_realtime.dart';
 import '../../../core/util/formatters.dart';
+import '../../session/presentation/session_live_controls.dart';
 import '../data/client_models.dart';
 import '../data/client_repository.dart';
 import 'widgets/client_widgets.dart';
@@ -102,6 +103,8 @@ class _DetailBody extends StatelessWidget {
                 if (s.status == SessionStatus.inProgress &&
                     s.startedAt != null) ...[
                   LiveSessionTimer(startedAt: s.startedAt!),
+                  const SizedBox(height: 12),
+                  SessionLiveControls(sessionId: s.id),
                   const SizedBox(height: 12),
                 ],
                 _MetaRow(icon: Icons.schedule, text: Fmt.time(s.scheduledTime)),

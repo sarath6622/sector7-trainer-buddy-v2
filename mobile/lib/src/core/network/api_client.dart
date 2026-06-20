@@ -75,6 +75,25 @@ class ApiClient {
   Future<dynamic> delete(String path, {Object? body}) =>
       _request(() => _dio.delete(path, data: body));
 
+  // ── Raw-envelope variants ───────────────────────────────────────────────
+  // Return the FULL decoded body (envelope intact), not just `data`. The
+  // rest-timer / pause endpoints ship a sibling `serverNow` next to `data`;
+  // the live countdown needs it to compute clock skew, which the unwrapping
+  // helpers above would silently drop. Bearer header + 401 refresh-and-retry
+  // still apply.
+
+  Future<dynamic> getRaw(String path, {Map<String, dynamic>? query}) =>
+      _send(() => _dio.get(path, queryParameters: query));
+
+  Future<dynamic> putRaw(String path, {Object? body}) =>
+      _send(() => _dio.put(path, data: body));
+
+  Future<dynamic> postRaw(String path, {Object? body}) =>
+      _send(() => _dio.post(path, data: body));
+
+  Future<dynamic> deleteRaw(String path, {Object? body}) =>
+      _send(() => _dio.delete(path, data: body));
+
   /// Multipart upload of a single file field. Goes through [_request] so the
   /// Bearer header, proactive/401 refresh, and `{ data }` unwrap all apply.
   Future<dynamic> uploadFile(
@@ -108,7 +127,19 @@ class ApiClient {
     }
   }
 
-  Future<dynamic> _request(Future<Response> Function() send, {bool isRetry = false}) async {
+  /// Unwraps the `{ data }` success envelope. Callers that need sibling fields
+  /// (e.g. `serverNow`) use the `*Raw` helpers, which skip this unwrap.
+  Future<dynamic> _request(Future<Response> Function() send) async {
+    final body = await _send(send);
+    if (body is Map && body.containsKey('data')) return body['data'];
+    return body;
+  }
+
+  /// Core request path: maps Dio failures to [ApiException], handles a one-shot
+  /// 401 refresh-and-retry, and on success returns the FULL decoded body
+  /// (envelope intact). [_request] unwraps `data` from this; the `*Raw`
+  /// helpers return it as-is.
+  Future<dynamic> _send(Future<Response> Function() send, {bool isRetry = false}) async {
     Response res;
     try {
       res = await send();
@@ -123,8 +154,6 @@ class ApiClient {
     final data = res.data;
 
     if (status >= 200 && status < 300) {
-      // Success envelope: { data: T, message? } — unwrap `data` when present.
-      if (data is Map && data.containsKey('data')) return data['data'];
       return data;
     }
 
@@ -132,7 +161,7 @@ class ApiClient {
       // Access token likely expired — try a single refresh, then retry once.
       final refreshed = await _ensureRefreshed();
       if (refreshed) {
-        return _request(send, isRetry: true);
+        return _send(send, isRetry: true);
       }
       onAuthFailure?.call();
     } else if (status == 401) {

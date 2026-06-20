@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/realtime/session_realtime.dart';
 import '../../../core/util/formatters.dart';
 import '../../client/data/client_models.dart';
+import '../../session/presentation/session_live_controls.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/trainer_repository.dart';
 import 'widgets/trainer_actions.dart';
@@ -102,6 +103,8 @@ class _TrainerSessionDetailScreenState
                 if (s.status == SessionStatus.inProgress &&
                     s.startedAt != null) ...[
                   LiveSessionTimer(startedAt: s.startedAt!),
+                  const SizedBox(height: 12),
+                  SessionLiveControls(sessionId: s.id),
                   const SizedBox(height: 12),
                 ],
                 _MetaRow(
