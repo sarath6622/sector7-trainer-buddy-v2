@@ -79,6 +79,72 @@ class TrainerRepository {
   Future<void> markNoShow(String id) =>
       _api.post('/trainer/sessions/$id/no-show');
 
+  /// GET /api/trainer/schedule/day?date=YYYY-MM-DD — the trainer's day agenda:
+  /// booked sessions, free slots derived from their availability, and a summary.
+  Future<TrainerDayView> scheduleDay(String date) async {
+    final data = await _api.get('/trainer/schedule/day', query: {'date': date});
+    return data is Map
+        ? TrainerDayView.fromJson(Map<String, dynamic>.from(data))
+        : const TrainerDayView(
+            date: '',
+            workingDay: false,
+            sessions: [],
+            availableSlots: [],
+            summary: TrainerDaySummary.empty,
+          );
+  }
+
+  /// POST /api/trainer/sessions/bulk — create one or more sessions for a client
+  /// at [startTime] across [dates] (`YYYY-MM-DD`). Returns the created count.
+  Future<int> bulkCreateSessions({
+    required String clientProfileId,
+    required List<String> dates,
+    required String startTime,
+    required int durationMin,
+  }) async {
+    final data = await _api.post('/trainer/sessions/bulk', body: {
+      'clientProfileId': clientProfileId,
+      'dates': dates,
+      'startTime': startTime,
+      'durationMin': durationMin,
+    });
+    return data is Map ? _intFromAny(data['created']) : 0;
+  }
+
+  static int _intFromAny(Object? v) =>
+      v is num ? v.toInt() : (v is String ? int.tryParse(v) ?? 0 : 0);
+
+  /// GET /api/trainer/clients/[id]/workout-calendar?month=YYYY-MM — month grid of
+  /// a client's completed PT days + PR days (same data the client sees).
+  Future<WorkoutCalendarMonth> workoutCalendar(
+    String clientProfileId, {
+    required String month,
+  }) async {
+    final data = await _api.get(
+      '/trainer/clients/$clientProfileId/workout-calendar',
+      query: {'month': month},
+    );
+    return data is Map
+        ? WorkoutCalendarMonth.fromJson(Map<String, dynamic>.from(data))
+        : WorkoutCalendarMonth.empty;
+  }
+
+  /// GET /api/trainer/clients/[id]/workouts?dateFrom=&dateTo= — one client's
+  /// logged exercises for a single day (powers the calendar day-detail sheet).
+  Future<List<CalendarDayLog>> dayWorkouts(
+    String clientProfileId, {
+    required String date,
+  }) async {
+    final data = await _api.get(
+      '/trainer/clients/$clientProfileId/workouts',
+      query: {'dateFrom': date, 'dateTo': date},
+    ) as List<dynamic>;
+    return data
+        .whereType<Map>()
+        .map((m) => CalendarDayLog.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+  }
+
   /// Client-detail snapshot: recent workout history + progress + badges, fetched
   /// in parallel. Hits the three `/api/trainer/clients/[id]/*` read routes.
   Future<TrainerClientDetail> clientDetail(String clientProfileId) async {
@@ -181,6 +247,55 @@ final trainerUpcomingProvider =
   final today = TrainerRepository.ymd(DateTime.now());
   return ref.watch(trainerRepositoryProvider).schedule(dateFrom: today);
 });
+
+/// Never-ended sessions: IN_PROGRESS rows from a *previous* day, which the
+/// dashboard surfaces as "resume to close out" cards. Today's live sessions come
+/// from [trainerTodayProvider] instead, so the two sets stay disjoint.
+final trainerStaleSessionsProvider =
+    FutureProvider.autoDispose<List<TrainerSession>>((ref) async {
+  final today = TrainerRepository.ymd(DateTime.now());
+  final inProgress = await ref
+      .watch(trainerRepositoryProvider)
+      .schedule(status: 'IN_PROGRESS');
+  return inProgress.where((s) {
+    final d = s.scheduledDate;
+    return d == null || TrainerRepository.ymd(d) != today;
+  }).toList();
+});
+
+/// This calendar month's sessions for the signed-in trainer — powers the
+/// dashboard's completion / no-show stat strip.
+final trainerMonthSessionsProvider =
+    FutureProvider.autoDispose<List<TrainerSession>>((ref) {
+  final now = DateTime.now();
+  final month = '${now.year.toString().padLeft(4, '0')}-'
+      '${now.month.toString().padLeft(2, '0')}';
+  return ref.watch(trainerRepositoryProvider).schedule(month: month);
+});
+
+/// The trainer's day agenda (sessions + free slots + summary), keyed by the
+/// day's `YYYY-MM-DD`.
+final trainerDayViewProvider =
+    FutureProvider.autoDispose.family<TrainerDayView, String>(
+  (ref, date) => ref.watch(trainerRepositoryProvider).scheduleDay(date),
+);
+
+/// One client's workout-calendar month, keyed by (clientProfileId, `YYYY-MM`).
+final trainerWorkoutCalendarProvider = FutureProvider.autoDispose
+    .family<WorkoutCalendarMonth, ({String clientId, String month})>(
+  (ref, key) => ref
+      .watch(trainerRepositoryProvider)
+      .workoutCalendar(key.clientId, month: key.month),
+);
+
+/// One client's logged exercises for a single day, keyed by (clientProfileId,
+/// `YYYY-MM-DD`) — feeds the calendar day-detail sheet.
+final trainerDayWorkoutsProvider = FutureProvider.autoDispose
+    .family<List<CalendarDayLog>, ({String clientId, String date})>(
+  (ref, key) => ref
+      .watch(trainerRepositoryProvider)
+      .dayWorkouts(key.clientId, date: key.date),
+);
 
 /// The trainer's clients (active + reassigned).
 final trainerClientsProvider =
