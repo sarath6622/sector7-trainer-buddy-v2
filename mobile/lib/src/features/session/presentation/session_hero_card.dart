@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/rest_timer_controller.dart';
 import '../data/session_pause_controller.dart';
-import '../domain/rest_timer_state.dart';
+import '../domain/session_mood.dart';
 import 'session_live_controls.dart' show RestTimerSheet;
 
 // Status colours — semantic (rest/idle/pause language), not the orange brand
@@ -112,8 +112,14 @@ class _SessionHeroCardState extends ConsumerState<SessionHeroCard> {
     final progress =
         expectedSec > 0 ? (elapsedSec / expectedSec).clamp(0.0, 1.0) : 0.0;
 
-    final mood = _resolveMood(nowMs, restSnap.skewMs, timer, isPaused);
-    final accent = mood.accent;
+    final mood = resolveSessionMood(
+      nowMs: nowMs,
+      skewMs: restSnap.skewMs,
+      timer: timer,
+      isPaused: isPaused,
+      lastActivityMs: widget.lastActivityMs,
+    );
+    final accent = _accentFor(mood.kind);
     // The timer only takes a colour when it's saying something — rose when the
     // client needs attention, amber while paused, otherwise calm white.
     final timerColor =
@@ -236,89 +242,14 @@ class _SessionHeroCardState extends ConsumerState<SessionHeroCard> {
     );
   }
 
-  /// Card mood, in priority order — ports the web SessionHero escalation but
-  /// collapses it to the green / amber / rose vocabulary the card chrome shows:
-  /// session-paused → rest-done (fresh on-track / overdue rose) → resting →
-  /// rest-paused → idle (on-track / overdue rose) → live.
-  _HeroMood _resolveMood(
-    int nowMs,
-    int skewMs,
-    RestTimerState timer,
-    bool isPaused,
-  ) {
-    if (isPaused) {
-      return const _HeroMood(_kPaused, 'PAUSED', '');
-    }
-
-    if (timer.isDone(nowMs, skewMs)) {
-      final doneSec = timer.endTime != null
-          ? (((nowMs + skewMs) - timer.endTime!) ~/ 1000)
-              .clamp(0, 1 << 40)
-              .toInt()
-          : 0;
-      // Rest finished a while ago and no new set — client is idle, flag it.
-      if (doneSec >= 120) {
-        return _HeroMood(
-          _kUrgent,
-          'IDLE',
-          'Rest done · ${_fmtIdle(doneSec)} ago',
-          attention: true,
-        );
-      }
-      return const _HeroMood(_kDone, 'LIVE', 'Rest done!');
-    }
-    if (timer.isRunning(nowMs, skewMs)) {
-      return _HeroMood(
-        _kDone,
-        'REST',
-        'Resting · ${formatMmSs(timer.remaining(nowMs, skewMs)!)}',
-      );
-    }
-    if (timer.isPaused) {
-      return _HeroMood(
-        _kPaused,
-        'PAUSED',
-        'Rest paused · ${formatMmSs(timer.remaining(nowMs, skewMs)!)}',
-      );
-    }
-
-    final lastMs = widget.lastActivityMs;
-    if (lastMs != null) {
-      final idleSec = ((nowMs - lastMs) ~/ 1000).clamp(0, 1 << 40).toInt();
-      if (idleSec >= 480) {
-        return _HeroMood(
-          _kUrgent,
-          'IDLE',
-          '${_fmtIdle(idleSec)} idle',
-          attention: true,
-        );
-      }
-      if (idleSec >= 60) {
-        return _HeroMood(
-          _kDone,
-          'LIVE',
-          '${_fmtIdle(idleSec)} since last set',
-        );
-      }
-    }
-    return const _HeroMood(_kDone, 'LIVE', '');
-  }
-}
-
-class _HeroMood {
-  const _HeroMood(this.accent, this.word, this.detail, {this.attention = false});
-
-  /// The card's single mood colour (green / amber / rose).
-  final Color accent;
-
-  /// Short state word for the status pill (LIVE / REST / PAUSED / IDLE).
-  final String word;
-
-  /// Human detail shown next to the pill.
-  final String detail;
-
-  /// Client needs the trainer's eye — paints the card rose + colours the timer.
-  final bool attention;
+  /// Maps the shared [SessionMoodKind] to the card's single mood colour. The
+  /// escalation itself lives in [resolveSessionMood] so the lock-screen Live
+  /// Activity / notification reads identical state.
+  Color _accentFor(SessionMoodKind kind) => switch (kind) {
+        SessionMoodKind.live => _kDone,
+        SessionMoodKind.paused => _kPaused,
+        SessionMoodKind.idle => _kUrgent,
+      };
 }
 
 class _Avatar extends StatelessWidget {
@@ -519,16 +450,6 @@ String _fmtElapsed(int totalSec) {
   final m = (s % 3600) ~/ 60;
   final sec = s % 60;
   return h > 0 ? '$h:${two(m)}:${two(sec)}' : '${two(m)}:${two(sec)}';
-}
-
-String _fmtIdle(int totalSec) {
-  final s = totalSec < 0 ? 0 : totalSec;
-  if (s < 60) return '${s}s';
-  final m = s ~/ 60;
-  if (m < 60) return '${m}m';
-  final h = m ~/ 60;
-  final rem = m % 60;
-  return rem == 0 ? '${h}h' : '${h}h${rem}m';
 }
 
 String _initialsOf(String name) {

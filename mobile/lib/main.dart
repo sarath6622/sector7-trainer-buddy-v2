@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'src/core/theme/app_theme.dart';
 import 'src/features/auth/application/auth_controller.dart';
+import 'src/features/session/data/live_session_service.dart';
 import 'src/features/workout/data/workout_repository.dart';
 import 'src/features/workout/data/workout_sync_service.dart';
 import 'src/routing/app_router.dart';
@@ -29,6 +30,10 @@ class _Sector7AppState extends ConsumerState<Sector7App>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Warm the lock-screen surface plumbing (timezone DB, notification channels,
+    // ActivityKit App Group) once. Idempotent + fire-and-forget; the live-session
+    // binder no-ops until this completes.
+    ref.read(liveSessionServiceProvider).init();
   }
 
   @override

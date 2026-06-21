@@ -6,6 +6,7 @@ import '../../../core/util/formatters.dart';
 import '../../client/data/client_models.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../../session/presentation/session_hero_card.dart';
+import '../../session/presentation/session_live_activity_binder.dart';
 import '../../workout/presentation/workout_logger_screen.dart';
 import '../data/trainer_models.dart';
 import '../data/trainer_repository.dart';
@@ -217,15 +218,23 @@ class _TrainerSessionDetailScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 8),
-          SessionHeroCard(
+          // Project this live session onto the lock screen (iOS Live Activity /
+          // Android ongoing notification) while it's the active one.
+          SessionLiveActivityBinder(
             sessionId: s.id,
             name: detail.clientName ?? 'Client',
             startedAt: s.startedAt!,
-            expectedDurationMin: s.durationMin,
-            onEnd: () => _runAction(
-              () => TrainerSessionActions.end(context, ref, _activeId),
+            workoutTitle: _title,
+            child: SessionHeroCard(
+              sessionId: s.id,
+              name: detail.clientName ?? 'Client',
+              startedAt: s.startedAt!,
+              expectedDurationMin: s.durationMin,
+              onEnd: () => _runAction(
+                () => TrainerSessionActions.end(context, ref, _activeId),
+              ),
+              ending: _busy,
             ),
-            ending: _busy,
           ),
         ],
       ));

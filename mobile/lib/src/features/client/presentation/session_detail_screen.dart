@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/realtime/session_realtime.dart';
 import '../../../core/util/formatters.dart';
 import '../../session/presentation/session_hero_card.dart';
+import '../../session/presentation/session_live_activity_binder.dart';
 import '../../workout/presentation/workout_logger_screen.dart';
 import '../data/client_models.dart';
 import '../data/client_repository.dart';
@@ -137,17 +138,25 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen>
     // Live session → a single minimal hero card (trainer name + timer + status
     // pill + pause). No date title, status chip, or meta rows.
     if (s.status == SessionStatus.inProgress && s.startedAt != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 8),
-          SessionHeroCard(
-            sessionId: s.id,
-            name: s.trainerName ?? 'Session',
-            startedAt: s.startedAt!,
-            expectedDurationMin: s.durationMin,
-          ),
-        ],
+      // The binder projects this live session onto the lock screen (iOS Live
+      // Activity / Android ongoing notification) for as long as it's mounted.
+      return SessionLiveActivityBinder(
+        sessionId: s.id,
+        name: s.trainerName ?? 'Session',
+        startedAt: s.startedAt!,
+        workoutTitle: _title,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 8),
+            SessionHeroCard(
+              sessionId: s.id,
+              name: s.trainerName ?? 'Session',
+              startedAt: s.startedAt!,
+              expectedDurationMin: s.durationMin,
+            ),
+          ],
+        ),
       );
     }
     return Column(

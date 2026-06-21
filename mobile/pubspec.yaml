@@ -44,6 +44,9 @@ dependencies:
   # Online/offline detection that drives the sync flush.
   connectivity_plus: ^6.1.0
   pusher_channels_flutter: ^2.4.0
+  live_activities: ^2.4.7
+  flutter_local_notifications: ^22.0.1
+  timezone: ^0.11.0
 
   # ── Added in later phases (need native config; see docs/flutter-migration-plan.md) ──
   # workmanager                   → true OS-background sync (deferred; needs iOS BGTaskScheduler
