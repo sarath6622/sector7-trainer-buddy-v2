@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/realtime/session_realtime.dart';
 import '../../../core/util/formatters.dart';
-import '../../session/presentation/session_live_controls.dart';
+import '../../session/presentation/session_hero_card.dart';
+import '../../workout/presentation/workout_logger_screen.dart';
 import '../data/client_models.dart';
 import '../data/client_repository.dart';
 import 'widgets/client_widgets.dart';
 import 'widgets/reschedule_sheet.dart';
 
+/// Client view of their own session: the session header (date, status, live
+/// timer + controls, trainer, reschedule) with the shared workout logger
+/// embedded directly below — one screen, no separate "Log workout" route. Save
+/// lives in the app bar and drives the embedded [WorkoutLoggerBody].
 class SessionDetailScreen extends ConsumerStatefulWidget {
   const SessionDetailScreen({super.key, required this.sessionId});
   final String sessionId;
@@ -21,6 +25,12 @@ class SessionDetailScreen extends ConsumerStatefulWidget {
 
 class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen>
     with SessionRealtimeMixin {
+  final _loggerKey = GlobalKey<WorkoutLoggerBodyState>();
+  bool _saving = false;
+  // App-bar title, named after the muscle groups trained today (the logger
+  // reports it as exercises are added); generic until anything is logged.
+  String _title = 'Workout';
+
   @override
   String get realtimeSessionId => widget.sessionId;
 
@@ -40,45 +50,110 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen>
     super.dispose();
   }
 
+  static bool _canLog(SessionStatus s) =>
+      s == SessionStatus.scheduled ||
+      s == SessionStatus.inProgress ||
+      s == SessionStatus.completed;
+
   @override
   Widget build(BuildContext context) {
     final detail = ref.watch(clientSessionProvider(widget.sessionId));
+    final canLog = detail.maybeWhen(
+      skipLoadingOnReload: true,
+      data: (d) => _canLog(d.summary.status),
+      orElse: () => false,
+    );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Session')),
-      body: RefreshIndicator(
-        onRefresh: () =>
-            ref.refresh(clientSessionProvider(widget.sessionId).future),
-        child: detail.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ListView(
-            children: [
-              const SizedBox(height: 120),
-              ErrorRetry(
-                message: e.toString(),
-                onRetry: () =>
-                    ref.invalidate(clientSessionProvider(widget.sessionId)),
+      floatingActionButton: canLog
+          ? FloatingActionButton(
+              onPressed:
+                  _saving ? null : () => _loggerKey.currentState?.openSearchPicker(),
+              tooltip: 'Add exercise',
+              child: const Icon(Icons.add),
+            )
+          : null,
+      appBar: AppBar(
+        title: Text(_title),
+        actions: [
+          if (canLog)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: TextButton(
+                onPressed: _saving ? null : () => _loggerKey.currentState?.save(),
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
               ),
-            ],
-          ),
-          data: (d) => _DetailBody(detail: d),
+            ),
+        ],
+      ),
+      body: detail.when(
+        skipLoadingOnReload: true,
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => ListView(
+          children: [
+            const SizedBox(height: 120),
+            ErrorRetry(
+              message: e.toString(),
+              onRetry: () =>
+                  ref.invalidate(clientSessionProvider(widget.sessionId)),
+            ),
+          ],
         ),
+        data: (d) => _merged(d),
       ),
     );
   }
-}
 
-class _DetailBody extends StatelessWidget {
-  const _DetailBody({required this.detail});
-  final SessionDetail detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = detail.summary;
+  Widget _merged(SessionDetail detail) {
+    if (_canLog(detail.summary.status)) {
+      return WorkoutLoggerBody(
+        key: _loggerKey,
+        sessionId: widget.sessionId,
+        header: _headerSection(detail),
+        onSavingChanged: (v) {
+          if (mounted) setState(() => _saving = v);
+        },
+        onTitleChanged: (t) {
+          if (mounted) setState(() => _title = t);
+        },
+      );
+    }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: [_headerSection(detail)],
+    );
+  }
+
+  /// Session card + (for scheduled sessions) a reschedule action, rendered as
+  /// the first scrollable item above the log.
+  Widget _headerSection(SessionDetail detail) {
+    final s = detail.summary;
+    // Live session → a single minimal hero card (trainer name + timer + status
+    // pill + pause). No date title, status chip, or meta rows.
+    if (s.status == SessionStatus.inProgress && s.startedAt != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 8),
+          SessionHeroCard(
+            sessionId: s.id,
+            name: s.trainerName ?? 'Session',
+            startedAt: s.startedAt!,
+            expectedDurationMin: s.durationMin,
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Header card: date, time, status, trainer, duration.
+        const SizedBox(height: 8),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -100,13 +175,6 @@ class _DetailBody extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (s.status == SessionStatus.inProgress &&
-                    s.startedAt != null) ...[
-                  LiveSessionTimer(startedAt: s.startedAt!),
-                  const SizedBox(height: 12),
-                  SessionLiveControls(sessionId: s.id),
-                  const SizedBox(height: 12),
-                ],
                 _MetaRow(icon: Icons.schedule, text: Fmt.time(s.scheduledTime)),
                 _MetaRow(
                   icon: Icons.timer_outlined,
@@ -127,36 +195,14 @@ class _DetailBody extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-
-        if (s.status == SessionStatus.scheduled ||
-            s.status == SessionStatus.inProgress ||
-            s.status == SessionStatus.completed) ...[
-          FilledButton.icon(
-            onPressed: () async {
-              final saved =
-                  await context.push<bool>('/client/sessions/${s.id}/log');
-              if (saved == true && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Workout saved')),
-                );
-              }
-            },
-            icon: const Icon(Icons.fitness_center),
-            label: Text(
-              s.status == SessionStatus.completed ? 'Edit workout' : 'Log workout',
-            ),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(46)),
-          ),
-          const SizedBox(height: 12),
-        ],
-
         if (s.status == SessionStatus.scheduled) ...[
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               final ok = await showRescheduleSheet(context, s);
-              if (ok && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+              if (ok && mounted) {
+                messenger.showSnackBar(
                   const SnackBar(content: Text('Reschedule request submitted')),
                 );
               }
@@ -165,22 +211,7 @@ class _DetailBody extends StatelessWidget {
             label: const Text('Request reschedule'),
             style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
           ),
-          const SizedBox(height: 16),
         ],
-
-        SectionHeader(title: 'Workout (${detail.workoutLogs.length})'),
-        if (detail.workoutLogs.isEmpty)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: EmptyState(
-                icon: Icons.fitness_center,
-                message: 'No exercises logged for this session.',
-              ),
-            ),
-          )
-        else
-          for (final log in detail.workoutLogs) _WorkoutLogCard(log: log),
       ],
     );
   }
@@ -202,87 +233,6 @@ class _MetaRow extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(child: Text(text)),
         ],
-      ),
-    );
-  }
-}
-
-class _WorkoutLogCard extends StatelessWidget {
-  const _WorkoutLogCard({required this.log});
-  final WorkoutLogEntry log;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    log.exerciseName,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                if (log.isCompleted)
-                  Icon(Icons.check_circle, size: 18, color: Colors.green.shade300),
-              ],
-            ),
-            if (log.muscleGroup != null)
-              Text(
-                log.muscleGroup!,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            const SizedBox(height: 10),
-            if (log.sets.isEmpty)
-              Text(
-                'No sets recorded',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              )
-            else
-              for (final set in log.sets)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 28,
-                        child: Text(
-                          '${set.setNumber}',
-                          style: TextStyle(
-                            color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Expanded(child: Text(set.summary)),
-                      if (set.rpe != null)
-                        Text(
-                          'RPE ${set.rpe}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
-                        ),
-                    ],
-                  ),
-                ),
-          ],
-        ),
       ),
     );
   }

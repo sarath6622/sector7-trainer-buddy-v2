@@ -118,18 +118,25 @@ class SessionDetail {
     required this.summary,
     required this.workoutLogs,
     this.clientName,
+    this.clientProfileId,
   });
 
   final SessionSummary summary;
   final List<WorkoutLogEntry> workoutLogs;
   final String? clientName;
 
+  /// The session's ClientProfile id, when the endpoint exposes it (the trainer
+  /// session detail returns `client.id`). Drives the logger's "last time" hint
+  /// fetch; when null (e.g. a client endpoint that omits it) hints are skipped.
+  final String? clientProfileId;
+
   factory SessionDetail.fromJson(Map<String, dynamic> json) {
     final logs = (json['workoutLogs'] as List? ?? const [])
         .whereType<Map>()
         .map((m) => WorkoutLogEntry.fromJson(Map<String, dynamic>.from(m)))
         .toList();
-    final clientUser = (json['client'] as Map?)?['user'] as Map?;
+    final client = json['client'] as Map?;
+    final clientUser = client?['user'] as Map?;
     final clientName = clientUser == null
         ? null
         : '${clientUser['firstName'] ?? ''} ${clientUser['lastName'] ?? ''}'.trim();
@@ -137,6 +144,7 @@ class SessionDetail {
       summary: SessionSummary.fromJson(json),
       workoutLogs: logs,
       clientName: (clientName?.isEmpty ?? true) ? null : clientName,
+      clientProfileId: client?['id'] as String?,
     );
   }
 }

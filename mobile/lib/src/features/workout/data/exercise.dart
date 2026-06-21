@@ -33,3 +33,33 @@ class Exercise {
         equipment: json['equipmentRequired'] as String?,
       );
 }
+
+/// One set from a client's most recent prior session for an exercise, returned
+/// by `GET /api/trainer/clients/[id]/last-sets`. Powers the "last time" hints
+/// in the workout logger (set 1 → prior set 1, set 2 → prior set 2, …).
+class LastSetSnapshot {
+  const LastSetSnapshot({
+    required this.setNumber,
+    this.reps,
+    this.weightKg,
+    this.durationSec,
+    this.restSec,
+    this.stepsCount,
+  });
+
+  final int setNumber;
+  final int? reps;
+  final double? weightKg;
+  final int? durationSec;
+  final int? restSec;
+  final int? stepsCount;
+
+  factory LastSetSnapshot.fromJson(Map<String, dynamic> json) => LastSetSnapshot(
+        setNumber: (json['setNumber'] as num?)?.toInt() ?? 1,
+        reps: (json['reps'] as num?)?.toInt(),
+        weightKg: (json['weightKg'] as num?)?.toDouble(),
+        durationSec: (json['durationSec'] as num?)?.toInt(),
+        restSec: (json['restSec'] as num?)?.toInt(),
+        stepsCount: (json['stepsCount'] as num?)?.toInt(),
+      );
+}

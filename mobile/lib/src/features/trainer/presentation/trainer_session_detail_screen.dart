@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/realtime/session_realtime.dart';
 import '../../../core/util/formatters.dart';
 import '../../client/data/client_models.dart';
-import '../../session/presentation/session_live_controls.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
+import '../../session/presentation/session_hero_card.dart';
+import '../../workout/presentation/workout_logger_screen.dart';
 import '../data/trainer_repository.dart';
 import 'widgets/trainer_actions.dart';
 
-/// Trainer view of one session: header + lifecycle actions (start / end /
-/// no-show) + the shared workout logger + the logged exercises. Reuses the
-/// shared [SessionDetail] model returned by GET /api/trainer/sessions/[id].
+/// Trainer view of one session: the session header + lifecycle actions
+/// (start / end / no-show) with the shared workout logger embedded directly
+/// below — one screen, no separate "Log workout" route. Save lives in the app
+/// bar and drives the embedded [WorkoutLoggerBody] via a [GlobalKey].
 class TrainerSessionDetailScreen extends ConsumerStatefulWidget {
   const TrainerSessionDetailScreen({super.key, required this.sessionId});
   final String sessionId;
@@ -25,7 +26,12 @@ class TrainerSessionDetailScreen extends ConsumerStatefulWidget {
 class _TrainerSessionDetailScreenState
     extends ConsumerState<TrainerSessionDetailScreen>
     with SessionRealtimeMixin {
-  bool _busy = false;
+  final _loggerKey = GlobalKey<WorkoutLoggerBodyState>();
+  bool _busy = false; // a lifecycle action (start/end/no-show) is in flight
+  bool _saving = false; // the embedded logger is saving
+  // App-bar title, named after the muscle groups trained today (the logger
+  // reports it as exercises are added); generic until anything is logged.
+  String _title = 'Workout';
 
   @override
   String get realtimeSessionId => widget.sessionId;
@@ -46,39 +52,133 @@ class _TrainerSessionDetailScreenState
     super.dispose();
   }
 
+  static bool _canLog(SessionStatus s) =>
+      s == SessionStatus.scheduled ||
+      s == SessionStatus.inProgress ||
+      s == SessionStatus.completed;
+
   @override
   Widget build(BuildContext context) {
     final detail = ref.watch(trainerSessionProvider(widget.sessionId));
+    final canLog = detail.maybeWhen(
+      skipLoadingOnReload: true,
+      data: (d) => _canLog(d.summary.status),
+      orElse: () => false,
+    );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Session')),
-      body: RefreshIndicator(
-        onRefresh: () =>
-            ref.refresh(trainerSessionProvider(widget.sessionId).future),
-        child: detail.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ListView(
-            children: [
-              const SizedBox(height: 120),
-              ErrorRetry(
-                message: e.toString(),
-                onRetry: () =>
-                    ref.invalidate(trainerSessionProvider(widget.sessionId)),
+      floatingActionButton: canLog
+          ? FloatingActionButton(
+              onPressed:
+                  _saving ? null : () => _loggerKey.currentState?.openSearchPicker(),
+              tooltip: 'Add exercise',
+              child: const Icon(Icons.add),
+            )
+          : null,
+      appBar: AppBar(
+        title: Text(_title),
+        actions: [
+          if (canLog)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: TextButton(
+                onPressed: _saving ? null : () => _loggerKey.currentState?.save(),
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
               ),
-            ],
-          ),
-          data: (d) => _body(d),
+            ),
+        ],
+      ),
+      // skipLoadingOnReload keeps the embedded logger mounted across the
+      // realtime/poll refetches — otherwise a refetch would flash the spinner
+      // and drop in-progress edits.
+      body: detail.when(
+        skipLoadingOnReload: true,
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => ListView(
+          children: [
+            const SizedBox(height: 120),
+            ErrorRetry(
+              message: e.toString(),
+              onRetry: () =>
+                  ref.invalidate(trainerSessionProvider(widget.sessionId)),
+            ),
+          ],
         ),
+        data: (d) => _merged(d),
       ),
     );
   }
 
-  Widget _body(SessionDetail detail) {
-    final s = detail.summary;
+  Widget _merged(SessionDetail detail) {
+    final status = detail.summary.status;
+    if (_canLog(status)) {
+      return WorkoutLoggerBody(
+        key: _loggerKey,
+        sessionId: widget.sessionId,
+        header: _headerSection(detail),
+        onSavingChanged: (v) {
+          if (mounted) setState(() => _saving = v);
+        },
+        onTitleChanged: (t) {
+          if (mounted) setState(() => _title = t);
+        },
+      );
+    }
+    // Non-loggable (no-show / cancelled): header + a note, no logger.
     final scheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
+        _headerSection(detail),
+        if (status == SessionStatus.noShow) ...[
+          const SizedBox(height: 8),
+          Text(
+            'This session was marked a no-show.',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// The session card + lifecycle actions, rendered as the first scrollable
+  /// item above the log (so it scrolls away as exercises are added).
+  Widget _headerSection(SessionDetail detail) {
+    final s = detail.summary;
+    // Live session → a single minimal hero card (name + timer + status pill +
+    // pause/end cluster). No duplicate title, status chip, meta rows, or a
+    // separate End button.
+    if (s.status == SessionStatus.inProgress && s.startedAt != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 8),
+          SessionHeroCard(
+            sessionId: s.id,
+            name: detail.clientName ?? 'Client',
+            startedAt: s.startedAt!,
+            expectedDurationMin: s.durationMin,
+            onEnd: () => _runAction(
+              () => TrainerSessionActions.end(context, ref, widget.sessionId),
+            ),
+            ending: _busy,
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 8),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -100,17 +200,7 @@ class _TrainerSessionDetailScreenState
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (s.status == SessionStatus.inProgress &&
-                    s.startedAt != null) ...[
-                  LiveSessionTimer(startedAt: s.startedAt!),
-                  const SizedBox(height: 12),
-                  SessionLiveControls(sessionId: s.id),
-                  const SizedBox(height: 12),
-                ],
-                _MetaRow(
-                  icon: Icons.event,
-                  text: Fmt.dayMonthYear(s.scheduledDate),
-                ),
+                _MetaRow(icon: Icons.event, text: Fmt.dayMonthYear(s.scheduledDate)),
                 _MetaRow(icon: Icons.schedule, text: Fmt.time(s.scheduledTime)),
                 _MetaRow(
                   icon: Icons.timer_outlined,
@@ -129,56 +219,14 @@ class _TrainerSessionDetailScreenState
             ),
           ),
         ),
-        const SizedBox(height: 16),
-
-        ..._actions(s.status),
-
-        SectionHeader(title: 'Workout (${detail.workoutLogs.length})'),
-        if (detail.workoutLogs.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: EmptyState(
-                icon: Icons.fitness_center,
-                message: s.status == SessionStatus.scheduled
-                    ? 'Start the session to log exercises.'
-                    : 'No exercises logged yet.',
-              ),
-            ),
-          )
-        else
-          for (final log in detail.workoutLogs)
-            WorkoutLogCard(log: log),
-        if (s.status == SessionStatus.noShow) ...[
-          const SizedBox(height: 8),
-          Text(
-            'This session was marked a no-show.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ],
+        ..._statusActions(s.status),
       ],
     );
   }
 
-  /// Status-driven action buttons. While an action is in flight everything is
-  /// disabled and a progress spinner replaces the primary control.
-  List<Widget> _actions(SessionStatus status) {
-    final canLog = status == SessionStatus.scheduled ||
-        status == SessionStatus.inProgress ||
-        status == SessionStatus.completed;
-
-    final logButton = OutlinedButton.icon(
-      onPressed: _busy ? null : _openLogger,
-      icon: const Icon(Icons.fitness_center),
-      label: Text(
-        status == SessionStatus.completed ? 'Edit workout' : 'Log workout',
-      ),
-      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
-    );
-
+  /// Start / End / No-show controls. While one is in flight everything is
+  /// disabled and a spinner replaces the primary control.
+  List<Widget> _statusActions(SessionStatus status) {
     Widget primary(String label, Future<bool> Function() run) => FilledButton(
           onPressed: _busy ? null : () => _runAction(run),
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(46)),
@@ -191,56 +239,43 @@ class _TrainerSessionDetailScreenState
               : Text(label),
         );
 
-    final widgets = <Widget>[];
     switch (status) {
       case SessionStatus.scheduled:
-        widgets.add(primary('Start session',
-            () => TrainerSessionActions.start(context, ref, widget.sessionId)));
-        widgets.add(const SizedBox(height: 12));
-        widgets.add(OutlinedButton.icon(
-          onPressed: _busy
-              ? null
-              : () => _runAction(() =>
-                  TrainerSessionActions.noShow(context, ref, widget.sessionId)),
-          icon: const Icon(Icons.person_off_outlined),
-          label: const Text('Mark no-show'),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(46),
-            foregroundColor: Theme.of(context).colorScheme.error,
+        return [
+          const SizedBox(height: 16),
+          primary('Start session',
+              () => TrainerSessionActions.start(context, ref, widget.sessionId)),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _busy
+                ? null
+                : () => _runAction(() =>
+                    TrainerSessionActions.noShow(context, ref, widget.sessionId)),
+            icon: const Icon(Icons.person_off_outlined),
+            label: const Text('Mark no-show'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(46),
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
           ),
-        ));
-        widgets.add(const SizedBox(height: 12));
+          const SizedBox(height: 4),
+        ];
       case SessionStatus.inProgress:
-        widgets.add(primary('End session',
-            () => TrainerSessionActions.end(context, ref, widget.sessionId)));
-        widgets.add(const SizedBox(height: 12));
+        return [
+          const SizedBox(height: 16),
+          primary('End session',
+              () => TrainerSessionActions.end(context, ref, widget.sessionId)),
+          const SizedBox(height: 4),
+        ];
       default:
-        break;
+        return const [];
     }
-    if (canLog) {
-      widgets.add(logButton);
-      widgets.add(const SizedBox(height: 16));
-    } else if (widgets.isNotEmpty) {
-      widgets.add(const SizedBox(height: 4));
-    }
-    return widgets;
   }
 
   Future<void> _runAction(Future<bool> Function() run) async {
     setState(() => _busy = true);
     await run();
     if (mounted) setState(() => _busy = false);
-  }
-
-  Future<void> _openLogger() async {
-    final saved =
-        await context.push<bool>('/trainer/sessions/${widget.sessionId}/log');
-    if (saved == true && mounted) {
-      ref.invalidate(trainerSessionProvider(widget.sessionId));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Workout saved')),
-      );
-    }
   }
 }
 

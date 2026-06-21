@@ -19,6 +19,27 @@ void main() {
       expect(DraftSet(setNumber: 1, reps: 5, rpe: 0).toJson().containsKey('rpe'), isFalse);
       expect(DraftSet(setNumber: 1, reps: 5, rpe: 11).toJson().containsKey('rpe'), isFalse);
     });
+
+    test('emits positive restSec, drops zero', () {
+      expect(DraftSet(setNumber: 1, reps: 5, restSec: 90).toJson()['restSec'], 90);
+      expect(
+        DraftSet(setNumber: 1, reps: 5, restSec: 0).toJson().containsKey('restSec'),
+        isFalse,
+      );
+    });
+  });
+
+  group('DraftSet restSec round-trips', () {
+    test('full json keeps restSec for a restored offline draft', () {
+      final s = DraftSet(setNumber: 2, reps: 8, weightKg: 40, restSec: 120);
+      final back = DraftSet.fromFullJson(s.toFullJson());
+      expect(back.restSec, 120);
+    });
+
+    test('fromEntry carries restSec from a logged set', () {
+      const e = WorkoutSetEntry(setNumber: 1, reps: 5, restSec: 75);
+      expect(DraftSet.fromEntry(e).restSec, 75);
+    });
   });
 
   group('DraftExercise', () {
@@ -86,6 +107,90 @@ void main() {
       expect(d.toJson(0)['sets'], [
         {'setNumber': 1, 'reps': 5, 'weightKg': 100.0},
       ]);
+    });
+  });
+
+  group('DraftSet.isCompleted (guided logger)', () {
+    test('round-trips through full json, defaults false when absent', () {
+      final s = DraftSet(setNumber: 1, reps: 5, weightKg: 40, isCompleted: true);
+      expect(DraftSet.fromFullJson(s.toFullJson()).isCompleted, isTrue);
+      expect(DraftSet.fromFullJson({'setNumber': 1, 'reps': 5}).isCompleted, isFalse);
+    });
+
+    test('fromEntry marks server-logged sets completed', () {
+      const e = WorkoutSetEntry(setNumber: 1, reps: 5, weightKg: 40);
+      expect(DraftSet.fromEntry(e).isCompleted, isTrue);
+    });
+
+    test('is never sent on the wire', () {
+      final s = DraftSet(setNumber: 1, reps: 5, isCompleted: true);
+      expect(s.toJson().containsKey('isCompleted'), isFalse);
+    });
+  });
+
+  group('DraftSet.hasValue', () {
+    test('true with any logged metric, false when empty', () {
+      expect(DraftSet(setNumber: 1, reps: 5).hasValue, isTrue);
+      expect(DraftSet(setNumber: 1, weightKg: 20).hasValue, isTrue);
+      expect(DraftSet(setNumber: 1, durationSec: 30).hasValue, isTrue);
+      expect(DraftSet(setNumber: 1).hasValue, isFalse);
+      expect(DraftSet(setNumber: 1, reps: 0, weightKg: 0).hasValue, isFalse);
+    });
+  });
+
+  group('DraftExercise guided getters', () {
+    DraftExercise ex(List<DraftSet> sets) => DraftExercise(
+        exerciseId: 'e', name: 'X', exerciseType: 'WEIGHTED', sets: sets);
+
+    test('activeSetIndex is the first not-completed set', () {
+      final d = ex([
+        DraftSet(setNumber: 1, reps: 5, weightKg: 20, isCompleted: true),
+        DraftSet(setNumber: 2, reps: 5, weightKg: 20, isCompleted: true),
+        DraftSet(setNumber: 3),
+      ]);
+      expect(d.activeSetIndex, 2);
+    });
+
+    test('activeSetIndex is null when every set is resolved', () {
+      final d = ex([
+        DraftSet(setNumber: 1, reps: 5, weightKg: 20, isCompleted: true),
+        DraftSet(setNumber: 2, isCompleted: true), // skipped
+      ]);
+      expect(d.activeSetIndex, isNull);
+    });
+
+    test('loggedSetCount counts completed-with-values, excludes skipped', () {
+      final d = ex([
+        DraftSet(setNumber: 1, reps: 5, weightKg: 20, isCompleted: true), // logged
+        DraftSet(setNumber: 2, isCompleted: true), // skipped (no value)
+        DraftSet(setNumber: 3, reps: 5, weightKg: 20), // active, not completed
+      ]);
+      expect(d.loggedSetCount, 1);
+    });
+  });
+
+  group('improvementKg', () {
+    test('heaviest current minus heaviest last', () {
+      final delta = improvementKg(
+        [
+          DraftSet(setNumber: 1, reps: 5, weightKg: 22.5),
+          DraftSet(setNumber: 2, reps: 5, weightKg: 20),
+        ],
+        const [LastSetSnapshot(setNumber: 1, reps: 5, weightKg: 20)],
+      );
+      expect(delta, 2.5);
+    });
+
+    test('null when either side has no weight', () {
+      expect(
+        improvementKg([DraftSet(setNumber: 1, reps: 5)],
+            const [LastSetSnapshot(setNumber: 1, weightKg: 20)]),
+        isNull,
+      );
+      expect(
+        improvementKg([DraftSet(setNumber: 1, weightKg: 20)], const []),
+        isNull,
+      );
     });
   });
 }

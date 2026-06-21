@@ -14,11 +14,7 @@ import 'workout_draft.dart';
 /// True when a set carries at least one logged metric and should be persisted.
 /// Half-typed / empty rows are dropped so they don't churn the diff or get
 /// saved as noise (mirrors the logger's pre-save filter + web `isSetComplete`).
-bool isSaveableSet(DraftSet s) =>
-    (s.reps ?? 0) > 0 ||
-    (s.weightKg ?? 0) > 0 ||
-    (s.durationSec ?? 0) > 0 ||
-    (s.stepsCount ?? 0) > 0;
+bool isSaveableSet(DraftSet s) => s.hasValue;
 
 /// Normalized wire payload for a session: only exercises with ≥1 saveable set,
 /// sets renumbered 1-based, `orderIndex` dense from 0. Built identically for

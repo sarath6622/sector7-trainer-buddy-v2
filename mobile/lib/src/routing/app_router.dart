@@ -11,7 +11,6 @@ import '../features/client/presentation/reschedule_requests_screen.dart';
 import '../features/client/presentation/session_detail_screen.dart';
 import '../features/client/presentation/unavailability_screen.dart';
 import '../features/client/presentation/workout_history_screen.dart';
-import '../features/workout/presentation/workout_logger_screen.dart';
 import '../features/shared/presentation/splash_screen.dart';
 import '../features/trainer/data/trainer_models.dart';
 import '../features/trainer/presentation/trainer_client_detail_screen.dart';
@@ -44,13 +43,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, state) => TrainerSessionDetailScreen(
               sessionId: state.pathParameters['id']!,
             ),
-            routes: [
-              GoRoute(
-                path: 'log',
-                builder: (_, state) =>
-                    WorkoutLoggerScreen(sessionId: state.pathParameters['id']!),
-              ),
-            ],
           ),
           GoRoute(
             path: 'clients/:id',
@@ -79,13 +71,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'sessions/:id',
             builder: (_, state) =>
                 SessionDetailScreen(sessionId: state.pathParameters['id']!),
-            routes: [
-              GoRoute(
-                path: 'log',
-                builder: (_, state) =>
-                    WorkoutLoggerScreen(sessionId: state.pathParameters['id']!),
-              ),
-            ],
           ),
           GoRoute(
             path: 'workouts',
