@@ -146,7 +146,7 @@ class _OtherSessionChipState extends ConsumerState<_OtherSessionChip> {
     final subColor = status.neutral ? scheme.onSurfaceVariant : accent;
 
     return Material(
-      color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      color: scheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: widget.onTap,
@@ -158,7 +158,7 @@ class _OtherSessionChipState extends ConsumerState<_OtherSessionChip> {
             border: Border.all(
               color: status.alert
                   ? accent.withValues(alpha: 0.55)
-                  : scheme.outlineVariant.withValues(alpha: 0.4),
+                  : scheme.outlineVariant,
             ),
           ),
           child: Row(

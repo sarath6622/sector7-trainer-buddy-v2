@@ -10,20 +10,25 @@ import 'session_live_controls.dart' show RestTimerSheet;
 
 // Status colours — semantic (rest/idle/pause language), not the orange brand
 // accent. Same vocabulary as session_live_controls.dart + the web SessionHero.
-const _kRunning = Color(0xFF3B82F6); // blue-500  — resting
-const _kDone = Color(0xFF22C55E); // green-500 — rest done (fresh) / live
+const _kDone = Color(0xFF22C55E); // green-500 — on track / live
 const _kPaused = Color(0xFFF59E0B); // amber-500 — paused / warn
-const _kUrgent = Color(0xFFFB7185); // rose-400  — overtime / urgent
+const _kUrgent = Color(0xFFFB7185); // rose-400  — idle / needs attention
 
-/// Compact live-session header — the mobile analogue of the web `SessionHero`.
-/// Replaces the old LIVE pill + stacked Pause/Rest buttons with one dense card:
-/// an avatar story-ring (elapsed / expected), the person's name, the elapsed
-/// timer, and a single status pill that escalates through resting → rest-done →
-/// paused → idle → live. Tapping the card opens the rest-timer sheet (the only
-/// rest entry point on mobile); the trailing button toggles session pause.
+/// Live-session header — the mobile analogue of the web `SessionHero`, restyled
+/// as a "now playing" card: an avatar story-ring (elapsed / expected) with a
+/// live presence dot, the person's name, the elapsed timer, a status line, and
+/// labeled Pause / End actions.
 ///
-/// Neutral dark card by design — the timer and status pill carry the only
-/// colour, so it sits quietly inside the session-detail card.
+/// The whole card carries a single **mood** colour that the trainer can read at
+/// a glance — a soft glowing border, the ring, the status pill, and (when it
+/// matters) the timer all share it:
+///   • **green** when everything is on track (live, resting, just finished rest),
+///   • **rose** when the client is idle and needs attention (rest overdue, or no
+///     set logged for a while),
+///   • **amber** while the session is paused.
+///
+/// Tapping the card body opens the rest-timer sheet (the only rest entry point
+/// on mobile); the End button is trainer-only ([onEnd] non-null).
 class SessionHeroCard extends ConsumerStatefulWidget {
   const SessionHeroCard({
     super.key,
@@ -43,15 +48,15 @@ class SessionHeroCard extends ConsumerStatefulWidget {
   final DateTime startedAt;
   final int expectedDurationMin;
 
-  /// Most-recent activity timestamp (ms) for the idle pill. Null suppresses the
-  /// idle counter (shows "Live" instead).
+  /// Most-recent activity timestamp (ms) for the idle detection. Null suppresses
+  /// the idle escalation (the card stays on-track / green).
   final int? lastActivityMs;
 
   /// When set, renders an End (stop) button next to Pause — trainer-only by
   /// design (lifecycle stays trainer-owned). Clients pass null.
   final VoidCallback? onEnd;
 
-  /// True while the End action is in flight — swaps the End button for a spinner.
+  /// True while the End action is in flight — swaps the End icon for a spinner.
   final bool ending;
 
   @override
@@ -106,187 +111,214 @@ class _SessionHeroCardState extends ConsumerState<SessionHeroCard> {
     final expectedSec = widget.expectedDurationMin * 60;
     final progress =
         expectedSec > 0 ? (elapsedSec / expectedSec).clamp(0.0, 1.0) : 0.0;
-    final overtime = expectedSec > 0 && elapsedSec >= expectedSec;
 
-    final ringColor =
-        isPaused ? _kPaused : (overtime ? _kUrgent : scheme.primary);
+    final mood = _resolveMood(nowMs, restSnap.skewMs, timer, isPaused);
+    final accent = mood.accent;
+    // The timer only takes a colour when it's saying something — rose when the
+    // client needs attention, amber while paused, otherwise calm white.
     final timerColor =
-        isPaused ? _kPaused : (overtime ? _kUrgent : scheme.onSurface);
-    final status = _statusFor(nowMs, restSnap.skewMs, timer, isPaused);
+        mood.attention ? _kUrgent : (isPaused ? _kPaused : scheme.onSurface);
+    // A little stronger when it needs the eye (idle / paused), softer on track.
+    final live = mood.attention || isPaused;
 
-    return Material(
-      color: scheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: _openRest,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: 0.6),
-            ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: live ? 0.22 : 0.13),
+            blurRadius: 22,
+            spreadRadius: -4,
           ),
-          child: Row(
-            children: [
-              _Avatar(
-                initials: _initialsOf(widget.name),
-                progress: progress,
-                ringColor: ringColor,
+        ],
+      ),
+      child: Material(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: _openRest,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: accent.withValues(alpha: live ? 0.55 : 0.40),
+                width: 1.2,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            widget.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'SESSION',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.8,
-                                fontSize: 9,
-                              ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _fmtElapsed(elapsedSec),
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: timerColor,
-                            fontWeight: FontWeight.w800,
-                            height: 1,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                    ),
-                    const SizedBox(height: 5),
-                    _StatusPill(label: status.label, color: status.color),
-                  ],
+              // Soft accent wash from the avatar edge — the inner glow in the
+              // reference design.
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [accent.withValues(alpha: 0.10), Colors.transparent],
+                stops: const [0.0, 0.55],
+              ),
+            ),
+            child: Row(
+              children: [
+                _Avatar(
+                  initials: _initialsOf(widget.name),
+                  progress: progress,
+                  ringColor: accent,
                 ),
-              ),
-              const SizedBox(width: 10),
-              // Action cluster — Pause first, End on the destructive trailing
-              // edge (PWA SessionHero order). End is trainer-only via [onEnd].
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _CircleButton(
-                    icon: isPaused
-                        ? Icons.play_arrow_rounded
-                        : Icons.pause_rounded,
-                    color: isPaused ? _kPaused : scheme.onSurfaceVariant,
-                    background: isPaused
-                        ? _kPaused.withValues(alpha: 0.16)
-                        : scheme.surface,
-                    tooltip: isPaused ? 'Resume session' : 'Pause session',
-                    onTap: ref
-                        .read(sessionPauseControllerProvider(widget.sessionId)
-                            .notifier)
-                        .toggle,
-                  ),
-                  if (widget.onEnd != null) ...[
-                    const SizedBox(width: 8),
-                    if (widget.ending)
-                      const SizedBox(
-                        width: 42,
-                        height: 42,
-                        child: Center(
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      )
-                    else
-                      _CircleButton(
-                        icon: Icons.stop_rounded,
-                        color: _kUrgent,
-                        background: _kUrgent.withValues(alpha: 0.16),
-                        tooltip: 'End session',
-                        onTap: widget.onEnd!,
+                const SizedBox(width: 11),
+                Container(width: 1, height: 52, color: scheme.outlineVariant),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
-                  ],
+                      const SizedBox(height: 3),
+                      Text(
+                        _fmtElapsed(elapsedSec),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(
+                              color: timerColor,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                      ),
+                      const SizedBox(height: 7),
+                      _StatusLine(
+                        word: mood.word,
+                        detail: mood.detail,
+                        color: accent,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Action cluster — Pause first, End on the destructive trailing
+                // edge (PWA SessionHero order). End is trainer-only via [onEnd]
+                // and picks up the card's mood colour.
+                _LabeledAction(
+                  icon:
+                      isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                  label: isPaused ? 'Resume' : 'Pause',
+                  color: isPaused ? _kPaused : scheme.onSurface,
+                  background:
+                      isPaused ? _kPaused.withValues(alpha: 0.16) : scheme.surface,
+                  onTap: ref
+                      .read(sessionPauseControllerProvider(widget.sessionId)
+                          .notifier)
+                      .toggle,
+                ),
+                if (widget.onEnd != null) ...[
+                  const SizedBox(width: 8),
+                  _LabeledAction(
+                    icon: Icons.stop_rounded,
+                    label: 'End',
+                    color: accent,
+                    background: accent.withValues(alpha: 0.16),
+                    onTap: widget.onEnd!,
+                    busy: widget.ending,
+                  ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  /// Status-pill escalation, in priority order — ports the web SessionHero:
-  /// session-paused → rest-done (fresh/warn/urgent) → resting → rest-paused →
-  /// idle (warn/urgent) → live.
-  _HeroStatus _statusFor(
+  /// Card mood, in priority order — ports the web SessionHero escalation but
+  /// collapses it to the green / amber / rose vocabulary the card chrome shows:
+  /// session-paused → rest-done (fresh on-track / overdue rose) → resting →
+  /// rest-paused → idle (on-track / overdue rose) → live.
+  _HeroMood _resolveMood(
     int nowMs,
     int skewMs,
     RestTimerState timer,
     bool isPaused,
   ) {
-    if (isPaused) return const _HeroStatus('Session paused', _kPaused);
+    if (isPaused) {
+      return const _HeroMood(_kPaused, 'PAUSED', '');
+    }
 
     if (timer.isDone(nowMs, skewMs)) {
       final doneSec = timer.endTime != null
-          ? (((nowMs + skewMs) - timer.endTime!) ~/ 1000).clamp(0, 1 << 40).toInt()
+          ? (((nowMs + skewMs) - timer.endTime!) ~/ 1000)
+              .clamp(0, 1 << 40)
+              .toInt()
           : 0;
-      if (doneSec >= 300) {
-        return _HeroStatus('Rest done · ${_fmtIdle(doneSec)}', _kUrgent);
-      }
+      // Rest finished a while ago and no new set — client is idle, flag it.
       if (doneSec >= 120) {
-        return _HeroStatus('Rest done · ${_fmtIdle(doneSec)}', _kPaused);
+        return _HeroMood(
+          _kUrgent,
+          'IDLE',
+          'Rest done · ${_fmtIdle(doneSec)} ago',
+          attention: true,
+        );
       }
-      return const _HeroStatus('Rest done!', _kDone);
+      return const _HeroMood(_kDone, 'LIVE', 'Rest done!');
     }
     if (timer.isRunning(nowMs, skewMs)) {
-      return _HeroStatus(
+      return _HeroMood(
+        _kDone,
+        'REST',
         'Resting · ${formatMmSs(timer.remaining(nowMs, skewMs)!)}',
-        _kRunning,
       );
     }
     if (timer.isPaused) {
-      return _HeroStatus(
-        'Rest paused · ${formatMmSs(timer.remaining(nowMs, skewMs)!)}',
+      return _HeroMood(
         _kPaused,
+        'PAUSED',
+        'Rest paused · ${formatMmSs(timer.remaining(nowMs, skewMs)!)}',
       );
     }
 
     final lastMs = widget.lastActivityMs;
     if (lastMs != null) {
       final idleSec = ((nowMs - lastMs) ~/ 1000).clamp(0, 1 << 40).toInt();
-      if (idleSec >= 1200) return _HeroStatus('${_fmtIdle(idleSec)} idle', _kUrgent);
-      if (idleSec >= 480) return _HeroStatus('${_fmtIdle(idleSec)} idle', _kPaused);
-      if (idleSec >= 60) return _HeroStatus('${_fmtIdle(idleSec)} idle', _kDone);
+      if (idleSec >= 480) {
+        return _HeroMood(
+          _kUrgent,
+          'IDLE',
+          '${_fmtIdle(idleSec)} idle',
+          attention: true,
+        );
+      }
+      if (idleSec >= 60) {
+        return _HeroMood(
+          _kDone,
+          'LIVE',
+          '${_fmtIdle(idleSec)} since last set',
+        );
+      }
     }
-    return const _HeroStatus('Live', _kDone);
+    return const _HeroMood(_kDone, 'LIVE', '');
   }
 }
 
-class _HeroStatus {
-  const _HeroStatus(this.label, this.color);
-  final String label;
-  final Color color;
+class _HeroMood {
+  const _HeroMood(this.accent, this.word, this.detail, {this.attention = false});
+
+  /// The card's single mood colour (green / amber / rose).
+  final Color accent;
+
+  /// Short state word for the status pill (LIVE / REST / PAUSED / IDLE).
+  final String word;
+
+  /// Human detail shown next to the pill.
+  final String detail;
+
+  /// Client needs the trainer's eye — paints the card rose + colours the timer.
+  final bool attention;
 }
 
 class _Avatar extends StatelessWidget {
@@ -304,23 +336,23 @@ class _Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return SizedBox(
-      width: 46,
-      height: 46,
+      width: 52,
+      height: 52,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox.expand(
             child: CircularProgressIndicator(
               value: progress,
-              strokeWidth: 2.5,
+              strokeWidth: 3,
               strokeCap: StrokeCap.round,
-              backgroundColor: scheme.onSurface.withValues(alpha: 0.12),
+              backgroundColor: scheme.onSurface.withValues(alpha: 0.10),
               valueColor: AlwaysStoppedAnimation(ringColor),
             ),
           ),
           Container(
-            width: 34,
-            height: 34,
+            width: 40,
+            height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
@@ -328,9 +360,24 @@ class _Avatar extends StatelessWidget {
             ),
             child: Text(
               initials,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ),
+          // Live presence dot — punched out of the card with a matching border.
+          Positioned(
+            right: 1,
+            bottom: 3,
+            child: Container(
+              width: 13,
+              height: 13,
+              decoration: BoxDecoration(
+                color: _kDone,
+                shape: BoxShape.circle,
+                border: Border.all(color: scheme.surfaceContainerLow, width: 2.5),
+              ),
             ),
           ),
         ],
@@ -339,72 +386,128 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label, required this.color});
-  final String label;
+class _StatusLine extends StatelessWidget {
+  const _StatusLine({
+    required this.word,
+    required this.detail,
+    required this.color,
+  });
+
+  final String word;
+  final String detail;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            label.toUpperCase(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                  fontSize: 10,
-                ),
+          padding: const EdgeInsets.fromLTRB(7, 3, 9, 3),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration:
+                    BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                word,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      fontSize: 10,
+                    ),
+              ),
+            ],
           ),
         ),
+        if (detail.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              detail,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
-class _CircleButton extends StatelessWidget {
-  const _CircleButton({
+class _LabeledAction extends StatelessWidget {
+  const _LabeledAction({
     required this.icon,
+    required this.label,
     required this.color,
     required this.background,
-    required this.tooltip,
     required this.onTap,
+    this.busy = false,
   });
 
   final IconData icon;
+  final String label;
   final Color color;
   final Color background;
-  final String tooltip;
   final VoidCallback onTap;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: background,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icon, size: 20, color: color),
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: label,
+          child: Material(
+            color: background,
+            borderRadius: BorderRadius.circular(13),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(13),
+              onTap: busy ? null : onTap,
+              child: SizedBox(
+                width: 46,
+                height: 44,
+                child: busy
+                    ? const Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : Icon(icon, size: 22, color: color),
+              ),
+            ),
           ),
         ),
-      ),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+        ),
+      ],
     );
   }
 }
