@@ -11,7 +11,7 @@ import { useRestTimer } from '@/hooks/useRestTimer';
 import { useSessionPause } from '@/hooks/useSessionPause';
 import { useRestAutofill } from '@/hooks/useRestAutofill';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
-import { useKeyboardInset } from '@/hooks/useKeyboardInset';
+import { useKeyboardViewport } from '@/hooks/useKeyboardInset';
 import type {
   SessionStartedPayload,
   SessionEndedPayload,
@@ -297,11 +297,30 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
   const restTimer = useRestTimer(activeId);
   const sessionPause = useSessionPause(activeId);
   const { lastFinishedRestSec, consumeRest } = useRestAutofill(activeId, restTimer);
-  // Keyboard-aware container height. iOS standalone PWAs don't shrink `dvh`
-  // when the virtual keyboard opens, so without this the bottom rest-timer
-  // pill ends up hidden behind the keyboard while the trainer types.
-  const keyboardInset = useKeyboardInset();
-  const containerHeight = `calc(100dvh - 3.5rem - env(safe-area-inset-top) - ${keyboardInset}px)`;
+  // Size the session container from the *visual* viewport height (the on-screen
+  // area above the keyboard) instead of `100dvh`. iOS standalone PWAs overlay
+  // the keyboard without shrinking `dvh`/`innerHeight`, so a full-height
+  // container leaves its scroll body running behind the keyboard and the
+  // focused cell hidden under it. visualViewport.height ends the scrollport
+  // exactly at the keyboard top, so the cell can scroll into view — the
+  // iOS-recommended PWA keyboard pattern. Falls back to `100dvh` until measured.
+  const { height: viewportHeight, inset: keyboardInset } = useKeyboardViewport();
+  const keyboardOpen = keyboardInset > 0;
+  const viewportBasis = viewportHeight != null ? `${viewportHeight}px` : '100dvh';
+  const containerHeight = `calc(${viewportBasis} - 3.5rem - env(safe-area-inset-top))`;
+
+  // When the keyboard opens, the container shrinks to the visual-viewport height
+  // a frame or two later. Re-scroll the focused cell into view once that's
+  // happened so it sits above the keyboard — the cell's own onFocus scroll can
+  // fire before the resize lands and miss. Keyed on the open/close transition
+  // (not the px) so it runs once per open and doesn't fight manual scrolling.
+  useEffect(() => {
+    if (!keyboardOpen) return;
+    const el = document.activeElement;
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      requestAnimationFrame(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    }
+  }, [keyboardOpen]);
 
   // Branch default session duration drives the hero progress ring so the ring
   // reflects the gym's standard slot length rather than an out-of-band per-row
@@ -682,20 +701,22 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
       {/* ── Bottom dock — only the rest-timer pill lives here now. The End
           Session button moved into the hero to claim back the vertical
           space; the dock collapses to nothing when no rest is active. ── */}
-      {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
-        <div
-          className="shrink-0 px-4 pt-3"
-          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-        >
-          <RestTimerPillInline
-            remaining={restTimer.remaining}
-            isPaused={restTimer.isPaused}
-            isDone={restTimer.isDone}
-            onOpen={() => setRestTimerOpen(true)}
-            onStop={restTimer.stop}
-          />
-        </div>
-      )}
+      {!restTimerOpen &&
+        !keyboardOpen &&
+        (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
+          <div
+            className="shrink-0 px-4 pt-3"
+            style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+          >
+            <RestTimerPillInline
+              remaining={restTimer.remaining}
+              isPaused={restTimer.isPaused}
+              isDone={restTimer.isDone}
+              onOpen={() => setRestTimerOpen(true)}
+              onStop={restTimer.stop}
+            />
+          </div>
+        )}
 
       {/* Rest timer sheet */}
       {restTimerOpen && (

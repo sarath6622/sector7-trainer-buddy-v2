@@ -13,8 +13,8 @@ import {
   XCircle,
   CalendarDays,
   TrendingUp,
-  ExternalLink,
   Eye,
+  Timer,
   CalendarCheck,
   UmbrellaOff,
   ChevronRight,
@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
 import { InlineTimer } from '@/components/timer/SessionTimer';
+import { ClientWorkoutCalendar } from '@/components/calendar/ClientWorkoutCalendar';
 
 interface SessionData {
   id: string;
@@ -103,12 +104,77 @@ function greeting() {
   return 'Good evening';
 }
 
-const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  SCHEDULED: { bg: 'bg-blue-500/10', text: 'text-blue-500', label: 'Scheduled' },
-  IN_PROGRESS: { bg: 'bg-emerald-500/10', text: 'text-emerald-500', label: 'In Progress' },
-  COMPLETED: { bg: 'bg-zinc-500/10', text: 'text-zinc-400', label: 'Completed' },
-  NO_SHOW: { bg: 'bg-red-500/10', text: 'text-red-500', label: 'No Show' },
-  CANCELLED: { bg: 'bg-zinc-500/10', text: 'text-zinc-400', label: 'Cancelled' },
+interface TodayStatusStyle {
+  label: string;
+  /** status pill */
+  bg: string;
+  text: string;
+  dot: string;
+  /** left time-block */
+  timeBg: string;
+  timeText: string;
+  /** tile shell + left accent bar */
+  tileBg: string;
+  tileBorder: string;
+  bar: string;
+}
+
+const STATUS_STYLE: Record<string, TodayStatusStyle> = {
+  SCHEDULED: {
+    label: 'Scheduled',
+    bg: 'bg-blue-500/10',
+    text: 'text-blue-400',
+    dot: 'bg-blue-400',
+    timeBg: 'bg-blue-500/10',
+    timeText: 'text-blue-400',
+    tileBg: 'bg-card',
+    tileBorder: 'border-border/50',
+    bar: 'bg-blue-500/70',
+  },
+  IN_PROGRESS: {
+    label: 'In Progress',
+    bg: 'bg-emerald-500/15',
+    text: 'text-emerald-400',
+    dot: 'bg-emerald-400 animate-pulse',
+    timeBg: 'bg-emerald-500/15',
+    timeText: 'text-emerald-400',
+    tileBg: 'bg-emerald-500/[0.06]',
+    tileBorder: 'border-emerald-500/30',
+    bar: 'bg-emerald-500',
+  },
+  COMPLETED: {
+    label: 'Completed',
+    bg: 'bg-zinc-500/10',
+    text: 'text-zinc-400',
+    dot: 'bg-zinc-400',
+    timeBg: 'bg-muted',
+    timeText: 'text-muted-foreground',
+    tileBg: 'bg-card',
+    tileBorder: 'border-border/50',
+    bar: 'bg-zinc-500/40',
+  },
+  NO_SHOW: {
+    label: 'No Show',
+    bg: 'bg-red-500/10',
+    text: 'text-red-400',
+    dot: 'bg-red-400',
+    timeBg: 'bg-red-500/10',
+    timeText: 'text-red-400',
+    tileBg: 'bg-card',
+    tileBorder: 'border-border/50',
+    bar: 'bg-red-500/60',
+  },
+  CANCELLED: {
+    label: 'Cancelled',
+    bg: 'bg-zinc-500/10',
+    text: 'text-zinc-400',
+    dot: 'bg-zinc-500',
+    timeBg: 'bg-muted',
+    timeText: 'text-muted-foreground',
+    tileBg: 'bg-card',
+    tileBorder: 'border-border/50',
+    bar: 'bg-zinc-500/30',
+  },
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -297,262 +363,151 @@ export default function TrainerDashboard() {
         <h1 className="text-2xl font-bold tracking-tight">{firstName}</h1>
       </div>
 
-      {/* ── Compact stats strip ── */}
-      <div className="grid grid-cols-4 gap-2">
-        <MiniStat
-          icon={<CalendarDays className="h-3.5 w-3.5" />}
-          value={monthSessions.length}
-          label="Total"
-          color="text-blue-500"
-          bg="bg-blue-500/10"
-        />
-        <MiniStat
-          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-          value={completedMonth}
-          label="Done"
-          color="text-emerald-500"
-          bg="bg-emerald-500/10"
-        />
-        <MiniStat
-          icon={<XCircle className="h-3.5 w-3.5" />}
-          value={noShowMonth}
-          label="No-show"
-          color="text-red-500"
-          bg="bg-red-500/10"
-        />
-        <MiniStat
-          icon={<TrendingUp className="h-3.5 w-3.5" />}
-          value={completionRate != null ? `${completionRate}%` : '—'}
-          label="Rate"
-          color="text-amber-500"
-          bg="bg-amber-500/10"
-        />
-      </div>
-
-      {/* ── Active session banner ── */}
-      {(() => {
-        const allActive = [
-          ...todaySessions.filter((s) => s.status === 'IN_PROGRESS' && !!s.startedAt),
-          ...staleSessions.filter((s) => !!s.startedAt),
-        ];
-        const uniqueActive = Array.from(new Map(allActive.map((s) => [s.id, s])).values());
-        if (uniqueActive.length === 0) return null;
-
-        if (uniqueActive.length === 1) {
-          const s = uniqueActive[0]!;
-          return (
-            <button
-              onClick={() => router.push(`/trainer/session/${s.id}`)}
-              className="w-full rounded-2xl bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 p-4 text-left ring-1 ring-emerald-500/30 transition-colors hover:ring-emerald-500/50"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-400">Session in progress</p>
-                    <p className="text-xs text-muted-foreground">
-                      {s.client.user.firstName} {s.client.user.lastName}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-lg font-bold tabular-nums text-emerald-400">
-                    <InlineTimer startedAt={s.startedAt!} expectedDurationMin={s.durationMin} />
-                  </span>
-                  <ExternalLink className="h-4 w-4 text-emerald-500" />
-                </div>
-              </div>
-            </button>
-          );
-        }
-
-        return (
-          <div className="overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 ring-1 ring-emerald-500/30">
-            <div className="flex items-center gap-2 px-4 pt-3.5 pb-2.5">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-sm font-semibold text-emerald-400">
-                {uniqueActive.length} sessions in progress
-              </p>
-            </div>
-            <div className="divide-y divide-emerald-500/10">
-              {uniqueActive.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => router.push(`/trainer/session/${s.id}`)}
-                  className="flex w-full items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-emerald-500/5"
-                >
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {s.client.user.firstName} {s.client.user.lastName}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-bold tabular-nums text-emerald-400">
-                      <InlineTimer startedAt={s.startedAt!} expectedDurationMin={s.durationMin} />
-                    </span>
-                    <ExternalLink className="h-3.5 w-3.5 text-emerald-500" />
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Stale / Incomplete Sessions Alert ── */}
-      {staleSessions.length > 0 && (
-        <div className="rounded-2xl bg-amber-500/10 ring-1 ring-amber-500/30 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 pt-4 pb-3">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <h2 className="font-semibold text-amber-500">Incomplete Sessions</h2>
-            <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-semibold text-amber-500">
-              {staleSessions.length}
-            </span>
-          </div>
-          <p className="px-4 pb-2 text-xs text-amber-400/80">
-            These sessions were never ended. Tap to resume and end them.
-          </p>
-          <div className="divide-y divide-amber-500/10">
-            {staleSessions.map((session) => {
-              const clientFirst = session.client.user.firstName;
-              const clientLast = session.client.user.lastName;
-              const sessionDate = new Date(session.scheduledDate).toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'short',
-              });
-              return (
-                <div key={session.id} className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-xs font-bold text-amber-500">
-                      {initials(clientFirst, clientLast)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {clientFirst} {clientLast}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {sessionDate} · {formatTime12(session.scheduledTime)} ·{' '}
-                        {session.durationMin} min
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-md bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-500">
-                      Still Active
-                    </span>
-                  </div>
-                  <div className="mt-2.5 pl-12">
-                    <button
-                      onClick={() => router.push(`/trainer/session/${session.id}`)}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 py-2 text-xs font-semibold text-black transition-colors hover:bg-amber-400"
-                    >
-                      <Square className="h-3 w-3" />
-                      Resume &amp; End Session
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* ── Active sessions (live + never-ended, unified into one card) ── */}
+      <ActiveSessionsCard
+        live={todaySessions.filter((s) => s.status === 'IN_PROGRESS' && !!s.startedAt)}
+        stale={staleSessions}
+        onOpen={(id) => router.push(`/trainer/session/${id}`)}
+      />
 
       {/* ── Today's Sessions ── */}
-      <div className="rounded-2xl bg-card ring-1 ring-border/50 overflow-hidden">
-        <div className="flex items-center gap-2 px-4 pt-4 pb-3">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <h2 className="font-semibold">Today</h2>
-          <span className="text-xs text-muted-foreground">
-            ·{' '}
-            {new Date().toLocaleDateString('en-IN', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'short',
-            })}
-          </span>
+      <div className="overflow-hidden rounded-3xl bg-card ring-1 ring-border/50">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
+            <Clock className="h-5 w-5 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-bold leading-tight">Today</h2>
+            <p className="text-xs text-muted-foreground">
+              {new Date().toLocaleDateString('en-IN', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'short',
+              })}
+            </p>
+          </div>
           {todaySessions.length > 0 && (
-            <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-              {todaySessions.length}
+            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+              {todaySessions.length} session{todaySessions.length > 1 ? 's' : ''}
             </span>
           )}
         </div>
 
         {todaySessions.length === 0 ? (
-          <p className="px-4 pb-5 text-center text-sm text-muted-foreground">
-            No sessions today — enjoy your rest day.
-          </p>
+          <div className="flex flex-col items-center gap-2 px-4 pb-7 pt-2 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50">
+              <CalendarCheck className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-semibold">No sessions today</p>
+            <p className="text-xs text-muted-foreground">Enjoy your rest day.</p>
+          </div>
         ) : (
-          <div className="divide-y divide-border/40">
+          <div className="space-y-2.5 px-3 pb-3">
             {todaySessions.map((session) => {
               const st = STATUS_STYLE[session.status] ?? STATUS_STYLE.SCHEDULED!;
               const isLoading = actionLoading === session.id;
               const isCancelled = session.status === 'CANCELLED';
               const clientFirst = session.client.user.firstName;
               const clientLast = session.client.user.lastName;
+              const [clock, ampm] = formatTime12(session.scheduledTime).split(' ');
 
               return (
-                <div key={session.id} className={`px-4 py-3 ${isCancelled ? 'opacity-50' : ''}`}>
+                <div
+                  key={session.id}
+                  className={`relative overflow-hidden rounded-2xl border ${st.tileBorder} ${st.tileBg} p-3 ${
+                    isCancelled ? 'opacity-60' : ''
+                  }`}
+                >
+                  {/* Status accent bar */}
+                  <span className={`absolute inset-y-0 left-0 w-1 ${st.bar}`} aria-hidden />
+
                   <div className="flex items-center gap-3">
-                    {/* Client avatar */}
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground">
-                      {initials(clientFirst, clientLast)}
+                    {/* Time block */}
+                    <div
+                      className={`flex h-12 w-14 shrink-0 flex-col items-center justify-center rounded-xl ${st.timeBg}`}
+                    >
+                      <span className={`text-sm font-bold leading-none ${st.timeText}`}>
+                        {clock}
+                      </span>
+                      <span
+                        className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide opacity-70 ${st.timeText}`}
+                      >
+                        {ampm}
+                      </span>
                     </div>
+
+                    {/* Client + meta */}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
+                      <p
+                        className={`truncate text-sm font-semibold ${isCancelled ? 'line-through' : ''}`}
+                      >
                         {clientFirst} {clientLast}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatTime12(session.scheduledTime)} · {session.durationMin} min
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          {session.durationMin} min
+                        </span>
+                        {session.status === 'SCHEDULED' && (
+                          <StartsInLabel
+                            scheduledDate={session.scheduledDate}
+                            scheduledTime={session.scheduledTime}
+                          />
+                        )}
+                      </div>
                     </div>
+
+                    {/* Status pill */}
                     <span
-                      className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold ${st.bg} ${st.text}`}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${st.bg} ${st.text}`}
                     >
+                      <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
                       {st.label}
                     </span>
                   </div>
 
                   {/* Action buttons */}
                   {session.status === 'SCHEDULED' && (
-                    <div className="mt-2.5 flex gap-2 pl-12">
+                    <div className="mt-3 flex gap-2">
                       <button
                         onClick={() => handleStartSession(session.id)}
                         disabled={isLoading}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 py-2.5 text-xs font-semibold text-white shadow-sm shadow-emerald-950/30 transition-all hover:from-emerald-400 hover:to-emerald-500 active:scale-[0.98] disabled:opacity-50"
                       >
-                        <Play className="h-3 w-3" />
+                        <Play className="h-3.5 w-3.5 fill-current" />
                         {isLoading ? 'Starting…' : 'Start'}
                       </button>
                       <button
                         onClick={() => handleNoShow(session.id)}
                         disabled={isLoading}
-                        className="flex items-center justify-center gap-1.5 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 ring-1 ring-red-500/30 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-2.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/15 active:scale-[0.98] disabled:opacity-50"
                       >
-                        <UserX className="h-3 w-3" />
+                        <UserX className="h-3.5 w-3.5" />
                         No Show
                       </button>
                     </div>
                   )}
 
                   {session.status === 'IN_PROGRESS' && (
-                    <div className="mt-2.5 pl-12">
-                      <button
-                        onClick={() => router.push(`/trainer/session/${session.id}`)}
-                        className="relative overflow-hidden flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-all hover:bg-emerald-700 active:scale-95 [touch-action:manipulation] [-webkit-tap-highlight-color:transparent]"
-                      >
-                        <span className="absolute inset-0 rounded-xl animate-ping bg-emerald-400 opacity-25" />
-                        <Square className="relative h-3 w-3" />
-                        <span className="relative">Resume Session</span>
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => router.push(`/trainer/session/${session.id}`)}
+                      className="relative mt-3 flex w-full items-center justify-center gap-1.5 overflow-hidden rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 py-2.5 text-xs font-semibold text-white shadow-sm shadow-emerald-950/30 transition-all hover:from-emerald-400 hover:to-emerald-500 active:scale-[0.98] [touch-action:manipulation] [-webkit-tap-highlight-color:transparent]"
+                    >
+                      <span className="absolute inset-0 animate-ping rounded-xl bg-emerald-400 opacity-20" />
+                      <Square className="relative h-3.5 w-3.5" />
+                      <span className="relative">Resume Session</span>
+                    </button>
                   )}
 
                   {session.status === 'COMPLETED' && (
-                    <div className="mt-2 pl-12">
-                      <button
-                        onClick={() => router.push(`/trainer/sessions/${session.id}`)}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Eye className="h-3 w-3" />
-                        View workout
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => router.push(`/trainer/sessions/${session.id}`)}
+                      className="mt-2.5 flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      View workout
+                    </button>
                   )}
                 </div>
               );
@@ -666,6 +621,15 @@ export default function TrainerDashboard() {
         </div>
       )}
 
+      {/* ── Client Workout Calendar (tabbed per client) ── */}
+      <ClientWorkoutCalendar
+        clients={clients.map((c) => ({
+          id: c.clientProfile.id,
+          firstName: c.clientProfile.user.firstName,
+          lastName: c.clientProfile.user.lastName,
+        }))}
+      />
+
       {/* ── Upcoming Sessions ── */}
       <div className="rounded-2xl bg-card ring-1 ring-border/50 overflow-hidden">
         <div className="flex items-center gap-2 px-4 pt-4 pb-3">
@@ -714,6 +678,38 @@ export default function TrainerDashboard() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* ── Compact stats strip ── */}
+      <div className="grid grid-cols-4 gap-2">
+        <MiniStat
+          icon={<CalendarDays className="h-3.5 w-3.5" />}
+          value={monthSessions.length}
+          label="Total"
+          color="text-blue-500"
+          bg="bg-blue-500/10"
+        />
+        <MiniStat
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          value={completedMonth}
+          label="Done"
+          color="text-emerald-500"
+          bg="bg-emerald-500/10"
+        />
+        <MiniStat
+          icon={<XCircle className="h-3.5 w-3.5" />}
+          value={noShowMonth}
+          label="No-show"
+          color="text-red-500"
+          bg="bg-red-500/10"
+        />
+        <MiniStat
+          icon={<TrendingUp className="h-3.5 w-3.5" />}
+          value={completionRate != null ? `${completionRate}%` : '—'}
+          label="Rate"
+          color="text-amber-500"
+          bg="bg-amber-500/10"
+        />
       </div>
 
       {/* ── Client Package Status ── */}
@@ -859,6 +855,262 @@ function MiniStat({
       </div>
       <p className="mt-2.5 text-xl font-bold leading-none">{value}</p>
       <p className="mt-0.5 text-[10px] text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+// ─── "Starts in" live countdown ───────────────────────────────────────────────
+
+/** Local timestamp for a session's scheduled start. Uses the date-part of
+ *  scheduledDate (not its UTC clock) so a session keeps its intended calendar
+ *  day regardless of timezone — matching how the rest of the app reads it. */
+function sessionStartMs(scheduledDate: string, scheduledTime: string): number {
+  const [y, mo, d] = scheduledDate.split('T')[0]!.split('-').map(Number);
+  const [h = 0, mi = 0] = scheduledTime.split(':').map(Number);
+  return new Date(y!, (mo ?? 1) - 1, d ?? 1, h, mi, 0, 0).getTime();
+}
+
+function fmtCountdown(mins: number): string {
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+/**
+ * Live "Starts in N" chip for an upcoming scheduled session. Re-renders every
+ * 30s so the label stays current without a per-second timer, and shifts colour
+ * as the start time nears and passes:
+ *   > 60m → muted · ≤ 60m → blue · ≤ 15m → amber · due/overdue → red.
+ */
+function StartsInLabel({
+  scheduledDate,
+  scheduledTime,
+}: {
+  scheduledDate: string;
+  scheduledTime: string;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const diffMin = Math.round((sessionStartMs(scheduledDate, scheduledTime) - now) / 60_000);
+
+  let label: string;
+  let tone: string;
+  if (diffMin <= 0) {
+    label = diffMin === 0 ? 'Due now' : `Overdue ${fmtCountdown(-diffMin)}`;
+    tone = 'bg-red-500/10 text-red-400';
+  } else {
+    label = `Starts in ${fmtCountdown(diffMin)}`;
+    tone =
+      diffMin <= 15
+        ? 'bg-amber-500/10 text-amber-400'
+        : diffMin <= 60
+          ? 'bg-primary/10 text-primary'
+          : 'bg-muted text-muted-foreground';
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${tone}`}
+    >
+      <Timer className="h-3 w-3" />
+      {label}
+    </span>
+  );
+}
+
+// ─── Active sessions (live + never-ended) ─────────────────────────────────────
+
+/** Human "Open for N minutes/hours/days" label for a never-ended session,
+ *  measured from when it actually started (falling back to its scheduled date).
+ *  Replaces a live HH:MM:SS timer, which is meaningless for a session left
+ *  running for days (e.g. a 32-day-old "780:31:26"). */
+function openForLabel(s: SessionData): string {
+  const ref = new Date(s.startedAt ?? s.scheduledDate).getTime();
+  const mins = Math.floor((Date.now() - ref) / 60_000);
+  if (mins < 60) {
+    const m = Math.max(1, mins);
+    return `Open for ${m} minute${m === 1 ? '' : 's'}`;
+  }
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Open for ${hrs} hour${hrs === 1 ? '' : 's'}`;
+  const days = Math.floor(hrs / 24);
+  return `Open for ${days} day${days === 1 ? '' : 's'}`;
+}
+
+/**
+ * Single card for every IN_PROGRESS session, replacing the old separate
+ * "Session in progress" banner and "Incomplete Sessions" alert that both
+ * rendered the same never-ended session.
+ *
+ *   • live  — in progress today: green accent + live ticking timer, tap to resume.
+ *   • stale — in progress from a previous day (never ended): amber accent, a
+ *             static "open Nd" age, and an explicit "Resume & End" action.
+ *
+ * Theme/header adapt to the mix (pure-live → green, pure-stale → amber,
+ * both → neutral card with per-row colour). A session can only ever appear
+ * in one group, so nothing is shown twice.
+ */
+function ActiveSessionsCard({
+  live,
+  stale,
+  onOpen,
+}: {
+  live: SessionData[];
+  stale: SessionData[];
+  onOpen: (id: string) => void;
+}) {
+  // Defensive de-dupe: never let a session land in both groups. (The two
+  // source queries are already disjoint by date, but this guarantees the
+  // double-render bug can't come back.)
+  const staleIds = new Set(stale.map((s) => s.id));
+  const liveSessions = live.filter((s) => !staleIds.has(s.id));
+
+  const total = liveSessions.length + stale.length;
+  if (total === 0) return null;
+
+  const hasLive = liveSessions.length > 0;
+  const hasStale = stale.length > 0;
+  const mixed = hasLive && hasStale;
+  const staleOnly = hasStale && !hasLive;
+
+  const attention = hasStale; // anything needing "end it" gets the amber treatment
+
+  // Stale/incomplete is a cleanup task, not a critical alert — keep its shell
+  // neutral and let colour live only on the warning icon + the action button.
+  const shell =
+    hasLive && !mixed ? 'bg-emerald-500/[0.06] ring-emerald-500/25' : 'bg-card ring-border/50';
+
+  const heading = mixed
+    ? 'Active Sessions'
+    : hasLive
+      ? liveSessions.length === 1
+        ? 'Session in progress'
+        : `${liveSessions.length} sessions in progress`
+      : 'Incomplete Sessions';
+
+  const subtitle = staleOnly
+    ? 'Never ended — resume to close them out.'
+    : mixed
+      ? 'Some were never ended — resume to close them out.'
+      : liveSessions.length === 1
+        ? 'Tap to jump back into your session.'
+        : 'Tap any session to jump back in.';
+
+  return (
+    <div className={`overflow-hidden rounded-3xl ring-1 ${shell}`}>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+            attention ? 'bg-amber-500/10' : 'bg-emerald-500/15'
+          }`}
+        >
+          {attention ? (
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+          ) : (
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2
+            className={`text-base font-bold leading-tight ${
+              mixed ? 'text-foreground' : hasLive ? 'text-emerald-400' : 'text-amber-500'
+            }`}
+          >
+            {heading}
+          </h2>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
+            attention ? 'bg-muted text-muted-foreground' : 'bg-emerald-500/15 text-emerald-400'
+          }`}
+        >
+          {total}
+        </span>
+      </div>
+
+      {/* Rows */}
+      <div className="space-y-2.5 px-3 pb-3">
+        {/* Live tiles — running today, with a live timer */}
+        {liveSessions.map((s) => {
+          const [clock, ampm] = formatTime12(s.scheduledTime).split(' ');
+          return (
+            <button
+              key={s.id}
+              onClick={() => onOpen(s.id)}
+              className="relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-3 text-left transition-all hover:bg-emerald-500/[0.1] active:scale-[0.99]"
+            >
+              <span className="absolute inset-y-0 left-0 w-1 bg-emerald-500" aria-hidden />
+              <div className="flex h-12 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-emerald-500/15">
+                <span className="text-sm font-bold leading-none text-emerald-400">{clock}</span>
+                <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-400 opacity-70">
+                  {ampm}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">
+                  {s.client.user.firstName} {s.client.user.lastName}
+                </p>
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live · {s.durationMin} min
+                </p>
+              </div>
+              <span className="font-mono text-lg font-bold tabular-nums text-emerald-400">
+                <InlineTimer startedAt={s.startedAt!} expectedDurationMin={s.durationMin} />
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-emerald-500/70" />
+            </button>
+          );
+        })}
+
+        {/* Stale tiles — never ended. Kept calm/neutral: colour lives only on
+            the header warning icon and the action button. */}
+        {stale.map((s) => {
+          const day = new Date(s.scheduledDate).toLocaleDateString('en-IN', { day: 'numeric' });
+          const mon = new Date(s.scheduledDate).toLocaleDateString('en-IN', { month: 'short' });
+          return (
+            <div key={s.id} className="rounded-2xl border border-border/50 bg-muted/20 p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-muted">
+                  <span className="text-sm font-bold leading-none text-foreground">{day}</span>
+                  <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                    {mon}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {s.client.user.firstName} {s.client.user.lastName}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatTime12(s.scheduledTime)} · {s.durationMin} min
+                  </p>
+                </div>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <Timer className="h-3 w-3" />
+                  {openForLabel(s)}
+                </span>
+              </div>
+              <button
+                onClick={() => onOpen(s.id)}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 py-2.5 text-xs font-bold text-amber-950 transition-colors hover:bg-amber-400 active:scale-[0.98]"
+              >
+                <Square className="h-3.5 w-3.5" />
+                Resume &amp; End Session
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
