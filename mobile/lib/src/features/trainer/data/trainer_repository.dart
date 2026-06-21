@@ -263,6 +263,16 @@ final trainerStaleSessionsProvider =
   }).toList();
 });
 
+/// Every IN_PROGRESS session for the signed-in trainer (live + never-ended).
+/// The session screen offers the ones other than the open client as switchable
+/// "other active clients" chips, so a trainer running parallel sessions can hop
+/// between their workout logs without leaving the screen (web session-page
+/// parity).
+final trainerInProgressProvider =
+    FutureProvider.autoDispose<List<TrainerSession>>(
+  (ref) => ref.watch(trainerRepositoryProvider).schedule(status: 'IN_PROGRESS'),
+);
+
 /// This calendar month's sessions for the signed-in trainer — powers the
 /// dashboard's completion / no-show stat strip.
 final trainerMonthSessionsProvider =

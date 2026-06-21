@@ -18,6 +18,15 @@ import 'pusher_service.dart';
 mixin SessionRealtimeMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   StreamSubscription<RealtimeEvent>? _rtSub;
 
+  // Captured at subscribe time so [stopSessionRealtime] can unsubscribe without
+  // touching `ref` — riverpod disposes `ref` before `State.dispose()` runs, so
+  // reading a provider there throws. Caching the service + the exact channel we
+  // joined also makes a mid-life resubscribe (the trainer's session switcher)
+  // unsubscribe the channel we actually joined, not one re-derived from a
+  // since-changed [realtimeSessionId].
+  PusherService? _rtService;
+  String? _rtChannel;
+
   /// The session whose `session-{id}` channel to watch.
   String get realtimeSessionId;
 
@@ -26,8 +35,10 @@ mixin SessionRealtimeMixin<T extends ConsumerStatefulWidget> on ConsumerState<T>
 
   void startSessionRealtime() {
     final svc = ref.read(pusherServiceProvider);
+    _rtService = svc;
     if (!svc.enabled) return;
     final channel = 'session-$realtimeSessionId';
+    _rtChannel = channel;
     svc.subscribe(channel);
     _rtSub = svc.events.where((e) => e.channelName == channel).listen(_handle);
   }
@@ -49,7 +60,9 @@ mixin SessionRealtimeMixin<T extends ConsumerStatefulWidget> on ConsumerState<T>
   void stopSessionRealtime() {
     _rtSub?.cancel();
     _rtSub = null;
-    ref.read(pusherServiceProvider).unsubscribe('session-$realtimeSessionId');
+    final channel = _rtChannel;
+    if (channel != null) _rtService?.unsubscribe(channel);
+    _rtChannel = null;
   }
 }
 

@@ -67,6 +67,13 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
   /// server (or a restored local draft) and advanced on a confirmed sync.
   List<Map<String, dynamic>> _baseline = const [];
 
+  /// The saveable payload as last *persisted to the local store* — set on seed
+  /// and after every save (which writes local-first). [isDirty] compares the
+  /// live draft to this, so it reports true only for in-memory edits that would
+  /// be lost if the logger were torn down before saving (an unsynced save is
+  /// restored on remount, so it doesn't count as dirty).
+  List<Map<String, dynamic>> _savedPayload = const [];
+
   /// Outcome of the most recent save — drives the offline / queued banner.
   SyncOutcome? _lastOutcome;
 
@@ -102,6 +109,7 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
       setState(() {
         _drafts = decodeDrafts(local.draftJson);
         _baseline = decodeSavePayload(local.baselineJson);
+        _savedPayload = buildSavePayload(_drafts!);
         _restoredUnsynced = true;
         _lastOutcome = local.syncStatus == WorkoutSyncStatus.failed
             ? SyncOutcome.failed
@@ -142,6 +150,7 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
       setState(() {
         _drafts = drafts;
         _baseline = baseline; // server state = our baseline
+        _savedPayload = baseline; // and what the local cache now holds
         _restoredUnsynced = false;
         _lastOutcome = null;
         _clientProfileId = detail.clientProfileId;
@@ -155,6 +164,7 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
         setState(() {
           _drafts = decodeDrafts(local.draftJson);
           _baseline = decodeSavePayload(local.baselineJson);
+          _savedPayload = buildSavePayload(_drafts!);
           _expandedExerciseId = _defaultExpanded(_drafts!);
         });
         _emitTitle();
@@ -325,6 +335,16 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
     _emitTitle();
   }
 
+  /// Whether the in-memory draft holds edits the last sync hasn't captured.
+  /// Public so a host that swaps this logger out (e.g. the trainer's active-
+  /// session switcher) can warn before discarding. False until seeded, and
+  /// false once a save advances the baseline to match.
+  bool get isDirty {
+    final drafts = _drafts;
+    if (drafts == null) return false;
+    return !diffExercises(_savedPayload, buildSavePayload(drafts)).isEmpty;
+  }
+
   /// Persist the workout. Public so the host session screen's app-bar Save can
   /// trigger it via a [GlobalKey]. Stays mounted on success (the logger is now
   /// embedded, not a pushed route): we just refresh the session providers and
@@ -332,6 +352,10 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
   Future<void> save() async {
     if (_drafts == null || _saving) return;
     final drafts = _drafts!;
+    // Snapshot the saveable state we're about to persist (local-first) so the
+    // dirty check settles to "clean" once the save returns — whatever the sync
+    // outcome, this is now what the local store holds and a remount restores.
+    final persisted = buildSavePayload(drafts);
     setState(() => _saving = true);
     widget.onSavingChanged?.call(true);
 
@@ -351,6 +375,7 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
     }
 
     if (!mounted) return;
+    if (outcome != SyncOutcome.noop) _savedPayload = persisted;
     switch (outcome) {
       case SyncOutcome.synced:
         // Refresh both session readers (only the relevant one is mounted) plus
