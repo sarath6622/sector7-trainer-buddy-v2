@@ -18,6 +18,12 @@ const _kLive = Color(0xFF22C55E); // emerald-500
 const _kNoShow = Color(0xFFEF4444); // red-500
 const _kAmber = Color(0xFFF59E0B); // amber-500
 
+/// A today session that has been *started* (in progress with a start time).
+/// These belong to the Active-Sessions card only — they're filtered out of the
+/// Today list so a running session never appears in two places at once.
+bool _isLiveToday(TrainerSession s) =>
+    s.status == SessionStatus.inProgress && s.summary.startedAt != null;
+
 /// Trainer dashboard — the gym-floor home screen. Ports the rich web `/trainer`
 /// page: a greeting header, an Active-Sessions card (live + never-ended), the
 /// day's sessions with inline actions, a per-client workout calendar, the next
@@ -54,23 +60,39 @@ class TrainerTodayScreen extends ConsumerWidget {
               ),
             ],
           ),
-          data: (sessions) => ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            children: [
-              _GreetingHeader(name: user?.firstName ?? 'Trainer'),
-              const SizedBox(height: 16),
-              _ActiveSection(today: sessions),
-              _TodayCard(sessions: sessions),
-              const SizedBox(height: 16),
-              const _CalendarSection(),
-              const _UpcomingSection(),
-              const SizedBox(height: 16),
-              const _StatStripSection(),
-              const SizedBox(height: 16),
-              const _PackagesSection(),
-              const _QuickLinks(),
-            ],
-          ),
+          data: (sessions) {
+            // Started sessions live in the Active-Sessions card only; keep them
+            // out of the Today list so they never show in both places.
+            final todaysScheduled =
+                sessions.where((s) => !_isLiveToday(s)).toList();
+            // When the Active-Sessions card is showing and nothing un-started
+            // is left today, drop the Today card entirely — otherwise it reads
+            // the ironic "No sessions today" while live sessions sit right
+            // above it. (Genuine rest day → no active → Today still shows.)
+            final stale =
+                ref.watch(trainerStaleSessionsProvider).valueOrNull ?? const [];
+            final hasActive = sessions.any(_isLiveToday) || stale.isNotEmpty;
+            final showToday = todaysScheduled.isNotEmpty || !hasActive;
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              children: [
+                _GreetingHeader(name: user?.firstName ?? 'Trainer'),
+                const SizedBox(height: 16),
+                _ActiveSection(today: sessions),
+                if (showToday) ...[
+                  _TodayCard(sessions: todaysScheduled),
+                  const SizedBox(height: 16),
+                ],
+                const _CalendarSection(),
+                const _UpcomingSection(),
+                const SizedBox(height: 16),
+                const _StatStripSection(),
+                const SizedBox(height: 16),
+                const _PackagesSection(),
+                const _QuickLinks(),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -123,11 +145,7 @@ class _ActiveSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final live = today
-        .where((s) =>
-            s.status == SessionStatus.inProgress &&
-            s.summary.startedAt != null)
-        .toList();
+    final live = today.where(_isLiveToday).toList();
     final stale =
         ref.watch(trainerStaleSessionsProvider).valueOrNull ?? const [];
 
