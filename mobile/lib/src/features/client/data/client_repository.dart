@@ -177,6 +177,13 @@ final clientSessionsProvider =
   (ref) => ref.watch(clientRepositoryProvider).sessions(),
 );
 
+/// The client's sessions scoped to a `YYYY-MM` month (drives the Sessions tab's
+/// month navigator).
+final clientSessionsByMonthProvider =
+    FutureProvider.autoDispose.family<List<SessionSummary>, String>(
+  (ref, month) => ref.watch(clientRepositoryProvider).sessions(month: month),
+);
+
 /// One session's full detail, keyed by id.
 final clientSessionProvider =
     FutureProvider.autoDispose.family<SessionDetail, String>(
