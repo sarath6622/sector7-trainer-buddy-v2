@@ -8,14 +8,23 @@ import '../../data/progress_models.dart';
 /// index (evenly spaced); date labels are derived from the points. Kept
 /// presentation-only — the server owns the values.
 class MetricLineChart extends StatelessWidget {
-  const MetricLineChart({super.key, required this.points, required this.unit});
+  const MetricLineChart({
+    super.key,
+    required this.points,
+    required this.unit,
+    this.color,
+  });
 
   final List<ChartPoint> points;
   final String unit;
 
+  /// Line/area accent. Defaults to the brand primary when null.
+  final Color? color;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final c = color ?? scheme.primary;
     final spots = [
       for (var i = 0; i < points.length; i++)
         FlSpot(i.toDouble(), points[i].value),
@@ -117,13 +126,13 @@ class MetricLineChart extends StatelessWidget {
             spots: spots,
             isCurved: true,
             preventCurveOverShooting: true,
-            color: scheme.primary,
+            color: c,
             barWidth: 3,
             dotData: FlDotData(
               show: points.length <= 12,
               getDotPainter: (spot, _, _, _) => FlDotCirclePainter(
                 radius: 3,
-                color: scheme.primary,
+                color: c,
                 strokeWidth: 0,
               ),
             ),
@@ -133,8 +142,8 @@ class MetricLineChart extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  scheme.primary.withValues(alpha: 0.25),
-                  scheme.primary.withValues(alpha: 0.0),
+                  c.withValues(alpha: 0.25),
+                  c.withValues(alpha: 0.0),
                 ],
               ),
             ),

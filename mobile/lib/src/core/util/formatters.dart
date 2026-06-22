@@ -9,6 +9,7 @@ class Fmt {
   static final _weekdayDayMonth = DateFormat('EEE d MMM'); // Mon 16 Jun
   static final _dayMonthYear = DateFormat('EEE, d MMM yyyy');
   static final _monthYear = DateFormat('MMMM yyyy');
+  static final _monthShort = DateFormat('MMM'); // Jun
 
   static String dayMonth(DateTime? d) => d == null ? '—' : _dayMonth.format(d);
 
@@ -18,6 +19,13 @@ class Fmt {
   static String dayMonthYear(DateTime? d) =>
       d == null ? '—' : _dayMonthYear.format(d);
   static String monthYear(DateTime d) => _monthYear.format(d);
+
+  /// Short month name, e.g. "Jun" (for compact date badges).
+  static String monthShort(DateTime d) => _monthShort.format(d);
+
+  /// Trims a trailing ".0" so 140.0 → "140" but 72.5 → "72.5".
+  static String trimNum(num v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
   /// "HH:MM" (24h) → "6:30 AM". Falls back to the raw string if unparseable.
   static String time(String hhmm) {

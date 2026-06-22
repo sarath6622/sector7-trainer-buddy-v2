@@ -55,6 +55,11 @@ class ClientRepository {
         .toList();
   }
 
+  /// POST /api/client/progress — log a new body-measurement entry. Only the
+  /// provided numeric fields are sent (e.g. `{weightKg: 74.5}`).
+  Future<void> logProgress(Map<String, double> values) =>
+      _api.post('/client/progress', body: values);
+
   /// GET /api/client/workouts (logged exercises across sessions, newest first)
   Future<List<WorkoutHistoryEntry>> workouts() async {
     final data = await _api.get('/client/workouts') as List<dynamic>;

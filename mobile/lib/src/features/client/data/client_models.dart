@@ -242,6 +242,7 @@ class SessionCount {
     required this.scheduled,
     required this.noShow,
     required this.total,
+    this.carryForward = 0,
   });
 
   final int used;
@@ -250,6 +251,7 @@ class SessionCount {
   final int scheduled;
   final int noShow;
   final int total;
+  final int carryForward;
 
   factory SessionCount.fromJson(Map<String, dynamic> json) => SessionCount(
         used: _asInt(json['used']),
@@ -258,6 +260,7 @@ class SessionCount {
         scheduled: _asInt(json['scheduled']),
         noShow: _asInt(json['noShow']),
         total: _asInt(json['total']),
+        carryForward: _asInt(json['carryForward']),
       );
 
   static const empty = SessionCount(
@@ -298,16 +301,49 @@ class PackageExpiry {
     required this.isExpired,
     this.daysUntilExpiry,
     this.endDate,
+    this.startDate,
   });
 
   final bool isExpired;
   final int? daysUntilExpiry;
   final DateTime? endDate;
+  final DateTime? startDate;
 
   factory PackageExpiry.fromJson(Map<String, dynamic> json) => PackageExpiry(
         isExpired: json['isExpired'] == true,
         daysUntilExpiry: _asIntOrNull(json['daysUntilExpiry']),
         endDate: _asDate(json['endDate']),
+        startDate: _asDate(json['startDate']),
+      );
+
+  /// Fraction 0..1 of the package lifetime elapsed — drives the countdown bar.
+  /// Falls back to 0 when the span can't be computed.
+  double get progress {
+    final s = startDate, e = endDate, d = daysUntilExpiry;
+    if (s == null || e == null || d == null) return 0;
+    final total = e.difference(s).inDays;
+    if (total <= 0) return 0;
+    return ((total - d) / total).clamp(0.0, 1.0);
+  }
+}
+
+/// A point-in-time body-measurement snapshot — drives the Fitness Journey cards
+/// and their deltas. Any field may be null when the client hasn't logged it.
+class ProgressSnapshot {
+  const ProgressSnapshot({this.weightKg, this.bodyFatPercent, this.muscleMass});
+
+  final double? weightKg;
+  final double? bodyFatPercent;
+  final double? muscleMass;
+
+  bool get hasAny =>
+      weightKg != null || bodyFatPercent != null || muscleMass != null;
+
+  factory ProgressSnapshot.fromJson(Map<String, dynamic> json) =>
+      ProgressSnapshot(
+        weightKg: _asDoubleOrNull(json['weightKg']),
+        bodyFatPercent: _asDoubleOrNull(json['bodyFatPercent']),
+        muscleMass: _asDoubleOrNull(json['muscleMass']),
       );
 }
 
@@ -334,25 +370,41 @@ class ClientDashboard {
     required this.sessionCount,
     required this.engagementStats,
     this.trainerName,
+    this.trainerSessionsPerMonth,
     this.nextSession,
     this.activeSession,
     this.packageExpiry,
+    this.latestProgress,
+    this.prevProgress,
     this.prs = const [],
   });
 
   final SessionCount sessionCount;
   final EngagementStats engagementStats;
   final String? trainerName;
+  final int? trainerSessionsPerMonth;
   final SessionSummary? nextSession;
   final SessionSummary? activeSession;
   final PackageExpiry? packageExpiry;
+  final ProgressSnapshot? latestProgress;
+  final ProgressSnapshot? prevProgress;
   final List<PersonalRecord> prs;
+
+  /// True when there's any body-metric or PR data to show the Fitness Journey.
+  bool get hasFitnessJourney => (latestProgress?.hasAny ?? false) || prs.isNotEmpty;
 
   factory ClientDashboard.fromJson(Map<String, dynamic> json) {
     SessionSummary? session(String key) {
       final raw = json[key];
       return raw is Map
           ? SessionSummary.fromJson(Map<String, dynamic>.from(raw))
+          : null;
+    }
+
+    ProgressSnapshot? snapshot(String key) {
+      final raw = json[key];
+      return raw is Map
+          ? ProgressSnapshot.fromJson(Map<String, dynamic>.from(raw))
           : null;
     }
 
@@ -367,11 +419,14 @@ class ClientDashboard {
               Map<String, dynamic>.from(json['engagementStats'] as Map))
           : EngagementStats.empty,
       trainerName: trainer?['name'] as String?,
+      trainerSessionsPerMonth: _asIntOrNull(trainer?['sessionsPerMonth']),
       nextSession: session('nextSession'),
       activeSession: session('activeSession'),
       packageExpiry: pkg != null
           ? PackageExpiry.fromJson(Map<String, dynamic>.from(pkg))
           : null,
+      latestProgress: snapshot('latestProgress'),
+      prevProgress: snapshot('prevProgress'),
       prs: (json['prs'] as List? ?? const [])
           .whereType<Map>()
           .map((m) => PersonalRecord.fromJson(Map<String, dynamic>.from(m)))

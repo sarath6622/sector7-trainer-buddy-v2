@@ -45,6 +45,10 @@ class CommunityRepository {
   Future<void> deleteComment(String postId, String commentId) =>
       _api.delete('/community/posts/$postId/comments/$commentId');
 
+  /// DELETE /api/community/posts/[id] — remove own post.
+  Future<void> deletePost(String postId) =>
+      _api.delete('/community/posts/$postId');
+
   /// GET /api/community/leaderboard (no exerciseId) — the compound-lift tabs.
   Future<List<CompoundExercise>> compoundExercises() async {
     final data = await _api.get('/community/leaderboard') as List<dynamic>;
@@ -150,6 +154,14 @@ class CommunityFeedController
   Future<void> deleteComment(String postId, String commentId) async {
     await _repo.deleteComment(postId, commentId);
     _replacePost(postId, (p) => p.withRemovedComment(commentId));
+  }
+
+  /// Removes own post (owner-only on the server), dropping it from the feed.
+  Future<void> deletePost(String postId) async {
+    await _repo.deletePost(postId);
+    final list = [...(state.valueOrNull ?? const <CommunityPost>[])]
+      ..removeWhere((p) => p.id == postId);
+    state = AsyncData(list);
   }
 }
 
