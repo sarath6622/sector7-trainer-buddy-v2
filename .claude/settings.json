@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/session-context-reminder.sh\"",
+            "statusMessage": "Loading Sector 7 pre-read protocol"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/prisma-migration-guard.py\"",
+            "statusMessage": "Checking migration target (Rule 0)"
+          }
+        ]
+      }
+    ]
+  }
+}
