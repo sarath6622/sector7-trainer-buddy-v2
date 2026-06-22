@@ -12,6 +12,7 @@ import '../data/client_models.dart';
 import '../data/client_repository.dart';
 import 'progress_screen.dart';
 import 'widgets/client_widgets.dart';
+import 'widgets/client_workout_calendar_card.dart';
 
 // ── Accent palette (Tailwind 500s used by the PWA dashboard) ──────────────────
 const _emerald = Color(0xFF10B981);
@@ -131,6 +132,10 @@ class _DashboardBody extends ConsumerWidget {
       sections.add(_ActiveSessionBanner(session: d.activeSession!));
       gap();
     }
+
+    // Workout calendar (PT session days + PR days) — same position as the PWA.
+    sections.add(const ClientWorkoutCalendarCard());
+    gap();
 
     final strip = _EngagementStrip(stats: d.engagementStats);
     if (strip.hasTiles) {

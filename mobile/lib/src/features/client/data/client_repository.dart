@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../trainer/data/trainer_models.dart' show WorkoutCalendarMonth;
 import 'client_extras_models.dart';
 import 'client_models.dart';
 import 'progress_models.dart';
@@ -67,6 +68,16 @@ class ClientRepository {
         .whereType<Map>()
         .map((m) => WorkoutHistoryEntry.fromJson(Map<String, dynamic>.from(m)))
         .toList();
+  }
+
+  /// GET /api/client/workout-calendar?month=YYYY-MM — the caller's own month grid
+  /// of completed PT days + PR days (same shape the trainer view consumes).
+  Future<WorkoutCalendarMonth> workoutCalendar({required String month}) async {
+    final data =
+        await _api.get('/client/workout-calendar', query: {'month': month});
+    return data is Map
+        ? WorkoutCalendarMonth.fromJson(Map<String, dynamic>.from(data))
+        : WorkoutCalendarMonth.empty;
   }
 
   /// GET /api/client/badges → earned + locked badges.
@@ -211,6 +222,13 @@ final workoutHistoryProvider =
 /// Earned + locked badges.
 final badgesProvider = FutureProvider.autoDispose<BadgesData>(
   (ref) => ref.watch(clientRepositoryProvider).badges(),
+);
+
+/// The caller's own workout-calendar month (PT days + PR days), keyed by
+/// `YYYY-MM` — drives the home dashboard calendar.
+final clientWorkoutCalendarProvider =
+    FutureProvider.autoDispose.family<WorkoutCalendarMonth, String>(
+  (ref, month) => ref.watch(clientRepositoryProvider).workoutCalendar(month: month),
 );
 
 /// Dates the client has marked themselves unavailable.
