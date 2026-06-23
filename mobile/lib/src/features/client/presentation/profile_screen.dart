@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/client_repository.dart';
 
@@ -19,7 +20,7 @@ class ProfileScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+        padding: EdgeInsets.fromLTRB(16, 24, 16, glassDockScrollInset(context)),
         children: [
           Center(
             child: Column(

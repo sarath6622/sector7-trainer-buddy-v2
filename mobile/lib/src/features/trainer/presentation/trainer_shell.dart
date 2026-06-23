@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/glass_dock_nav_bar.dart';
+import '../../../core/widgets/top_fade_scrim.dart';
 import 'trainer_clients_screen.dart';
 import 'trainer_profile_screen.dart';
 import 'trainer_schedule_screen.dart';
@@ -29,29 +31,38 @@ class _TrainerShellState extends ConsumerState<TrainerShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _index, children: _tabs),
-      bottomNavigationBar: NavigationBar(
+      // Let tab content scroll *under* the floating dock (WhatsApp-style).
+      extendBody: true,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          IndexedStack(index: _index, children: _tabs),
+          // Dark→clear fade so content scrolls cleanly under the Dynamic Island.
+          const TopFadeScrim(),
+        ],
+      ),
+      bottomNavigationBar: GlassDockNavBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
+          GlassDockDestination(
+            icon: Icons.dashboard_outlined,
+            selectedIcon: Icons.dashboard,
             label: 'Dashboard',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
+          GlassDockDestination(
+            icon: Icons.people_outline,
+            selectedIcon: Icons.people,
             label: 'Clients',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
+          GlassDockDestination(
+            icon: Icons.calendar_month_outlined,
+            selectedIcon: Icons.calendar_month,
             label: 'Schedule',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
+          GlassDockDestination(
+            icon: Icons.person_outline,
+            selectedIcon: Icons.person,
             label: 'Profile',
           ),
         ],

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
+import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../client/data/client_models.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/trainer_models.dart';
@@ -69,7 +70,7 @@ class _TrainerScheduleScreenState extends ConsumerState<TrainerScheduleScreen> {
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(trainerDayViewProvider(_selectedYmd).future),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, glassDockScrollInset(context)),
           children: [
             _WeekStrip(
               selected: _selected,

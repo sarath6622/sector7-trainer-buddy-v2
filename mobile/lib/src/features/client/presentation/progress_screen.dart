@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
+import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../data/client_repository.dart';
 import '../data/progress_models.dart';
 import 'widgets/client_widgets.dart';
@@ -245,7 +246,7 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, glassDockScrollInset(context)),
       children: [
         // Header.
         Row(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
+import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/trainer_models.dart';
 import '../data/trainer_repository.dart';
@@ -52,7 +53,7 @@ class TrainerClientsScreen extends ConsumerWidget {
               );
             }
             return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              padding: EdgeInsets.fromLTRB(16, 8, 16, glassDockScrollInset(context)),
               children: [
                 Padding(
                   padding: const EdgeInsets.only(left: 2, bottom: 10),

@@ -176,6 +176,11 @@ class _MonthGrid extends StatelessWidget {
       crossAxisCount: 7,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      // Cells are static; skip per-cell repaint boundaries so the grid rasterizes
+      // into one cacheable texture instead of compositing 42 layers every scroll
+      // frame (raster-thread jank on weak GPUs).
+      addRepaintBoundaries: false,
+      addAutomaticKeepAlives: false,
       mainAxisSpacing: 4,
       crossAxisSpacing: 4,
       children: [
@@ -237,10 +242,13 @@ class _DayCell extends StatelessWidget {
           decoration: BoxDecoration(
             color: bg,
             shape: BoxShape.circle,
-            border: Border.all(
-              color: isToday ? _kToday : border,
-              width: isToday ? 2 : 1,
-            ),
+            // Skip stroking a (transparent) border on empty out-of-month cells.
+            border: (isToday || border != Colors.transparent)
+                ? Border.all(
+                    color: isToday ? _kToday : border,
+                    width: isToday ? 2 : 1,
+                  )
+                : null,
           ),
           child: day?.isPR == true
               ? const Icon(Icons.star_rounded, size: 18, color: _kPR)

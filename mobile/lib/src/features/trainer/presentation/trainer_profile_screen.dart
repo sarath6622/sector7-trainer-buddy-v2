@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../auth/application/auth_controller.dart';
 
 /// Trainer "Profile" tab — identity, links to Leaves + Reschedule requests, and
@@ -22,7 +23,7 @@ class TrainerProfileScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+        padding: EdgeInsets.fromLTRB(16, 24, 16, glassDockScrollInset(context)),
         children: [
           Center(
             child: CircleAvatar(

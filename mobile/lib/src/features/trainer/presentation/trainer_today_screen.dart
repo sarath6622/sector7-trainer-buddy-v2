@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
+import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../client/data/client_models.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
@@ -46,53 +47,63 @@ class TrainerTodayScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard')),
-      body: RefreshIndicator(
-        onRefresh: refreshAll,
-        child: today.when(
-          loading: () => const _LoadingList(),
-          error: (e, _) => ListView(
-            children: [
-              const SizedBox(height: 120),
-              ErrorRetry(
-                message: e.toString(),
-                onRetry: () => ref.invalidate(trainerTodayProvider),
-              ),
-            ],
-          ),
-          data: (sessions) {
-            // Started sessions live in the Active-Sessions card only; keep them
-            // out of the Today list so they never show in both places.
-            final todaysScheduled =
-                sessions.where((s) => !_isLiveToday(s)).toList();
-            // When the Active-Sessions card is showing and nothing un-started
-            // is left today, drop the Today card entirely — otherwise it reads
-            // the ironic "No sessions today" while live sessions sit right
-            // above it. (Genuine rest day → no active → Today still shows.)
-            final stale =
-                ref.watch(trainerStaleSessionsProvider).valueOrNull ?? const [];
-            final hasActive = sessions.any(_isLiveToday) || stale.isNotEmpty;
-            final showToday = todaysScheduled.isNotEmpty || !hasActive;
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: refreshAll,
+          child: today.when(
+            loading: () => const _LoadingList(),
+            error: (e, _) => ListView(
               children: [
-                _GreetingHeader(name: user?.firstName ?? 'Trainer'),
-                const SizedBox(height: 16),
-                _ActiveSection(today: sessions),
-                if (showToday) ...[
-                  _TodayCard(sessions: todaysScheduled),
-                  const SizedBox(height: 16),
-                ],
-                const _CalendarSection(),
-                const _UpcomingSection(),
-                const SizedBox(height: 16),
-                const _StatStripSection(),
-                const SizedBox(height: 16),
-                const _PackagesSection(),
-                const _QuickLinks(),
+                const SizedBox(height: 120),
+                ErrorRetry(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(trainerTodayProvider),
+                ),
               ],
-            );
-          },
+            ),
+            data: (sessions) {
+              // Started sessions live in the Active-Sessions card only; keep them
+              // out of the Today list so they never show in both places.
+              final todaysScheduled = sessions
+                  .where((s) => !_isLiveToday(s))
+                  .toList();
+              // When the Active-Sessions card is showing and nothing un-started
+              // is left today, drop the Today card entirely — otherwise it reads
+              // the ironic "No sessions today" while live sessions sit right
+              // above it. (Genuine rest day → no active → Today still shows.)
+              final stale =
+                  ref.watch(trainerStaleSessionsProvider).valueOrNull ??
+                  const [];
+              final hasActive = sessions.any(_isLiveToday) || stale.isNotEmpty;
+              final showToday = todaysScheduled.isNotEmpty || !hasActive;
+              return ListView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  MediaQuery.viewPaddingOf(context).top + 8,
+                  16,
+                  glassDockScrollInset(context),
+                ),
+                children: [
+                  _GreetingHeader(name: user?.firstName ?? 'Trainer'),
+                  const SizedBox(height: 16),
+                  _ActiveSection(today: sessions),
+                  if (showToday) ...[
+                    _TodayCard(sessions: todaysScheduled),
+                    const SizedBox(height: 16),
+                  ],
+                  const _CalendarSection(),
+                  const _UpcomingSection(),
+                  const SizedBox(height: 16),
+                  const _StatStripSection(),
+                  const SizedBox(height: 16),
+                  const _PackagesSection(),
+                  const _QuickLinks(),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -120,17 +131,16 @@ class _GreetingHeader extends StatelessWidget {
       children: [
         Text(
           _greeting(),
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 2),
         Text(
           name,
-          style: Theme.of(context)
-              .textTheme
-              .headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
       ],
     );
@@ -175,7 +185,9 @@ class _TodayCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.08)),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.08),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -201,24 +213,24 @@ class _TodayCard extends StatelessWidget {
                     children: [
                       Text(
                         'Today',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
+                        style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       Text(
                         Fmt.dayMonthYear(DateTime.now()),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 if (sessions.isNotEmpty)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: scheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(999),
@@ -226,9 +238,9 @@ class _TodayCard extends StatelessWidget {
                     child: Text(
                       '${sessions.length} session${sessions.length == 1 ? '' : 's'}',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
               ],
@@ -244,19 +256,27 @@ class _TodayCard extends StatelessWidget {
                     height: 48,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest
-                          .withValues(alpha: 0.5),
+                      color: scheme.surfaceContainerHighest.withValues(
+                        alpha: 0.5,
+                      ),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(Icons.event_available,
-                        color: scheme.onSurfaceVariant, size: 22),
+                    child: Icon(
+                      Icons.event_available,
+                      color: scheme.onSurfaceVariant,
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(height: 8),
-                  const Text('No sessions today',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text(
+                    'No sessions today',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 2),
-                  Text('Enjoy your rest day.',
-                      style: TextStyle(color: scheme.onSurfaceVariant)),
+                  Text(
+                    'Enjoy your rest day.',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
                 ],
               ),
             )
@@ -286,16 +306,41 @@ class _TodaySessionTile extends StatelessWidget {
   ({Color accent, Color bg, Color fg, String label}) _style(ColorScheme s) {
     switch (session.status) {
       case SessionStatus.inProgress:
-        return (accent: _kLive, bg: _kLive.withValues(alpha: 0.15), fg: _kLive, label: 'In Progress');
+        return (
+          accent: _kLive,
+          bg: _kLive.withValues(alpha: 0.15),
+          fg: _kLive,
+          label: 'In Progress',
+        );
       case SessionStatus.scheduled:
-        return (accent: _kScheduled, bg: _kScheduled.withValues(alpha: 0.12), fg: _kScheduled, label: 'Scheduled');
+        return (
+          accent: _kScheduled,
+          bg: _kScheduled.withValues(alpha: 0.12),
+          fg: _kScheduled,
+          label: 'Scheduled',
+        );
       case SessionStatus.noShow:
-        return (accent: _kNoShow, bg: _kNoShow.withValues(alpha: 0.12), fg: _kNoShow, label: 'No Show');
+        return (
+          accent: _kNoShow,
+          bg: _kNoShow.withValues(alpha: 0.12),
+          fg: _kNoShow,
+          label: 'No Show',
+        );
       case SessionStatus.completed:
-        return (accent: s.outlineVariant, bg: s.surfaceContainerHighest, fg: s.onSurfaceVariant, label: 'Completed');
+        return (
+          accent: s.outlineVariant,
+          bg: s.surfaceContainerHighest,
+          fg: s.onSurfaceVariant,
+          label: 'Completed',
+        );
       case SessionStatus.cancelled:
       case SessionStatus.unknown:
-        return (accent: s.outlineVariant, bg: s.surfaceContainerHighest, fg: s.onSurfaceVariant, label: 'Cancelled');
+        return (
+          accent: s.outlineVariant,
+          bg: s.surfaceContainerHighest,
+          fg: s.onSurfaceVariant,
+          label: 'Cancelled',
+        );
     }
   }
 
@@ -312,8 +357,9 @@ class _TodaySessionTile extends StatelessWidget {
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color:
-              isLive ? _kLive.withValues(alpha: 0.06) : scheme.surfaceContainerHigh,
+          color: isLive
+              ? _kLive.withValues(alpha: 0.06)
+              : scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isLive
@@ -348,9 +394,7 @@ class _TodaySessionTile extends StatelessWidget {
                                   parts.isNotEmpty
                                       ? parts[0]
                                       : session.scheduledTime,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleSmall
+                                  style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(
                                         color: st.fg,
                                         fontWeight: FontWeight.w800,
@@ -383,9 +427,7 @@ class _TodaySessionTile extends StatelessWidget {
                                   session.clientName ?? 'Client',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleSmall
+                                  style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(
                                         fontWeight: FontWeight.w700,
                                         decoration: isCancelled
@@ -396,9 +438,11 @@ class _TodaySessionTile extends StatelessWidget {
                                 const SizedBox(height: 3),
                                 Row(
                                   children: [
-                                    Icon(Icons.schedule,
-                                        size: 13,
-                                        color: scheme.onSurfaceVariant),
+                                    Icon(
+                                      Icons.schedule,
+                                      size: 13,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
                                     const SizedBox(width: 4),
                                     Text(
                                       '${session.summary.durationMin} min',
@@ -415,7 +459,12 @@ class _TodaySessionTile extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _Pill(label: st.label, bg: st.bg, fg: st.fg, dot: isLive),
+                          _Pill(
+                            label: st.label,
+                            bg: st.bg,
+                            fg: st.fg,
+                            dot: isLive,
+                          ),
                         ],
                       ),
                     ),
@@ -436,11 +485,12 @@ class _TodaySessionTile extends StatelessWidget {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill(
-      {required this.label,
-      required this.bg,
-      required this.fg,
-      this.dot = false});
+  const _Pill({
+    required this.label,
+    required this.bg,
+    required this.fg,
+    this.dot = false,
+  });
   final String label;
   final Color bg;
   final Color fg;
@@ -450,8 +500,10 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -466,10 +518,10 @@ class _Pill extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: fg,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 10,
-                ),
+              color: fg,
+              fontWeight: FontWeight.w700,
+              fontSize: 10,
+            ),
           ),
         ],
       ),
@@ -511,7 +563,9 @@ class _TodayActionsState extends ConsumerState<_TodayActions> {
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Icon(Icons.play_arrow_rounded, size: 18),
                 label: Text(_busy ? 'Starting…' : 'Start'),
@@ -523,7 +577,10 @@ class _TodayActionsState extends ConsumerState<_TodayActions> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: _kNoShow,
                 side: BorderSide(color: _kNoShow.withValues(alpha: 0.4)),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
               ),
               icon: const Icon(Icons.person_off_outlined, size: 16),
               label: const Text('No Show'),
@@ -541,8 +598,10 @@ class _TodayActionsState extends ConsumerState<_TodayActions> {
               padding: const EdgeInsets.symmetric(vertical: 11),
             ),
             icon: const Icon(Icons.stop_rounded, size: 18),
-            label: const Text('Resume Session',
-                style: TextStyle(fontWeight: FontWeight.w700)),
+            label: const Text(
+              'Resume Session',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         );
       case SessionStatus.completed:
@@ -567,7 +626,11 @@ class _TodayActionsState extends ConsumerState<_TodayActions> {
 
   Future<void> _start() async {
     setState(() => _busy = true);
-    final ok = await TrainerSessionActions.start(context, ref, widget.session.id);
+    final ok = await TrainerSessionActions.start(
+      context,
+      ref,
+      widget.session.id,
+    );
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok) context.push('/trainer/sessions/${widget.session.id}');
@@ -610,27 +673,32 @@ class _UpcomingSection extends ConsumerWidget {
     final now = DateTime.now();
     final todayStr = TrainerRepository.ymd(now);
     final horizon = now.add(const Duration(days: 14));
-    final scheduled = upcoming.where((s) {
-      if (s.status != SessionStatus.scheduled) return false;
-      final d = s.scheduledDate;
-      if (d == null) return false;
-      final dStr = TrainerRepository.ymd(d);
-      return dStr != todayStr && !d.isAfter(horizon);
-    }).toList()
-      ..sort((a, b) =>
-          (a.scheduledDate ?? now).compareTo(b.scheduledDate ?? now));
+    final scheduled =
+        upcoming.where((s) {
+          if (s.status != SessionStatus.scheduled) return false;
+          final d = s.scheduledDate;
+          if (d == null) return false;
+          final dStr = TrainerRepository.ymd(d);
+          return dStr != todayStr && !d.isAfter(horizon);
+        }).toList()..sort(
+          (a, b) => (a.scheduledDate ?? now).compareTo(b.scheduledDate ?? now),
+        );
 
     // Group by date (insertion order preserved → chronological).
     final byDate = <String, List<TrainerSession>>{};
     for (final s in scheduled) {
-      byDate.putIfAbsent(TrainerRepository.ymd(s.scheduledDate!), () => []).add(s);
+      byDate
+          .putIfAbsent(TrainerRepository.ymd(s.scheduledDate!), () => [])
+          .add(s);
     }
 
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.08)),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.08),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -639,22 +707,24 @@ class _UpcomingSection extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                Icon(Icons.event_outlined,
-                    size: 18, color: scheme.onSurfaceVariant),
+                Icon(
+                  Icons.event_outlined,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Upcoming',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   '· next 14 days',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -678,10 +748,10 @@ class _UpcomingSection extends ConsumerWidget {
                     Text(
                       Fmt.dayMonth(DateTime.tryParse('${entry.key}T00:00:00')),
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                          ),
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     for (final s in entry.value)
@@ -725,9 +795,9 @@ class _UpcomingRow extends StatelessWidget {
                 ),
                 child: Text(
                   _initials(session.clientName ?? 'Client'),
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
               const SizedBox(width: 12),
@@ -744,8 +814,8 @@ class _UpcomingRow extends StatelessWidget {
                     Text(
                       '${Fmt.time(session.scheduledTime)} · ${session.summary.durationMin} min',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -768,10 +838,8 @@ class _StatStripSection extends ConsumerWidget {
     final month =
         ref.watch(trainerMonthSessionsProvider).valueOrNull ?? const [];
     final total = month.length;
-    final done =
-        month.where((s) => s.status == SessionStatus.completed).length;
-    final noShow =
-        month.where((s) => s.status == SessionStatus.noShow).length;
+    final done = month.where((s) => s.status == SessionStatus.completed).length;
+    final noShow = month.where((s) => s.status == SessionStatus.noShow).length;
     final rate = (done + noShow) > 0
         ? '${((done / (done + noShow)) * 100).round()}%'
         : '—';
@@ -780,34 +848,38 @@ class _StatStripSection extends ConsumerWidget {
       children: [
         Expanded(
           child: _MiniStat(
-              icon: Icons.event_note_outlined,
-              value: '$total',
-              label: 'Total',
-              color: _kScheduled),
+            icon: Icons.event_note_outlined,
+            value: '$total',
+            label: 'Total',
+            color: _kScheduled,
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: _MiniStat(
-              icon: Icons.check_circle_outline,
-              value: '$done',
-              label: 'Done',
-              color: _kLive),
+            icon: Icons.check_circle_outline,
+            value: '$done',
+            label: 'Done',
+            color: _kLive,
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: _MiniStat(
-              icon: Icons.cancel_outlined,
-              value: '$noShow',
-              label: 'No-show',
-              color: _kNoShow),
+            icon: Icons.cancel_outlined,
+            value: '$noShow',
+            label: 'No-show',
+            color: _kNoShow,
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: _MiniStat(
-              icon: Icons.trending_up,
-              value: rate,
-              label: 'Rate',
-              color: _kAmber),
+            icon: Icons.trending_up,
+            value: rate,
+            label: 'Rate',
+            color: _kAmber,
+          ),
         ),
       ],
     );
@@ -834,7 +906,9 @@ class _MiniStat extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.08)),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.08),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -852,17 +926,17 @@ class _MiniStat extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             value,
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800, height: 1),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -890,8 +964,9 @@ class _PackagesSection extends ConsumerWidget {
         decoration: BoxDecoration(
           color: scheme.surfaceContainer,
           borderRadius: BorderRadius.circular(20),
-          border:
-              Border.all(color: scheme.outlineVariant.withValues(alpha: 0.08)),
+          border: Border.all(
+            color: scheme.outlineVariant.withValues(alpha: 0.08),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -900,20 +975,24 @@ class _PackagesSection extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               child: Row(
                 children: [
-                  Icon(Icons.people_outline,
-                      size: 18, color: scheme.onSurfaceVariant),
+                  Icon(
+                    Icons.people_outline,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Client Packages',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const Spacer(),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: scheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(999),
@@ -921,8 +1000,8 @@ class _PackagesSection extends ConsumerWidget {
                     child: Text(
                       '${withPkg.length} active',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ],
@@ -952,8 +1031,8 @@ class _PackageRow extends StatelessWidget {
     final urgency = daysLeft <= 7
         ? _kNoShow
         : daysLeft <= 14
-            ? _kAmber
-            : _kLive;
+        ? _kAmber
+        : _kLive;
     final pct = (pkg.fractionUsed * 100).round();
 
     return Row(
@@ -969,10 +1048,9 @@ class _PackageRow extends StatelessWidget {
           ),
           child: Text(
             _initials(client.name),
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
         const SizedBox(width: 12),
@@ -991,8 +1069,10 @@ class _PackageRow extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: urgency.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
@@ -1000,9 +1080,10 @@ class _PackageRow extends StatelessWidget {
                     child: Text(
                       '${daysLeft}d left',
                       style: TextStyle(
-                          color: urgency,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700),
+                        color: urgency,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
@@ -1021,8 +1102,8 @@ class _PackageRow extends StatelessWidget {
               Text(
                 '$pct% used · Ends ${Fmt.dayMonth(pkg.endDate)}',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -1092,8 +1173,9 @@ class _QuickLink extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border:
-                Border.all(color: scheme.outlineVariant.withValues(alpha: 0.08)),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.08),
+            ),
           ),
           child: Row(
             children: [
@@ -1112,16 +1194,20 @@ class _QuickLink extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13)),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
                     Text(
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -1143,13 +1229,13 @@ class _LoadingList extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     Widget bar(double h) => Container(
-          height: h,
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
-          ),
-        );
+      height: h,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
@@ -1171,8 +1257,11 @@ class _LoadingList extends StatelessWidget {
 }
 
 String _initials(String name) {
-  final parts =
-      name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
   if (parts.isEmpty) return '?';
   if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
   return (parts.first.substring(0, 1) + parts.last.substring(0, 1))

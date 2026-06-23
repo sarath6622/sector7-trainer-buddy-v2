@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
+import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/client_extras_models.dart' show Badge;
 import '../data/client_models.dart';
@@ -68,7 +69,7 @@ class ClientDashboardScreen extends ConsumerWidget {
             ),
             data: (d) => _GreetingScroll(
               firstName: firstName,
-              children: [_DashboardBody(dashboard: d)],
+              children: _dashboardSections(d),
             ),
           ),
         ),
@@ -88,7 +89,7 @@ class _GreetingScroll extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, glassDockScrollInset(context)),
       children: [
         Text(
           'Hey, $firstName',
@@ -112,61 +113,61 @@ class _GreetingScroll extends StatelessWidget {
   }
 }
 
-class _DashboardBody extends ConsumerWidget {
-  const _DashboardBody({required this.dashboard});
-  final ClientDashboard dashboard;
+/// Builds the dashboard's sections as a flat list so each becomes its own
+/// [ListView] child — and therefore its own repaint boundary. Returning a single
+/// tall [Column] instead made the whole dashboard one over-tall layer that blew
+/// past the raster cache and re-rasterized every scroll frame, which stutters on
+/// weaker GPUs. (ListView stretches children to full width, like the old Column.)
+List<Widget> _dashboardSections(ClientDashboard d) {
+  final pkg = d.packageExpiry;
+  final sections = <Widget>[];
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final d = dashboard;
-    final pkg = d.packageExpiry;
-    final sections = <Widget>[];
+  void gap() => sections.add(const SizedBox(height: 14));
 
-    void gap() => sections.add(const SizedBox(height: 14));
-
-    if (pkg != null && pkg.endDate != null) {
-      sections.add(_PackageCard(expiry: pkg));
-      gap();
-    }
-    if (d.activeSession != null) {
-      sections.add(_ActiveSessionBanner(session: d.activeSession!));
-      gap();
-    }
-
-    // Workout calendar (PT session days + PR days) — same position as the PWA.
-    sections.add(const ClientWorkoutCalendarCard());
+  if (pkg != null && pkg.endDate != null) {
+    sections.add(_PackageCard(expiry: pkg));
     gap();
-
-    final strip = _EngagementStrip(stats: d.engagementStats);
-    if (strip.hasTiles) {
-      sections.add(strip);
-      gap();
-    }
-
-    if (d.hasFitnessJourney) {
-      sections.add(_FitnessJourney(dashboard: d));
-      gap();
-    }
-
-    sections.add(_BadgesShowcase());
-    sections.add(const SizedBox(height: 14));
-
-    sections.add(_SessionsCard(count: d.sessionCount));
+  }
+  if (d.activeSession != null) {
+    sections.add(_ActiveSessionBanner(session: d.activeSession!));
     gap();
+  }
 
-    sections.add(_NextSessionTrainerCard(
+  // Workout calendar (PT session days + PR days) — same position as the PWA.
+  sections.add(const ClientWorkoutCalendarCard());
+  gap();
+
+  final strip = _EngagementStrip(stats: d.engagementStats);
+  if (strip.hasTiles) {
+    sections.add(strip);
+    gap();
+  }
+
+  if (d.hasFitnessJourney) {
+    sections.add(_FitnessJourney(dashboard: d));
+    gap();
+  }
+
+  sections.add(_BadgesShowcase());
+  sections.add(const SizedBox(height: 14));
+
+  sections.add(_SessionsCard(count: d.sessionCount));
+  gap();
+
+  sections.add(
+    _NextSessionTrainerCard(
       next: d.nextSession,
       trainerName: d.trainerName,
       sessionsPerMonth: d.trainerSessionsPerMonth,
-    ));
+    ),
+  );
 
-    if (d.sessionCount.noShow > 0) {
-      gap();
-      sections.add(_NoShowWarning(count: d.sessionCount.noShow));
-    }
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: sections);
+  if (d.sessionCount.noShow > 0) {
+    gap();
+    sections.add(_NoShowWarning(count: d.sessionCount.noShow));
   }
+
+  return sections;
 }
 
 // ── Reusable card shell (rounded-2xl, card bg, subtle border) ──────────────────
@@ -179,18 +180,28 @@ class _Panel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(18),
-      side: BorderSide(color: scheme.outlineVariant),
-    );
-    return Material(
-      color: scheme.surfaceContainerLow,
-      shape: shape,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(padding: padding, child: child),
+    final radius = BorderRadius.circular(18);
+    // Flat DecoratedBox (bg + border) — no Material shape/clip and no ClipRRect.
+    // Both forced a per-card `saveLayer` every frame, the dashboard's dominant
+    // raster cost. Content is padded well inside the corners, so no clip is
+    // needed; the tap ripple is rounded via InkWell.borderRadius (which only
+    // costs while a ripple actually animates, not during scroll).
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: radius,
+        border: Border.all(color: scheme.outlineVariant),
       ),
+      child: onTap != null
+          ? Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: radius,
+                child: Padding(padding: padding, child: child),
+              ),
+            )
+          : Padding(padding: padding, child: child),
     );
   }
 }

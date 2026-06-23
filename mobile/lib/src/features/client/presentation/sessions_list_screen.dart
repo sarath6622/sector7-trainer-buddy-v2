@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
+import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../data/client_models.dart';
 import '../data/client_repository.dart';
 import 'widgets/client_widgets.dart';
@@ -52,7 +53,7 @@ class _SessionsListScreenState extends ConsumerState<SessionsListScreen> {
           onRefresh: () =>
               ref.refresh(clientSessionsByMonthProvider(_monthKey).future),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, glassDockScrollInset(context)),
             children: [
               Text('My Sessions',
                   style: Theme.of(context)

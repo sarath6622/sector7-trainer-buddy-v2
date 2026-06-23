@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/community_models.dart';
@@ -102,6 +103,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                         ])
                       : ListView.builder(
                           controller: _scroll,
+                          padding: EdgeInsets.only(bottom: glassDockScrollInset(context)),
                           itemCount: posts.length + (controller.hasMore ? 1 : 0),
                           itemBuilder: (context, i) {
                             if (i >= posts.length) {
