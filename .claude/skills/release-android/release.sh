@@ -61,21 +61,22 @@ echo "✅ Built $(du -h "$APK" | cut -f1) → $APK"
 echo "▶️  Uploading to Firebase App Distribution"
 DIST_ARGS=(--app "$ANDROID_APP_ID" --release-notes "$NOTES")
 if [ -n "${FAD_TESTERS:-}" ]; then
-  echo "    testers: $FAD_TESTERS"
+  TARGET_DESC="testers $FAD_TESTERS"
   DIST_ARGS+=(--testers "$FAD_TESTERS")
 else
-  echo "    group:   $GROUPS"
+  TARGET_DESC="group '$GROUPS'"
   DIST_ARGS+=(--groups "$GROUPS")
 fi
+echo "    → $TARGET_DESC"
 firebase appdistribution:distribute "$APK" "${DIST_ARGS[@]}" || {
   echo "❌ Distribute failed. First time? Enable App Distribution in the Firebase"
-  echo "   console and create the tester group '$GROUPS' (or pass FAD_TESTERS=email)."
+  echo "   console, then add testers to $TARGET_DESC (or pass FAD_TESTERS=email)."
   exit 1
 }
 
 cat <<EOF
 
-✅ Distributed to '$GROUPS'. Testers get an email + a notification in the
-   Firebase App Tester app. They install/update from there.
+✅ Distributed to $TARGET_DESC. They get an email + a notification in the
+   Firebase App Tester app, and install/update from there.
    Backend for this build: $API  (deploy backend changes with deploy-qa).
 EOF
