@@ -1,0 +1,14 @@
+# Release signing config for Android (Firebase App Distribution / Play).
+# Copy this file to android/key.properties (which is gitignored) and fill in the
+# real values after generating your upload keystore. NEVER commit key.properties
+# or the .jks file.
+#
+# Generate the keystore (run from mobile/android/app so storeFile resolves):
+#   keytool -genkey -v -keystore upload-keystore.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# storeFile is resolved relative to mobile/android/app/.
+storePassword=CHANGEME
+keyPassword=CHANGEME
+keyAlias=upload
+storeFile=upload-keystore.jks

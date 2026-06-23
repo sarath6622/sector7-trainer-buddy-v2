@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "184622370860",
+    "project_id": "sector7-fb0ff",
+    "storage_bucket": "sector7-fb0ff.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:184622370860:android:640dd9a87cb8872bb90189",
+        "android_client_info": {
+          "package_name": "com.sector7.sector7_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4P5YsjOEISUi2a02QLBfUQ4qZsSOCKwU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,7 +1,12 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'firebase_options.dart';
+import 'src/core/flags/force_update_gate.dart';
 import 'src/core/theme/app_theme.dart';
 import 'src/features/auth/application/auth_controller.dart';
 import 'src/features/session/data/live_session_service.dart';
@@ -9,12 +14,42 @@ import 'src/features/workout/data/workout_repository.dart';
 import 'src/features/workout/data/workout_sync_service.dart';
 import 'src/routing/app_router.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   // Offline-first: Inter ships as a bundled asset (see pubspec + assets/fonts).
   // Disable runtime fetching so a font is never pulled over the network — a
   // missing variant surfaces loudly in dev instead of silently fetching.
   GoogleFonts.config.allowRuntimeFetching = false;
+
+  await _initFirebase();
+
   runApp(const ProviderScope(child: Sector7App()));
+}
+
+/// Firebase is best-effort at startup: Crashlytics + Remote Config are nice to
+/// have, but a failure here must never stop the app from running — Remote Config
+/// then falls back to its in-code defaults (see [ForceUpdateGate]).
+Future<void> _initFirebase() async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    // Don't pollute Crashlytics with errors thrown during local development.
+    await FirebaseCrashlytics.instance
+        .setCrashlyticsCollectionEnabled(!kDebugMode);
+    final priorOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+      // Keep the console dump / red-screen in debug.
+      priorOnError?.call(details);
+    };
+    WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  } catch (e) {
+    debugPrint('Firebase init skipped: $e');
+  }
 }
 
 class Sector7App extends ConsumerStatefulWidget {
@@ -79,6 +114,9 @@ class _Sector7AppState extends ConsumerState<Sector7App>
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
       routerConfig: router,
+      // Remote-Config force-update gate wraps every route (fails open).
+      builder: (context, child) =>
+          ForceUpdateGate(child: child ?? const SizedBox.shrink()),
     );
   }
 }

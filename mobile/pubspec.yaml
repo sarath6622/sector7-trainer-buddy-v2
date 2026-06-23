@@ -47,6 +47,10 @@ dependencies:
   live_activities: ^2.4.7
   flutter_local_notifications: ^22.0.1
   timezone: ^0.11.0
+  firebase_core: ^4.11.0
+  firebase_remote_config: ^6.5.3
+  firebase_crashlytics: ^5.2.4
+  package_info_plus: ^9.0.1
 
   # ── Added in later phases (need native config; see docs/flutter-migration-plan.md) ──
   # workmanager                   → true OS-background sync (deferred; needs iOS BGTaskScheduler
