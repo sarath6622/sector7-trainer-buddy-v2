@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 /// Approximate rendered height of the dock body (icon + label + inner padding +
 /// border), excluding the gap below it.
-const double _kDockBodyHeight = 61;
+const double _kDockBodyHeight = 67;
 
 /// Gap between the dock's bottom edge and the screen bottom. We deliberately sit
 /// *below* the full safe-area inset — just clear of the home indicator — so the
@@ -24,8 +24,8 @@ double glassDockScrollInset(BuildContext context) {
 ///
 /// Renders as a translucent, blurred, rounded dock that floats above the screen
 /// edge with a hairline border and a soft shadow — the "Frosted Floating Dock"
-/// look. Each destination shows its icon above a label; the active one gets an
-/// orange pill behind the icon and accent-colored text.
+/// look. Each destination shows its icon above a label; the active one gets a
+/// subtle frosted background behind the whole item — icon and label together.
 ///
 /// Drop it straight into [Scaffold.bottomNavigationBar]. It wraps itself in a
 /// [SafeArea] and reserves its own height (dock + margins), so it works with the
@@ -47,40 +47,26 @@ class GlassDockNavBar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
 
-    // A live BackdropFilter blur is cheap on Apple GPUs (Impeller) but expensive
-    // on mid-range Android, where re-blurring the scrolling content every frame
-    // drops scroll frames. So we blur only on iOS; on Android a more opaque
-    // frosted fill reads as glass without the per-frame backdrop cost.
-    final useBlur = Theme.of(context).platform == TargetPlatform.iOS;
-
-    final List<Color> fill;
-    if (isDark) {
-      fill = useBlur
-          ? [
-              Colors.white.withValues(alpha: 0.10),
-              Colors.white.withValues(alpha: 0.04),
-            ]
-          : [
-              const Color(0xFF34373F).withValues(alpha: 0.90),
-              const Color(0xFF202229).withValues(alpha: 0.86),
-            ];
-    } else {
-      fill = useBlur
-          ? [
-              Colors.white.withValues(alpha: 0.45),
-              Colors.white.withValues(alpha: 0.30),
-            ]
-          : [
-              Colors.white.withValues(alpha: 0.92),
-              Colors.white.withValues(alpha: 0.86),
-            ];
-    }
+    // A clear, see-through frosted dock: a translucent dark (light in light
+    // mode) tint laid over a live blur of the content scrolling behind it —
+    // WhatsApp's floating-bar look. The blur is cheap here: Impeller is the
+    // default renderer on both iOS and (Flutter 3.27+) Android, and we blur only
+    // this small fixed-height region, not the whole screen.
+    final List<Color> fill = isDark
+        ? [
+            Colors.black.withValues(alpha: 0.42),
+            Colors.black.withValues(alpha: 0.55),
+          ]
+        : [
+            Colors.white.withValues(alpha: 0.55),
+            Colors.white.withValues(alpha: 0.42),
+          ];
     final borderColor = isDark
-        ? Colors.white.withValues(alpha: 0.22)
-        : Colors.black.withValues(alpha: 0.07);
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.06);
 
-    // The frosted surface: the gradient fill + the nav row. Wrapped in a
-    // BackdropFilter only on iOS (see above).
+    // The frosted surface: the translucent tint + the nav row, laid over a blur
+    // of whatever is behind the dock.
     Widget surface = DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -92,7 +78,7 @@ class GlassDockNavBar extends StatelessWidget {
       child: Material(
         type: MaterialType.transparency,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
           child: Row(
             children: [
               for (var i = 0; i < destinations.length; i++)
@@ -110,21 +96,19 @@ class GlassDockNavBar extends StatelessWidget {
         ),
       ),
     );
-    if (useBlur) {
-      surface = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: surface,
-      );
-    }
+    surface = BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+      child: surface,
+    );
 
     return SafeArea(
       top: false,
       bottom: false,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          16,
+          10,
           0,
-          16,
+          10,
           _dockBottomGap(MediaQuery.viewPaddingOf(context).bottom),
         ),
         child: DecoratedBox(
@@ -183,47 +167,56 @@ class _GlassDockItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = selected ? selectedColor : mutedColor;
-    // Neutral frosted pill behind the active icon (WhatsApp-style) — no accent.
-    final pillColor = isDark
-        ? Colors.white.withValues(alpha: 0.18)
-        : Colors.black.withValues(alpha: 0.07);
+    // Neutral frosted highlight behind the *whole* active item — icon and label
+    // together (WhatsApp-style), no accent tint.
+    final activeBg = isDark
+        ? Colors.white.withValues(alpha: 0.14)
+        : Colors.black.withValues(alpha: 0.06);
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: selected ? pillColor : Colors.transparent,
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(
+    return Padding(
+      // A small gap between items so adjacent highlights never touch.
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? activeBg : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
                 selected ? destination.selectedIcon : destination.icon,
-                size: 20,
+                size: 22,
                 color: color,
               ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              destination.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontSize: 11,
-                height: 1.0,
-                color: color,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              const SizedBox(height: 4),
+              // Scale the label down a touch (never wrap, never clip) so long
+              // labels like "Community"/"Dashboard" still fit on narrow screens.
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    destination.label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontSize: 11,
+                      height: 1.0,
+                      color: color,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

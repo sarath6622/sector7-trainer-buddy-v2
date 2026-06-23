@@ -49,27 +49,27 @@ class _ClientShellState extends ConsumerState<ClientShell> {
         destinations: const [
           GlassDockDestination(
             icon: Icons.home_outlined,
-            selectedIcon: Icons.home,
+            selectedIcon: Icons.home_rounded,
             label: 'Home',
           ),
           GlassDockDestination(
             icon: Icons.fitness_center_outlined,
-            selectedIcon: Icons.fitness_center,
+            selectedIcon: Icons.fitness_center_rounded,
             label: 'Sessions',
           ),
           GlassDockDestination(
             icon: Icons.insights_outlined,
-            selectedIcon: Icons.insights,
+            selectedIcon: Icons.insights_rounded,
             label: 'Progress',
           ),
           GlassDockDestination(
             icon: Icons.groups_outlined,
-            selectedIcon: Icons.groups,
+            selectedIcon: Icons.groups_rounded,
             label: 'Community',
           ),
           GlassDockDestination(
-            icon: Icons.person_outline,
-            selectedIcon: Icons.person,
+            icon: Icons.person_outline_rounded,
+            selectedIcon: Icons.person_rounded,
             label: 'Profile',
           ),
         ],

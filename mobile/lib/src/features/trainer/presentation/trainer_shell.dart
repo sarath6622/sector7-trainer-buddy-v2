@@ -46,23 +46,23 @@ class _TrainerShellState extends ConsumerState<TrainerShell> {
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
           GlassDockDestination(
-            icon: Icons.dashboard_outlined,
-            selectedIcon: Icons.dashboard,
+            icon: Icons.space_dashboard_outlined,
+            selectedIcon: Icons.space_dashboard_rounded,
             label: 'Dashboard',
           ),
           GlassDockDestination(
-            icon: Icons.people_outline,
-            selectedIcon: Icons.people,
+            icon: Icons.groups_outlined,
+            selectedIcon: Icons.groups_rounded,
             label: 'Clients',
           ),
           GlassDockDestination(
             icon: Icons.calendar_month_outlined,
-            selectedIcon: Icons.calendar_month,
+            selectedIcon: Icons.calendar_month_rounded,
             label: 'Schedule',
           ),
           GlassDockDestination(
-            icon: Icons.person_outline,
-            selectedIcon: Icons.person,
+            icon: Icons.person_outline_rounded,
+            selectedIcon: Icons.person_rounded,
             label: 'Profile',
           ),
         ],
