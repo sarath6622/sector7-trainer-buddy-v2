@@ -673,3 +673,19 @@ Exercises present in `exercises` but absent from `dirtyExerciseIds` are left unt
 - **FCM `platform` field.** `FcmToken` gains nullable `platform` (`ios|android|web`); `POST /api/notifications/fcm-token` now accepts `{ token, platform }` (Zod `registerFcmTokenSchema`), already Bearer-aware via the Phase-0 `getServerSession` shim. The send path gained an `apns: { payload: { aps: { sound: 'default' } } }` block so native iOS renders an alert+sound (ignored for web/android tokens in the mixed multicast). Schema migration is **local-Docker-only** for now (operator choice) — see schema.md.
 
 **Consequences:** No new server channels, no Pusher quota change. The live timer needs the Pusher app's `PUSHER_*` env on the server (`.env.local`, currently blank) to actually emit, plus `--dart-define=PUSHER_KEY/CLUSTER` on the app build to subscribe. Tests: `mobile/test/pusher_service_test.dart` (payload-decode tolerance + disabled-no-op contract). FCM client (`firebase_messaging`) + iOS push capability/entitlements are the next increment, gated on the Firebase iOS config (`GoogleService-Info.plist`) + an APNs key.
+
+## ADR-046: `qa` Branch as a Fast-Forward Deployment Pointer for Flutter Device Testing
+
+**Status:** Accepted (2026-06-23). In use — `qa` pushed from `feat/flutter-mobile-client-mvp`; Vercel auto-builds it as a Preview; verified open + reachable.
+
+**Context:** The Flutter app (`mobile/`) needs to run on real iOS/Android devices against a hosted backend (not just the local dev server) without disturbing the production PWA. Two physical/simulated builds testing in parallel need a stable, internet-reachable API URL. We did **not** want a separate Vercel project or a separate database, and we wanted the local-only Flutter run workflow to keep working unchanged.
+
+**Decisions:**
+
+- **`qa` is a deployment pointer, never a working branch.** Development stays on the feature/dev branch (`feat/flutter-mobile-client-mvp`); `qa` is only ever **fast-forwarded** to that branch's tip (`git push origin HEAD:qa`, or the `deploy-qa` skill which enforces FF). It is never committed on directly, so it cannot diverge — no merge conflicts, no force-push. Vercel auto-builds `qa` as a **Preview** deployment, leaving Production (`main` = the PWA) untouched.
+- **Shared Production DB, test users only.** The qa Preview reads the same Neon database as prod (no separate `DATABASE_URL` for the Preview env). The PWA front-end is untouched, but the data store is shared — so qa testing logs in with seeded **test users only** (writes are real data). Operator (Sarath) accepted this trade-off over standing up an isolated DB.
+- **Stable branch alias over per-deploy hash.** The app points at `…-git-qa-<scope>.vercel.app` (auto-follows the latest qa deploy), not a frozen `…-<hash>.vercel.app`. Stored in the **gitignored** `.claude/skills/run-mobile/qa-url.local` (or `$QA_API_BASE_URL`), so the scoped URL is never committed.
+- **Deployment Protection off for Preview.** Required, or the app's `/api/*` calls receive a Vercel SSO page instead of JSON. `run-mobile` probes for this on launch and warns.
+- **Tooling:** `run-mobile` gained a backend-mode 2nd arg (`local|qa|<url>`); new `deploy-qa` skill does the FF push + post-deploy reminders; `rules/change-management.md` documents the protocol. The Flutter API base is the build-time `--dart-define=API_BASE_URL` (`mobile/lib/src/core/config/app_config.dart`).
+
+**Consequences:** Zero schema/contract changes. The local Flutter workflow is unchanged (`run.sh both` still hits localhost/10.0.2.2). Promoting qa-tested work to production is a normal PR into `main` — pushing `qa` never affects prod. Risk accepted: shared DB means careless logins on qa could mutate prod data; mitigated by the test-users-only convention. If true data isolation is later wanted, set a separate `DATABASE_URL` (+ Pusher/NextAuth vars) for the Vercel **Preview** environment — no app change needed beyond the URL.
