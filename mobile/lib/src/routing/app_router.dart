@@ -33,10 +33,13 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: auth,
     routes: [
       GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (_, _) => _fadePage(const LoginScreen()),
+      ),
       GoRoute(
         path: '/trainer',
-        builder: (_, _) => const TrainerShell(),
+        pageBuilder: (_, _) => _fadePage(const TrainerShell()),
         routes: [
           GoRoute(
             path: 'sessions/:id',
@@ -65,7 +68,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/client',
-        builder: (_, _) => const ClientShell(),
+        pageBuilder: (_, _) => _fadePage(const ClientShell()),
         routes: [
           GoRoute(
             path: 'sessions/:id',
@@ -120,6 +123,16 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
   );
 });
+
+/// Cross-fade page transition used for the top-level destinations, so the
+/// animated splash dissolves into login / the role home instead of a hard cut
+/// (mirrors the PWA splash fading out over the page).
+CustomTransitionPage<void> _fadePage(Widget child) => CustomTransitionPage<void>(
+      child: child,
+      transitionDuration: const Duration(milliseconds: 350),
+      transitionsBuilder: (_, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
+    );
 
 class _UnsupportedRoleScreen extends ConsumerWidget {
   const _UnsupportedRoleScreen();

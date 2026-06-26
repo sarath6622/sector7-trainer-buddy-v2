@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cold-start launch background — matches the dark splash (#050505) so the
+         OS launch window dissolves seamlessly into the animated SEC7OR splash
+         instead of flashing white. -->
+    <color name="splash_bg">#FF050505</color>
+</resources>

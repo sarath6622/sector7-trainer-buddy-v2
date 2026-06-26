@@ -1,7 +1,7 @@
 name: sector7_mobile
 description: 'Sector 7 — gym member & PT session mobile client (Trainer + Client).'
 publish_to: 'none'
-version: 0.1.0+3
+version: 0.1.0+4
 
 environment:
   sdk: ^3.10.0
@@ -104,3 +104,8 @@ flutter:
   # These are the exact full TTFs google_fonts would otherwise download.
   assets:
     - assets/fonts/
+    # Brand wordmark for the login screen (mirrors the PWA's /sector7-logo.png).
+    - assets/images/
+    # Individual letter glyphs for the animated cold-start splash (S E C 7 O R
+    # + FITNESS / GYM CROSSFIT), mirroring the PWA's /splash-vector/* sequence.
+    - assets/splash/
