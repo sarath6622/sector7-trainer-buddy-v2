@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/realtime/session_realtime.dart';
 import '../../../core/util/formatters.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../session/presentation/session_hero_card.dart';
 import '../../session/presentation/session_live_activity_binder.dart';
 import '../../workout/presentation/workout_logger_screen.dart';
@@ -95,7 +96,7 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen>
       ),
       body: detail.when(
         skipLoadingOnReload: true,
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const SkeletonList(),
         error: (e, _) => ListView(
           children: [
             const SizedBox(height: 120),

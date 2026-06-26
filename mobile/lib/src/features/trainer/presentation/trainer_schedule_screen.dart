@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../client/data/client_models.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/trainer_models.dart';
@@ -774,15 +775,16 @@ class _AgendaSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    Widget bar(double h) => Container(
-          height: h,
-          margin: const EdgeInsets.only(bottom: 10),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
-          ),
-        );
-    return Column(children: [bar(72), bar(64), bar(64)]);
+    return const Shimmer(
+      child: Column(
+        children: [
+          Bone(width: double.infinity, height: 72, radius: 16),
+          SizedBox(height: 10),
+          Bone(width: double.infinity, height: 64, radius: 16),
+          SizedBox(height: 10),
+          Bone(width: double.infinity, height: 64, radius: 16),
+        ],
+      ),
+    );
   }
 }

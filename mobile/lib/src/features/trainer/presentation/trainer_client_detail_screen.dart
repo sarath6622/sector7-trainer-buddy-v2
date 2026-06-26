@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/util/formatters.dart';
 import '../../client/data/client_extras_models.dart';
 import '../../client/data/progress_models.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/trainer_models.dart';
 import '../data/trainer_repository.dart';
@@ -33,7 +34,7 @@ class TrainerClientDetailScreen extends ConsumerWidget {
         onRefresh: () =>
             ref.refresh(trainerClientDetailProvider(clientProfileId).future),
         child: detail.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const SkeletonList(),
           error: (e, _) => ListView(
             children: [
               const SizedBox(height: 120),

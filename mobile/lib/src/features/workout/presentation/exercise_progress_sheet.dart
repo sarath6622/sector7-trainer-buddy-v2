@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/skeleton.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../../client/presentation/widgets/metric_line_chart.dart';
 import '../data/workout_repository.dart';
@@ -100,7 +101,9 @@ class _ExerciseProgressSheet extends ConsumerWidget {
             SizedBox(
               height: 240,
               child: async.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const Shimmer(
+                  child: Bone(width: double.infinity, height: 240, radius: 16),
+                ),
                 error: (e, _) => ErrorRetry(
                   message: e.toString(),
                   onRetry: () => ref.invalidate(exerciseProgressProvider(

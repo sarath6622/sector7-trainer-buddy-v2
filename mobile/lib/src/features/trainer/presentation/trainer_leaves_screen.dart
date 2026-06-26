@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/util/formatters.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/trainer_models.dart';
 import '../data/trainer_repository.dart';
@@ -31,7 +32,7 @@ class TrainerLeavesScreen extends ConsumerWidget {
           return ref.refresh(trainerLeavesProvider.future);
         },
         child: leaves.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const SkeletonList(),
           error: (e, _) => ListView(
             children: [
               const SizedBox(height: 120),

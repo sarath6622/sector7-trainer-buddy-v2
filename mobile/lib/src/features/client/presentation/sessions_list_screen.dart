@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../data/client_models.dart';
 import '../data/client_repository.dart';
 import 'widgets/client_widgets.dart';
@@ -73,8 +74,18 @@ class _SessionsListScreenState extends ConsumerState<SessionsListScreen> {
               const SizedBox(height: 14),
               sessions.when(
                 loading: () => const Padding(
-                  padding: EdgeInsets.only(top: 60),
-                  child: Center(child: CircularProgressIndicator()),
+                  padding: EdgeInsets.only(top: 12),
+                  child: Shimmer(
+                    child: Column(
+                      children: [
+                        Bone(width: double.infinity, height: 84, radius: 16),
+                        SizedBox(height: 12),
+                        Bone(width: double.infinity, height: 84, radius: 16),
+                        SizedBox(height: 12),
+                        Bone(width: double.infinity, height: 84, radius: 16),
+                      ],
+                    ),
+                  ),
                 ),
                 error: (e, _) => ErrorRetry(
                   message: e.toString(),

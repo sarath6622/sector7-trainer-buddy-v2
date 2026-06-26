@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/util/formatters.dart';
 import '../data/client_extras_models.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../data/client_repository.dart';
 import 'widgets/client_widgets.dart';
 
@@ -19,7 +20,7 @@ class BadgesScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(badgesProvider.future),
         child: badges.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const SkeletonList(),
           error: (e, _) => ListView(children: [
             const SizedBox(height: 120),
             ErrorRetry(message: e.toString(), onRetry: () => ref.invalidate(badgesProvider)),

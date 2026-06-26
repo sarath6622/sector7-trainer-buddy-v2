@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/realtime/session_realtime.dart';
 import '../../../core/util/formatters.dart';
 import '../../client/data/client_models.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../../session/presentation/session_hero_card.dart';
 import '../../session/presentation/session_live_activity_binder.dart';
@@ -140,7 +141,7 @@ class _TrainerSessionDetailScreenState
       // and drop in-progress edits.
       body: detail.when(
         skipLoadingOnReload: true,
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const SkeletonList(),
         error: (e, _) => ListView(
           children: [
             const SizedBox(height: 120),

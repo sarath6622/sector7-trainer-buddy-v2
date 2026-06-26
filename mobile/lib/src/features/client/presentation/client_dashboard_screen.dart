@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/client_extras_models.dart' show Badge;
 import '../data/client_models.dart';
@@ -53,8 +54,18 @@ class ClientDashboardScreen extends ConsumerWidget {
             loading: () => _GreetingScroll(
               firstName: firstName,
               children: const [
-                SizedBox(height: 80),
-                Center(child: CircularProgressIndicator()),
+                SizedBox(height: 8),
+                Shimmer(
+                  child: Column(
+                    children: [
+                      Bone(width: double.infinity, height: 132, radius: 20),
+                      SizedBox(height: 14),
+                      Bone(width: double.infinity, height: 96, radius: 20),
+                      SizedBox(height: 14),
+                      Bone(width: double.infinity, height: 160, radius: 20),
+                    ],
+                  ),
+                ),
               ],
             ),
             error: (e, _) => _GreetingScroll(

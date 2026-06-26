@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/community_models.dart';
@@ -89,7 +90,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             Divider(height: 1, color: scheme.outlineVariant),
             Expanded(
               child: feed.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const SkeletonList(),
                 error: (e, _) => ErrorRetry(
                   message: e.toString(),
                   onRetry: () => ref.invalidate(communityFeedControllerProvider),
@@ -108,8 +109,13 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                           itemBuilder: (context, i) {
                             if (i >= posts.length) {
                               return const Padding(
-                                padding: EdgeInsets.all(20),
-                                child: Center(child: CircularProgressIndicator()),
+                                padding: EdgeInsets.fromLTRB(16, 8, 16, 20),
+                                child: Shimmer(
+                                  child: Bone(
+                                      width: double.infinity,
+                                      height: 84,
+                                      radius: 16),
+                                ),
                               );
                             }
                             return _PostCard(post: posts[i]);
@@ -794,7 +800,7 @@ class _LeaderboardScreenState extends ConsumerState<_LeaderboardScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Leaderboard')),
       body: exercises.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const SkeletonList(),
         error: (e, _) => ErrorRetry(
           message: e.toString(),
           onRetry: () => ref.invalidate(compoundExercisesProvider),
@@ -845,7 +851,7 @@ class _LeaderboardList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final board = ref.watch(leaderboardProvider(exerciseId));
     return board.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const SkeletonList(),
       error: (e, _) => ErrorRetry(
         message: e.toString(),
         onRetry: () => ref.invalidate(leaderboardProvider(exerciseId)),

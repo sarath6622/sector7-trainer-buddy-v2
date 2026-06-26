@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../data/client_repository.dart';
 import 'widgets/client_widgets.dart';
 
@@ -18,7 +19,7 @@ class ClientSettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: profile.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const SkeletonList(),
         error: (e, _) => ErrorRetry(
           message: e.toString(),
           onRetry: () => ref.invalidate(clientProfileEditProvider),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/util/formatters.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../../data/trainer_models.dart';
 import '../../data/trainer_repository.dart';
 
@@ -548,8 +549,16 @@ class _DayDetailSheet extends ConsumerWidget {
             Flexible(
               child: logsAsync.when(
                 loading: () => const Padding(
-                  padding: EdgeInsets.all(36),
-                  child: Center(child: CircularProgressIndicator()),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  child: Shimmer(
+                    child: Column(
+                      children: [
+                        Bone(width: double.infinity, height: 56, radius: 12),
+                        SizedBox(height: 10),
+                        Bone(width: double.infinity, height: 56, radius: 12),
+                      ],
+                    ),
+                  ),
                 ),
                 error: (e, _) => Padding(
                   padding: const EdgeInsets.all(28),

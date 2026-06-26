@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/skeleton.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/exercise.dart';
 import '../data/muscle_groups.dart';
@@ -189,7 +190,7 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
         if (_groups.isNotEmpty) _groupChips(),
         Expanded(
           child: results.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const SkeletonList(),
             error: (e, _) => ErrorRetry(
               message: e.toString(),
               onRetry: () => ref.invalidate(exerciseSearchProvider(query)),

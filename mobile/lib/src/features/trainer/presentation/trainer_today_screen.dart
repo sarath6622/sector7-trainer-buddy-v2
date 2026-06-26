@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../client/data/client_models.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
@@ -1227,31 +1228,19 @@ class _LoadingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    Widget bar(double h) => Container(
-      height: h,
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+    return Shimmer(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: const [
+          Bone(width: 180, height: 28, radius: 8),
+          SizedBox(height: 20),
+          Bone(width: double.infinity, height: 150, radius: 16),
+          SizedBox(height: 16),
+          Bone(width: double.infinity, height: 120, radius: 16),
+          SizedBox(height: 16),
+          Bone(width: double.infinity, height: 220, radius: 16),
+        ],
       ),
-    );
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: [
-        Container(
-          height: 28,
-          width: 180,
-          margin: const EdgeInsets.only(bottom: 20),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        bar(150),
-        bar(120),
-        bar(220),
-      ],
     );
   }
 }

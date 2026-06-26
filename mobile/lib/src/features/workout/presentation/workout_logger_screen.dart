@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../client/data/client_repository.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
@@ -433,8 +434,18 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
       );
     } else if (drafts == null) {
       logContent = const Padding(
-        padding: EdgeInsets.only(top: 48),
-        child: Center(child: CircularProgressIndicator()),
+        padding: EdgeInsets.only(top: 16),
+        child: Shimmer(
+          child: Column(
+            children: [
+              Bone(width: double.infinity, height: 96, radius: 16),
+              SizedBox(height: 12),
+              Bone(width: double.infinity, height: 96, radius: 16),
+              SizedBox(height: 12),
+              Bone(width: double.infinity, height: 96, radius: 16),
+            ],
+          ),
+        ),
       );
     } else if (drafts.isEmpty) {
       logContent = const Padding(

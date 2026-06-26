@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../data/client_repository.dart';
 import '../data/progress_models.dart';
 import 'widgets/client_widgets.dart';
@@ -870,8 +871,22 @@ class _DashedEmpty extends StatelessWidget {
 class _Loading extends StatelessWidget {
   const _Loading();
   @override
-  Widget build(BuildContext context) =>
-      const Center(child: Padding(padding: EdgeInsets.only(top: 120), child: CircularProgressIndicator()));
+  Widget build(BuildContext context) {
+    return Shimmer(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: const [
+          Bone(width: 160, height: 24, radius: 8),
+          SizedBox(height: 16),
+          Bone(width: double.infinity, height: 200, radius: 16),
+          SizedBox(height: 16),
+          Bone(width: double.infinity, height: 88, radius: 16),
+          SizedBox(height: 12),
+          Bone(width: double.infinity, height: 88, radius: 16),
+        ],
+      ),
+    );
+  }
 }
 
 String _f(double? v) =>

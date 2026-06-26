@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/util/formatters.dart';
 import '../data/client_extras_models.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../data/client_repository.dart';
 import 'widgets/client_widgets.dart';
 
@@ -18,7 +19,7 @@ class RescheduleRequestsScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(rescheduleRequestsProvider.future),
         child: requests.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const SkeletonList(),
           error: (e, _) => ListView(children: [
             const SizedBox(height: 120),
             ErrorRetry(

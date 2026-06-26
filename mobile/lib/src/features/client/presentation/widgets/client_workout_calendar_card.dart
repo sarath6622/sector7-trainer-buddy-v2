@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/util/formatters.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../../../trainer/data/trainer_models.dart' show WorkoutCalendarDay;
 import '../../data/client_repository.dart';
 import '../../data/progress_models.dart' show WorkoutHistoryEntry;
@@ -357,8 +358,16 @@ class _DaySheet extends ConsumerWidget {
             Flexible(
               child: history.isLoading
                   ? const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 32),
-                      child: Center(child: CircularProgressIndicator()),
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Shimmer(
+                        child: Column(
+                          children: [
+                            Bone(width: double.infinity, height: 56, radius: 12),
+                            SizedBox(height: 10),
+                            Bone(width: double.infinity, height: 56, radius: 12),
+                          ],
+                        ),
+                      ),
                     )
                   : logs.isEmpty
                       ? Padding(
