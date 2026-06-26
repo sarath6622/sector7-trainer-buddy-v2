@@ -38,7 +38,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   // ── Sizing (logical px) ────────────────────────────────────────────────────
   static const double _letterH = 42; // each square glyph cell
-  static const double _heroH = 94; // the 7 punches out larger than the row
+  static const double _heroH = 100; // the 7 punches out larger than the row
   static const double _fitnessH = 12;
   static const double _gymH = 13;
 
@@ -192,30 +192,42 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
           ),
-          // 7 — centred over the T slot, overflows the cell, glows orange.
-          Opacity(
-            opacity: inOpacity,
-            child: Transform.translate(
-              offset: Offset(0, sevenDy),
-              child: Transform.scale(
-                scale: sevenScale,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    ImageFiltered(
-                      imageFilter: ui.ImageFilter.blur(
-                        sigmaX: 12,
-                        sigmaY: 12,
+          // 7 — the hero. Centred over the T slot but rendered at [_heroH],
+          // ~2.4x the letter cell, so it towers above and below the wordmark
+          // like the logo. OverflowBox hands it unbounded constraints (otherwise
+          // the 42px cell would clamp it back to letter size) and the parent
+          // Stack's Clip.none lets it spill over the neighbours.
+          OverflowBox(
+            minWidth: 0,
+            maxWidth: double.infinity,
+            minHeight: 0,
+            maxHeight: double.infinity,
+            alignment: Alignment.center,
+            child: Opacity(
+              opacity: inOpacity,
+              child: Transform.translate(
+                offset: Offset(0, sevenDy),
+                child: Transform.scale(
+                  scale: sevenScale,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
+                    children: [
+                      ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(
+                          sigmaX: 14,
+                          sigmaY: 14,
+                        ),
+                        child: Image.asset(
+                          'assets/splash/7.png',
+                          height: _heroH,
+                          color: _orange.withValues(alpha: 0.7),
+                          colorBlendMode: BlendMode.srcIn,
+                        ),
                       ),
-                      child: Image.asset(
-                        'assets/splash/7.png',
-                        height: _heroH,
-                        color: _orange.withValues(alpha: 0.7),
-                        colorBlendMode: BlendMode.srcIn,
-                      ),
-                    ),
-                    Image.asset('assets/splash/7.png', height: _heroH),
-                  ],
+                      Image.asset('assets/splash/7.png', height: _heroH),
+                    ],
+                  ),
                 ),
               ),
             ),
