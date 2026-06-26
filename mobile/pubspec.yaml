@@ -1,7 +1,7 @@
 name: sector7_mobile
 description: 'Sector 7 — gym member & PT session mobile client (Trainer + Client).'
 publish_to: 'none'
-version: 0.1.0+4
+version: 0.1.0+5
 
 environment:
   sdk: ^3.10.0
