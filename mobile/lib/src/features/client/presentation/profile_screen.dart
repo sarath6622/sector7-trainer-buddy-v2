@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/appearance_card.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/client_repository.dart';
@@ -37,8 +38,8 @@ class ProfileScreen extends ConsumerWidget {
                   Text(
                     user!.email,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
               ],
             ),
@@ -98,6 +99,8 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
+          const AppearanceCard(),
+          const SizedBox(height: 24),
           FilledButton.tonalIcon(
             onPressed: () => _confirmLogout(context, ref),
             icon: const Icon(Icons.logout),
@@ -142,10 +145,10 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   static String _roleLabel(String? role) => switch (role) {
-        'CLIENT' => 'Client',
-        'TRAINER' => 'Trainer',
-        _ => role ?? '—',
-      };
+    'CLIENT' => 'Client',
+    'TRAINER' => 'Trainer',
+    _ => role ?? '—',
+  };
 }
 
 /// Avatar that shows the current profile image (or initials) and lets the user
@@ -177,7 +180,9 @@ class _ProfileAvatarState extends ConsumerState<_ProfileAvatar> {
         imageQuality: 85,
       );
     } catch (_) {
-      _snack('Could not open ${source == ImageSource.camera ? 'camera' : 'library'}.');
+      _snack(
+        'Could not open ${source == ImageSource.camera ? 'camera' : 'library'}.',
+      );
       return;
     }
     if (picked == null) return;
@@ -295,7 +300,11 @@ class _ProfileAvatarState extends ConsumerState<_ProfileAvatar> {
                 onTap: _busy ? null : () => _showOptions(url != null),
                 child: Padding(
                   padding: const EdgeInsets.all(7),
-                  child: Icon(Icons.camera_alt, size: 16, color: scheme.onPrimary),
+                  child: Icon(
+                    Icons.camera_alt,
+                    size: 16,
+                    color: scheme.onPrimary,
+                  ),
                 ),
               ),
             ),

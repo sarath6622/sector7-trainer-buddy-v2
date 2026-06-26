@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
 import 'src/core/flags/force_update_gate.dart';
 import 'src/core/theme/app_theme.dart';
+import 'src/core/theme/theme_mode_controller.dart';
 import 'src/features/auth/application/auth_controller.dart';
 import 'src/features/session/data/live_session_service.dart';
 import 'src/features/workout/data/workout_repository.dart';
@@ -35,8 +36,9 @@ Future<void> _initFirebase() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     // Don't pollute Crashlytics with errors thrown during local development.
-    await FirebaseCrashlytics.instance
-        .setCrashlyticsCollectionEnabled(!kDebugMode);
+    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+      !kDebugMode,
+    );
     final priorOnError = FlutterError.onError;
     FlutterError.onError = (details) {
       FirebaseCrashlytics.instance.recordFlutterFatalError(details);
@@ -106,13 +108,15 @@ class _Sector7AppState extends ConsumerState<Sector7App>
     });
 
     final router = ref.watch(routerProvider);
+    final themeMode = ref.watch(themeModeProvider);
     return MaterialApp.router(
       title: 'Sector 7',
       debugShowCheckedModeBanner: false,
-      // Dark-first, mirroring the PWA (next-themes defaultTheme="dark").
+      // Follows the OS by default; the user can override to Light/Dark in
+      // Settings (persisted via [themeModeProvider]).
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.dark,
+      themeMode: themeMode,
       routerConfig: router,
       // Remote-Config force-update gate wraps every route (fails open).
       builder: (context, child) =>

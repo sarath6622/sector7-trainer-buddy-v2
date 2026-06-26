@@ -93,18 +93,17 @@ class _GreetingScroll extends StatelessWidget {
       children: [
         Text(
           'Hey, $firstName',
-          style: Theme.of(context)
-              .textTheme
-              .headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           "Here's your fitness overview",
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: scheme.onSurfaceVariant),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 20),
         ...children,
@@ -172,7 +171,11 @@ List<Widget> _dashboardSections(ClientDashboard d) {
 
 // ── Reusable card shell (rounded-2xl, card bg, subtle border) ──────────────────
 class _Panel extends StatelessWidget {
-  const _Panel({required this.child, this.padding = const EdgeInsets.all(16), this.onTap});
+  const _Panel({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.onTap,
+  });
   final Widget child;
   final EdgeInsets padding;
   final VoidCallback? onTap;
@@ -214,11 +217,11 @@ Widget _sectionLabel(BuildContext context, String text, {Widget? trailing}) {
         child: Text(
           text.toUpperCase(),
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
-                fontSize: 11,
-              ),
+            color: scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            fontSize: 11,
+          ),
         ),
       ),
       ?trailing,
@@ -236,7 +239,9 @@ class _PackageCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final days = expiry.daysUntilExpiry;
     final urgent = !expiry.isExpired && days != null && days <= 7;
-    final endLabel = expiry.endDate != null ? Fmt.dayMonthYear(expiry.endDate) : null;
+    final endLabel = expiry.endDate != null
+        ? Fmt.dayMonthYear(expiry.endDate)
+        : null;
 
     if (expiry.isExpired) {
       return Container(
@@ -256,17 +261,30 @@ class _PackageCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('🏋️', style: TextStyle(fontSize: 32)),
-                _pill('PACKAGE EXPIRED', Colors.white.withValues(alpha: 0.85),
-                    Colors.white.withValues(alpha: 0.12)),
+                _pill(
+                  'PACKAGE EXPIRED',
+                  Colors.white.withValues(alpha: 0.85),
+                  Colors.white.withValues(alpha: 0.12),
+                ),
               ],
             ),
             const SizedBox(height: 12),
-            const Text("You've been benched!",
-                style: TextStyle(
-                    color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+            const Text(
+              "You've been benched!",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text('Contact your gym admin to renew your PT package.',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
+            Text(
+              'Contact your gym admin to renew your PT package.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 13,
+              ),
+            ),
             const SizedBox(height: 14),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
@@ -282,7 +300,9 @@ class _PackageCard extends StatelessWidget {
       );
     }
 
-    final barColor = urgent ? _red : (expiry.progress >= 0.75 ? _amber : scheme.primary);
+    final barColor = urgent
+        ? _red
+        : (expiry.progress >= 0.75 ? _amber : scheme.primary);
     return _Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,13 +310,24 @@ class _PackageCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(children: [
-                Text(urgent ? '⏰' : '📦', style: const TextStyle(fontSize: 18)),
-                const SizedBox(width: 8),
-                const Text('PT Package', style: TextStyle(fontWeight: FontWeight.w700)),
-              ]),
-              _pill(urgent ? 'Expiring soon' : 'Active', urgent ? _red : _emerald,
-                  (urgent ? _red : _emerald).withValues(alpha: 0.15)),
+              Row(
+                children: [
+                  Text(
+                    urgent ? '⏰' : '📦',
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'PT Package',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              _pill(
+                urgent ? 'Expiring soon' : 'Active',
+                urgent ? _red : _emerald,
+                (urgent ? _red : _emerald).withValues(alpha: 0.15),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -318,14 +349,24 @@ class _PackageCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    days == 0 ? 'expires today' : (days == 1 ? 'day left' : 'days remaining'),
-                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    days == 0
+                        ? 'expires today'
+                        : (days == 1 ? 'day left' : 'days remaining'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
               if (endLabel != null)
-                Text('Ends $endLabel',
-                    style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+                Text(
+                  'Ends $endLabel',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -341,8 +382,10 @@ class _PackageCard extends StatelessWidget {
           const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerRight,
-            child: Text('${(expiry.progress * 100).round()}% of package used',
-                style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
+            child: Text(
+              '${(expiry.progress * 100).round()}% of package used',
+              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+            ),
           ),
         ],
       ),
@@ -351,11 +394,16 @@ class _PackageCard extends StatelessWidget {
 }
 
 Widget _pill(String text, Color fg, Color bg) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(text,
-          style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.w700)),
-    );
+  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+  decoration: BoxDecoration(
+    color: bg,
+    borderRadius: BorderRadius.circular(999),
+  ),
+  child: Text(
+    text,
+    style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.w700),
+  ),
+);
 
 // ── Active session hero banner ────────────────────────────────────────────────
 class _ActiveSessionBanner extends StatefulWidget {
@@ -387,8 +435,9 @@ class _ActiveSessionBannerState extends State<_ActiveSessionBanner> {
   Widget build(BuildContext context) {
     final s = widget.session;
     final started = s.startedAt;
-    final elapsed =
-        started != null ? DateTime.now().difference(started) : Duration.zero;
+    final elapsed = started != null
+        ? DateTime.now().difference(started)
+        : Duration.zero;
     String two(int n) => n.toString().padLeft(2, '0');
     final elapsedLabel = elapsed.inHours > 0
         ? '${elapsed.inHours}:${two(elapsed.inMinutes % 60)}:${two(elapsed.inSeconds % 60)}'
@@ -414,23 +463,33 @@ class _ActiveSessionBannerState extends State<_ActiveSessionBanner> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                          color: Colors.white, shape: BoxShape.circle),
-                    ),
-                    const SizedBox(width: 8),
-                    Text('SESSION IN PROGRESS',
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'SESSION IN PROGRESS',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.8,
-                        )),
-                  ]),
-                  _pill('View workout →', Colors.white, Colors.white.withValues(alpha: 0.2)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  _pill(
+                    'View workout →',
+                    Colors.white,
+                    Colors.white.withValues(alpha: 0.2),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -438,12 +497,16 @@ class _ActiveSessionBannerState extends State<_ActiveSessionBanner> {
                 Text.rich(
                   TextSpan(
                     text: 'Training with ',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85)),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
                     children: [
                       TextSpan(
                         text: s.trainerName,
                         style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w700),
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
@@ -480,18 +543,39 @@ class _EngagementStrip extends StatelessWidget {
   List<_Tile> _build() {
     final t = <_Tile>[];
     if (stats.streak >= 2) {
-      t.add(_Tile(Icons.local_fire_department, 'Streak', '${stats.streak}', 'sessions',
-          _orange));
+      t.add(
+        _Tile(
+          Icons.local_fire_department,
+          'Streak',
+          '${stats.streak}',
+          'sessions',
+          _orange,
+        ),
+      );
     }
     if (stats.allTimeCompleted > 0) {
-      t.add(_Tile(Icons.emoji_events, 'All-time', '${stats.allTimeCompleted}',
-          stats.allTimeCompleted == 1 ? 'session' : 'sessions', _violet));
+      t.add(
+        _Tile(
+          Icons.emoji_events,
+          'All-time',
+          '${stats.allTimeCompleted}',
+          stats.allTimeCompleted == 1 ? 'session' : 'sessions',
+          _violet,
+        ),
+      );
     }
     final d = stats.daysSinceLastSession;
     if (d != null) {
       final fresh = d <= 3;
-      t.add(_Tile(Icons.restart_alt, 'Last session', d == 0 ? 'Today' : '${d}d ago',
-          null, fresh ? _emerald : _amber));
+      t.add(
+        _Tile(
+          Icons.restart_alt,
+          'Last session',
+          d == 0 ? 'Today' : '${d}d ago',
+          null,
+          fresh ? _emerald : _amber,
+        ),
+      );
     }
     return t;
   }
@@ -523,23 +607,34 @@ class _EngagementStrip extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-                color: t.color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10)),
+              color: t.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Icon(t.icon, size: 16, color: t.color),
           ),
           const SizedBox(height: 10),
-          Text(t.label,
-              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
+          Text(
+            t.label,
+            style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+          ),
           const SizedBox(height: 2),
-          Text(t.value,
+          Text(
+            t.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          if (t.sub != null)
+            Text(
+              t.sub!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, height: 1)),
-          if (t.sub != null)
-            Text(t.sub!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
+              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+            ),
         ],
       ),
     );
@@ -567,36 +662,42 @@ class _FitnessJourney extends StatelessWidget {
     final prev = dashboard.prevProgress;
     final metrics = <Widget>[];
     if (latest?.weightKg != null) {
-      metrics.add(_MetricCard(
-        icon: Icons.monitor_weight_outlined,
-        color: _blue,
-        label: 'Weight',
-        value: latest!.weightKg!,
-        unit: 'kg',
-        prev: prev?.weightKg,
-        lowerIsBetter: true,
-      ));
+      metrics.add(
+        _MetricCard(
+          icon: Icons.monitor_weight_outlined,
+          color: _blue,
+          label: 'Weight',
+          value: latest!.weightKg!,
+          unit: 'kg',
+          prev: prev?.weightKg,
+          lowerIsBetter: true,
+        ),
+      );
     }
     if (latest?.bodyFatPercent != null) {
-      metrics.add(_MetricCard(
-        icon: Icons.bolt_outlined,
-        color: _amber,
-        label: 'Body Fat',
-        value: latest!.bodyFatPercent!,
-        unit: '%',
-        prev: prev?.bodyFatPercent,
-        lowerIsBetter: true,
-      ));
+      metrics.add(
+        _MetricCard(
+          icon: Icons.bolt_outlined,
+          color: _amber,
+          label: 'Body Fat',
+          value: latest!.bodyFatPercent!,
+          unit: '%',
+          prev: prev?.bodyFatPercent,
+          lowerIsBetter: true,
+        ),
+      );
     }
     if (latest?.muscleMass != null) {
-      metrics.add(_MetricCard(
-        icon: Icons.fitness_center,
-        color: _emerald,
-        label: 'Muscle Mass',
-        value: latest!.muscleMass!,
-        unit: 'kg',
-        prev: prev?.muscleMass,
-      ));
+      metrics.add(
+        _MetricCard(
+          icon: Icons.fitness_center,
+          color: _emerald,
+          label: 'Muscle Mass',
+          value: latest!.muscleMass!,
+          unit: 'kg',
+          prev: prev?.muscleMass,
+        ),
+      );
     }
 
     return Column(
@@ -606,16 +707,22 @@ class _FitnessJourney extends StatelessWidget {
           context,
           'Fitness Journey',
           trailing: InkWell(
-            onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProgressScreen())),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ProgressScreen())),
             borderRadius: BorderRadius.circular(8),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('Full history',
-                    style: TextStyle(color: scheme.primary, fontSize: 12)),
-                Icon(Icons.chevron_right, size: 14, color: scheme.primary),
-              ]),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Full history',
+                    style: TextStyle(color: scheme.primary, fontSize: 12),
+                  ),
+                  Icon(Icons.chevron_right, size: 14, color: scheme.primary),
+                ],
+              ),
             ),
           ),
         ),
@@ -666,28 +773,41 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return _Panel(
-      onTap: () => Navigator.of(context)
-          .push(MaterialPageRoute(builder: (_) => const ProgressScreen())),
+      onTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const ProgressScreen())),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, size: 16, color: color),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(label,
-                  style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
-            ),
-            Icon(Icons.chevron_right, size: 14, color: scheme.onSurfaceVariant.withValues(alpha: 0.5)),
-          ]),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 16, color: color),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                size: 14,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           Text.rich(
             TextSpan(
@@ -697,15 +817,21 @@ class _MetricCard extends StatelessWidget {
                 TextSpan(
                   text: ' $unit',
                   style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: scheme.onSurfaceVariant),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 4),
-          _Delta(current: value, prev: prev, unit: unit, lowerIsBetter: lowerIsBetter),
+          _Delta(
+            current: value,
+            prev: prev,
+            unit: unit,
+            lowerIsBetter: lowerIsBetter,
+          ),
         ],
       ),
     );
@@ -733,12 +859,25 @@ class _Delta extends StatelessWidget {
     if (diff.abs() < 0.01) return Text('No change', style: muted);
     final positive = lowerIsBetter ? diff < 0 : diff > 0;
     final color = positive ? _emerald : const Color(0xFFF87171);
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(diff > 0 ? Icons.trending_up : Icons.trending_down, size: 12, color: color),
-      const SizedBox(width: 2),
-      Text('${diff > 0 ? '+' : ''}${diff.toStringAsFixed(1)}$unit',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-    ]);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          diff > 0 ? Icons.trending_up : Icons.trending_down,
+          size: 12,
+          color: color,
+        ),
+        const SizedBox(width: 2),
+        Text(
+          '${diff > 0 ? '+' : ''}${diff.toStringAsFixed(1)}$unit',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -753,77 +892,112 @@ class _PrCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
                   color: _amber.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.emoji_events, size: 15, color: _amber),
-            ),
-            const SizedBox(width: 8),
-            const Text('Personal Records',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          ]),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.emoji_events, size: 15, color: _amber),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Personal Records',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           for (var i = 0; i < prs.length; i++) ...[
             if (i > 0) const SizedBox(height: 10),
-            Row(children: [
-              _rankBadge(i),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(prs[i].exerciseName,
+            Row(
+              children: [
+                _rankBadge(context, i),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        prs[i].exerciseName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text(prs[i].muscle,
-                        style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8)),
-                child: Text.rich(TextSpan(
-                  text: Fmt.trimNum(prs[i].maxWeightKg),
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-                  children: [
-                    TextSpan(
-                        text: ' kg',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        prs[i].muscle,
                         style: TextStyle(
+                          fontSize: 10,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text.rich(
+                    TextSpan(
+                      text: Fmt.trimNum(prs[i].maxWeightKg),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: ' kg',
+                          style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w400,
-                            color: scheme.onSurfaceVariant)),
-                  ],
-                )),
-              ),
-            ]),
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ],
       ),
     );
   }
 
-  Widget _rankBadge(int i) {
+  Widget _rankBadge(BuildContext context, int i) {
+    final scheme = Theme.of(context).colorScheme;
     final (bg, fg) = switch (i) {
       0 => (_gold.withValues(alpha: 0.2), _gold),
       1 => (_silver.withValues(alpha: 0.2), _silver),
       2 => (_bronze.withValues(alpha: 0.2), _bronze),
-      _ => (Colors.white10, Colors.white54),
+      // Ranks 4+: neutral, theme-aware (white-on-base was invisible in light).
+      _ => (
+        scheme.onSurfaceVariant.withValues(alpha: 0.12),
+        scheme.onSurfaceVariant,
+      ),
     };
     return Container(
       width: 20,
       height: 20,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-      child: Text('${i + 1}',
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: fg)),
+      child: Text(
+        '${i + 1}',
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: fg),
+      ),
     );
   }
 }
@@ -833,30 +1007,38 @@ class _BadgesShowcase extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    final badges = ref.watch(badgesProvider).maybeWhen(
-          data: (b) => b.earned,
-          orElse: () => const <Badge>[],
-        );
+    final badges = ref
+        .watch(badgesProvider)
+        .maybeWhen(data: (b) => b.earned, orElse: () => const <Badge>[]);
     if (badges.isEmpty) return const SizedBox.shrink();
     return _Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
                   color: _amber.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.workspace_premium, size: 15, color: _amber),
-            ),
-            const SizedBox(width: 8),
-            const Text('Badges Earned',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-            const SizedBox(width: 8),
-            _pill('${badges.length}', _amber, _amber.withValues(alpha: 0.12)),
-          ]),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.workspace_premium,
+                  size: 15,
+                  color: _amber,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Badges Earned',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+              const SizedBox(width: 8),
+              _pill('${badges.length}', _amber, _amber.withValues(alpha: 0.12)),
+            ],
+          ),
           const SizedBox(height: 12),
           SizedBox(
             height: 78,
@@ -868,7 +1050,10 @@ class _BadgesShowcase extends ConsumerWidget {
                 final b = badges[i];
                 return Container(
                   width: 80,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: _amber.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(12),
@@ -885,7 +1070,10 @@ class _BadgesShowcase extends ConsumerWidget {
                         textAlign: TextAlign.center,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            fontSize: 9, height: 1.1, color: scheme.onSurface),
+                          fontSize: 9,
+                          height: 1.1,
+                          color: scheme.onSurface,
+                        ),
                       ),
                     ],
                   ),
@@ -913,49 +1101,107 @@ class _SessionsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionLabel(context, 'Sessions',
-              trailing: Text('This month',
-                  style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant))),
+          _sectionLabel(
+            context,
+            'Sessions',
+            trailing: Text(
+              'This month',
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+            ),
+          ),
           const SizedBox(height: 14),
-          Row(children: [
-            SizedBox(
-              width: 96,
-              height: 96,
-              child: Stack(alignment: Alignment.center, children: [
-                SizedBox.expand(
-                  child: CircularProgressIndicator(
-                    value: usedFrac,
-                    strokeWidth: 8,
-                    strokeCap: StrokeCap.round,
-                    backgroundColor: scheme.surfaceContainerHighest,
-                    valueColor: AlwaysStoppedAnimation(scheme.primary),
-                  ),
+          Row(
+            children: [
+              SizedBox(
+                width: 96,
+                height: 96,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox.expand(
+                      child: CircularProgressIndicator(
+                        value: usedFrac,
+                        strokeWidth: 8,
+                        strokeCap: StrokeCap.round,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        valueColor: AlwaysStoppedAnimation(scheme.primary),
+                      ),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${count.used}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                        Text(
+                          'of ${count.total}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text('${count.used}',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, height: 1)),
-                  Text('of ${count.total}',
-                      style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
-                ]),
-              ]),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(children: [
-                Row(children: [
-                  Expanded(child: _StatPill(Icons.fitness_center, 'Used', count.used, scheme.primary)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _StatPill(Icons.event_available, 'Remaining', count.remaining, _emerald)),
-                ]),
-                const SizedBox(height: 10),
-                Row(children: [
-                  Expanded(child: _StatPill(Icons.adjust, 'Total', count.total, _blue)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _StatPill(Icons.autorenew, 'Carry Fwd', count.carryForward, _amber)),
-                ]),
-              ]),
-            ),
-          ]),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _StatPill(
+                            Icons.fitness_center,
+                            'Used',
+                            count.used,
+                            scheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _StatPill(
+                            Icons.event_available,
+                            'Remaining',
+                            count.remaining,
+                            _emerald,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _StatPill(
+                            Icons.adjust,
+                            'Total',
+                            count.total,
+                            _blue,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _StatPill(
+                            Icons.autorenew,
+                            'Carry Fwd',
+                            count.carryForward,
+                            _amber,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -975,30 +1221,42 @@ class _StatPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(10)),
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(children: [
-            Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
+          Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, size: 13, color: color),
-            ),
-            const SizedBox(width: 8),
-            Text('$value',
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, height: 1)),
-          ]),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 13, color: color),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$value',
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
-          Text(label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+          ),
         ],
       ),
     );
@@ -1026,80 +1284,141 @@ class _NextSessionTrainerCard extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-            child: Row(children: [
-              Icon(Icons.bolt, size: 16, color: scheme.primary),
-              const SizedBox(width: 6),
-              Expanded(child: _sectionLabel(context, 'Next Session')),
-            ]),
+            child: Row(
+              children: [
+                Icon(Icons.bolt, size: 16, color: scheme.primary),
+                const SizedBox(width: 6),
+                Expanded(child: _sectionLabel(context, 'Next Session')),
+              ],
+            ),
           ),
           if (next != null)
             InkWell(
               onTap: () => context.push('/client/sessions/${next!.id}'),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-                child: Row(children: [
-                  _dateBadge(context, next!.scheduledDate),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Text(_relativeDay(next!.scheduledDate),
-                              style: const TextStyle(fontWeight: FontWeight.w700)),
-                          const SizedBox(width: 8),
-                          _pill('${next!.durationMin} min', scheme.primary,
-                              scheme.primary.withValues(alpha: 0.12)),
-                        ]),
-                        const SizedBox(height: 4),
-                        Row(children: [
-                          Icon(Icons.schedule, size: 12, color: scheme.onSurfaceVariant),
-                          const SizedBox(width: 4),
-                          Text(Fmt.time(next!.scheduledTime),
-                              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
-                        ]),
-                      ],
+                child: Row(
+                  children: [
+                    _dateBadge(context, next!.scheduledDate),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                _relativeDay(next!.scheduledDate),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _pill(
+                                '${next!.durationMin} min',
+                                scheme.primary,
+                                scheme.primary.withValues(alpha: 0.12),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.schedule,
+                                size: 12,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                Fmt.time(next!.scheduledTime),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Icon(Icons.arrow_forward, size: 16, color: scheme.onSurfaceVariant),
-                ]),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
               ),
             )
           else
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-              child: Column(children: [
-                Icon(Icons.event_busy, size: 30, color: scheme.onSurfaceVariant.withValues(alpha: 0.5)),
-                const SizedBox(height: 8),
-                Text('No upcoming sessions scheduled',
-                    style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
-              ]),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.event_busy,
+                    size: 30,
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No upcoming sessions scheduled',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
           if (trainerName != null) ...[
-            Divider(height: 1, indent: 18, endIndent: 18, color: scheme.outlineVariant),
+            Divider(
+              height: 1,
+              indent: 18,
+              endIndent: 18,
+              color: scheme.outlineVariant,
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-              child: Row(children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: scheme.surfaceContainerHighest,
-                  child: Text(_initials(trainerName!),
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(trainerName!,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                      if (sessionsPerMonth != null)
-                        Text('$sessionsPerMonth sessions/month',
-                            style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
-                    ],
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                    child: Text(
+                      _initials(trainerName!),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
-                ),
-              ]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          trainerName!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (sessionsPerMonth != null)
+                          Text(
+                            '$sessionsPerMonth sessions/month',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -1113,17 +1432,29 @@ class _NextSessionTrainerCard extends StatelessWidget {
       width: 54,
       height: 54,
       decoration: BoxDecoration(
-          color: scheme.primary.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(14)),
+        color: scheme.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(date != null ? '${date.day}' : '—',
-              style: TextStyle(
-                  fontSize: 18, height: 1, fontWeight: FontWeight.w800, color: scheme.primary)),
-          Text(date != null ? Fmt.monthShort(date).toUpperCase() : '',
-              style: TextStyle(
-                  fontSize: 10, fontWeight: FontWeight.w600, color: scheme.primary.withValues(alpha: 0.7))),
+          Text(
+            date != null ? '${date.day}' : '—',
+            style: TextStyle(
+              fontSize: 18,
+              height: 1,
+              fontWeight: FontWeight.w800,
+              color: scheme.primary,
+            ),
+          ),
+          Text(
+            date != null ? Fmt.monthShort(date).toUpperCase() : '',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: scheme.primary.withValues(alpha: 0.7),
+            ),
+          ),
         ],
       ),
     );
@@ -1145,34 +1476,52 @@ class _NoShowWarning extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _red.withValues(alpha: 0.2)),
       ),
-      child: Row(children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-              color: _red.withValues(alpha: 0.15), shape: BoxShape.circle),
-          child: const Icon(Icons.error_outline, size: 18, color: _red),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('$count no-show session${count > 1 ? 's' : ''}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              Text('Counted as used this month',
-                  style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
-            ],
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _red.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.error_outline, size: 18, color: _red),
           ),
-        ),
-      ]),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$count no-show session${count > 1 ? 's' : ''}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Counted as used this month',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 // ── Local helpers ─────────────────────────────────────────────────────────────
 String _initials(String name) {
-  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
   if (parts.isEmpty) return '?';
   if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
   return (parts.first[0] + parts.last[0]).toUpperCase();

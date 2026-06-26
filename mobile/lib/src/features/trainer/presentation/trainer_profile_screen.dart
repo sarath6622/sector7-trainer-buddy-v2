@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/appearance_card.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../auth/application/auth_controller.dart';
 
@@ -17,8 +18,8 @@ class TrainerProfileScreen extends ConsumerWidget {
     final initials = (user == null)
         ? '?'
         : '${user.firstName.isNotEmpty ? user.firstName[0] : ''}'
-                '${user.lastName.isNotEmpty ? user.lastName[0] : ''}'
-            .toUpperCase();
+                  '${user.lastName.isNotEmpty ? user.lastName[0] : ''}'
+              .toUpperCase();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -31,10 +32,9 @@ class TrainerProfileScreen extends ConsumerWidget {
               backgroundColor: scheme.surfaceContainerHighest,
               child: Text(
                 initials.isEmpty ? '?' : initials,
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -42,20 +42,18 @@ class TrainerProfileScreen extends ConsumerWidget {
           Center(
             child: Text(
               user?.fullName.trim().isEmpty ?? true ? 'Coach' : user!.fullName,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           if (user?.email != null)
             Center(
               child: Text(
                 user!.email,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: scheme.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
           const SizedBox(height: 8),
@@ -87,12 +85,15 @@ class TrainerProfileScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
+          const AppearanceCard(),
+          const SizedBox(height: 24),
           OutlinedButton.icon(
-            onPressed: () =>
-                ref.read(authControllerProvider.notifier).logout(),
+            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
             icon: const Icon(Icons.logout),
             label: const Text('Sign out'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
           ),
         ],
       ),

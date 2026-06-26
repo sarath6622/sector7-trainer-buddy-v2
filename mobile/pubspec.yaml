@@ -1,7 +1,7 @@
 name: sector7_mobile
 description: 'Sector 7 — gym member & PT session mobile client (Trainer + Client).'
 publish_to: 'none'
-version: 0.1.0+2
+version: 0.1.0+3
 
 environment:
   sdk: ^3.10.0
@@ -21,6 +21,11 @@ dependencies:
 
   # Secure token storage (access/refresh JWTs)
   flutter_secure_storage: ^9.2.4
+
+  # Non-sensitive local prefs (e.g. light/dark theme choice). Synchronous-ish
+  # reads avoid the Android keystore latency that flutter_secure_storage incurs,
+  # so the saved theme applies on the first frame without a flash.
+  shared_preferences: ^2.3.0
 
   # Charts (replaces Recharts) — progress screens
   fl_chart: ^0.69.2
