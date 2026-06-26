@@ -33,6 +33,7 @@ import {
   curatedGroupOf,
   type CuratedMuscleGroupId,
 } from '@/lib/muscle-groups';
+import { writeOutbox, readOutbox, clearOutbox } from '@/lib/workout-outbox';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -1064,6 +1065,20 @@ export function WorkoutLogger({
   const hasUnsavedPayload = currentHash !== lastSavedHashRef.current;
   const hasUnsaved = hasUnsavedPayload || hasDraftRows(exercises, lastSavedPayloadRef.current);
 
+  // Durable backup of the unsaved payload (see workout-outbox). Mirrored to
+  // localStorage *synchronously* on every change so a freeze/kill of a
+  // backgrounded PWA — or a keepalive POST that's dropped or hits an expired
+  // session — can't lose the sets the user just typed. The next mount / online
+  // event replays whatever is still here (attemptRecovery). Cleared the moment
+  // everything the device holds is confirmed on the server.
+  useEffect(() => {
+    if (hasUnsavedPayload) {
+      writeOutbox(sessionInstanceId, currentPayload);
+    } else {
+      clearOutbox(sessionInstanceId);
+    }
+  }, [hasUnsavedPayload, currentHash, currentPayload, sessionInstanceId]);
+
   // Persist to the server. The write is scoped to what this device changed
   // since its last sync (see `diffExercises`) so a debounced save from a stale
   // peer can't clobber the other side's concurrent edits. Serialized via
@@ -1199,6 +1214,11 @@ export function WorkoutLogger({
     const payload = currentPayloadRef.current;
     const hashAtFlush = currentHashRef.current;
     if (payload.length === 0 || hashAtFlush === lastSavedHashRef.current) return;
+    // Synchronously persist the freshest payload before the OS can freeze or
+    // kill us. The keepalive POST below is best-effort and can be dropped
+    // (frozen process, dead socket, expired cookie); the outbox is the durable
+    // record that attemptRecovery replays on the next mount / reconnect.
+    writeOutbox(sessionInstanceId, payload);
     // Scope the teardown flush the same way as a normal save so it can't
     // full-replace over a peer's edits on the way out.
     const { dirtyExerciseIds, removedExerciseIds, removedSetsByExerciseId } = diffExercises(
@@ -1263,6 +1283,89 @@ export function WorkoutLogger({
       window.removeEventListener('pagehide', flushPendingSave);
     };
   }, [flushPendingSave]);
+
+  // Replay any outbox left behind by a previous run that died before its save
+  // landed (frozen/killed PWA, dropped keepalive, expired session). This is the
+  // recovery half of the durability fix: the mirror effect / teardown flush
+  // wrote the unsaved payload to localStorage synchronously; here we push it to
+  // the server on the next mount and on every reconnect.
+  //
+  // The replay is strictly *additive*: dirtyExerciseIds = every recovered
+  // exercise, removedExerciseIds = []. The lost data is data that never reached
+  // the DB, so we only ever ADD it back — a recovery can't clobber a peer's
+  // concurrent edits with a stale delete. We also skip the replay entirely when
+  // the server already holds everything in the outbox (stale leftover), so a
+  // clean resume doesn't fire a redundant POST.
+  const attemptRecovery = useCallback(async () => {
+    const record = readOutbox<SavePayloadEntry>(sessionInstanceId);
+    if (!record || record.exercises.length === 0) return;
+
+    // lastSavedPayloadRef holds the freshly-hydrated server snapshot. If every
+    // exercise and complete set in the outbox is already persisted, this is
+    // stale leftover — just drop it.
+    const serverSigs = signaturesOf(lastSavedPayloadRef.current);
+    const serverExIds = new Set(lastSavedPayloadRef.current.map((e) => e.exerciseId));
+    const outboxSigs = signaturesOf(record.exercises);
+    const hasUnsynced =
+      record.exercises.some((e) => !serverExIds.has(e.exerciseId)) ||
+      [...outboxSigs].some((sig) => !serverSigs.has(sig));
+    if (!hasUnsynced) {
+      clearOutbox(sessionInstanceId);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/sessions/${sessionInstanceId}/workouts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exercises: record.exercises,
+          dirtyExerciseIds: record.exercises.map((e) => e.exerciseId),
+          removedExerciseIds: [],
+          removedSetsByExerciseId: {},
+        }),
+      });
+      if (res.ok) {
+        clearOutbox(sessionInstanceId);
+        // Pull the now-persisted data back so the UI shows it with full
+        // metadata (the outbox only carries ids, not exercise names/types).
+        onForegroundRef.current?.();
+      }
+      // On a non-ok response (e.g. still-expired session) leave the outbox in
+      // place — the next mount or `online` event retries.
+    } catch {
+      /* offline — keep the outbox and retry on reconnect */
+    }
+  }, [sessionInstanceId]);
+
+  // Run recovery once, after the parent's first session fetch has hydrated the
+  // server snapshot (so we can tell genuinely-lost data from stale leftover).
+  // `existingLogs === undefined` means the fetch hasn't resolved yet; an empty
+  // array is a valid "server has nothing" — which, with an outbox present, is
+  // exactly the total-loss case we must replay.
+  const recoveryDoneRef = useRef(false);
+  useEffect(() => {
+    if (recoveryDoneRef.current || existingLogs === undefined) return;
+    recoveryDoneRef.current = true;
+    void attemptRecovery();
+  }, [existingLogs, attemptRecovery]);
+
+  // Reconnect handling. When the network returns, push the latest state: prefer
+  // the live in-memory payload if the component is still alive and dirty;
+  // otherwise replay the outbox (covers a prior run whose save never landed).
+  useEffect(() => {
+    function onOnline() {
+      const hasLiveUnsaved =
+        currentPayloadRef.current.length > 0 && currentHashRef.current !== lastSavedHashRef.current;
+      if (hasLiveUnsaved) {
+        void saveWorkoutRef.current();
+      } else {
+        void attemptRecovery();
+      }
+    }
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [attemptRecovery]);
 
   useEffect(() => {
     onUnsavedChange?.(hasUnsaved);
