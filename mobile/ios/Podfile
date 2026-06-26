@@ -1,5 +1,7 @@
-# Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+# Firebase 12.x (core/crashlytics/remote_config) requires iOS 15+, so the whole
+# app targets 15.0. Keep this in sync with IPHONEOS_DEPLOYMENT_TARGET in the
+# Runner Xcode project and the forced value in post_install below.
+platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -39,5 +41,10 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    # Firebase requires iOS 15+; flutter_additional_ios_build_settings only
+    # raises pods to Flutter's lower floor, so force 15.0 across every config.
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
   end
 end
