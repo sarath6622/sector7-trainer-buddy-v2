@@ -74,6 +74,27 @@ dev_dependencies:
   drift_dev: ^2.20.0
   build_runner: ^2.4.13
 
+  # Generates the home-screen launcher icons for both platforms from the
+  # source art in assets/icon/. Re-run after changing that art:
+  #   dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.1
+
+# ── Launcher icon (S7 monogram, dark + warm-glow; see assets/icon/) ──
+# iOS uses the baked full-square master; Android uses an adaptive icon
+# (gradient background layer + logo foreground) plus a monochrome layer for
+# Android 13 themed icons.
+flutter_launcher_icons:
+  image_path: 'assets/icon/icon.png'
+  # iOS: flatten away alpha onto the brand background (App Store rejects alpha).
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: '#121212'
+  # Android adaptive icon.
+  android: 'ic_launcher'
+  adaptive_icon_background: 'assets/icon/adaptive_bg.png'
+  adaptive_icon_foreground: 'assets/icon/adaptive_fg.png'
+  adaptive_icon_monochrome: 'assets/icon/adaptive_monochrome.png'
+
 flutter:
   uses-material-design: true
 
