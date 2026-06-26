@@ -26,7 +26,11 @@ REPO_ROOT="$(cd "$SKILL_DIR/../../.." && pwd)"
 MOBILE_DIR="$REPO_ROOT/mobile"
 APK="$MOBILE_DIR/build/app/outputs/flutter-apk/app-release.apk"
 
-GROUPS="${FAD_GROUPS:-${1:-beta}}"
+# NB: do NOT name this `GROUPS` — that's a reserved bash special array holding
+# the current user's group IDs (assignments to it are silently ignored), so the
+# value would always read back as the primary GID (20 = staff on macOS) and
+# distribute would 404 on a non-existent group "20".
+FAD_GROUP="${FAD_GROUPS:-${1:-beta}}"
 
 # Backend baked into the build (default: the qa Vercel deploy the beta points at).
 API="${API_BASE_URL:-$(tr -d ' \t\r\n' < "$REPO_ROOT/.claude/skills/run-mobile/qa-url.local" 2>/dev/null)}"
@@ -64,8 +68,8 @@ if [ -n "${FAD_TESTERS:-}" ]; then
   TARGET_DESC="testers $FAD_TESTERS"
   DIST_ARGS+=(--testers "$FAD_TESTERS")
 else
-  TARGET_DESC="group '$GROUPS'"
-  DIST_ARGS+=(--groups "$GROUPS")
+  TARGET_DESC="group '$FAD_GROUP'"
+  DIST_ARGS+=(--groups "$FAD_GROUP")
 fi
 echo "    → $TARGET_DESC"
 firebase appdistribution:distribute "$APK" "${DIST_ARGS[@]}" || {
