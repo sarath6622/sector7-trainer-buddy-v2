@@ -57,13 +57,13 @@ class _ClientShellState extends ConsumerState<ClientShell> {
               label: 'Home',
             ),
             GlassDockDestination(
-              icon: Icons.fitness_center_outlined,
-              selectedIcon: Icons.fitness_center_rounded,
+              icon: Icons.assignment_outlined,
+              selectedIcon: Icons.assignment_rounded,
               label: 'Sessions',
             ),
             GlassDockDestination(
-              icon: Icons.insights_outlined,
-              selectedIcon: Icons.insights_rounded,
+              icon: Icons.track_changes_outlined,
+              selectedIcon: Icons.adjust_rounded,
               label: 'Progress',
             ),
             GlassDockDestination(
@@ -72,8 +72,8 @@ class _ClientShellState extends ConsumerState<ClientShell> {
               label: 'Community',
             ),
             GlassDockDestination(
-              icon: Icons.person_outline_rounded,
-              selectedIcon: Icons.person_rounded,
+              icon: Icons.account_circle_outlined,
+              selectedIcon: Icons.account_circle_rounded,
               label: 'Profile',
             ),
           ],
