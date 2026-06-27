@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 /// Approximate rendered height of the dock body (icon + label + inner padding +
@@ -20,12 +18,18 @@ double glassDockScrollInset(BuildContext context) {
   return _dockBottomGap(safeBottom) + _kDockBodyHeight + 14;
 }
 
-/// A frosted-glass **floating dock** bottom navigation bar.
+/// A **floating dock** bottom navigation bar.
 ///
-/// Renders as a translucent, blurred, rounded dock that floats above the screen
-/// edge with a hairline border and a soft shadow — the "Frosted Floating Dock"
-/// look. Each destination shows its icon above a label; the active one gets a
-/// subtle frosted background behind the whole item — icon and label together.
+/// Renders as a near-opaque, rounded dock that floats above the screen edge with
+/// a hairline border and a soft shadow — the "Floating Dock" look. Each
+/// destination shows its icon above a label; the active one gets a subtle
+/// background behind the whole item — icon and label together.
+///
+/// Deliberately uses a solid (near-opaque) fill rather than a live backdrop
+/// blur: a [BackdropFilter] re-blurs everything scrolling behind it every frame,
+/// which is the heaviest per-frame GPU cost in the app and janks scrolling on
+/// low-end devices. A flat fill reads almost identically and costs nothing per
+/// frame, so it stays smooth across the widest range of hardware.
 ///
 /// Drop it straight into [Scaffold.bottomNavigationBar]. It wraps itself in a
 /// [SafeArea] and reserves its own height (dock + margins), so it works with the
@@ -47,27 +51,19 @@ class GlassDockNavBar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
 
-    // A clear, see-through frosted dock: a translucent dark (light in light
-    // mode) tint laid over a live blur of the content scrolling behind it —
-    // WhatsApp's floating-bar look. The blur is cheap here: Impeller is the
-    // default renderer on both iOS and (Flutter 3.27+) Android, and we blur only
-    // this small fixed-height region, not the whole screen.
+    // Fully opaque: with no blur underneath, any translucency lets content
+    // scrolling beneath the dock ghost through like a watermark. A subtle
+    // top→bottom gradient keeps a little depth so it still reads as a floating
+    // panel rather than a flat bar.
     final List<Color> fill = isDark
-        ? [
-            Colors.black.withValues(alpha: 0.42),
-            Colors.black.withValues(alpha: 0.55),
-          ]
-        : [
-            Colors.white.withValues(alpha: 0.55),
-            Colors.white.withValues(alpha: 0.42),
-          ];
+        ? const [Color(0xFF1C1C1E), Color(0xFF141416)]
+        : const [Colors.white, Color(0xFFF2F2F5)];
     final borderColor = isDark
         ? Colors.white.withValues(alpha: 0.12)
         : Colors.black.withValues(alpha: 0.06);
 
-    // The frosted surface: the translucent tint + the nav row, laid over a blur
-    // of whatever is behind the dock.
-    Widget surface = DecoratedBox(
+    // The dock surface: the tint + the nav row.
+    final Widget surface = DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -95,10 +91,6 @@ class GlassDockNavBar extends StatelessWidget {
           ),
         ),
       ),
-    );
-    surface = BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-      child: surface,
     );
 
     return SafeArea(
