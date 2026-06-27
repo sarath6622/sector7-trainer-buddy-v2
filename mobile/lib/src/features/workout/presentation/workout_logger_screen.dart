@@ -438,11 +438,11 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
         child: Shimmer(
           child: Column(
             children: [
-              Bone(width: double.infinity, height: 96, radius: 16),
+              Bone(width: double.infinity, height: 96, radius: 0),
               SizedBox(height: 12),
-              Bone(width: double.infinity, height: 96, radius: 16),
+              Bone(width: double.infinity, height: 96, radius: 0),
               SizedBox(height: 12),
-              Bone(width: double.infinity, height: 96, radius: 16),
+              Bone(width: double.infinity, height: 96, radius: 0),
             ],
           ),
         ),
@@ -489,9 +489,10 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
         ?_syncBanner,
         Expanded(
           child: ListView(
+            // Edge-to-edge cards: no horizontal inset so panels run full width.
             // Extra bottom inset so the floating + button never covers the last
             // card's actions.
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
+            padding: const EdgeInsets.fromLTRB(0, 4, 0, 88),
             children: [
               ?widget.header,
               if (widget.header != null) const SizedBox(height: 12),
@@ -560,6 +561,10 @@ String _fmtNum(double v) => v % 1 == 0 ? v.toInt().toString() : v.toString();
 /// "Saved to the server" accent — a value cell gains a small padded border in
 /// this green once its set matches the last-synced baseline (persisted in the DB).
 const Color _kSavedGreen = Color(0xFF34D399);
+
+/// Completed-exercise accent — a true green (green-500) for the done card's
+/// filled check, "Completed" badge and volume summary (matches the reference).
+const Color _kCompletedGreen = Color(0xFF22C55E);
 
 /// Per-row "is this set currently persisted on the server?" flags, derived by
 /// consuming the exercise's baseline sets as a multiset (so duplicate rows and a
@@ -740,6 +745,207 @@ class _ExerciseCard extends StatelessWidget {
     return list.last;
   }
 
+  /// Collapsed header for an in-progress exercise — type glyph, name, muscle
+  /// group + "logged/total sets" pill, and the progress-chart shortcut.
+  Widget _activeHeader(BuildContext context, ColorScheme scheme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(_typeIcon(draft.exerciseType), size: 20, color: scheme.onPrimary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  draft.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    if (draft.muscleGroup != null && draft.muscleGroup!.isNotEmpty) ...[
+                      Flexible(
+                        child: Text(
+                          draft.muscleGroup!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    _Pill(
+                      text: '${draft.loggedSetCount}/${draft.sets.length} sets',
+                      tone: scheme.primary,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (clientProfileId != null)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Progress',
+              icon: Icon(Icons.trending_up, color: scheme.onSurfaceVariant),
+              onPressed: () => showExerciseProgressSheet(
+                context,
+                clientProfileId: clientProfileId!,
+                exerciseId: draft.exerciseId,
+                exerciseName: draft.name,
+                exerciseType: draft.exerciseType,
+              ),
+            ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+
+  /// Collapsed header for a *completed* exercise — a filled green check, the
+  /// name (no strikethrough), muscle group, a "Completed" badge and a
+  /// "N Sets • {volume}kg Volume" summary, with a chevron to expand the logged
+  /// sets. Matches the reference design.
+  Widget _completedHeader(BuildContext context, ColorScheme scheme) {
+    final n = draft.loggedSetCount;
+    final vol = _exerciseVolume(draft);
+    final sets = '$n ${n == 1 ? 'Set' : 'Sets'}';
+    final summary = vol > 0 ? '$sets  •  ${_fmtNum(vol)}kg Volume' : sets;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: _kCompletedGreen,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check, size: 22, color: Colors.white),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        draft.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const _Pill(text: 'Completed', tone: _kCompletedGreen),
+                  ],
+                ),
+                if (draft.muscleGroup != null && draft.muscleGroup!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    draft.muscleGroup!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Text(
+                  summary,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _kCompletedGreen,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Icon(
+            expanded ? Icons.expand_more : Icons.chevron_right,
+            color: scheme.onSurfaceVariant,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Total training volume (Σ weight × reps over value-bearing sets), in kg.
+  /// Zero for bodyweight / duration / cardio work (no weight) — the summary then
+  /// shows just the set count.
+  double _exerciseVolume(DraftExercise d) {
+    var v = 0.0;
+    for (final s in d.sets) {
+      final w = s.weightKg ?? 0;
+      final r = (s.reps ?? 0).toDouble();
+      if (w > 0 && r > 0) v += w * r;
+    }
+    return v;
+  }
+
+  /// Open set [index] for editing while keeping the logger to a single open
+  /// editor. The guided logger surfaces only the *first* incomplete set
+  /// ([DraftExercise.activeSetIndex]); without this, tapping Set 1 then Set 2 to
+  /// edit would leave two sets incomplete and hide the second one. So before
+  /// opening the tapped set we resolve any *other* in-progress set: commit it
+  /// back to a completed row when it carries values, or drop it when it's an
+  /// untouched placeholder. Iterates high→low so list removals don't shift the
+  /// indices still to be visited, adjusting [index] when an earlier set is
+  /// dropped.
+  void _editSet(int index) {
+    for (var j = draft.sets.length - 1; j >= 0; j--) {
+      if (j == index || draft.sets[j].isCompleted) continue;
+      if (draft.sets[j].hasValue) {
+        draft.sets[j].isCompleted = true;
+      } else {
+        draft.removeSet(j);
+        if (j < index) index--;
+      }
+    }
+    draft.sets[index].isCompleted = false;
+    onChanged();
+  }
+
+  /// Append a fresh set and make it the one being edited. Commits the current
+  /// open editor first (when it has values) so only one stays open; if that set
+  /// is still empty it's already the "new" set to fill, so we don't stack
+  /// another on top of it.
+  void _addSet() {
+    final active = draft.activeSetIndex;
+    if (active != null) {
+      if (!draft.sets[active].hasValue) {
+        onChanged();
+        return;
+      }
+      draft.sets[active].isCompleted = true;
+    }
+    draft.addSet();
+    onChanged();
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -750,115 +956,20 @@ class _ExerciseCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
+      // Edge-to-edge, square panel — keep the hairline border so the card stays
+      // defined against the surface (esp. light mode), just drop the rounding.
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header (tap to expand/collapse) ──
+          // ── Header (tap to expand/collapse) — a distinct "completed" look ──
           InkWell(
             onTap: onToggleExpand,
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: scheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(_typeIcon(draft.exerciseType), size: 20, color: scheme.onPrimary),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          draft.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            decoration: draft.isCompleted ? TextDecoration.lineThrough : null,
-                            color: draft.isCompleted ? scheme.onSurfaceVariant : null,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            if (draft.muscleGroup != null && draft.muscleGroup!.isNotEmpty) ...[
-                              Flexible(
-                                child: Text(
-                                  draft.muscleGroup!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(color: scheme.onSurfaceVariant),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            _Pill(
-                              text:
-                                  '${draft.loggedSetCount}/${draft.sets.length} sets',
-                              tone: scheme.primary,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (draft.isCompleted)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4),
-                      child: Icon(Icons.check_circle, size: 20, color: Colors.green.shade400),
-                    ),
-                  if (clientProfileId != null)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Progress',
-                      icon: Icon(Icons.trending_up, color: scheme.onSurfaceVariant),
-                      onPressed: () => showExerciseProgressSheet(
-                        context,
-                        clientProfileId: clientProfileId!,
-                        exerciseId: draft.exerciseId,
-                        exerciseName: draft.name,
-                        exerciseType: draft.exerciseType,
-                      ),
-                    ),
-                  PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert, color: scheme.onSurfaceVariant),
-                    tooltip: 'Exercise options',
-                    onSelected: (v) {
-                      if (v == 'remove') onRemove();
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'remove',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline, size: 18, color: scheme.error),
-                            const SizedBox(width: 10),
-                            Text('Remove exercise', style: TextStyle(color: scheme.error)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  AnimatedRotation(
-                    turns: expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 150),
-                    child: Icon(Icons.expand_more, color: scheme.onSurfaceVariant),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-              ),
-            ),
+            child: draft.isCompleted
+                ? _completedHeader(context, scheme)
+                : _activeHeader(context, scheme),
           ),
 
           // ── Expanded body: guided set-by-set logger ──
@@ -879,7 +990,10 @@ class _ExerciseCard extends StatelessWidget {
                   ],
                   _ProgressSection(draft: draft),
                   const SizedBox(height: 10),
-                  // Resolved sets (completed or skipped) as read-only rows.
+                  // Render sets in order: a resolved set as a read-only row, and
+                  // the one active set inline at its own position. Editing an
+                  // earlier set (e.g. Set 1) then shows its editor in place,
+                  // above the later completed sets — not pushed to the bottom.
                   for (var i = 0; i < draft.sets.length; i++)
                     if (draft.sets[i].isCompleted)
                       _CompletedSetRow(
@@ -887,47 +1001,40 @@ class _ExerciseCard extends StatelessWidget {
                         set: draft.sets[i],
                         type: draft.exerciseType,
                         saved: savedFlags[i],
-                        onEdit: () {
-                          draft.sets[i].isCompleted = false;
-                          onChanged();
-                        },
+                        onEdit: () => _editSet(i),
                         onRemove: () {
                           draft.removeSet(i);
                           onChanged();
                         },
+                      )
+                    else if (i == activeIndex)
+                      _ActiveSetEditor(
+                        key: ValueKey('active-${identityHashCode(draft.sets[i])}'),
+                        set: draft.sets[i],
+                        type: draft.exerciseType,
+                        cols: cols,
+                        sessionId: sessionId,
+                        previous: _prevFor(i + 1),
+                        onChanged: onChanged,
+                        onComplete: () {
+                          draft.sets[i].isCompleted = true;
+                          onChanged();
+                        },
+                        onSkip: () {
+                          draft.sets[i]
+                            ..reps = null
+                            ..weightKg = null
+                            ..durationSec = null
+                            ..stepsCount = null
+                            ..isCompleted = true;
+                          onChanged();
+                        },
                       ),
-                  // The one active set being entered.
-                  if (activeIndex != null)
-                    _ActiveSetEditor(
-                      key: ValueKey('active-${identityHashCode(draft.sets[activeIndex])}'),
-                      set: draft.sets[activeIndex],
-                      type: draft.exerciseType,
-                      cols: cols,
-                      sessionId: sessionId,
-                      previous: _prevFor(activeIndex + 1),
-                      onChanged: onChanged,
-                      onComplete: () {
-                        draft.sets[activeIndex].isCompleted = true;
-                        onChanged();
-                      },
-                      onSkip: () {
-                        draft.sets[activeIndex]
-                          ..reps = null
-                          ..weightKg = null
-                          ..durationSec = null
-                          ..stepsCount = null
-                          ..isCompleted = true;
-                        onChanged();
-                      },
-                    ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       TextButton.icon(
-                        onPressed: () {
-                          draft.addSet();
-                          onChanged();
-                        },
+                        onPressed: _addSet,
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add set'),
                         style: TextButton.styleFrom(
@@ -1004,7 +1111,7 @@ String _fieldLabel(_Field f) => switch (f) {
       _Field.rest => 'REST',
     };
 
-/// A quiet uppercase section label ("LAST WORKOUT", "PROGRESS").
+/// A quiet uppercase section label ("LAST SESSION", "PROGRESS").
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.text);
   final String text;
@@ -1023,7 +1130,7 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-/// "LAST WORKOUT" history line + an improvement delta (this session's heaviest
+/// "LAST SESSION" history line + an improvement delta (this session's heaviest
 /// vs last session's), reusing the already-fetched [LastSetSnapshot]s.
 class _LastWorkoutStrip extends StatelessWidget {
   const _LastWorkoutStrip({
@@ -1061,7 +1168,7 @@ class _LastWorkoutStrip extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _SectionLabel('LAST WORKOUT'),
+              const _SectionLabel('LAST SESSION'),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 14,
@@ -1209,65 +1316,66 @@ class _CompletedSetRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final skipped = !set.hasValue;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(
-            skipped
-                ? Icons.remove_circle_outline
-                : (saved ? Icons.check_circle : Icons.check_circle_outline),
-            size: 22,
-            color: skipped
-                ? scheme.onSurfaceVariant.withValues(alpha: 0.5)
-                : _kSavedGreen,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Set ${set.setNumber}',
-                    style:
-                        const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                const SizedBox(height: 1),
-                Text(
-                  _summary(),
-                  style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+    // Tap anywhere on the row to edit (re-opens it as the active set); the trash
+    // at the trailing edge deletes it. Replaces the old ⋮ Edit/Remove menu.
+    return InkWell(
+      onTap: onEdit,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Icon(
+              skipped
+                  ? Icons.remove_circle_outline
+                  : (saved ? Icons.check_circle : Icons.check_circle_outline),
+              size: 22,
+              color: skipped
+                  ? scheme.onSurfaceVariant.withValues(alpha: 0.5)
+                  : _kSavedGreen,
+            ),
+            const SizedBox(width: 10),
+            // "Set N" and its summary on one row (fixed label width keeps the
+            // value column aligned across sets).
+            SizedBox(
+              width: 52,
+              child: Text('Set ${set.setNumber}',
+                  style:
+                      const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _summary(),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: scheme.onSurfaceVariant,
                 ),
-              ],
-            ),
-          ),
-          if ((set.restSec ?? 0) > 0) ...[
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('Rest',
-                    style:
-                        TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
-                Text(_fmtMmSs(set.restSec!),
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600)),
-              ],
-            ),
-            const SizedBox(width: 4),
-          ],
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, size: 18, color: scheme.onSurfaceVariant),
-            tooltip: 'Set options',
-            onSelected: (v) {
-              if (v == 'edit') onEdit();
-              if (v == 'remove') onRemove();
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'edit', child: Text('Edit set')),
-              PopupMenuItem(
-                value: 'remove',
-                child: Text('Remove set', style: TextStyle(color: scheme.error)),
               ),
+            ),
+            if ((set.restSec ?? 0) > 0) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('Rest',
+                      style: TextStyle(
+                          fontSize: 11, color: scheme.onSurfaceVariant)),
+                  Text(_fmtMmSs(set.restSec!),
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const SizedBox(width: 8),
             ],
-          ),
-        ],
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Remove set',
+              icon: Icon(Icons.delete_outline,
+                  size: 20, color: scheme.onSurfaceVariant),
+              onPressed: onRemove,
+            ),
+          ],
+        ),
       ),
     );
   }

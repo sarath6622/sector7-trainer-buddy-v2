@@ -16,16 +16,19 @@ import 'workout_draft.dart';
 /// saved as noise (mirrors the logger's pre-save filter + web `isSetComplete`).
 bool isSaveableSet(DraftSet s) => s.hasValue;
 
-/// Normalized wire payload for a session: only exercises with ≥1 saveable set,
-/// sets renumbered 1-based, `orderIndex` dense from 0. Built identically for
-/// the current draft and the last-synced baseline so [diffExercises] compares
-/// like-for-like and an unchanged draft diffs to nothing (a net-zero re-post).
+/// Normalized wire payload for a session: every exercise the user added (its
+/// half-typed/empty sets filtered out, the rest renumbered 1-based), `orderIndex`
+/// dense from 0. An exercise with no logged set is still emitted as a *structural
+/// row* (`sets: []`) — the server explicitly supports this so an added-but-not-yet-
+/// logged exercise survives navigation/reopen (matches the web `buildSavePayload`).
+/// Built identically for the current draft and the last-synced baseline so
+/// [diffExercises] compares like-for-like and an unchanged draft diffs to nothing
+/// (a net-zero re-post).
 List<Map<String, dynamic>> buildSavePayload(List<DraftExercise> drafts) {
   final out = <Map<String, dynamic>>[];
   var order = 0;
   for (final d in drafts) {
     final sets = d.sets.where(isSaveableSet).toList();
-    if (sets.isEmpty) continue;
     out.add({
       'exerciseId': d.exerciseId,
       'orderIndex': order,

@@ -129,7 +129,7 @@ class _SessionHeroCardState extends ConsumerState<SessionHeroCard> {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.zero,
         boxShadow: [
           BoxShadow(
             color: accent.withValues(alpha: live ? 0.22 : 0.13),
@@ -140,14 +140,14 @@ class _SessionHeroCardState extends ConsumerState<SessionHeroCard> {
       ),
       child: Material(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.zero,
         child: InkWell(
           onTap: _openRest,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.zero,
           child: Container(
             padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.zero,
               border: Border.all(
                 color: accent.withValues(alpha: live ? 0.55 : 0.40),
                 width: 1.2,

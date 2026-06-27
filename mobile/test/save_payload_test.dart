@@ -18,14 +18,19 @@ DraftSet st(int n, {int? reps, double? weight}) =>
 
 void main() {
   group('buildSavePayload', () {
-    test('drops exercises with no saveable sets and half-typed rows', () {
+    test('filters half-typed rows but keeps an unlogged exercise as a '
+        'structural row (sets: []), matching the web logger + server', () {
       final payload = buildSavePayload([
         ex('a', sets: [st(1, reps: 10, weight: 40), st(2)]), // 2nd row empty
-        ex('b', sets: [st(1)]), // all empty → whole exercise dropped
+        ex('b', sets: [st(1)]), // all empty → kept as a structural row
       ]);
-      expect(payload, hasLength(1));
-      expect(payload.first['exerciseId'], 'a');
-      expect((payload.first['sets'] as List), hasLength(1));
+      expect(payload, hasLength(2));
+      expect(payload[0]['exerciseId'], 'a');
+      expect((payload[0]['sets'] as List), hasLength(1)); // empty row filtered
+      // The unlogged exercise survives so it persists across a reopen.
+      expect(payload[1]['exerciseId'], 'b');
+      expect((payload[1]['sets'] as List), isEmpty);
+      expect(payload[1]['orderIndex'], 1);
     });
 
     test('renumbers sets 1-based and orderIndex dense from 0', () {
