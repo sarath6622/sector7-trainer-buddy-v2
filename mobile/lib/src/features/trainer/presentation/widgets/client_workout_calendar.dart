@@ -319,21 +319,37 @@ class _MonthGrid extends StatelessWidget {
       cells.add((date: cells.last.date.add(const Duration(days: 1)), inMonth: false));
     }
 
-    return GridView.count(
-      crossAxisCount: 7,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 4,
-      crossAxisSpacing: 4,
+    // Plain Column of Rows rather than a shrink-wrapped GridView: nesting a
+    // scrollable GridView inside the page's ListView mis-sized its main-axis
+    // extent (box taller than its rows -> dead space above/below the weeks).
+    // A non-scrolling Column is deterministic: height == rows*36 + gaps.
+    final rowCount = cells.length ~/ 7;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        for (final cell in cells)
-          _DayCell(
-            date: cell.date,
-            inMonth: cell.inMonth,
-            day: cell.inMonth ? days[_ymd(cell.date)] : null,
-            isToday: cell.inMonth && _ymd(cell.date) == todayStr,
-            onTapDay: onTapDay,
+        for (var r = 0; r < rowCount; r++) ...[
+          if (r > 0) const SizedBox(height: 3),
+          SizedBox(
+            height: 36,
+            child: Row(
+              children: [
+                for (var c = 0; c < 7; c++)
+                  Expanded(
+                    child: _DayCell(
+                      date: cells[r * 7 + c].date,
+                      inMonth: cells[r * 7 + c].inMonth,
+                      day: cells[r * 7 + c].inMonth
+                          ? days[_ymd(cells[r * 7 + c].date)]
+                          : null,
+                      isToday: cells[r * 7 + c].inMonth &&
+                          _ymd(cells[r * 7 + c].date) == todayStr,
+                      onTapDay: onTapDay,
+                    ),
+                  ),
+              ],
+            ),
           ),
+        ],
       ],
     );
   }
@@ -384,8 +400,8 @@ class _DayCell extends StatelessWidget {
               }
             : null,
         child: Container(
-          width: 36,
-          height: 36,
+          width: 32,
+          height: 32,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: bg,
