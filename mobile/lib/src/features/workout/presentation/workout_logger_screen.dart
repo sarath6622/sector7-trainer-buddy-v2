@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
+import '../../../core/feedback/sound_service.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../client/data/client_repository.dart';
@@ -318,6 +321,14 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
         _expandedExerciseId = d.exerciseId;
       }
     });
+    // Reward finishing an exercise with a success buzz + the completion chime;
+    // un-completing it is just a light tap (no celebration).
+    if (d.isCompleted) {
+      Haptics.success();
+      SoundService.instance.playComplete();
+    } else {
+      Haptics.tap();
+    }
   }
 
   /// First incomplete exercise (used when auto-advancing after mark-complete).
@@ -379,6 +390,7 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
     if (outcome != SyncOutcome.noop) _savedPayload = persisted;
     switch (outcome) {
       case SyncOutcome.synced:
+        Haptics.success();
         // Refresh both session readers (only the relevant one is mounted) plus
         // the client's history list, then settle in place.
         ref.invalidate(trainerSessionProvider(widget.sessionId));
@@ -390,12 +402,14 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
         });
         _toast('Workout saved');
       case SyncOutcome.queuedOffline:
+        Haptics.tap();
         setState(() {
           _lastOutcome = outcome;
           _restoredUnsynced = true;
         });
         _toast('Saved on this device — will sync when back online.');
       case SyncOutcome.failed:
+        Haptics.error();
         setState(() => _lastOutcome = outcome);
         _toast('Saved on device, but the server rejected the sync.');
       case SyncOutcome.noop:
@@ -562,9 +576,9 @@ String _fmtNum(double v) => v % 1 == 0 ? v.toInt().toString() : v.toString();
 /// this green once its set matches the last-synced baseline (persisted in the DB).
 const Color _kSavedGreen = Color(0xFF34D399);
 
-/// Completed-exercise accent — a true green (green-500) for the done card's
-/// filled check, "Completed" badge and volume summary (matches the reference).
-const Color _kCompletedGreen = Color(0xFF22C55E);
+// The completed-exercise accent (filled check, "Completed" badge, volume summary)
+// uses the design-system success colour, resolved theme-aware via AppColors in
+// _completedHeader.
 
 /// Per-row "is this set currently persisted on the server?" flags, derived by
 /// consuming the exercise's baseline sets as a multiset (so duplicate rows and a
@@ -822,6 +836,7 @@ class _ExerciseCard extends StatelessWidget {
   /// "N Sets • {volume}kg Volume" summary, with a chevron to expand the logged
   /// sets. Matches the reference design.
   Widget _completedHeader(BuildContext context, ColorScheme scheme) {
+    final completed = AppColors.of(context).success;
     final n = draft.loggedSetCount;
     final vol = _exerciseVolume(draft);
     final sets = '$n ${n == 1 ? 'Set' : 'Sets'}';
@@ -833,8 +848,8 @@ class _ExerciseCard extends StatelessWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: const BoxDecoration(
-              color: _kCompletedGreen,
+            decoration: BoxDecoration(
+              color: completed,
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.check, size: 22, color: Colors.white),
@@ -856,7 +871,7 @@ class _ExerciseCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const _Pill(text: 'Completed', tone: _kCompletedGreen),
+                    _Pill(text: 'Completed', tone: completed),
                   ],
                 ),
                 if (draft.muscleGroup != null && draft.muscleGroup!.isNotEmpty) ...[
@@ -874,10 +889,10 @@ class _ExerciseCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   summary,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: _kCompletedGreen,
+                    color: completed,
                   ),
                 ),
               ],
@@ -1018,6 +1033,7 @@ class _ExerciseCard extends StatelessWidget {
                         onChanged: onChanged,
                         onComplete: () {
                           draft.sets[i].isCompleted = true;
+                          Haptics.primary(); // a solid tick for logging a set
                           onChanged();
                         },
                         onSkip: () {
@@ -1027,6 +1043,7 @@ class _ExerciseCard extends StatelessWidget {
                             ..durationSec = null
                             ..stepsCount = null
                             ..isCompleted = true;
+                          Haptics.tap();
                           onChanged();
                         },
                       ),

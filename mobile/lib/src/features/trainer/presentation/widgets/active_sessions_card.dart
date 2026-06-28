@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/util/formatters.dart';
 import '../../data/trainer_models.dart';
 
 // Dashboard accent palette — shared vocabulary with the web trainer dashboard.
-const _kLive = Color(0xFF22C55E); // emerald-500 — running today
+// "live / running today" maps to the design-system success colour (theme-aware,
+// resolved via AppColors at the call sites below).
 const _kAttention = Color(0xFFF59E0B); // amber-500 — never-ended cleanup
 const _kUrgent = Color(0xFFFB7185); // rose-400  — overtime
 
@@ -43,6 +45,8 @@ class ActiveSessionsCard extends StatelessWidget {
     if (total == 0) return const SizedBox.shrink();
 
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
+    final kLive = colors.success;
     final hasLive = liveSessions.isNotEmpty;
     final hasStale = stale.isNotEmpty;
     final mixed = hasLive && hasStale;
@@ -67,18 +71,18 @@ class ActiveSessionsCard extends StatelessWidget {
     final headingColor = mixed
         ? scheme.onSurface
         : hasLive
-            ? _kLive
+            ? kLive
             : _kAttention;
 
     return Container(
       decoration: BoxDecoration(
         color: hasLive && !mixed
-            ? _kLive.withValues(alpha: 0.06)
+            ? kLive.withValues(alpha: 0.06)
             : scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: hasLive && !mixed
-              ? _kLive.withValues(alpha: 0.25)
+              ? kLive.withValues(alpha: 0.25)
               : scheme.outlineVariant.withValues(alpha: 0.08),
         ),
       ),
@@ -95,7 +99,7 @@ class ActiveSessionsCard extends StatelessWidget {
                   height: 40,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: (attention ? _kAttention : _kLive)
+                    color: (attention ? _kAttention : kLive)
                         .withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -135,14 +139,14 @@ class ActiveSessionsCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: attention
                         ? scheme.surfaceContainerHighest
-                        : _kLive.withValues(alpha: 0.15),
+                        : kLive.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     '$total',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: attention ? scheme.onSurfaceVariant : _kLive,
+                          color: attention ? scheme.onSurfaceVariant : kLive,
                         ),
                   ),
                 ),
@@ -179,8 +183,9 @@ class _LiveTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final kLive = AppColors.of(context).success;
     return Material(
-      color: _kLive.withValues(alpha: 0.06),
+      color: kLive.withValues(alpha: 0.06),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -189,14 +194,14 @@ class _LiveTile extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _kLive.withValues(alpha: 0.3)),
+            border: Border.all(color: kLive.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
               _TimeBlock(
                 time: session.scheduledTime,
-                bg: _kLive.withValues(alpha: 0.15),
-                fg: _kLive,
+                bg: kLive.withValues(alpha: 0.15),
+                fg: kLive,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -236,7 +241,7 @@ class _LiveTile extends StatelessWidget {
                   expectedDurationMin: session.summary.durationMin,
                 ),
               Icon(Icons.chevron_right,
-                  color: _kLive.withValues(alpha: 0.7), size: 20),
+                  color: kLive.withValues(alpha: 0.7), size: 20),
             ],
           ),
         ),
@@ -524,6 +529,7 @@ class _PulseDotState extends State<_PulseDot>
 
   @override
   Widget build(BuildContext context) {
+    final kLive = AppColors.of(context).success;
     return SizedBox(
       width: widget.size,
       height: widget.size,
@@ -537,8 +543,8 @@ class _PulseDotState extends State<_PulseDot>
               child: Transform.scale(
                 scale: 1 + _c.value * 1.6,
                 child: Container(
-                  decoration: const BoxDecoration(
-                    color: _kLive,
+                  decoration: BoxDecoration(
+                    color: kLive,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -548,8 +554,8 @@ class _PulseDotState extends State<_PulseDot>
           Container(
             width: widget.size,
             height: widget.size,
-            decoration: const BoxDecoration(
-              color: _kLive,
+            decoration: BoxDecoration(
+              color: kLive,
               shape: BoxShape.circle,
             ),
           ),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../session/data/rest_timer_controller.dart';
 import '../../../session/data/session_pause_controller.dart';
 import '../../../session/domain/rest_timer_state.dart'
@@ -10,9 +11,9 @@ import '../../../session/domain/rest_timer_state.dart'
 import '../../data/trainer_models.dart';
 
 // Status vocabulary shared with session_hero_card.dart / the web SessionHero:
-// semantic rest/idle/pause colours, not the orange brand accent.
-const _kRunning = Color(0xFF3B82F6); // blue-500  — resting
-const _kDone = Color(0xFF22C55E); // green-500 — rest done (fresh) / live
+// semantic rest/idle/pause colours, not the orange brand accent. "Resting" and
+// "live / rest-done" map to the design-system info/success colours (theme-aware,
+// passed into _statusFor from build).
 const _kPaused = Color(0xFFF59E0B); // amber-500 — paused
 const _kUrgent = Color(0xFFFB7185); // rose-400  — rest done a while / overtime
 
@@ -129,6 +130,7 @@ class _OtherSessionChipState extends ConsumerState<_OtherSessionChip> {
     final s = widget.session;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
+    final colors = AppColors.of(context);
     final restSnap = ref.watch(restTimerControllerProvider(s.id));
     final pauseSnap = ref.watch(sessionPauseControllerProvider(s.id));
     final status = _statusFor(
@@ -137,6 +139,8 @@ class _OtherSessionChipState extends ConsumerState<_OtherSessionChip> {
       restSnap.timer,
       pauseSnap.pause.isPaused,
       s.summary.startedAt,
+      colors.success,
+      colors.info,
     );
 
     final name = s.clientName ?? 'Client';
@@ -242,6 +246,8 @@ class _OtherSessionChipState extends ConsumerState<_OtherSessionChip> {
     RestTimerState timer,
     bool isPaused,
     DateTime? startedAt,
+    Color success,
+    Color info,
   ) {
     if (isPaused) return const _ChipStatus('Paused', _kPaused);
 
@@ -258,11 +264,11 @@ class _OtherSessionChipState extends ConsumerState<_OtherSessionChip> {
         return _ChipStatus('Rest done · ${_fmtIdle(doneSec)}', _kPaused,
             alert: true);
       }
-      return const _ChipStatus('Rest done!', _kDone, alert: true);
+      return _ChipStatus('Rest done!', success, alert: true);
     }
     if (timer.isRunning(nowMs, skewMs)) {
       return _ChipStatus(
-          'Resting · ${formatMmSs(timer.remaining(nowMs, skewMs)!)}', _kRunning);
+          'Resting · ${formatMmSs(timer.remaining(nowMs, skewMs)!)}', info);
     }
     if (timer.isPaused) return const _ChipStatus('Rest paused', _kPaused);
 
@@ -270,9 +276,9 @@ class _OtherSessionChipState extends ConsumerState<_OtherSessionChip> {
       final elapsed = ((nowMs - startedAt.millisecondsSinceEpoch) ~/ 1000)
           .clamp(0, 1 << 40)
           .toInt();
-      return _ChipStatus(_fmtElapsed(elapsed), _kDone, neutral: true);
+      return _ChipStatus(_fmtElapsed(elapsed), success, neutral: true);
     }
-    return const _ChipStatus('Live', _kDone, neutral: true);
+    return _ChipStatus('Live', success, neutral: true);
   }
 }
 

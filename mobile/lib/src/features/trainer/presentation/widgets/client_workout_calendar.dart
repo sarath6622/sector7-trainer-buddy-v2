@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/feedback/haptics.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/util/formatters.dart';
 import '../../../../core/widgets/skeleton.dart';
 import '../../data/trainer_models.dart';
 import '../../data/trainer_repository.dart';
 
-const _kWorkout = Color(0xFF22C55E); // emerald-500
+// A logged workout day maps to the design-system success colour (theme-aware,
+// resolved via AppColors at the call sites below).
 const _kPR = Color(0xFFFBBF24); // amber-400
 const _kToday = Color(0xFFF97316); // orange-500
 
@@ -192,11 +195,14 @@ class _ClientWorkoutCalendarState extends ConsumerState<ClientWorkoutCalendar> {
               alignment: WrapAlignment.center,
               spacing: 16,
               runSpacing: 8,
-              children: const [
-                _LegendItem(color: _kWorkout, label: 'Workout', filled: true),
-                _LegendItem(color: _kPR, label: 'PR Day', star: true),
-                _LegendItem(color: _kToday, label: 'Today', ring: true),
-                _LegendItem(color: null, label: 'No workout'),
+              children: [
+                _LegendItem(
+                    color: AppColors.of(context).success,
+                    label: 'Workout',
+                    filled: true),
+                const _LegendItem(color: _kPR, label: 'PR Day', star: true),
+                const _LegendItem(color: _kToday, label: 'Today', ring: true),
+                const _LegendItem(color: null, label: 'No workout'),
               ],
             ),
           ),
@@ -351,6 +357,7 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final workout = AppColors.of(context).success;
     final clickable = day != null;
 
     Color border = Colors.transparent;
@@ -361,16 +368,21 @@ class _DayCell extends StatelessWidget {
       bg = _kPR.withValues(alpha: 0.1);
       fg = _kPR;
     } else if (day != null) {
-      border = _kWorkout.withValues(alpha: 0.6);
-      bg = _kWorkout.withValues(alpha: 0.1);
-      fg = _kWorkout;
+      border = workout.withValues(alpha: 0.6);
+      bg = workout.withValues(alpha: 0.1);
+      fg = workout;
     } else if (inMonth) {
       border = scheme.outlineVariant.withValues(alpha: 0.14);
     }
 
     return Center(
       child: GestureDetector(
-        onTap: clickable ? () => onTapDay(_ymd(date), day!.isPR) : null,
+        onTap: clickable
+            ? () {
+                Haptics.select();
+                onTapDay(_ymd(date), day!.isPR);
+              }
+            : null,
         child: Container(
           width: 36,
           height: 36,

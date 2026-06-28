@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/feedback/haptics.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -11,9 +13,9 @@ import '../data/trainer_models.dart';
 import '../data/trainer_repository.dart';
 import 'widgets/schedule_booking_sheet.dart';
 
-// Agenda accent palette — shared vocabulary with the web schedule.
-const _kBooked = Color(0xFF3B82F6); // blue-500
-const _kAvailable = Color(0xFF22C55E); // emerald-500
+// Agenda accent palette — shared vocabulary with the web schedule. Booked and
+// available map to the design-system info/success colours (theme-aware, resolved
+// via AppColors at the call sites below).
 
 /// Trainer "Schedule" tab — a per-day agenda (ported from the web mobile view):
 /// a Mon→Sun week strip, a booked/available summary for the day, the day's
@@ -69,7 +71,7 @@ class _TrainerScheduleScreenState extends ConsumerState<TrainerScheduleScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(trainerDayViewProvider(_selectedYmd).future),
+        onRefresh: () => Haptics.onRefresh(() => ref.refresh(trainerDayViewProvider(_selectedYmd).future)),
         child: ListView(
           padding: EdgeInsets.fromLTRB(16, 12, 16, glassDockScrollInset(context)),
           children: [
@@ -277,6 +279,7 @@ class _DaySummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
     final now = DateTime.now();
     final isToday = selected.year == now.year &&
         selected.month == now.month &&
@@ -337,7 +340,7 @@ class _DaySummary extends StatelessWidget {
                             text: '${Fmt.durationMin(summary.bookedMin)} booked · '),
                         TextSpan(
                           text: '${Fmt.durationMin(summary.availableMin)} available',
-                          style: const TextStyle(color: _kAvailable),
+                          style: TextStyle(color: colors.success),
                         ),
                       ],
                     ),
@@ -367,17 +370,16 @@ class _DaySummary extends StatelessWidget {
 
 // ── Session row ──────────────────────────────────────────────────────────────
 
-({Color color, String label}) _statusStyle(SessionStatus s) => switch (s) {
-      SessionStatus.scheduled => (color: _kBooked, label: 'PT Session'),
-      SessionStatus.inProgress =>
-        (color: const Color(0xFF22C55E), label: 'In Progress'),
+({Color color, String label}) _statusStyle(SessionStatus s, AppColors c) =>
+    switch (s) {
+      SessionStatus.scheduled => (color: c.info, label: 'PT Session'),
+      SessionStatus.inProgress => (color: c.success, label: 'In Progress'),
       SessionStatus.completed =>
         (color: const Color(0xFF10B981), label: 'Completed'),
       SessionStatus.noShow =>
         (color: const Color(0xFFF59E0B), label: 'No Show'),
-      SessionStatus.cancelled =>
-        (color: const Color(0xFFEF4444), label: 'Cancelled'),
-      SessionStatus.unknown => (color: _kBooked, label: 'Session'),
+      SessionStatus.cancelled => (color: c.error, label: 'Cancelled'),
+      SessionStatus.unknown => (color: c.info, label: 'Session'),
     };
 
 class _SessionRow extends StatelessWidget {
@@ -388,11 +390,13 @@ class _SessionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final st = _statusStyle(session.status);
+    final colors = AppColors.of(context);
+    final st = _statusStyle(session.status, colors);
+    final booked = colors.info;
     final endTime = Fmt.addMinutes(session.startTime, session.durationMin);
 
     return Material(
-      color: _kBooked.withValues(alpha: 0.04),
+      color: booked.withValues(alpha: 0.04),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -401,7 +405,7 @@ class _SessionRow extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _kBooked.withValues(alpha: 0.3)),
+            border: Border.all(color: booked.withValues(alpha: 0.3)),
           ),
           child: IntrinsicHeight(
             child: Row(
@@ -414,7 +418,7 @@ class _SessionRow extends StatelessWidget {
                   decoration: BoxDecoration(
                     border: Border(
                       right: BorderSide(
-                          color: _kBooked.withValues(alpha: 0.2)),
+                          color: booked.withValues(alpha: 0.2)),
                     ),
                   ),
                   child: Column(
@@ -422,11 +426,11 @@ class _SessionRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(Fmt.time(session.startTime),
-                          style: const TextStyle(
-                              color: _kBooked, fontWeight: FontWeight.w700)),
+                          style: TextStyle(
+                              color: booked, fontWeight: FontWeight.w700)),
                       Text(Fmt.time(endTime),
-                          style: const TextStyle(
-                              color: _kBooked, fontWeight: FontWeight.w700)),
+                          style: TextStyle(
+                              color: booked, fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -443,10 +447,9 @@ class _SessionRow extends StatelessWidget {
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: _kBooked.withValues(alpha: 0.15),
+                            color: booked.withValues(alpha: 0.15),
                           ),
-                          child: const Icon(Icons.person,
-                              size: 18, color: _kBooked),
+                          child: Icon(Icons.person, size: 18, color: booked),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -548,18 +551,19 @@ class _SlotRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final accent = isPast ? scheme.onSurfaceVariant : _kAvailable;
+    final available = AppColors.of(context).success;
+    final accent = isPast ? scheme.onSurfaceVariant : available;
     return Opacity(
       opacity: isPast ? 0.5 : 1,
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: isPast ? null : _kAvailable.withValues(alpha: 0.04),
+          color: isPast ? null : available.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isPast
                 ? scheme.outlineVariant.withValues(alpha: 0.12)
-                : _kAvailable.withValues(alpha: 0.3),
+                : available.withValues(alpha: 0.3),
           ),
         ),
         child: IntrinsicHeight(
@@ -669,6 +673,7 @@ class _Legend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
       decoration: BoxDecoration(
@@ -681,8 +686,8 @@ class _Legend extends StatelessWidget {
         spacing: 20,
         runSpacing: 8,
         children: [
-          _LegendDot(color: _kBooked, label: 'Booked'),
-          _LegendDot(color: _kAvailable, label: 'Available'),
+          _LegendDot(color: colors.info, label: 'Booked'),
+          _LegendDot(color: colors.success, label: 'Available'),
           _LegendDot(
               color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
               label: 'Unavailable'),

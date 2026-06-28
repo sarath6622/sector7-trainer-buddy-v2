@@ -1,19 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
+import '../../../core/theme/app_theme.dart';
 import '../data/rest_timer_controller.dart';
 import '../data/session_pause_controller.dart';
 import '../domain/rest_timer_state.dart';
 
-// Rest-timer semantics borrow the web's colour language (blue running, emerald
-// done, amber paused) rather than the app's orange brand accent, so the floor
-// controls read as utility timers, not brand chrome.
-const _kRunning = Color(0xFF3B82F6); // blue-500
-const _kDone = Color(0xFF22C55E); // green-500
-const _kPaused = Color(0xFFF59E0B); // amber-500
+// Rest-timer semantics borrow a utility colour language (info = running,
+// success = done, amber = paused) rather than the app's orange brand accent, so
+// the floor controls read as utility timers, not brand chrome. Running/done are
+// the design-system info/success colours, resolved theme-aware via AppColors at
+// the call sites below.
+const _kPaused = Color(0xFFF59E0B); // amber-500 — paused
 
 const _kRestPresets = <(String, int)>[
   ('1 min', 60),
@@ -144,7 +145,7 @@ class _RestTimerControlState extends ConsumerState<RestTimerControl> {
         _prevRemaining! > 0 &&
         r == 0 &&
         snap.timer.total != null) {
-      HapticFeedback.vibrate();
+      Haptics.success();
     }
     _prevRemaining = r;
     setState(() {});
@@ -186,7 +187,8 @@ class _RestTimerControlState extends ConsumerState<RestTimerControl> {
       );
     }
 
-    final accent = isDone ? _kDone : _kRunning;
+    final colors = AppColors.of(context);
+    final accent = isDone ? colors.success : colors.info;
     return Material(
       color: accent.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(12),
@@ -314,6 +316,7 @@ class _RestTimerSheetState extends ConsumerState<RestTimerSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
     final snap = ref.watch(restTimerControllerProvider(widget.sessionId));
     final now = DateTime.now().millisecondsSinceEpoch;
     final timer = snap.timer;
@@ -322,7 +325,7 @@ class _RestTimerSheetState extends ConsumerState<RestTimerSheet> {
     final isPaused = timer.isPaused;
     final isRunning = timer.isRunning(now, snap.skewMs);
     final progress = timer.progress(now, snap.skewMs);
-    final accent = isDone ? _kDone : _kRunning;
+    final accent = isDone ? colors.success : colors.info;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -352,7 +355,7 @@ class _RestTimerSheetState extends ConsumerState<RestTimerSheet> {
                 padding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
                 child: Row(
                   children: [
-                    Icon(Icons.hotel_rounded, size: 18, color: _kRunning),
+                    Icon(Icons.hotel_rounded, size: 18, color: colors.info),
                     const SizedBox(width: 8),
                     Text(
                       'Rest timer',
@@ -467,7 +470,8 @@ class _RestTimerSheetState extends ConsumerState<RestTimerSheet> {
                         onPressed: _controller.stop,
                         icon: const Icon(Icons.refresh_rounded),
                         label: const Text('Reset'),
-                        style: OutlinedButton.styleFrom(foregroundColor: _kDone),
+                        style:
+                            OutlinedButton.styleFrom(foregroundColor: colors.success),
                       ),
                     const SizedBox(height: 20),
                     Align(
@@ -558,7 +562,9 @@ class _PresetButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: selected ? _kRunning : scheme.surfaceContainerHighest,
+      color: selected
+          ? AppColors.of(context).info
+          : scheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,

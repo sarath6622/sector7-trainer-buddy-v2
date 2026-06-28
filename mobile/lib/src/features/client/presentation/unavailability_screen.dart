@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/util/formatters.dart';
 import '../data/client_extras_models.dart';
@@ -86,7 +87,7 @@ class _UnavailabilityScreenState extends ConsumerState<UnavailabilityScreen> {
         label: const Text('Mark a date'),
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(unavailabilityProvider.future),
+        onRefresh: () => Haptics.onRefresh(() => ref.refresh(unavailabilityProvider.future)),
         child: dates.when(
           loading: () => const SkeletonList(),
           error: (e, _) => ListView(children: [

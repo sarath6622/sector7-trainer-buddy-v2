@@ -5,6 +5,8 @@ import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/feedback/haptics.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -17,13 +19,15 @@ import 'widgets/client_widgets.dart';
 import 'widgets/client_workout_calendar_card.dart';
 
 // ── Accent palette (Tailwind 500s used by the PWA dashboard) ──────────────────
+// "success" (green) and "error/urgent" (red) map to the design-system colours
+// (theme-aware, resolved via AppColors at the call sites). The remaining accents
+// (emerald, blue metric/stat, violet, gold/silver/bronze, …) are decorative and
+// kept as-is.
 const _emerald = Color(0xFF10B981);
-const _green = Color(0xFF22C55E);
 const _blue = Color(0xFF3B82F6);
 const _amber = Color(0xFFF59E0B);
 const _violet = Color(0xFF8B5CF6);
 const _orange = Color(0xFFF97316);
-const _red = Color(0xFFEF4444);
 const _gold = Color(0xFFFBBF24);
 const _silver = Color(0xFFA1A1AA);
 const _bronze = Color(0xFFC2410C);
@@ -46,6 +50,7 @@ class ClientDashboardScreen extends ConsumerWidget {
         bottom: false,
         child: RefreshIndicator(
           onRefresh: () async {
+            Haptics.tap();
             ref.invalidate(clientDashboardProvider);
             ref.invalidate(badgesProvider);
             await ref.read(clientDashboardProvider.future);
@@ -248,6 +253,7 @@ class _PackageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
     final days = expiry.daysUntilExpiry;
     final urgent = !expiry.isExpired && days != null && days <= 7;
     final endLabel = expiry.endDate != null
@@ -312,7 +318,7 @@ class _PackageCard extends StatelessWidget {
     }
 
     final barColor = urgent
-        ? _red
+        ? colors.error
         : (expiry.progress >= 0.75 ? _amber : scheme.primary);
     return _Panel(
       child: Column(
@@ -336,8 +342,8 @@ class _PackageCard extends StatelessWidget {
               ),
               _pill(
                 urgent ? 'Expiring soon' : 'Active',
-                urgent ? _red : _emerald,
-                (urgent ? _red : _emerald).withValues(alpha: 0.15),
+                urgent ? colors.error : _emerald,
+                (urgent ? colors.error : _emerald).withValues(alpha: 0.15),
               ),
             ],
           ),
@@ -355,7 +361,7 @@ class _PackageCard extends StatelessWidget {
                       fontSize: 30,
                       height: 1,
                       fontWeight: FontWeight.w800,
-                      color: urgent ? _red : scheme.onSurface,
+                      color: urgent ? colors.error : scheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -444,6 +450,7 @@ class _ActiveSessionBannerState extends State<_ActiveSessionBanner> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     final s = widget.session;
     final started = s.startedAt;
     final elapsed = started != null
@@ -461,10 +468,10 @@ class _ActiveSessionBannerState extends State<_ActiveSessionBanner> {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [_green, Color(0xFF059669)],
+              colors: [colors.success, const Color(0xFF059669)],
             ),
           ),
           padding: const EdgeInsets.all(18),
@@ -1480,12 +1487,13 @@ class _NoShowWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final red = AppColors.of(context).error;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _red.withValues(alpha: 0.05),
+        color: red.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _red.withValues(alpha: 0.2)),
+        border: Border.all(color: red.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -1493,10 +1501,10 @@ class _NoShowWarning extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: _red.withValues(alpha: 0.15),
+              color: red.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.error_outline, size: 18, color: _red),
+            child: Icon(Icons.error_outline, size: 18, color: red),
           ),
           const SizedBox(width: 12),
           Expanded(

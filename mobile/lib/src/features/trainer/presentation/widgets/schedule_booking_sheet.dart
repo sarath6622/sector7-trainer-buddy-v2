@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/feedback/haptics.dart';
 import '../../../../core/util/formatters.dart';
 import '../../data/trainer_repository.dart';
 
@@ -272,12 +273,14 @@ class _ScheduleBookingSheetState extends ConsumerState<ScheduleBookingSheet> {
             durationMin: _durationMin,
           );
       if (!mounted) return;
+      Haptics.success();
       widget.onBooked();
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Session scheduled')));
     } catch (e) {
       if (!mounted) return;
+      Haptics.error();
       final msg = e.toString();
       setState(() {
         _saving = false;

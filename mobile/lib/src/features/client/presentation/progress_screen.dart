@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -158,6 +159,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
       appBar: AppBar(title: const Text('Progress')),
       body: RefreshIndicator(
         onRefresh: () async {
+          Haptics.tap();
           ref.invalidate(progressEntriesProvider);
           for (final m in ChartMetric.values) {
             ref.invalidate(progressChartProvider(m));

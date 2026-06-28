@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/feedback/haptics.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -9,10 +11,9 @@ import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/trainer_models.dart';
 import '../data/trainer_repository.dart';
 
-// Accent palette — shared with the dashboard / schedule.
-const _kDone = Color(0xFF22C55E); // emerald-500
-const _kScheduled = Color(0xFF3B82F6); // blue-500
-const _kNoShow = Color(0xFFEF4444); // red-500
+// Accent palette — shared with the dashboard / schedule. Done/scheduled/no-show
+// map to the design-system success/info/error colours (theme-aware, resolved
+// via AppColors at the call sites below).
 const _kAmber = Color(0xFFF59E0B); // amber-500
 
 /// Trainer "Clients" tab — the active roster with rich per-client context: a
@@ -29,7 +30,7 @@ class TrainerClientsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Clients')),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(trainerClientsProvider.future),
+        onRefresh: () => Haptics.onRefresh(() => ref.refresh(trainerClientsProvider.future)),
         child: clients.when(
           loading: () => const SkeletonList(),
           error: (e, _) => ListView(
@@ -215,6 +216,7 @@ class _UsageBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
     final used = stats.used;
     final scheduled = stats.scheduled;
     // Scale to whichever is larger so an over-quota month still fills cleanly.
@@ -262,11 +264,12 @@ class _UsageBlock extends StatelessWidget {
             height: 10,
             child: Row(
               children: [
-                if (used > 0) Expanded(flex: used, child: const ColoredBox(color: _kDone)),
+                if (used > 0)
+                  Expanded(flex: used, child: ColoredBox(color: colors.success)),
                 if (scheduled > 0)
                   Expanded(
                     flex: scheduled,
-                    child: ColoredBox(color: _kScheduled.withValues(alpha: 0.55)),
+                    child: ColoredBox(color: colors.info.withValues(alpha: 0.55)),
                   ),
                 Expanded(
                   flex: (denom - used - scheduled).clamp(0, denom),
@@ -282,10 +285,10 @@ class _UsageBlock extends StatelessWidget {
           spacing: 14,
           runSpacing: 4,
           children: [
-            _StatDot(color: _kDone, label: '${stats.completed} done'),
-            _StatDot(color: _kScheduled, label: '$scheduled scheduled'),
+            _StatDot(color: colors.success, label: '${stats.completed} done'),
+            _StatDot(color: colors.info, label: '$scheduled scheduled'),
             if (stats.noShow > 0)
-              _StatDot(color: _kNoShow, label: '${stats.noShow} no-show'),
+              _StatDot(color: colors.error, label: '${stats.noShow} no-show'),
             _StatDot(
                 color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
                 label: '$free left'),
@@ -303,19 +306,22 @@ class _OutcomeChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     return Row(
       children: [
         Expanded(
             child: _MiniStat(
-                value: stats.completed, label: 'Done', color: _kDone)),
+                value: stats.completed, label: 'Done', color: colors.success)),
         const SizedBox(width: 8),
         Expanded(
             child: _MiniStat(
-                value: stats.scheduled, label: 'Scheduled', color: _kScheduled)),
+                value: stats.scheduled,
+                label: 'Scheduled',
+                color: colors.info)),
         const SizedBox(width: 8),
         Expanded(
             child: _MiniStat(
-                value: stats.noShow, label: 'No-show', color: _kNoShow)),
+                value: stats.noShow, label: 'No-show', color: colors.error)),
       ],
     );
   }
@@ -424,11 +430,12 @@ class _DaysLeftChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     final color = daysLeft <= 7
-        ? _kNoShow
+        ? colors.error
         : daysLeft <= 14
             ? _kAmber
-            : _kDone;
+            : colors.success;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(

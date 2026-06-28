@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/feedback/haptics.dart';
 import '../../data/trainer_repository.dart';
 
 /// Shared session-lifecycle actions for the trainer (start / end / no-show).
@@ -21,6 +22,7 @@ class TrainerSessionActions {
         sessionId,
         action: (repo) => repo.startSession(sessionId),
         successMessage: 'Session started',
+        successHaptic: Haptics.primary,
       );
 
   static Future<bool> end(
@@ -37,6 +39,7 @@ class TrainerSessionActions {
       sessionId,
       action: (repo) => repo.endSession(sessionId, notes: notes),
       successMessage: 'Session completed',
+      successHaptic: Haptics.success,
     );
   }
 
@@ -59,6 +62,7 @@ class TrainerSessionActions {
       sessionId,
       action: (repo) => repo.markNoShow(sessionId),
       successMessage: 'Marked as no-show',
+      successHaptic: Haptics.warning,
     );
   }
 
@@ -68,9 +72,11 @@ class TrainerSessionActions {
     String sessionId, {
     required Future<void> Function(TrainerRepository repo) action,
     required String successMessage,
+    required VoidCallback successHaptic,
   }) async {
     try {
       await action(ref.read(trainerRepositoryProvider));
+      successHaptic();
       // Refresh every surface that shows this session or its rollups.
       ref.invalidate(trainerSessionProvider(sessionId));
       ref.invalidate(trainerTodayProvider);
@@ -82,6 +88,7 @@ class TrainerSessionActions {
       }
       return true;
     } catch (e) {
+      Haptics.error();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(_message(e))),

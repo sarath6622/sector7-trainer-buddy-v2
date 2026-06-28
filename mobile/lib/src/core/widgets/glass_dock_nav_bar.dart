@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../feedback/haptics.dart';
+import '../theme/app_theme.dart';
+
 /// Approximate rendered height of the dock body (icon + label + inner padding +
 /// border), excluding the gap below it.
 const double _kDockBodyHeight = 67;
@@ -49,18 +52,17 @@ class GlassDockNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
     final isDark = scheme.brightness == Brightness.dark;
 
     // Fully opaque: with no blur underneath, any translucency lets content
     // scrolling beneath the dock ghost through like a watermark. A subtle
     // top→bottom gradient keeps a little depth so it still reads as a floating
-    // panel rather than a flat bar.
+    // panel rather than a flat bar — floating → elevated surface in dark.
     final List<Color> fill = isDark
-        ? const [Color(0xFF1C1C1E), Color(0xFF141416)]
-        : const [Colors.white, Color(0xFFF2F2F5)];
-    final borderColor = isDark
-        ? Colors.white.withValues(alpha: 0.12)
-        : Colors.black.withValues(alpha: 0.06);
+        ? [colors.surfaceFloating, colors.surfaceElevated]
+        : const [Colors.white, AppTheme.lightSurfaceSecondary];
+    final borderColor = isDark ? colors.border : colors.borderSubtle;
 
     // The dock surface: the tint + the nav row.
     final Widget surface = DecoratedBox(
@@ -169,7 +171,12 @@ class _GlassDockItem extends StatelessWidget {
       // A small gap between items so adjacent highlights never touch.
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          // A light selection tick when switching to a different tab (re-tapping
+          // the active tab is a no-op, so it stays silent).
+          if (!selected) Haptics.select();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),

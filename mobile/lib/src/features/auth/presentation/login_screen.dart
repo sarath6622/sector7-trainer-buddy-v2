@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
+import '../../../core/theme/app_theme.dart';
 import '../application/auth_controller.dart';
 
 /// Sign-in screen — a Flutter port of the PWA's `(auth)/login` page.
@@ -21,15 +23,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _password = TextEditingController();
   bool _showPassword = false;
 
-  // ── Pinned dark palette (mirrors the PWA login's zinc/brand tokens) ─────────
-  static const _bg = Color(0xFF070707); // bg-zinc-950
-  static const _card = Color(0xFF141417); // zinc-900/80 over black
-  static const _border = Color(0x14FFFFFF); // white/8%
-  static const _fieldFill = Color(0x0AFFFFFF); // white/4%
-  static const _orange = Color(0xFFE15A2B); // --primary (dark)
-  static const _white = Color(0xFFFAFAFA);
-  static const _zinc400 = Color(0xFFA1A1AA);
-  static const _zinc500 = Color(0xFF71717A);
+  // ── Pinned dark palette (Sector 7 dark UI tokens; always dark here) ─────────
+  static const _bg = AppTheme.darkCanvas; // page background
+  static const _card = AppTheme.darkSurface; // sign-in card
+  static const _border = AppTheme.darkBorder; // card / field borders
+  static const _fieldFill = Color(0x0AFFFFFF); // white/4% — subtle input fill
+  static const _orange = AppTheme.brand; // --primary
+  static const _white = AppTheme.darkTextPrimary;
+  static const _zinc400 = AppTheme.darkTextSecondary;
+  static const _zinc500 = AppTheme.darkTextTertiary;
   static const _zinc600 = Color(0xFF52525B);
   static const _zinc700 = Color(0xFF3F3F46);
   static const _red400 = Color(0xFFF87171);
@@ -44,6 +46,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _submit() {
     FocusScope.of(context).unfocus();
     if (_formKey.currentState?.validate() ?? false) {
+      Haptics.primary(); // confirm the tap registered; the result buzzes below
       ref
           .read(authControllerProvider.notifier)
           .login(_email.text, _password.text);
@@ -52,6 +55,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Buzz the outcome of an *interactive* sign-in: success when the credentials
+    // land, error when they're rejected. Gated on the prior state being
+    // `authenticating` so a silent token-restore on cold start stays quiet.
+    ref.listen<AuthState>(authControllerProvider, (prev, next) {
+      if (prev?.status != AuthStatus.authenticating) return;
+      if (next.status == AuthStatus.authenticated) {
+        Haptics.success();
+      } else if (next.error != null) {
+        Haptics.error();
+      }
+    });
+
     final state = ref.watch(authControllerProvider);
     final busy = state.status == AuthStatus.authenticating;
 

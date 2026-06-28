@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -28,6 +29,7 @@ class TrainerLeavesScreen extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () {
+          Haptics.tap();
           ref.invalidate(trainerLeaveBalanceProvider);
           return ref.refresh(trainerLeavesProvider.future);
         },
@@ -280,10 +282,13 @@ class _ApplyLeaveSheetState extends ConsumerState<_ApplyLeaveSheet> {
             endDate: TrainerRepository.ymd(_end),
             reason: _reason.text.trim(),
           );
+      Haptics.success();
       if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {
+      Haptics.error();
       setState(() => _error = e.message);
     } catch (e) {
+      Haptics.error();
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _submitting = false);

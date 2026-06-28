@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/feedback/haptics.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -15,9 +17,8 @@ import 'widgets/client_workout_calendar.dart';
 import 'widgets/trainer_actions.dart';
 
 // Dashboard accent palette — semantic, shared with the web trainer dashboard.
-const _kScheduled = Color(0xFF3B82F6); // blue-500
-const _kLive = Color(0xFF22C55E); // emerald-500
-const _kNoShow = Color(0xFFEF4444); // red-500
+// Scheduled/live/no-show map to the design-system info/success/error colours
+// (theme-aware, resolved via AppColors at the call sites below).
 const _kAmber = Color(0xFFF59E0B); // amber-500
 
 /// A today session that has been *started* (in progress with a start time).
@@ -52,7 +53,7 @@ class TrainerTodayScreen extends ConsumerWidget {
         top: false,
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: refreshAll,
+          onRefresh: () => Haptics.onRefresh(refreshAll),
           child: today.when(
             loading: () => const _LoadingList(),
             error: (e, _) => ListView(
@@ -304,27 +305,28 @@ class _TodaySessionTile extends StatelessWidget {
   const _TodaySessionTile({required this.session});
   final TrainerSession session;
 
-  ({Color accent, Color bg, Color fg, String label}) _style(ColorScheme s) {
+  ({Color accent, Color bg, Color fg, String label}) _style(
+      ColorScheme s, AppColors c) {
     switch (session.status) {
       case SessionStatus.inProgress:
         return (
-          accent: _kLive,
-          bg: _kLive.withValues(alpha: 0.15),
-          fg: _kLive,
+          accent: c.success,
+          bg: c.success.withValues(alpha: 0.15),
+          fg: c.success,
           label: 'In Progress',
         );
       case SessionStatus.scheduled:
         return (
-          accent: _kScheduled,
-          bg: _kScheduled.withValues(alpha: 0.12),
-          fg: _kScheduled,
+          accent: c.info,
+          bg: c.info.withValues(alpha: 0.12),
+          fg: c.info,
           label: 'Scheduled',
         );
       case SessionStatus.noShow:
         return (
-          accent: _kNoShow,
-          bg: _kNoShow.withValues(alpha: 0.12),
-          fg: _kNoShow,
+          accent: c.error,
+          bg: c.error.withValues(alpha: 0.12),
+          fg: c.error,
           label: 'No Show',
         );
       case SessionStatus.completed:
@@ -348,7 +350,8 @@ class _TodaySessionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final st = _style(scheme);
+    final colors = AppColors.of(context);
+    final st = _style(scheme, colors);
     final isCancelled = session.status == SessionStatus.cancelled;
     final isLive = session.status == SessionStatus.inProgress;
     final parts = Fmt.time(session.scheduledTime).split(' ');
@@ -359,12 +362,12 @@ class _TodaySessionTile extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: isLive
-              ? _kLive.withValues(alpha: 0.06)
+              ? colors.success.withValues(alpha: 0.06)
               : scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isLive
-                ? _kLive.withValues(alpha: 0.3)
+                ? colors.success.withValues(alpha: 0.3)
                 : scheme.outlineVariant.withValues(alpha: 0.08),
           ),
         ),
@@ -546,6 +549,7 @@ class _TodayActionsState extends ConsumerState<_TodayActions> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
     final id = widget.session.id;
     switch (widget.session.status) {
       case SessionStatus.scheduled:
@@ -555,7 +559,7 @@ class _TodayActionsState extends ConsumerState<_TodayActions> {
               child: FilledButton.icon(
                 onPressed: _busy ? null : _start,
                 style: FilledButton.styleFrom(
-                  backgroundColor: _kLive,
+                  backgroundColor: colors.success,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 10),
                 ),
@@ -576,8 +580,8 @@ class _TodayActionsState extends ConsumerState<_TodayActions> {
             OutlinedButton.icon(
               onPressed: _busy ? null : _noShow,
               style: OutlinedButton.styleFrom(
-                foregroundColor: _kNoShow,
-                side: BorderSide(color: _kNoShow.withValues(alpha: 0.4)),
+                foregroundColor: colors.error,
+                side: BorderSide(color: colors.error.withValues(alpha: 0.4)),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 10,
@@ -594,7 +598,7 @@ class _TodayActionsState extends ConsumerState<_TodayActions> {
           child: FilledButton.icon(
             onPressed: () => context.push('/trainer/sessions/$id'),
             style: FilledButton.styleFrom(
-              backgroundColor: _kLive,
+              backgroundColor: colors.success,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 11),
             ),
@@ -838,6 +842,7 @@ class _StatStripSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final month =
         ref.watch(trainerMonthSessionsProvider).valueOrNull ?? const [];
+    final colors = AppColors.of(context);
     final total = month.length;
     final done = month.where((s) => s.status == SessionStatus.completed).length;
     final noShow = month.where((s) => s.status == SessionStatus.noShow).length;
@@ -852,7 +857,7 @@ class _StatStripSection extends ConsumerWidget {
             icon: Icons.event_note_outlined,
             value: '$total',
             label: 'Total',
-            color: _kScheduled,
+            color: colors.info,
           ),
         ),
         const SizedBox(width: 8),
@@ -861,7 +866,7 @@ class _StatStripSection extends ConsumerWidget {
             icon: Icons.check_circle_outline,
             value: '$done',
             label: 'Done',
-            color: _kLive,
+            color: colors.success,
           ),
         ),
         const SizedBox(width: 8),
@@ -870,7 +875,7 @@ class _StatStripSection extends ConsumerWidget {
             icon: Icons.cancel_outlined,
             value: '$noShow',
             label: 'No-show',
-            color: _kNoShow,
+            color: colors.error,
           ),
         ),
         const SizedBox(width: 8),
@@ -1027,13 +1032,14 @@ class _PackageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
     final pkg = client.package!;
     final daysLeft = pkg.daysLeft ?? 0;
     final urgency = daysLeft <= 7
-        ? _kNoShow
+        ? colors.error
         : daysLeft <= 14
         ? _kAmber
-        : _kLive;
+        : colors.success;
     final pct = (pkg.fractionUsed * 100).round();
 
     return Row(
@@ -1136,7 +1142,7 @@ class _QuickLinks extends StatelessWidget {
         Expanded(
           child: _QuickLink(
             icon: Icons.event_repeat_outlined,
-            color: _kScheduled,
+            color: AppColors.of(context).info,
             title: 'Reschedules',
             subtitle: 'Review requests',
             onTap: () => context.push('/trainer/reschedule-requests'),

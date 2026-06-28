@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -20,7 +21,7 @@ class TrainerRescheduleScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Reschedule Requests')),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(trainerRescheduleProvider.future),
+        onRefresh: () => Haptics.onRefresh(() => ref.refresh(trainerRescheduleProvider.future)),
         child: requests.when(
           loading: () => const SkeletonList(),
           error: (e, _) => ListView(
@@ -79,14 +80,17 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
         await repo.rejectReschedule(widget.request.id, notes: notes);
       }
       ref.invalidate(trainerRescheduleProvider);
+      approve ? Haptics.success() : Haptics.warning();
       messenger.showSnackBar(
         SnackBar(content: Text(approve ? 'Request approved' : 'Request rejected')),
       );
     } on ApiException catch (e) {
       if (mounted) setState(() => _busy = false);
+      Haptics.error();
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (mounted) setState(() => _busy = false);
+      Haptics.error();
       messenger.showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }

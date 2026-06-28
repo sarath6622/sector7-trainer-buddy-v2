@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/util/formatters.dart';
 import '../../client/data/client_extras_models.dart';
 import '../../client/data/progress_models.dart';
@@ -31,8 +32,8 @@ class TrainerClientDetailScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: Text(client?.name ?? 'Client')),
       body: RefreshIndicator(
-        onRefresh: () =>
-            ref.refresh(trainerClientDetailProvider(clientProfileId).future),
+        onRefresh: () => Haptics.onRefresh(
+            () => ref.refresh(trainerClientDetailProvider(clientProfileId).future)),
         child: detail.when(
           loading: () => const SkeletonList(),
           error: (e, _) => ListView(

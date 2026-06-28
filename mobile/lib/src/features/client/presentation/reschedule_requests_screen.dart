@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/util/formatters.dart';
 import '../data/client_extras_models.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -17,7 +18,7 @@ class RescheduleRequestsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Reschedule requests')),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(rescheduleRequestsProvider.future),
+        onRefresh: () => Haptics.onRefresh(() => ref.refresh(rescheduleRequestsProvider.future)),
         child: requests.when(
           loading: () => const SkeletonList(),
           error: (e, _) => ListView(children: [

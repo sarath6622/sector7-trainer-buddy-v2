@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/feedback/haptics.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/util/formatters.dart';
 import '../../../../core/widgets/skeleton.dart';
 import '../../../trainer/data/trainer_models.dart' show WorkoutCalendarDay;
@@ -8,7 +10,8 @@ import '../../data/client_repository.dart';
 import '../../data/progress_models.dart' show WorkoutHistoryEntry;
 import 'client_widgets.dart' show WorkoutLogCard;
 
-const _kWorkout = Color(0xFF22C55E); // emerald-500 — a logged PT day
+// A logged PT day maps to the design-system success colour (theme-aware,
+// resolved via AppColors at the call sites below).
 const _kPR = Color(0xFFFBBF24); // amber-400 — a PR day
 const _kToday = Color(0xFFF97316); // orange-500 — today's ring
 
@@ -119,17 +122,20 @@ class _ClientWorkoutCalendarCardState
           ),
           Divider(height: 1, color: scheme.outlineVariant),
           // Legend.
-          const Padding(
-            padding: EdgeInsets.fromLTRB(12, 10, 12, 14),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
             child: Wrap(
               alignment: WrapAlignment.center,
               spacing: 16,
               runSpacing: 8,
               children: [
-                _LegendItem(color: _kWorkout, label: 'Workout', filled: true),
-                _LegendItem(color: _kPR, label: 'PR Day', star: true),
-                _LegendItem(color: _kToday, label: 'Today', ring: true),
-                _LegendItem(color: null, label: 'No workout'),
+                _LegendItem(
+                    color: AppColors.of(context).success,
+                    label: 'Workout',
+                    filled: true),
+                const _LegendItem(color: _kPR, label: 'PR Day', star: true),
+                const _LegendItem(color: _kToday, label: 'Today', ring: true),
+                const _LegendItem(color: null, label: 'No workout'),
               ],
             ),
           ),
@@ -216,6 +222,7 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final workout = AppColors.of(context).success;
     final clickable = day != null;
 
     Color border = Colors.transparent;
@@ -226,16 +233,21 @@ class _DayCell extends StatelessWidget {
       bg = _kPR.withValues(alpha: 0.1);
       fg = _kPR;
     } else if (day != null) {
-      border = _kWorkout.withValues(alpha: 0.6);
-      bg = _kWorkout.withValues(alpha: 0.1);
-      fg = _kWorkout;
+      border = workout.withValues(alpha: 0.6);
+      bg = workout.withValues(alpha: 0.1);
+      fg = workout;
     } else if (inMonth) {
       border = scheme.outlineVariant.withValues(alpha: 0.14);
     }
 
     return Center(
       child: GestureDetector(
-        onTap: clickable ? () => onTapDay(_ymd(date), day!.isPR) : null,
+        onTap: clickable
+            ? () {
+                Haptics.select();
+                onTapDay(_ymd(date), day!.isPR);
+              }
+            : null,
         child: Container(
           width: 36,
           height: 36,

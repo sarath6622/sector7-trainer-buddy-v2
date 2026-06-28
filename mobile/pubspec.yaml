@@ -1,7 +1,7 @@
 name: sector7_mobile
 description: 'Sector 7 — gym member & PT session mobile client (Trainer + Client).'
 publish_to: 'none'
-version: 0.1.0+8
+version: 0.1.0+9
 
 environment:
   sdk: ^3.10.0
@@ -56,6 +56,8 @@ dependencies:
   firebase_remote_config: ^6.5.3
   firebase_crashlytics: ^5.2.4
   package_info_plus: ^9.0.1
+  haptic_feedback: ^0.6.4+3
+  audioplayers: ^6.7.1
 
   # ── Added in later phases (need native config; see docs/flutter-migration-plan.md) ──
   # workmanager                   → true OS-background sync (deferred; needs iOS BGTaskScheduler
@@ -109,3 +111,6 @@ flutter:
     # Individual letter glyphs for the animated cold-start splash (S E C 7 O R
     # + FITNESS / GYM CROSSFIT), mirroring the PWA's /splash-vector/* sequence.
     - assets/splash/
+    # Short UI sound effects (the workout "completed" chime). Played via an
+    # ambient/mix-with-others audio session so it never pauses the user's music.
+    - assets/sounds/

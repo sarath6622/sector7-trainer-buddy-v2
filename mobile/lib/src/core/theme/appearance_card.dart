@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../feedback/feedback_prefs.dart';
 import 'theme_mode_controller.dart';
 
-/// A settings card that lets the user choose Light / System / Dark.
+/// A settings card that lets the user choose Light / System / Dark, and toggle
+/// haptic feedback and UI sounds.
 ///
 /// Drops straight into the Profile/Settings [ListView]s for both roles. Reads
-/// and writes the persisted [themeModeProvider]; the change applies app-wide
-/// immediately.
+/// and writes the persisted [themeModeProvider] and [feedbackSettingsProvider];
+/// every change applies app-wide immediately.
 class AppearanceCard extends ConsumerWidget {
   const AppearanceCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(themeModeProvider);
+    final feedback = ref.watch(feedbackSettingsProvider);
     final scheme = Theme.of(context).colorScheme;
 
     return Card(
@@ -62,6 +65,32 @@ class AppearanceCard extends ConsumerWidget {
                     .read(themeModeProvider.notifier)
                     .setMode(selection.first),
               ),
+            ),
+            const SizedBox(height: 6),
+            Divider(height: 1, color: scheme.outlineVariant),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: Icon(
+                Icons.vibration,
+                color: scheme.onSurfaceVariant,
+              ),
+              title: const Text('Haptics'),
+              subtitle: const Text('Vibration feedback on taps and actions'),
+              value: feedback.haptics,
+              onChanged: (v) =>
+                  ref.read(feedbackSettingsProvider.notifier).setHaptics(v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: Icon(
+                Icons.volume_up_outlined,
+                color: scheme.onSurfaceVariant,
+              ),
+              title: const Text('Sounds'),
+              subtitle: const Text('A chime when you complete an exercise'),
+              value: feedback.sound,
+              onChanged: (v) =>
+                  ref.read(feedbackSettingsProvider.notifier).setSound(v),
             ),
           ],
         ),

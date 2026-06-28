@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/feedback/haptics.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formatters.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -9,19 +11,19 @@ import '../data/client_models.dart';
 import '../data/client_repository.dart';
 import 'widgets/client_widgets.dart';
 
-const _blue = Color(0xFF3B82F6);
-const _green = Color(0xFF22C55E);
+// Scheduled/in-progress/cancelled map to the design-system info/success/error
+// colours (theme-aware); completed keeps its distinct emerald.
 const _emerald = Color(0xFF10B981);
 const _amber = Color(0xFFF59E0B);
-const _red = Color(0xFFEF4444);
 
-({String label, Color color, IconData icon}) _statusConfig(SessionStatus s) =>
+({String label, Color color, IconData icon}) _statusConfig(
+        SessionStatus s, AppColors c) =>
     switch (s) {
-      SessionStatus.scheduled => (label: 'Scheduled', color: _blue, icon: Icons.event),
-      SessionStatus.inProgress => (label: 'In Progress', color: _green, icon: Icons.play_circle),
+      SessionStatus.scheduled => (label: 'Scheduled', color: c.info, icon: Icons.event),
+      SessionStatus.inProgress => (label: 'In Progress', color: c.success, icon: Icons.play_circle),
       SessionStatus.completed => (label: 'Completed', color: _emerald, icon: Icons.check_circle),
       SessionStatus.noShow => (label: 'No Show', color: _amber, icon: Icons.error_outline),
-      SessionStatus.cancelled => (label: 'Cancelled', color: _red, icon: Icons.cancel_outlined),
+      SessionStatus.cancelled => (label: 'Cancelled', color: c.error, icon: Icons.cancel_outlined),
       SessionStatus.unknown => (label: 'Unknown', color: _amber, icon: Icons.help_outline),
     };
 
@@ -51,8 +53,8 @@ class _SessionsListScreenState extends ConsumerState<SessionsListScreen> {
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: () =>
-              ref.refresh(clientSessionsByMonthProvider(_monthKey).future),
+          onRefresh: () => Haptics.onRefresh(
+              () => ref.refresh(clientSessionsByMonthProvider(_monthKey).future)),
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, glassDockScrollInset(context)),
             children: [
@@ -92,7 +94,7 @@ class _SessionsListScreenState extends ConsumerState<SessionsListScreen> {
                   onRetry: () =>
                       ref.invalidate(clientSessionsByMonthProvider(_monthKey)),
                 ),
-                data: _content,
+                data: (all) => _content(context, all),
               ),
             ],
           ),
@@ -101,7 +103,8 @@ class _SessionsListScreenState extends ConsumerState<SessionsListScreen> {
     );
   }
 
-  Widget _content(List<SessionSummary> all) {
+  Widget _content(BuildContext context, List<SessionSummary> all) {
+    final colors = AppColors.of(context);
     final done = all.where((s) => s.status == SessionStatus.completed).length;
     final scheduled = all.where((s) => s.status == SessionStatus.scheduled).length;
     final noShow = all.where((s) => s.status == SessionStatus.noShow).length;
@@ -122,11 +125,11 @@ class _SessionsListScreenState extends ConsumerState<SessionsListScreen> {
         Row(children: [
           Expanded(child: _StatTile(value: done, label: 'Done', color: _emerald)),
           const SizedBox(width: 8),
-          Expanded(child: _StatTile(value: scheduled, label: 'Upcoming', color: _blue)),
+          Expanded(child: _StatTile(value: scheduled, label: 'Upcoming', color: colors.info)),
           const SizedBox(width: 8),
           Expanded(child: _StatTile(value: noShow, label: 'No Show', color: _amber)),
           const SizedBox(width: 8),
-          Expanded(child: _StatTile(value: cancelled, label: 'Cancelled', color: _red)),
+          Expanded(child: _StatTile(value: cancelled, label: 'Cancelled', color: colors.error)),
         ]),
         const SizedBox(height: 18),
         if (all.isEmpty)
@@ -236,7 +239,7 @@ class _SessionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final s = session;
-    final cfg = _statusConfig(s.status);
+    final cfg = _statusConfig(s.status, AppColors.of(context));
     final canView =
         s.status == SessionStatus.completed || s.status == SessionStatus.inProgress;
     final date = s.scheduledDate;

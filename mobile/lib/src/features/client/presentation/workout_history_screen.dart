@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/util/formatters.dart';
 import '../data/progress_models.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -17,7 +18,7 @@ class WorkoutHistoryScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Workout history')),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(workoutHistoryProvider.future),
+        onRefresh: () => Haptics.onRefresh(() => ref.refresh(workoutHistoryProvider.future)),
         child: history.when(
           loading: () => const SkeletonList(),
           error: (e, _) => ListView(

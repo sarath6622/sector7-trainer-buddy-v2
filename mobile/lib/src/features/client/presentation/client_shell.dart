@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/glass_dock_nav_bar.dart';
+import '../../../core/widgets/sliding_indexed_stack.dart';
 import '../../../core/widgets/status_bar_overlay.dart';
 import '../../../core/widgets/top_fade_scrim.dart';
 import '../../community/presentation/community_screen.dart';
@@ -42,7 +43,7 @@ class _ClientShellState extends ConsumerState<ClientShell> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            IndexedStack(index: _index, children: _tabs),
+            SlidingIndexedStack(index: _index, children: _tabs),
             // Dark→clear fade so content scrolls cleanly under the Dynamic Island.
             const TopFadeScrim(),
           ],

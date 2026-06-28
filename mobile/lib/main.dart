@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
@@ -6,6 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'firebase_options.dart';
+import 'src/core/feedback/feedback_prefs.dart';
+import 'src/core/feedback/haptics.dart';
+import 'src/core/feedback/sound_service.dart';
 import 'src/core/flags/force_update_gate.dart';
 import 'src/core/theme/app_theme.dart';
 import 'src/core/theme/theme_mode_controller.dart';
@@ -21,6 +26,14 @@ Future<void> main() async {
   // Disable runtime fetching so a font is never pulled over the network — a
   // missing variant surfaces loudly in dev instead of silently fetching.
   GoogleFonts.config.allowRuntimeFetching = false;
+
+  // Seed the haptic/sound preferences before the first frame so the very first
+  // interaction respects a saved choice, then probe haptic capability. The
+  // completion chime preloads in the background (non-blocking — it's only needed
+  // once the user finishes a set, long after startup).
+  await FeedbackPrefs.init();
+  await Haptics.init();
+  unawaited(SoundService.instance.init());
 
   await _initFirebase();
 

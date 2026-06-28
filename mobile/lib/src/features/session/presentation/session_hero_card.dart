@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../data/rest_timer_controller.dart';
 import '../data/session_pause_controller.dart';
 import '../domain/session_mood.dart';
@@ -10,7 +11,8 @@ import 'session_live_controls.dart' show RestTimerSheet;
 
 // Status colours — semantic (rest/idle/pause language), not the orange brand
 // accent. Same vocabulary as session_live_controls.dart + the web SessionHero.
-const _kDone = Color(0xFF22C55E); // green-500 — on track / live
+// "on track / live" maps to the design-system success colour (theme-aware,
+// resolved via AppColors at the call sites below).
 const _kPaused = Color(0xFFF59E0B); // amber-500 — paused / warn
 const _kUrgent = Color(0xFFFB7185); // rose-400  — idle / needs attention
 
@@ -119,7 +121,7 @@ class _SessionHeroCardState extends ConsumerState<SessionHeroCard> {
       isPaused: isPaused,
       lastActivityMs: widget.lastActivityMs,
     );
-    final accent = _accentFor(mood.kind);
+    final accent = _accentFor(mood.kind, AppColors.of(context).success);
     // The timer only takes a colour when it's saying something — rose when the
     // client needs attention, amber while paused, otherwise calm white.
     final timerColor =
@@ -245,8 +247,8 @@ class _SessionHeroCardState extends ConsumerState<SessionHeroCard> {
   /// Maps the shared [SessionMoodKind] to the card's single mood colour. The
   /// escalation itself lives in [resolveSessionMood] so the lock-screen Live
   /// Activity / notification reads identical state.
-  Color _accentFor(SessionMoodKind kind) => switch (kind) {
-        SessionMoodKind.live => _kDone,
+  Color _accentFor(SessionMoodKind kind, Color success) => switch (kind) {
+        SessionMoodKind.live => success,
         SessionMoodKind.paused => _kPaused,
         SessionMoodKind.idle => _kUrgent,
       };
@@ -305,7 +307,7 @@ class _Avatar extends StatelessWidget {
               width: 13,
               height: 13,
               decoration: BoxDecoration(
-                color: _kDone,
+                color: AppColors.of(context).success,
                 shape: BoxShape.circle,
                 border: Border.all(color: scheme.surfaceContainerLow, width: 2.5),
               ),

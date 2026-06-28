@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../client/presentation/widgets/client_widgets.dart';
 import '../data/exercise.dart';
@@ -89,6 +90,7 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
   }
 
   void _toggle(Exercise ex) {
+    Haptics.select();
     setState(() {
       if (_selected.containsKey(ex.id)) {
         _selected.remove(ex.id);
@@ -131,9 +133,12 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
                 _GroupCard(
                   group: g,
                   selected: _groups.contains(g.id),
-                  onTap: () => setState(() {
-                    _groups.contains(g.id) ? _groups.remove(g.id) : _groups.add(g.id);
-                  }),
+                  onTap: () {
+                    Haptics.select();
+                    setState(() {
+                      _groups.contains(g.id) ? _groups.remove(g.id) : _groups.add(g.id);
+                    });
+                  },
                 ),
             ],
           ),
@@ -286,7 +291,12 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: FilledButton.icon(
-          onPressed: n == 0 ? null : () => Navigator.pop(context, _selected.values.toList()),
+          onPressed: n == 0
+              ? null
+              : () {
+                  Haptics.primary();
+                  Navigator.pop(context, _selected.values.toList());
+                },
           icon: const Icon(Icons.add),
           label: Text(n == 0 ? 'Select exercises' : 'Add $n to workout'),
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),

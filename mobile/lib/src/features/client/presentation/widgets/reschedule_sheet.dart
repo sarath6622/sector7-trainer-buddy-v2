@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/feedback/haptics.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/util/formatters.dart';
 import '../../data/client_models.dart';
@@ -91,6 +92,7 @@ class _RescheduleFormState extends ConsumerState<_RescheduleForm> {
       ref.invalidate(rescheduleRequestsProvider);
       ref.invalidate(clientSessionProvider(widget.session.id));
       ref.invalidate(clientSessionsProvider);
+      Haptics.success();
       if (mounted) Navigator.pop(context, true);
     } on ApiException catch (e) {
       _fail(e.message);
@@ -103,6 +105,7 @@ class _RescheduleFormState extends ConsumerState<_RescheduleForm> {
 
   void _fail(String msg) {
     if (!mounted) return;
+    Haptics.error();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// Skeleton loading primitives — an animated shimmer placeholder system that
 /// replaces spinners on content-load states.
 ///
@@ -78,11 +80,12 @@ class _ShimmerState extends State<Shimmer>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
     final isDark = scheme.brightness == Brightness.dark;
     final base = scheme.surfaceContainerHigh;
     // A lighter band sweeps over the base bone colour in both themes.
     final highlight =
-        isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF7F7F7);
+        isDark ? colors.surfaceFloating : const Color(0xFFF7F7F7);
 
     return AnimatedBuilder(
       animation: _controller,

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_dock_nav_bar.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../auth/application/auth_controller.dart';
@@ -11,7 +13,8 @@ import '../data/community_repository.dart';
 
 const _orange500 = Color(0xFFF97316);
 const _orange700 = Color(0xFFC2410C);
-const _red = Color(0xFFEF4444);
+// "destructive" actions (react/report/delete) use the design-system error
+// colour, resolved theme-aware via AppColors at the call sites below.
 const _amber = Color(0xFFF59E0B);
 
 /// PR achievement banner theme — keyed off the exercise name so each lift gets a
@@ -84,8 +87,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         child: Column(
           children: [
             _Header(
-              onLeaderboard: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const _LeaderboardScreen())),
+              onLeaderboard: () {
+                Haptics.tap();
+                Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const _LeaderboardScreen()));
+              },
             ),
             Divider(height: 1, color: scheme.outlineVariant),
             Expanded(
@@ -96,7 +102,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                   onRetry: () => ref.invalidate(communityFeedControllerProvider),
                 ),
                 data: (posts) => RefreshIndicator(
-                  onRefresh: controller.refresh,
+                  onRefresh: () => Haptics.onRefresh(controller.refresh),
                   child: posts.isEmpty
                       ? ListView(children: const [
                           SizedBox(height: 80),
@@ -211,6 +217,7 @@ class _PostCardState extends ConsumerState<_PostCard> {
   CommunityPost get post => widget.post;
 
   Future<void> _react() async {
+    Haptics.tap();
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(communityFeedControllerProvider.notifier).toggleReaction(post.id);
@@ -230,6 +237,7 @@ class _PostCardState extends ConsumerState<_PostCard> {
   }
 
   void _openComments() {
+    Haptics.tap();
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -244,11 +252,13 @@ class _PostCardState extends ConsumerState<_PostCard> {
       builder: (_) => const _DeleteConfirmSheet(),
     );
     if (ok != true || !mounted) return;
+    Haptics.impact();
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(communityFeedControllerProvider.notifier).deletePost(post.id);
       messenger.showSnackBar(const SnackBar(content: Text('Post removed')));
     } catch (_) {
+      Haptics.error();
       messenger.showSnackBar(const SnackBar(content: Text('Could not delete post')));
     }
   }
@@ -259,6 +269,7 @@ class _PostCardState extends ConsumerState<_PostCard> {
       builder: (_) => const _OptionsSheet(),
     );
     if (reported != true || !mounted) return;
+    Haptics.tap();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Report submitted. We will review it shortly.')),
     );
@@ -329,7 +340,7 @@ class _PostCardState extends ConsumerState<_PostCard> {
             child: Row(children: [
               _ActionButton(
                 icon: reacted ? Icons.favorite : Icons.favorite_border,
-                color: reacted ? _red : scheme.onSurface,
+                color: reacted ? AppColors.of(context).error : scheme.onSurface,
                 count: post.reactionCount,
                 onTap: _react,
               ),
@@ -560,8 +571,9 @@ class _OptionsSheet extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                  color: _red.withValues(alpha: 0.15), shape: BoxShape.circle),
-              child: const Icon(Icons.flag_outlined, color: _red),
+                  color: AppColors.of(context).error.withValues(alpha: 0.15),
+                  shape: BoxShape.circle),
+              child: Icon(Icons.flag_outlined, color: AppColors.of(context).error),
             ),
             title: const Text('Report post', style: TextStyle(fontWeight: FontWeight.w600)),
             subtitle: const Text('Flag inappropriate content'),
@@ -584,6 +596,7 @@ class _DeleteConfirmSheet extends StatelessWidget {
   const _DeleteConfirmSheet();
   @override
   Widget build(BuildContext context) {
+    final red = AppColors.of(context).error;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -592,8 +605,8 @@ class _DeleteConfirmSheet extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-                color: _red.withValues(alpha: 0.15), shape: BoxShape.circle),
-            child: const Icon(Icons.delete_outline, color: _red),
+                color: red.withValues(alpha: 0.15), shape: BoxShape.circle),
+            child: Icon(Icons.delete_outline, color: red),
           ),
           const SizedBox(height: 12),
           const Text('Delete post?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
@@ -611,7 +624,7 @@ class _DeleteConfirmSheet extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: _red),
+                style: FilledButton.styleFrom(backgroundColor: red),
                 onPressed: () => Navigator.of(context).pop(true),
                 child: const Text('Delete'),
               ),
@@ -651,10 +664,13 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
       await ref
           .read(communityFeedControllerProvider.notifier)
           .addComment(widget.postId, text);
+      Haptics.primary();
       _controller.clear();
     } on ApiException catch (e) {
+      Haptics.error();
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
+      Haptics.error();
       messenger.showSnackBar(const SnackBar(content: Text('Could not comment')));
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -662,14 +678,17 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
   }
 
   Future<void> _delete(String commentId) async {
+    Haptics.impact();
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref
           .read(communityFeedControllerProvider.notifier)
           .deleteComment(widget.postId, commentId);
     } on ApiException catch (e) {
+      Haptics.error();
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
+      Haptics.error();
       messenger.showSnackBar(const SnackBar(content: Text('Could not delete')));
     }
   }

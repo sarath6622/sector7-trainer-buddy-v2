@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/feedback/haptics.dart';
 import '../../../core/util/formatters.dart';
 import '../data/client_extras_models.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -18,7 +19,7 @@ class BadgesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Badges')),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(badgesProvider.future),
+        onRefresh: () => Haptics.onRefresh(() => ref.refresh(badgesProvider.future)),
         child: badges.when(
           loading: () => const SkeletonList(),
           error: (e, _) => ListView(children: [
