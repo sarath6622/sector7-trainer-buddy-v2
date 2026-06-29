@@ -114,3 +114,7 @@ flutter:
     # Short UI sound effects (the workout "completed" chime). Played via an
     # ambient/mix-with-others audio session so it never pauses the user's music.
     - assets/sounds/
+    # Per-muscle-group anatomical art for the exercise cards + session-history
+    # thumbnails (keyed by curated group id; see curatedGroupImages in
+    # workout/data/muscle_groups.dart).
+    - assets/muscles/

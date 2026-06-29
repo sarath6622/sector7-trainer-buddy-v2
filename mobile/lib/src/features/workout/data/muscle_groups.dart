@@ -95,3 +95,25 @@ String? curatedGroupOf(String catalogValue) {
   }
   return null;
 }
+
+/// Full-colour anatomical art per curated group, keyed by group id. Shared by
+/// the workout logger's exercise cards and the Session-History thumbnails. A
+/// group with no asset falls back to a tinted glyph at the call site.
+const Map<String, String> curatedGroupImages = {
+  'chest': 'assets/muscles/chest.png',
+  'back': 'assets/muscles/back.png',
+  'shoulders': 'assets/muscles/shoulders.png',
+  'biceps': 'assets/muscles/biceps.png',
+  'triceps': 'assets/muscles/triceps.png',
+  'legs': 'assets/muscles/legs.png',
+  'core': 'assets/muscles/core.png',
+  'fullbody': 'assets/muscles/fullbody.png',
+};
+
+/// The bundled anatomical asset for a catalog `targetMuscleGroup` value (e.g.
+/// "Quadriceps" → legs art), or null when the value maps to no curated group.
+String? muscleGroupImageAsset(String? targetMuscleGroup) {
+  if (targetMuscleGroup == null) return null;
+  final id = curatedGroupOf(targetMuscleGroup);
+  return id == null ? null : curatedGroupImages[id];
+}

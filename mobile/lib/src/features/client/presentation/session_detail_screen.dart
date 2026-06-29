@@ -165,10 +165,8 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen>
       children: [
         const SizedBox(height: 8),
         Card(
-          // Square, edge-to-edge panel to match the workout cards below.
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+          // Inherits the theme's rounded card shape + hairline border, matching
+          // the workout cards below.
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(

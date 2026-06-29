@@ -452,11 +452,11 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
         child: Shimmer(
           child: Column(
             children: [
-              Bone(width: double.infinity, height: 96, radius: 0),
+              Bone(width: double.infinity, height: 96, radius: 14),
               SizedBox(height: 12),
-              Bone(width: double.infinity, height: 96, radius: 0),
+              Bone(width: double.infinity, height: 96, radius: 14),
               SizedBox(height: 12),
-              Bone(width: double.infinity, height: 96, radius: 0),
+              Bone(width: double.infinity, height: 96, radius: 14),
             ],
           ),
         ),
@@ -480,10 +480,11 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
       };
       logContent = Column(
         children: [
-          for (final d in drafts)
+          for (final (i, d) in drafts.indexed)
             _ExerciseCard(
               key: ValueKey(d.exerciseId),
               draft: d,
+              position: i + 1,
               expanded: _expandedExerciseId == d.exerciseId,
               lastSets: _lastSets[d.exerciseId],
               clientProfileId: _clientProfileId,
@@ -503,10 +504,10 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
         ?_syncBanner,
         Expanded(
           child: ListView(
-            // Edge-to-edge cards: no horizontal inset so panels run full width.
-            // Extra bottom inset so the floating + button never covers the last
-            // card's actions.
-            padding: const EdgeInsets.fromLTRB(0, 4, 0, 88),
+            // Cards inset from the screen edges so their rounded corners read
+            // cleanly. Extra bottom inset so the floating + button never covers
+            // the last card's actions.
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
             children: [
               ?widget.header,
               if (widget.header != null) const SizedBox(height: 12),
@@ -553,9 +554,10 @@ class WorkoutLoggerBodyState extends ConsumerState<WorkoutLoggerBody> {
 }
 
 // ─── Exercise type styling ─────────────────────────────────────────────────
-// Color is reserved for *state* (green = a completed set), not exercise type —
-// the type only changes the glyph, kept in the brand tint. This drops the
-// rainbow per-type accents that read as arbitrary on a native surface.
+// The exercise *type* sets the circle glyph; the *muscle group* sets the circle
+// colour (see _groupColor). State colour stays distinct: a completed card swaps
+// the whole circle for a green check, so the group tint only ever shows on an
+// in-progress card and never collides with the "done" signal.
 
 IconData _typeIcon(String type) {
   switch (type) {
@@ -566,9 +568,38 @@ IconData _typeIcon(String type) {
     case 'CARDIO':
       return Icons.directions_run;
     default:
-      return Icons.fitness_center;
+      return Icons.sports_gymnastics;
   }
 }
+
+/// A lively per-muscle-group tint for the active exercise circle, so a workout
+/// reads as a colourful ordered list. Keyed by curated group id ([curatedGroupOf]);
+/// greens are deliberately omitted so the tint never reads as the "completed"
+/// (success-green) state.
+const Map<String, Color> _groupColors = {
+  'chest': Color(0xFFEF4444), // red
+  'back': Color(0xFF3B82F6), // blue
+  'shoulders': Color(0xFFF59E0B), // amber
+  'biceps': Color(0xFF8B5CF6), // violet
+  'triceps': Color(0xFF14B8A6), // teal
+  'legs': Color(0xFFEC4899), // pink
+  'core': Color(0xFF06B6D4), // cyan
+  'fullbody': Color(0xFF6366F1), // indigo
+};
+
+/// The circle colour for an exercise — its muscle group's tint, falling back to
+/// the brand accent when the group is unknown / unset.
+Color _groupColor(DraftExercise d, ColorScheme scheme) {
+  final mg = d.muscleGroup;
+  final id = mg == null ? null : curatedGroupOf(mg);
+  return (id == null ? null : _groupColors[id]) ?? scheme.primary;
+}
+
+/// The bundled anatomical asset for an exercise's muscle group, or null when
+/// there isn't one yet. Art map lives in [curatedGroupImages] (shared with the
+/// Session-History thumbnails); a group with no asset falls back to the tinted
+/// circle + type glyph ([_leadingArt]).
+String? _groupImage(DraftExercise d) => muscleGroupImageAsset(d.muscleGroup);
 
 String _fmtNum(double v) => v % 1 == 0 ? v.toInt().toString() : v.toString();
 
@@ -718,6 +749,7 @@ class _ExerciseCard extends StatelessWidget {
   const _ExerciseCard({
     super.key,
     required this.draft,
+    required this.position,
     required this.expanded,
     required this.lastSets,
     required this.clientProfileId,
@@ -730,6 +762,10 @@ class _ExerciseCard extends StatelessWidget {
   });
 
   final DraftExercise draft;
+
+  /// 1-based order of this card in the list — rendered as a quiet index prefix
+  /// on the name so the workout reads as an ordered program.
+  final int position;
   final bool expanded;
   final List<LastSetSnapshot>? lastSets;
 
@@ -759,6 +795,63 @@ class _ExerciseCard extends StatelessWidget {
     return list.last;
   }
 
+  /// The exercise's 1-based order, rendered as a quiet tabular index to the left
+  /// of the type circle so the workout reads as an ordered list. Fixed width so
+  /// the numbers align (and the circles stay flush) across rows. Shared by the
+  /// active and completed headers.
+  Widget _indexBadge(ColorScheme scheme) {
+    return SizedBox(
+      width: 18,
+      child: Text(
+        '$position',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: scheme.onSurfaceVariant,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+
+  /// Leading thumbnail: the muscle-group anatomical tile when we have art for
+  /// the group, otherwise the tinted circle/tile + type glyph. A uniform 56px
+  /// rounded footprint either way so rows line up during the art rollout.
+  Widget _leadingArt(ColorScheme scheme) {
+    const size = 56.0;
+    final radius = BorderRadius.circular(12);
+    final img = _groupImage(draft);
+    if (img == null) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: _groupColor(draft, scheme),
+          borderRadius: radius,
+        ),
+        child: Icon(_typeIcon(draft.exerciseType), size: 26, color: Colors.white),
+      );
+    }
+    // A full-body portrait figure on a transparent canvas — contain (with a
+    // little inset) keeps the whole body visible rather than cropping head/legs.
+    // The figures are dark, so a white tile (hairline-bordered for definition in
+    // light mode) makes the silhouette read; on the dark card it's a crisp
+    // product-style thumbnail.
+    return Container(
+      width: size,
+      height: size,
+      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: radius,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Image.asset(img, fit: BoxFit.contain),
+    );
+  }
+
   /// Collapsed header for an in-progress exercise — type glyph, name, muscle
   /// group + "logged/total sets" pill, and the progress-chart shortcut.
   Widget _activeHeader(BuildContext context, ColorScheme scheme) {
@@ -766,15 +859,9 @@ class _ExerciseCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: scheme.primary,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(_typeIcon(draft.exerciseType), size: 20, color: scheme.onPrimary),
-          ),
+          _indexBadge(scheme),
+          const SizedBox(width: 10),
+          _leadingArt(scheme),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -845,6 +932,8 @@ class _ExerciseCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
       child: Row(
         children: [
+          _indexBadge(scheme),
+          const SizedBox(width: 10),
           Container(
             width: 40,
             height: 40,
@@ -971,11 +1060,8 @@ class _ExerciseCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      // Edge-to-edge, square panel — keep the hairline border so the card stays
-      // defined against the surface (esp. light mode), just drop the rounding.
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: scheme.outlineVariant),
-      ),
+      // Inherits the theme card shape: rounded corners + a hairline border so the
+      // card stays defined against the surface (esp. light mode).
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1261,7 +1347,7 @@ class _ProgressSection extends StatelessWidget {
             const Spacer(),
             Text(
               '$done of $n sets completed',
-              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -1357,16 +1443,19 @@ class _CompletedSetRow extends StatelessWidget {
               width: 52,
               child: Text('Set ${set.setNumber}',
                   style:
-                      const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                      const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             ),
             const SizedBox(width: 8),
+            // The set result is the screen's hero datum — give it the primary
+            // text colour + weight. A skipped set stays muted (it carries no
+            // value worth promoting).
             Expanded(
               child: Text(
                 _summary(),
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: scheme.onSurfaceVariant,
+                  fontSize: 15,
+                  fontWeight: skipped ? FontWeight.w500 : FontWeight.w600,
+                  color: skipped ? scheme.onSurfaceVariant : scheme.onSurface,
                 ),
               ),
             ),
@@ -1594,7 +1683,7 @@ class _LabeledNumber extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
             color: scheme.onSurfaceVariant,

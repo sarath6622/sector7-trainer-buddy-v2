@@ -16,6 +16,10 @@ import 'session_live_controls.dart' show RestTimerSheet;
 const _kPaused = Color(0xFFF59E0B); // amber-500 — paused / warn
 const _kUrgent = Color(0xFFFB7185); // rose-400  — idle / needs attention
 
+// Card corner rounding — matches the theme's large card radius (_radiusLg) so the
+// live hero reads as the same family of cards as the workout panels below it.
+const _kHeroRadius = BorderRadius.all(Radius.circular(14));
+
 /// Live-session header — the mobile analogue of the web `SessionHero`, restyled
 /// as a "now playing" card: an avatar story-ring (elapsed / expected) with a
 /// live presence dot, the person's name, the elapsed timer, a status line, and
@@ -131,7 +135,7 @@ class _SessionHeroCardState extends ConsumerState<SessionHeroCard> {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.zero,
+        borderRadius: _kHeroRadius,
         boxShadow: [
           BoxShadow(
             color: accent.withValues(alpha: live ? 0.22 : 0.13),
@@ -142,14 +146,14 @@ class _SessionHeroCardState extends ConsumerState<SessionHeroCard> {
       ),
       child: Material(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.zero,
+        borderRadius: _kHeroRadius,
         child: InkWell(
           onTap: _openRest,
-          borderRadius: BorderRadius.zero,
+          borderRadius: _kHeroRadius,
           child: Container(
             padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.zero,
+              borderRadius: _kHeroRadius,
               border: Border.all(
                 color: accent.withValues(alpha: live ? 0.55 : 0.40),
                 width: 1.2,
@@ -358,7 +362,7 @@ class _StatusLine extends StatelessWidget {
                       color: color,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.5,
-                      fontSize: 10,
+                      fontSize: 11,
                     ),
               ),
             ],
