@@ -7,6 +7,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/client/presentation/badges_screen.dart';
 import '../features/client/presentation/client_settings_screen.dart';
 import '../features/client/presentation/client_shell.dart';
+import '../features/client/presentation/metric_detail_screen.dart';
 import '../features/client/presentation/reschedule_requests_screen.dart';
 import '../features/client/presentation/session_detail_screen.dart';
 import '../features/client/presentation/unavailability_screen.dart';
@@ -78,6 +79,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'workouts',
             builder: (_, _) => const WorkoutHistoryScreen(),
+          ),
+          GoRoute(
+            path: 'progress/:metric',
+            builder: (_, state) => MetricDetailScreen(
+              metricKey: state.pathParameters['metric']!,
+            ),
           ),
           GoRoute(
             path: 'badges',
