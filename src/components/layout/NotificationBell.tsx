@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useVisiblePolling } from '@/hooks/useVisiblePolling';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Bell, BellOff, ChevronRight } from 'lucide-react';
@@ -20,7 +21,9 @@ import {
   type AppNotification,
 } from '@/components/notifications/NotificationItem';
 
-const POLL_INTERVAL = 10_000; // 10 seconds
+// Push (FCM) delivers real-time; this poll is only a fallback, so it runs at a
+// relaxed cadence and — via useVisiblePolling — pauses entirely on hidden tabs.
+const POLL_INTERVAL = 30_000; // 30 seconds
 
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -29,7 +32,6 @@ export function NotificationBell() {
   const router = useRouter();
   const { data: session } = useSession();
   const role = session?.user?.role ?? '';
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // -1 = not yet initialised (skip toast on first load)
   const prevUnreadRef = useRef(-1);
 
@@ -60,15 +62,9 @@ export function NotificationBell() {
     }
   }, []);
 
-  // Initial fetch + polling
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchNotifications();
-    intervalRef.current = setInterval(fetchNotifications, POLL_INTERVAL);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [fetchNotifications]);
+  // Initial fetch + polling — paused automatically while the tab is hidden,
+  // and refetched once the moment it becomes visible again.
+  useVisiblePolling(fetchNotifications, POLL_INTERVAL);
 
   // Refresh when dropdown opens
   useEffect(() => {
