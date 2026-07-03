@@ -117,11 +117,21 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico, sitemap.xml, robots.txt
+     * Run middleware ONLY on page routes. Its sole unique job is redirecting
+     * unauthenticated browser navigations to /login and role-gating dashboard
+     * pages — a page concern. Every API route already authenticates itself
+     * (getServerSession / bearer token / CRON_SECRET), so running the edge
+     * middleware (a getToken JWE-decrypt) on /api/* was pure redundant CPU —
+     * and it needlessly redirected bearer-auth clients (mobile, cron) that
+     * never carry a NextAuth cookie.
+     *
+     * Excluded from the matcher (middleware never even spins up):
+     * - `api`            → all API routes (self-authenticating)
+     * - `_next/static`, `_next/image` → build output & optimized images
+     * - `.*\\..*`        → any path with a file extension: manifest.json,
+     *                      sw.js, firebase-messaging-sw.js, /icons/*.png, etc.
+     *                      (no page route contains a dot)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
+    '/((?!api|_next/static|_next/image|.*\\..*).*)',
   ],
 };
