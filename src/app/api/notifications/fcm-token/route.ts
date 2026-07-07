@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { toErrorResponse } from '@/lib/errors';
+import { registerFcmTokenSchema } from '@/lib/validators';
 
 export async function POST(req: Request) {
   try {
@@ -10,18 +11,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
     }
 
-    const { token } = await req.json();
-    if (!token || typeof token !== 'string') {
+    const parsed = registerFcmTokenSchema.safeParse(await req.json());
+    if (!parsed.success) {
       return NextResponse.json(
         { error: 'Invalid token', code: 'VALIDATION_ERROR' },
         { status: 400 },
       );
     }
+    const { token, platform } = parsed.data;
 
+    // platform is `undefined` for web-push; passing undefined to Prisma is a
+    // no-op on update and falls back to the column default (null) on create.
     await prisma.fcmToken.upsert({
       where: { token },
-      create: { userId: session.user.id, token },
-      update: { userId: session.user.id },
+      create: { userId: session.user.id, token, platform },
+      update: { userId: session.user.id, platform },
     });
 
     return NextResponse.json({ ok: true });

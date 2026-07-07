@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { requireRole, getServerSession, hasRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
@@ -26,10 +26,9 @@ const rescheduleSchema = z
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER', 'KICKBOXING_TRAINER'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    // 401 for no/expired session vs 403 for wrong role — lets the mobile client
+    // tell "token expired → refresh & retry" from "logged in but not allowed".
+    const session = await requireRole(['TRAINER', 'KICKBOXING_TRAINER']);
 
     const { id } = await params;
     const trainerProfileId = session.user.trainerProfileId;

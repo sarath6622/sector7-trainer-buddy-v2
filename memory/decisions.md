@@ -602,3 +602,108 @@ Exercises present in `exercises` but absent from `dirtyExerciseIds` are left unt
 
 1. **Per-set removal scoping.** The POST body gains optional `removedSetsByExerciseId: Record<string, number[]>` — per dirty exercise, the set numbers this device explicitly deleted. When present (the WorkoutLogger always sends it, even empty), set deletion inside a dirty exercise is limited to exactly those numbers, so set rows the writer never saw survive. Incoming sets still upsert by `setNumber` (same-set conflicts stay last-writer-wins per set). Omitted → old delete-by-absence, so pre-per-set bundles and legacy callers are unaffected.
 2. **Draft rows count as unsaved (client only).** The "only persist complete sets" change (2026-06-10) made half-typed rows invisible to the payload-hash dirty check, so the 10s poll / Pusher refetch rehydrated over them mid-type — the reported "typed workout gets deleted" bug. `hasDraftRows()` now flags half-typed sets and extra blank rows; it extends `hasUnsaved` (poll pause + rehydration guard) while the auto-save debounce stays keyed to the saveable-payload hash so unchanged payloads are never re-POSTed.
+
+## ADR-042: Mobile JWT Auth via a Bearer-Aware `getServerSession()` (Flutter Phase 0)
+
+**Status:** Accepted (2026-06-13). Implements Phase 0 of `docs/flutter-migration-plan.md`.
+
+**Context:** The Flutter app (Trainer + Client) is a new client over the existing Next.js backend. NextAuth's auth is cookie + CSRF, which native apps can't ride. We needed mobile auth **without** forking the 159 route handlers or touching the web auth path.
+
+**Decision:**
+
+1. **Three new routes** `POST /api/mobile/auth/{login,refresh,logout}` issue/rotate/revoke JWTs (access ~15m, refresh ~30d), signed with a separate `MOBILE_JWT_SECRET`. Login reuses the web credential check (case-insensitive email, `isActive`/`deletedAt`, bcrypt) and **rejects admin-only accounts** (`isMobileAllowed` — admins/TV use web). Token logic lives in `src/lib/mobile-auth.ts`, kept pure (jose + crypto, no `next/headers`) so it's unit-testable.
+2. **One shim, zero route churn:** `getServerSession()` (`src/lib/auth.ts`) now reads the request's `Authorization` header first — a `Bearer` token is verified and rebuilt into the **identical** NextAuth `Session` shape; otherwise it falls back to the cookie path. A Bearer that's present-but-invalid returns null (no cookie fallback). RBAC, branch scoping, and audit logging are unchanged because they read the same session-user.
+3. **Middleware** (`src/middleware.ts`): `/api/mobile/auth` is public; any `/api/*` request carrying a `Bearer` header is passed through to the handler (which enforces auth). Middleware does **not** verify the JWT — handlers do.
+4. **Refresh-token store** = `MobileRefreshToken` table (see schema.md): rotating chains keyed by `familyId`, sha256-hashed tokens (raw never stored), with **reuse detection** — presenting a revoked token revokes the entire family. Per-device revoke at logout; `?all=true` logs out everywhere.
+
+**Flutter side:** `api_client.dart` does one-shot refresh-on-401 + retry (concurrency-guarded); `auth_repository.logout()` revokes server-side before clearing the keychain.
+
+**Consequences / out of scope:** Signed Cloudinary upload, Pusher Bearer auth, and the FCM `platform` field are deferred to their phases. No login rate-limiting yet (web login isn't rate-limited either — shared follow-up). Access-token claims (role/branch) can be up to ~15m stale; acceptable given the short TTL.
+
+**Verified end-to-end (local DB):** login → Bearer `/api/auth/me` + `/api/client/dashboard` (200) → refresh rotation → reuse-revokes-family (401) → admin rejected (403) → web cookie path still redirects unauthenticated to `/login`.
+
+## ADR-043: Auth Routes Return 401 for No/Expired Session, 403 Only for Wrong Role (`requireRole`)
+
+**Status:** Accepted (2026-06-14). Builds on ADR-042; first applied across `/api/client/*` (Flutter Phase 2).
+
+**Context:** Every data route guarded with `if (!session || !hasRole(...)) return 403 FORBIDDEN`, conflating two distinct failures. The Flutter `ApiClient` silently refreshes only on **401**. So when a 15-minute mobile access token expired, `getServerSession()` returned null, the route answered **403**, the refresh-on-401 never fired, and the user got stuck on a "Forbidden" screen until a manual re-login (reproduced 2026-06-14: dashboard/list 200 while token valid, then session-detail 403 minutes later after expiry).
+
+**Decision:** Split the guard via a single helper `requireRole(allowedRoles, { matchAllRoles? })` in `src/lib/auth.ts` (pure core `assertSessionRole` for unit tests):
+
+- no session → throw `AppError('UNAUTHORIZED', 401)` → **401**
+- session lacks an allowed role → throw `AppError('FORBIDDEN', 403)` → **403**
+- else return the session (RBAC/branch-scoping/audit unchanged).
+
+`matchAllRoles` preserves the two pre-existing check styles (primary role vs `roles ?? [role]`). The route's existing `catch → toErrorResponse` maps the throw to the status — no new error plumbing. Mobile keeps a complementary **proactive refresh** (decode access-token `exp`, refresh before sending) so expiry is usually handled before a 401 even occurs; the backend 401 is the backstop and benefits any future client.
+
+**Scope:** Migrated all 24 guards across the 18 `/api/client/*` routes. The ~91 trainer/admin/shared routes still return 403-for-unauthenticated; they migrate to `requireRole` in Phase 3 (route-by-route, per the migration plan). **Web is unaffected** — it calls these with a valid cookie (→200) and has no global 401 handler, so the rare unauthenticated case simply returns a more-correct 401.
+
+**Verified (local, minted tokens):** expired client token → 401; valid client → 200; valid trainer on a client route → 403; plus `assertSessionRole` unit tests (401 vs 403 vs primary/all-roles) and `mobile/test/jwt_test.dart` for the client-side `exp` check.
+
+## ADR-044: Cloudinary Signed Direct Upload for Mobile (`POST /api/mobile/upload/sign`)
+
+**Status:** Accepted (2026-06-14). Closes the deferred Phase 0 item (migration plan §3.3).
+
+**Context:** Native apps need to upload images (avatars, progress photos). The web path proxies bytes through Next (`POST /api/client/profile/image` → `uploadProfileImage` → Cloudinary SDK), keeping the API secret server-side. That proxy is fine for one small avatar with a baked face-crop transform, but proxying many/large **progress photos** through the server wastes bandwidth, and we never want to ship `CLOUDINARY_API_SECRET` to the client.
+
+**Decision:** Add `POST /api/mobile/upload/sign` (mobile roles only, Bearer-aware via `requireRole([...MOBILE_ALLOWED_ROLES], { matchAllRoles: true })`). It returns Cloudinary **signed-upload params** — `{ cloudName, apiKey, timestamp, folder, publicId?, signature, uploadUrl }` — computed by `signUpload()` in `src/lib/cloudinary.ts` using `cloudinary.utils.api_sign_request(paramsToSign, apiSecret)`. The app echoes those params + the file + `api_key` + `signature` straight to Cloudinary; the secret only seeds the signature and never leaves the server. Key choices:
+
+- **Folder is server-decided + branch-scoped** (`sector7/{profile-images|progress-photos}/{branchId}`) — a client can't write outside their branch's space.
+- **`kind: 'profile'`** pins `public_id = userId` (re-uploads overwrite the one avatar); **`kind: 'progress'`** omits public_id (Cloudinary auto-names, multiple photos).
+- Only the echoed params (`folder`, `timestamp`, `public_id?`) are signed — they must match exactly or Cloudinary returns "Invalid Signature".
+- The caller still **persists the resulting `secure_url`** afterwards: avatars via the existing profile-image route (which also applies the face-crop transform + audit), progress photos via the progress POST. The sign endpoint does **not** touch the DB.
+
+**Consequences:** Profile-image MVP can use _either_ path — the existing server-proxy route (transform + audit, simplest) or this signed upload. Progress photos and Phase 3 media use the signed path. No rate-limiting on the sign endpoint yet (cheap, auth-gated). Validation via `signUploadSchema` (safeParse → 400, since `toErrorResponse` maps only `AppError`).
+
+**Verified end-to-end (local + real Cloudinary):** minted client token → `POST /api/mobile/upload/sign` (200, branch-scoped folder) → direct multipart upload to `api.cloudinary.com` with the signed params (**200, real `secure_url`**) → asset destroyed (cleanup ok). Unit tests in `tests/unit/cloudinary-sign.test.ts` (folder/public_id by kind, sha1 signature shape, secret-not-leaked, signature recomputation).
+
+---
+
+## ADR-045: Mobile Real-Time & Push (Flutter Phase 4)
+
+**Status:** Accepted (2026-06-14). Real-time live-timer **built + unit-tested + DEVICE-VERIFIED on the iPhone 17 Pro sim** (LIVE pill ticks; `WORKOUT_UPDATED` from a different actor → auto-refetch; arun's own actor → self-echo skipped; server emit 200; `wss` handshake OK). FCM push track to follow — `GoogleService-Info.plist` parked at `mobile/ios/Runner/`, gated on a paid Apple Developer account (push capability + APNs key). Migration plan §6.
+
+**Context:** The Flutter app (Trainer + Client) needs the web's two real-time behaviors on the session screen — a **live session timer** and **workout-log sync** — plus **native push** (replacing web-push). The migration plan §3.3/§6 had pencilled in a "Pusher Bearer auth route" and an "FCM platform field" as deferred Phase-0 items.
+
+**Decisions:**
+
+- **No Pusher auth route.** The web subscribes to **public** channels (`session-{id}`, `user-{id}` — no `private-`/`presence-` prefix, no `authEndpoint`; see `src/lib/pusher-client.ts` / `usePusherChannel.ts`). The Flutter app reuses the **same Pusher app and the same public channels**, so it subscribes directly — the "Bearer auth route" item is moot under the current channel design. We deliberately did **not** tighten the channel security model (that would change the web's behavior too and is out of Phase 4 scope).
+- **Live timer = refetch-on-event, not event-state-machine.** The session-detail screens subscribe to `session-{id}` and, on `SESSION_STARTED` / `SESSION_ENDED` / `WORKOUT_UPDATED`, invalidate their session provider (server stays the source of truth — mirrors the web's `WORKOUT_UPDATED → refetch`). The writer's own `WORKOUT_UPDATED` echo is skipped (`actorUserId == me`). The elapsed clock (`LiveSessionTimer`) ticks **locally** off `startedAt`, so an already-IN_PROGRESS session shows a running timer even with Pusher disabled/offline. Rest-timer pill + pause state (`REST_TIMER_UPDATED` / `SESSION_PAUSE_UPDATED`) are deferred to a later increment — the elapsed timer + workout-sync covers the headline "live session timer" row.
+- **Graceful disable.** `PusherService.enabled` is false unless both `--dart-define=PUSHER_KEY` and `PUSHER_CLUSTER` are set; when off, subscribe/unsubscribe are no-ops and the stream never emits — UI degrades to pull-to-refresh (same posture as the web's null Pusher client). Native init/connect is lazy (first subscribe) and ref-counted per channel.
+- **FCM `platform` field.** `FcmToken` gains nullable `platform` (`ios|android|web`); `POST /api/notifications/fcm-token` now accepts `{ token, platform }` (Zod `registerFcmTokenSchema`), already Bearer-aware via the Phase-0 `getServerSession` shim. The send path gained an `apns: { payload: { aps: { sound: 'default' } } }` block so native iOS renders an alert+sound (ignored for web/android tokens in the mixed multicast). Schema migration is **local-Docker-only** for now (operator choice) — see schema.md.
+
+**Consequences:** No new server channels, no Pusher quota change. The live timer needs the Pusher app's `PUSHER_*` env on the server (`.env.local`, currently blank) to actually emit, plus `--dart-define=PUSHER_KEY/CLUSTER` on the app build to subscribe. Tests: `mobile/test/pusher_service_test.dart` (payload-decode tolerance + disabled-no-op contract). FCM client (`firebase_messaging`) + iOS push capability/entitlements are the next increment, gated on the Firebase iOS config (`GoogleService-Info.plist`) + an APNs key.
+
+## ADR-046: `qa` Branch as a Fast-Forward Deployment Pointer for Flutter Device Testing
+
+**Status:** Accepted (2026-06-23). In use — `qa` pushed from `feat/flutter-mobile-client-mvp`; Vercel auto-builds it as a Preview; verified open + reachable.
+
+**Context:** The Flutter app (`mobile/`) needs to run on real iOS/Android devices against a hosted backend (not just the local dev server) without disturbing the production PWA. Two physical/simulated builds testing in parallel need a stable, internet-reachable API URL. We did **not** want a separate Vercel project or a separate database, and we wanted the local-only Flutter run workflow to keep working unchanged.
+
+**Decisions:**
+
+- **`qa` is a deployment pointer, never a working branch.** Development stays on the feature/dev branch (`feat/flutter-mobile-client-mvp`); `qa` is only ever **fast-forwarded** to that branch's tip (`git push origin HEAD:qa`, or the `deploy-qa` skill which enforces FF). It is never committed on directly, so it cannot diverge — no merge conflicts, no force-push. Vercel auto-builds `qa` as a **Preview** deployment, leaving Production (`main` = the PWA) untouched.
+- **Shared Production DB, test users only.** The qa Preview reads the same Neon database as prod (no separate `DATABASE_URL` for the Preview env). The PWA front-end is untouched, but the data store is shared — so qa testing logs in with seeded **test users only** (writes are real data). Operator (Sarath) accepted this trade-off over standing up an isolated DB.
+- **Stable branch alias over per-deploy hash.** The app points at `…-git-qa-<scope>.vercel.app` (auto-follows the latest qa deploy), not a frozen `…-<hash>.vercel.app`. Stored in the **gitignored** `.claude/skills/run-mobile/qa-url.local` (or `$QA_API_BASE_URL`), so the scoped URL is never committed.
+- **Deployment Protection off for Preview.** Required, or the app's `/api/*` calls receive a Vercel SSO page instead of JSON. `run-mobile` probes for this on launch and warns.
+- **Tooling:** `run-mobile` gained a backend-mode 2nd arg (`local|qa|<url>`); new `deploy-qa` skill does the FF push + post-deploy reminders; `rules/change-management.md` documents the protocol. The Flutter API base is the build-time `--dart-define=API_BASE_URL` (`mobile/lib/src/core/config/app_config.dart`).
+
+**Consequences:** Zero schema/contract changes. The local Flutter workflow is unchanged (`run.sh both` still hits localhost/10.0.2.2). Promoting qa-tested work to production is a normal PR into `main` — pushing `qa` never affects prod. Risk accepted: shared DB means careless logins on qa could mutate prod data; mitigated by the test-users-only convention. If true data isolation is later wanted, set a separate `DATABASE_URL` (+ Pusher/NextAuth vars) for the Vercel **Preview** environment — no app change needed beyond the URL.
+
+## ADR-047: Beta Release Strategy — Android-Only Distribution + Firebase Remote Config Feature Flags
+
+**Status:** Accepted (2026-06-23). In progress — release-signing scaffolding + flutterfire CLI landed; Firebase Dart wiring pending the operator's `flutterfire configure` (needs their Google login) and keystore generation.
+
+**Context:** The Flutter app needs a controlled release to live testers without disturbing the production PWA, and the operator asked about Firebase A/B testing. Hard constraint: **no paid Apple Developer account** (chosen "own devices only for now"), which gates _all_ iOS beta distribution (TestFlight and Firebase App Distribution-to-iOS both require it). Testers are **internal staff / friendlies**, who should hit a stable hosted backend with unfinished features hidden. The goal is **rollout control**, not experimentation.
+
+**Decisions:**
+
+- **Android-only beta distribution via Firebase App Distribution** (free, no Apple account, no store review; email-invited tester group + App Tester app). iOS stays on the operator's own-device 7-day installs until the $99 Apple Developer Program is enrolled (then → TestFlight, ADR-TBD). Play Console tracks deferred.
+- **A/B Testing rejected for now; Firebase Remote Config feature flags instead.** True A/B experiments need statistical scale + a defined conversion metric — meaningless for a handful of staff testers. Remote Config gives flags, staged % rollout, and an instant **kill-switch** without a re-release. Same SDK substrate, so graduating to Firebase A/B Testing later (with Analytics) is incremental — explicitly deferred to "when there's real scale."
+- **Force-update / min-version gate** via Remote Config (`min_supported_build` vs the app's build number → blocking "update required" screen). Critical because the beta app points at an independently-deployed backend and iOS can't be force-updated easily; protects against API-contract drift.
+- **Crashlytics** for real-tester crash visibility. Analytics deferred until A/B/funnels are actually wanted.
+- **Beta backend = the qa Vercel deployment** (operator's choice: "prod URL = the qa URL"). The beta build's `--dart-define=API_BASE_URL` points at the `…-git-qa-…` alias, so deploying backend to `qa` (via the `deploy-qa` skill) auto-updates what beta testers hit. Keeps the real production PWA + its domain for web users. Shares the prod Neon DB (per ADR-046) — staff testers only. Swappable to a dedicated prod/staging URL later with no code change.
+- **Firebase project = `sector7-fb0ff`** (already wired for the parked iOS FCM plist; Android app to be registered via `flutterfire configure`). All of Remote Config / Crashlytics / Analytics need **no** paid Apple account — only push + iOS distribution do.
+- **Release signing** loaded from a **gitignored** `android/key.properties` (+ `*.jks`), with a debug-key fallback in `android/app/build.gradle.kts` so dev/release builds keep working before the keystore exists. Template: `android/key.properties.example`.
+
+**Consequences:** New runtime deps (`firebase_core`, `firebase_remote_config`, `firebase_crashlytics`) + the `com.google.gms.google-services` Gradle plugin (Android build then requires `google-services.json`). Remote Config must fetch+activate with safe in-code defaults so a fetch failure or Firebase-not-initialized never bricks the app (mirrors the Pusher graceful-disable posture). Feature work ships behind flags defaulting OFF. A planned `release-android` skill will mirror `deploy-qa`/`run-mobile` for one-command beta drops. iOS beta + Analytics + A/B Testing are sequenced behind the paid Apple account and real user scale respectively.

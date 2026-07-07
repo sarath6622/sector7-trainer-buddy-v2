@@ -120,6 +120,33 @@ Before adding a new npm package:
 
 ---
 
+## QA Preview Deployment Protocol (Flutter device testing)
+
+The `qa` remote branch is a **deployment pointer** for the Flutter app's Vercel
+**Preview** backend — it is **not** a working branch. See `memory/decisions.md`
+→ **ADR-046**.
+
+1. **Develop on the feature/dev branch** (e.g. `feat/flutter-mobile-client-mvp`),
+   commit there as usual.
+2. **Deploy to qa by fast-forward only:** `git push origin HEAD:qa` (or the
+   `deploy-qa` skill, which enforces the fast-forward). Vercel rebuilds the qa
+   Preview; the stable alias `…-git-qa-<scope>.vercel.app` auto-follows.
+3. **Relaunch devices:** `.claude/skills/run-mobile/run.sh both qa`.
+
+**Non-negotiables:**
+
+- **Never commit directly on `qa`.** It must always be a fast-forward of the dev
+  branch so it never diverges (no merge conflicts, no force-push). The
+  `deploy-qa` skill hard-fails if a push would not fast-forward.
+- **Production is `main`** (the PWA) and is **never** touched by a qa push.
+  Promoting qa-tested work to prod is a normal PR into `main`.
+- **qa shares the Production Neon DB** — test users only; every write is real
+  data. (Rule 2 branch-scoping and Rule 6 audit still apply on qa.)
+- **Vercel Deployment Protection must be OFF for Preview**, or the app's `/api/*`
+  calls get an SSO page instead of JSON.
+
+---
+
 ## Rollback Protocol
 
 If an implementation breaks something:

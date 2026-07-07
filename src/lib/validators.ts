@@ -133,6 +133,18 @@ export const createUserSchema = z.object({
 
 export const updateUserSchema = createUserSchema.partial().omit({ password: true, email: true });
 
+// Self-service profile edit (mobile client Settings). Deliberately narrow —
+// a client may only change their own name and phone, never roles/email/etc.
+export const updateOwnProfileSchema = z
+  .object({
+    firstName: z.string().min(1).max(100).optional(),
+    lastName: z.string().min(1).max(100).optional(),
+    phone: phoneSchema,
+  })
+  .refine((d) => d.firstName !== undefined || d.lastName !== undefined || d.phone !== undefined, {
+    message: 'At least one field must be provided',
+  });
+
 export const listUsersSchema = paginationSchema.extend({
   role: userRoleSchema.optional(),
   search: z.string().trim().max(100).optional(),
@@ -640,10 +652,23 @@ export const workoutCalendarQuerySchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, 'Must be YYYY-MM format'),
 });
 
+// ─── MOBILE: SIGNED UPLOAD ──────────────────────────
+
+export const signUploadSchema = z.object({
+  kind: z.enum(['profile', 'progress']).default('profile'),
+});
+
 // ─── NOTIFICATIONS ───────────────────────────────────
 
 export const listNotificationsSchema = paginationSchema.extend({
   unreadOnly: z.coerce.boolean().optional(),
+});
+
+// Native (Flutter) clients register their device push token here with a
+// `platform` tag; web-push registers the same way but omits `platform`.
+export const registerFcmTokenSchema = z.object({
+  token: z.string().min(1, 'token is required'),
+  platform: z.enum(['ios', 'android', 'web']).optional(),
 });
 
 // ─── BADGE DEFINITIONS ──────────────────────────────
@@ -903,6 +928,7 @@ export type CreateTrainerShiftApiInput = z.infer<typeof createTrainerShiftApiSch
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type UpdateOwnProfileInput = z.infer<typeof updateOwnProfileSchema>;
 export type CreateMappingInput = z.infer<typeof createMappingSchema>;
 export type UpdateMappingInput = z.infer<typeof updateMappingSchema>;
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
@@ -947,3 +973,4 @@ export type CreateTvAnnouncementInput = z.infer<typeof createTvAnnouncementSchem
 export type UpdateTvAnnouncementInput = z.infer<typeof updateTvAnnouncementSchema>;
 export type CreateTvEventInput = z.infer<typeof createTvEventSchema>;
 export type UpdateTvEventInput = z.infer<typeof updateTvEventSchema>;
+export type RegisterFcmTokenInput = z.infer<typeof registerFcmTokenSchema>;

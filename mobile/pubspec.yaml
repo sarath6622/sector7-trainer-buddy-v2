@@ -1,7 +1,7 @@
 name: sector7_mobile
 description: 'Sector 7 — gym member & PT session mobile client (Trainer + Client).'
 publish_to: 'none'
-version: 0.1.0
+version: 0.1.0+10
 
 environment:
   sdk: ^3.10.0
@@ -22,24 +22,99 @@ dependencies:
   # Secure token storage (access/refresh JWTs)
   flutter_secure_storage: ^9.2.4
 
+  # Non-sensitive local prefs (e.g. light/dark theme choice). Synchronous-ish
+  # reads avoid the Android keystore latency that flutter_secure_storage incurs,
+  # so the saved theme applies on the first frame without a flash.
+  shared_preferences: ^2.3.0
+
   # Charts (replaces Recharts) — progress screens
   fl_chart: ^0.69.2
+
+  # Inter font — matches the PWA's --font-sans (next/font Inter). Fetched at
+  # runtime + cached; bundle the .ttf as an asset before release for offline.
+  google_fonts: ^6.2.1
 
   # Date/number formatting
   intl: ^0.19.0
 
+  # Profile image picking (gallery/camera) → uploads via /api/client/profile/image
+  image_picker: ^1.1.2
+
+  # ── Phase 3 offline workout logger (write-local-first + diff sync; ADR-041) ──
+  # Local SQLite store for workout drafts + exercise-library cache (replaces Dexie).
+  drift: ^2.20.0
+  sqlite3_flutter_libs: ^0.5.26
+  path_provider: ^2.1.5
+  path: ^1.9.0
+  # Online/offline detection that drives the sync flush.
+  connectivity_plus: ^6.1.0
+  pusher_channels_flutter: ^2.4.0
+  live_activities: ^2.4.7
+  flutter_local_notifications: ^22.0.1
+  timezone: ^0.11.0
+  firebase_core: ^4.11.0
+  firebase_remote_config: ^6.5.3
+  firebase_crashlytics: ^5.2.4
+  package_info_plus: ^9.0.1
+  haptic_feedback: ^0.6.4+3
+  audioplayers: ^6.7.1
+
   # ── Added in later phases (need native config; see docs/flutter-migration-plan.md) ──
-  # drift + sqlite3_flutter_libs   → Phase 3 offline workout queue (replaces Dexie)
-  # connectivity_plus             → Phase 3 online/offline detection
-  # workmanager                   → Phase 3 background sync
+  # workmanager                   → true OS-background sync (deferred; needs iOS BGTaskScheduler
+  #                                 config + can't verify on a simulator — the foreground /
+  #                                 resume / connectivity-driven sync below covers the
+  #                                 gym-floor flaky-wifi case). Seam: WorkoutSyncService.flushPending.
   # firebase_core + firebase_messaging → Phase 4 native push (replaces FCM web-push)
   # pusher_channels_flutter       → Phase 2/4 real-time session timer (reuses existing Pusher app)
-  # image_picker                  → Phase 3 profile image upload (Cloudinary signed)
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 
+  # Drift codegen for the local store (run: dart run build_runner build).
+  drift_dev: ^2.20.0
+  build_runner: ^2.4.13
+
+  # Generates the home-screen launcher icons for both platforms from the
+  # source art in assets/icon/. Re-run after changing that art:
+  #   dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.1
+
+# ── Launcher icon (S7 monogram, dark + warm-glow; see assets/icon/) ──
+# iOS uses the baked full-square master; Android uses an adaptive icon
+# (gradient background layer + logo foreground) plus a monochrome layer for
+# Android 13 themed icons.
+flutter_launcher_icons:
+  image_path: 'assets/icon/icon.png'
+  # iOS: flatten away alpha onto the brand background (App Store rejects alpha).
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: '#121212'
+  # Android adaptive icon.
+  android: 'ic_launcher'
+  adaptive_icon_background: 'assets/icon/adaptive_bg.png'
+  adaptive_icon_foreground: 'assets/icon/adaptive_fg.png'
+  adaptive_icon_monochrome: 'assets/icon/adaptive_monochrome.png'
+
 flutter:
   uses-material-design: true
+
+  # Inter bundled locally so the offline-first app never fetches fonts at
+  # runtime. google_fonts matches these by the `Inter-<Variant>` filename and
+  # loads them from the bundle (allowRuntimeFetching is disabled in main.dart).
+  # These are the exact full TTFs google_fonts would otherwise download.
+  assets:
+    - assets/fonts/
+    # Brand wordmark for the login screen (mirrors the PWA's /sector7-logo.png).
+    - assets/images/
+    # Individual letter glyphs for the animated cold-start splash (S E C 7 O R
+    # + FITNESS / GYM CROSSFIT), mirroring the PWA's /splash-vector/* sequence.
+    - assets/splash/
+    # Short UI sound effects (the workout "completed" chime). Played via an
+    # ambient/mix-with-others audio session so it never pauses the user's music.
+    - assets/sounds/
+    # Per-muscle-group anatomical art for the exercise cards + session-history
+    # thumbnails (keyed by curated group id; see curatedGroupImages in
+    # workout/data/muscle_groups.dart).
+    - assets/muscles/

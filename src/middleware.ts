@@ -19,6 +19,9 @@ const PUBLIC_PATHS = [
   '/tv',
   '/api/admin/tv/dashboard',
   '/api/admin/tv/live',
+  // Mobile (Flutter) auth endpoints — login/refresh carry no session yet; the
+  // route handlers do their own credential/token checks.
+  '/api/mobile/auth',
 ];
 
 /** Role-to-path prefix mapping for route protection */
@@ -62,6 +65,14 @@ export async function middleware(request: NextRequest) {
     pathname === '/sw.js' ||
     /\.(png|jpg|jpeg|gif|svg|ico|webp)$/.test(pathname)
   ) {
+    return NextResponse.next();
+  }
+
+  // Mobile (Flutter) clients authenticate with a Bearer JWT, not a NextAuth
+  // cookie. Let any /api request carrying an `Authorization: Bearer` header
+  // through — the route handler enforces auth/RBAC/branch-scoping via the
+  // Bearer-aware getServerSession(). Page routes are unaffected.
+  if (pathname.startsWith('/api/') && request.headers.get('authorization')?.startsWith('Bearer ')) {
     return NextResponse.next();
   }
 

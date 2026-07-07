@@ -202,6 +202,13 @@ async function sendFcmPush({
         },
         fcmOptions: { link: '/' },
       },
+      // Native iOS (Flutter) tokens — render an alert + play the default sound.
+      // Ignored for web/android tokens, so it's safe in this mixed multicast.
+      apns: {
+        payload: {
+          aps: { sound: 'default' },
+        },
+      },
     });
 
     console.log(

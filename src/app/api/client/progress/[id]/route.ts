@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { updateProgressSchema } from '@/lib/validators';
 import * as progressService from '@/services/progress.service';
@@ -9,10 +9,7 @@ import * as progressService from '@/services/progress.service';
  */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['CLIENT'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['CLIENT']);
 
     const { id: progressId } = await params;
     const body = await req.json();

@@ -1,9 +1,19 @@
 # Sector 7 — Flutter Mobile Migration Plan
 
-> Status: Planning + Phase 1 scaffold complete
+> Status: Phase 1 scaffold complete · **Phase 0 auth core shipped (2026-06-13)** ·
+> **Phase 2 Client MVP started (2026-06-14)** — shell + dashboard + sessions + profile live
 > Scope decision (2026-06-11): **Mobile = Trainer + Client.** Admin & TV stay on the
 > existing Next.js web app. Next.js becomes the **shared backend** for web + mobile.
 > No business-logic rewrite — Flutter is a new client over the existing REST API.
+>
+> **Phase 0 done (2026-06-13):** mobile JWT auth (`/api/mobile/auth/{login,refresh,logout}`),
+> a Bearer-aware `getServerSession()` (all routes accept a mobile token, zero call-site
+> changes), middleware Bearer passthrough, and a rotating `MobileRefreshToken` store with
+> reuse detection. Flutter auto-refresh-on-401 + server logout wired. Verified end-to-end
+> against the local DB (login → Bearer `/api/client/dashboard` → refresh rotation →
+> reuse-revokes-family → admin rejected → web cookie path intact). Remaining Phase 0 items
+> (Pusher Bearer auth, FCM platform field) are deferred to their phases; **signed
+> upload is now done (ADR-044)**.
 
 ---
 
@@ -105,8 +115,10 @@ returned session user exactly as today.
 - **FCM device tokens:** native tokens register through the existing `FcmToken` model /
   notification endpoints. Confirm the register/unregister route accepts a `platform`
   field (ios/android) and Bearer auth.
-- **Cloudinary signed upload:** add `POST /api/mobile/upload/sign` returning a signature
-  so the app uploads directly (don't ship the API secret to the client).
+- **Cloudinary signed upload:** ✅ **done (2026-06-14, ADR-044)** — `POST /api/mobile/upload/sign`
+  returns branch-scoped signed params (`kind: profile|progress`); the app uploads directly to
+  Cloudinary, secret stays server-side. Verified end-to-end against real Cloudinary. Profile-image
+  can alternatively reuse the existing server-proxy `POST /api/client/profile/image`.
 - **CORS:** allow the app origins for any browser-context calls; native dio calls are
   not CORS-bound but staging/web-debug builds are.
 - **Pusher auth:** private/presence channels need an auth endpoint that accepts Bearer.
@@ -119,37 +131,112 @@ Each screen maps to existing endpoints — no new business logic, just presentat
 
 ### Client (Phase 2 — read-heavy, lowest risk)
 
-| Screen                                  | Endpoint(s)                                          |
-| --------------------------------------- | ---------------------------------------------------- |
-| Dashboard (counts, next/active session) | `GET /api/client/dashboard`                          |
-| Sessions list & detail                  | `GET /api/client/sessions`, `/api/sessions/[id]`     |
-| Live session timer                      | Pusher channel + session detail                      |
-| Workout history                         | `GET /api/client/workouts`                           |
-| Progress charts                         | `GET /api/client/progress` (+ `/charts`) → fl_chart  |
-| Badges                                  | `GET /api/client/badges`                             |
-| Mark unavailability                     | `GET/POST /api/client/unavailability`                |
-| Reschedule requests                     | `GET/POST /api/client/reschedule-requests`           |
-| Community feed (if in scope)            | `GET /api/community/feed`, posts/react/comments      |
-| Settings / profile image                | `GET/PUT /api/admin/users/[id]` shape, signed upload |
+> **Phase 2 nearly complete (2026-06-14):** bottom-nav shell (Home/Sessions/
+> Progress/Profile) + enriched dashboard + sessions list/detail + profile +
+> Progress charts (fl_chart) + workout history + **badges** + **availability
+> (mark/remove)** + **reschedule (list + submit)** shipped and verified live
+> against the local backend (incl. the app's first writes — unavailability
+> POST/DELETE verified E2E). The Cloudinary **signed-upload backend is now done**
+> (ADR-044); only the **settings/profile-image UI** remains (wire `image_picker`).
+>
+> Also fixed an auth gotcha surfaced here (**ADR-043**): client routes returned
+> `403` for an _expired_ token, so the app's refresh-on-401 never fired (stuck on
+> "Forbidden" until re-login). Now `requireRole()` returns **401** for no/expired
+> session vs **403** for wrong role across all `/api/client/*`; the app also
+> proactively refreshes on token `exp`. Trainer/admin routes migrate in Phase 3.
+
+| Screen                                  | Endpoint(s)                                                      | Status        |
+| --------------------------------------- | ---------------------------------------------------------------- | ------------- |
+| Dashboard (counts, next/active session) | `GET /api/client/dashboard`                                      | ✅ done       |
+| Sessions list & detail                  | `GET /api/client/sessions`, `/api/client/sessions/[id]`          | ✅ done       |
+| Profile (info + sign out)               | from `/api/auth/me` session                                      | ✅ done       |
+| Live session timer                      | Pusher channel + session detail                                  | ✅ verified   |
+| Workout history                         | `GET /api/client/workouts`                                       | ✅ done       |
+| Progress charts                         | `GET /api/client/progress` (+ `/charts`) → fl_chart              | ✅ done       |
+| Badges                                  | `GET /api/client/badges`                                         | ✅ done       |
+| Mark unavailability                     | `GET/POST/DELETE /api/client/unavailability`                     | ✅ done       |
+| Reschedule requests                     | `GET/POST /api/client/reschedule-requests`                       | ✅ done       |
+| Community feed (if in scope)            | `GET /api/community/feed`, posts/react/comments                  | ☐ TBD         |
+| Profile image (avatar)                  | proxy `GET/POST/DELETE /api/client/profile/image` (image_picker) | ✅ done       |
+| Settings (edit name/phone/etc.)         | `PUT` user shape                                                 | ☐ not started |
+
+> **Phase 3 started early (2026-06-14):** the **shared workout logger** (ADR-036 —
+> the session's client _or_ trainer may save) was built **client-first, online**,
+> since it unlocks client self-logging in the already-shipped Client app. The
+> client session-detail now has a **Log/Edit workout** button → logger screen
+> (exercise-library search/picker, add/edit/remove exercises + sets, mark-complete,
+> full-snapshot save to `POST /api/sessions/[id]/workouts`). Verified E2E: a client
+> token writes (201), idempotent net-zero re-post. **Still online-only** — the
+> offline Drift queue (§5) is the next increment and is required by rule #3 before
+> gym-floor use. The Trainer shell will reuse this same logger.
 
 ### Trainer (Phase 3 — includes the hard offline path)
 
-| Screen                                       | Endpoint(s)                                              |
-| -------------------------------------------- | -------------------------------------------------------- |
-| Client list                                  | `GET /api/trainer/clients`                               |
-| Client detail (history, progress, last sets) | `/api/trainer/clients/[id]/*`                            |
-| Schedule                                     | `GET /api/trainer/schedule` → table_calendar             |
-| Session start / end / no-show                | `POST /api/trainer/sessions/[id]/{start,end,no-show}`    |
-| **Workout logger (offline-first)**           | `POST /api/sessions/[id]/workouts` (see §5)              |
-| Progress editing                             | `PUT` progress endpoints                                 |
-| Leaves                                       | `GET/POST /api/trainer/leaves`                           |
-| Reschedule approve/reject                    | `/api/trainer/reschedule-requests/[id]/{approve,reject}` |
+> **Trainer role MVP started (2026-06-14):** the `TrainerShell` (4-tab IndexedStack:
+> Today / Clients / Schedule / Profile) replaces the placeholder. **Today** lists the
+> day's sessions with inline Start/End quick actions; **Schedule** is an agenda of
+> upcoming sessions grouped by day; **Clients** is the active roster (primary +
+> reassigned) with this-month stats + a measurement-overdue flag; **session detail**
+> drives the full lifecycle (start / end-with-notes / no-show) and reuses the existing
+> offline-first **workout logger** (the shared `POST /api/sessions/[id]/workouts`
+> path). Data layer: `features/trainer/data/{trainer_models,trainer_repository}.dart`
+> (reuses the client `SessionDetail`/`SessionSummary`/`SessionStatus` models since the
+> trainer endpoints return the same SessionInstance shape). The six trainer routes the
+> app touches were migrated from `hasRole→403` to `requireRole→401/403` (ADR-043) so
+> the app's refresh-on-401 fires on an expired token. Verified end-to-end via a minted
+> trainer JWT (200 happy path on GETs; 401 on bad token; 403 on a client token — all
+> six routes). **Deferred:** client detail (history/progress/last-sets), leaves, and
+> reschedule approve/reject.
+
+| Screen                                       | Endpoint(s)                                              | Status     |
+| -------------------------------------------- | -------------------------------------------------------- | ---------- |
+| Today / Schedule (agenda)                    | `GET /api/trainer/schedule`                              | ✅ done    |
+| Client list (roster)                         | `GET /api/trainer/clients`                               | ✅ done    |
+| Session detail                               | `GET /api/trainer/sessions/[id]`                         | ✅ done    |
+| Session start / end / no-show                | `POST /api/trainer/sessions/[id]/{start,end,no-show}`    | ✅ done    |
+| **Workout logger (offline-first)**           | `POST /api/sessions/[id]/workouts` (see §5)              | ✅ reused  |
+| Client detail (history, progress, last sets) | `/api/trainer/clients/[id]/*`                            | ☐ deferred |
+| Progress editing                             | `PUT` progress endpoints                                 | ☐ deferred |
+| Leaves                                       | `GET/POST /api/trainer/leaves`                           | ☐ deferred |
+| Reschedule approve/reject                    | `/api/trainer/reschedule-requests/[id]/{approve,reject}` | ☐ deferred |
 
 ---
 
 ## 5. Offline-first workout logging (the riskiest feature)
 
-Mirror `src/lib/offline-db.ts` + `useOfflineWorkout.ts` in Flutter:
+> **Built (2026-06-14) — core offline layer shipped in `mobile/lib/src/features/workout/`.**
+> The logger is now write-local-first + connectivity-driven diff sync. What landed and
+> where it diverged from the original sketch below:
+>
+> - **Local store (Drift):** `app_database.dart` — `WorkoutDraftRows` (one row per session:
+>   `draftJson` full editable snapshot, `baselineJson` last-synced save payload, `syncStatus`
+>   pending|synced|failed) + `CachedExerciseRows`. **Per-session snapshot + baseline, not a
+>   per-set `workout_queue`** — this matches how the web logger actually works post-ADR-041
+>   (a `lastSavedPayloadRef` diffed against the current payload). Codegen needs
+>   `dart run build_runner build --force-jit` (sqlite3's native-asset hook breaks the default
+>   AOT entrypoint compile). Store contracts live in `local/workout_local_store.dart` with an
+>   `InMemoryWorkoutStore` for tests.
+> - **Write path:** the logger saves to Drift first, then `WorkoutSyncService.saveLocalAndSync`
+>   flushes if online. Offline saves stay `pending` and show an on-device banner.
+> - **Sync = scoped diff, not full-replace (ADR-041).** `diffExercises(baseline, current)` in
+>   `domain/save_payload.dart` derives `dirtyExerciseIds` / `removedExerciseIds` /
+>   `removedSetsByExerciseId` and POSTs those. **Idempotency comes from the diff being net-zero
+>   on re-send** (sets upsert by number, deletes are explicit) — so no server `localId` upsert
+>   was needed (the route doesn't accept one anyway). `connectivity_plus` drives the flush;
+>   foreground save + app-resume + connectivity-return all trigger it.
+> - **Exercise library cache:** `WorkoutRepository` searches the server online (caching results)
+>   and falls back to the Drift cache offline; `prefetchExerciseLibrary()` warms it on login.
+> - **Session continuity:** opening the logger _anchors_ a synced record (server snapshot) so
+>   the session is editable if connectivity drops mid-edit, and a re-open restores unsynced edits.
+>
+> **Deferred:** `workmanager` true OS-background sync (needs iOS BGTaskScheduler config + can't
+> verify on a simulator; the foreground/resume/connectivity path covers the gym-floor case —
+> `WorkoutSyncService.flushPending` is the seam a headless task would call). Live session-timer
+> continuity (the rest-timer pill) is Phase 4 real-time work, not part of this increment.
+> **Not yet verified in airplane mode on the sim** — unit-tested (diff + sync engine, 18 cases);
+> needs a real on-device offline→online E2E pass.
+
+Original sketch (kept for reference):
 
 - **Local store (Drift):** `workout_queue` (localId UUID, sessionInstanceId, exerciseId,
   sets JSON, syncStatus pending|synced|failed), `exercise_cache`, `session_state`.
@@ -168,11 +255,29 @@ the trainer logs on the gym floor with flaky wifi.
 
 ## 6. Real-time & push
 
-- **Pusher:** reuse the existing app, cluster, channels, and event names. Subscribe on
-  the session/timer screens. Private channels authenticate via a Bearer-aware auth route.
+> **Phase 4 started (2026-06-14).** Live-timer real-time **built + unit-tested + DEVICE-VERIFIED**
+> on the iPhone 17 Pro sim (LIVE pill ticks; `WORKOUT_UPDATED` auto-refetch + self-echo skip
+> confirmed via the dev-server request log; server emit 200; `wss` handshake OK). FCM push track
+> is next — `GoogleService-Info.plist` parked at `mobile/ios/Runner/`, gated on a paid Apple
+> Developer account (push capability + APNs key).
+> Details + rationale in **ADR-045**. Correction to the sketch below: the existing channels are
+> **public** (no `private-`/`presence-`), so **no Pusher auth route is needed** — the app reuses
+> the same public `session-{id}` channel directly.
+
+- **Pusher (live session timer + workout sync):** reuse the existing app, cluster, public
+  channels, and event names. `core/realtime/pusher_service.dart` is a ref-counted, lazily-
+  connected wrapper (graceful no-op when `--dart-define=PUSHER_KEY/CLUSTER` are absent).
+  `core/realtime/session_realtime.dart` = the `SessionRealtimeMixin` (subscribe `session-{id}`,
+  refetch on `SESSION_STARTED`/`SESSION_ENDED`/`WORKOUT_UPDATED`, self-echo skipped) + the
+  `LiveSessionTimer` pill (ticks locally off `startedAt`). Wired into both the client and
+  trainer session-detail screens. To verify: set the Pusher app's `PUSHER_*` in `.env.local`
+  (server emit) + pass `--dart-define=PUSHER_KEY=… --dart-define=PUSHER_CLUSTER=…` (app subscribe).
 - **FCM:** `firebase_core` + `firebase_messaging`; iOS needs an APNs key in the Firebase
   console + push capability + background modes. Register the native token through the
-  existing `FcmToken` flow; the server already sends via `firebase-admin`.
+  existing `FcmToken` flow; the server already sends via `firebase-admin`. **Backend ready:**
+  `FcmToken.platform` added + `POST /api/notifications/fcm-token` accepts `{ token, platform }`
+  - an `apns` block in the send path (ADR-045). **Flutter client = next increment** (needs
+    `GoogleService-Info.plist` + APNs key).
 
 ---
 
@@ -228,22 +333,24 @@ flutter run --dart-define=API_BASE_URL=http://localhost:3000
 
 ## 9. Phases & effort (1–2 Flutter devs)
 
-| Phase | Work                                                                                 | Est.            |
-| ----- | ------------------------------------------------------------------------------------ | --------------- |
-| 0     | Backend mobile auth + Bearer shim, signed upload, Pusher/FCM auth                    | 2–3 wks         |
-| 1     | Flutter foundation (**scaffolded**) — finish design system, dio refresh, CI, flavors | 2–3 wks         |
-| 2     | Client role MVP → TestFlight/Internal                                                | 3–4 wks         |
-| 3     | Trainer role + **offline workout logger**                                            | 4–6 wks         |
-| 4     | Real-time + native push hardening                                                    | 1–2 wks         |
-| 5     | Store launch (App Store + Play)                                                      | 1–2 wks         |
-| —     | **Trainer + Client mobile, end-to-end**                                              | **~4–5 months** |
+| Phase | Work                                                                                                      | Est.            |
+| ----- | --------------------------------------------------------------------------------------------------------- | --------------- |
+| 0     | Backend mobile auth + Bearer shim **(✅ done)** + signed upload **(✅ done)**; Pusher/FCM auth (deferred) | 2–3 wks         |
+| 1     | Flutter foundation (**scaffolded**) — finish design system, dio refresh, CI, flavors                      | 2–3 wks         |
+| 2     | Client role MVP → TestFlight/Internal **(in progress: shell+dashboard+sessions+profile done)**            | 3–4 wks         |
+| 3     | Trainer role + **offline workout logger**                                                                 | 4–6 wks         |
+| 4     | Real-time + native push hardening **(started: live-timer built/tested; FCM next — ADR-045)**              | 1–2 wks         |
+| 5     | Store launch (App Store + Play)                                                                           | 1–2 wks         |
+| —     | **Trainer + Client mobile, end-to-end**                                                                   | **~4–5 months** |
 
 ---
 
 ## 10. Open risks / decisions
 
-- **Refresh-token strategy** — rotating refresh + denylist vs `tokenVersion` on `User`.
-  Pick one in Phase 0.
+- ~~**Refresh-token strategy**~~ — **RESOLVED (2026-06-13):** dedicated `MobileRefreshToken`
+  table with rotation chains (`familyId`) + reuse detection (presenting a revoked token
+  revokes the whole family). Per-device revoke + `?all=true` logout-everywhere. Raw tokens
+  are never stored (only sha256 hash).
 - **Offline write idempotency** — server upsert keyed on `localId` is required for safe
   retries; confirm `POST /api/sessions/[id]/workouts` supports it.
 - **Community module** — in scope for mobile or web-only? (not yet decided)

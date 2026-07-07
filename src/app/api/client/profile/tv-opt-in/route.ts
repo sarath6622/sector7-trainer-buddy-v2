@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession, hasRole } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { toErrorResponse, AppError } from '@/lib/errors';
 import { tvOptInSchema } from '@/lib/validators';
 import { prisma } from '@/lib/prisma';
@@ -7,10 +7,7 @@ import { auditLog } from '@/lib/audit';
 
 export async function GET(_request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.roles ?? [session.user.role], ['CLIENT'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['CLIENT'], { matchAllRoles: true });
     if (!session.user.clientProfileId) {
       throw new AppError('NOT_FOUND', 'Client profile not found for session', 404);
     }
@@ -30,10 +27,7 @@ export async function GET(_request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session || !hasRole(session.user.roles ?? [session.user.role], ['CLIENT'])) {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
+    const session = await requireRole(['CLIENT'], { matchAllRoles: true });
     if (!session.user.clientProfileId) {
       throw new AppError('NOT_FOUND', 'Client profile not found for session', 404);
     }

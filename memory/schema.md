@@ -1072,3 +1072,67 @@ enum SecondaryMetric {
 DEFAULT ARRAY[]::TEXT[]`, backfills it from the old single `pinnedPanel`
   (one-element array where set), then drops `pinnedPanel`. Applied to local
   Docker and Neon.
+
+## Mobile Refresh Tokens (2026-06-13, Flutter Phase 0)
+
+### New Model: MobileRefreshToken
+
+Server-side store for the Flutter app's rotating refresh tokens. The raw token is
+**never** stored — only its sha256 hash. One row = one refresh token in a rotation
+chain (`familyId`). On rotation the presented row is revoked (`revokedAt`,
+`replacedByJti`) and a successor row is created in the same family. Presenting an
+already-revoked token (reuse) revokes the whole family. See ADR-042.
+
+```prisma
+model MobileRefreshToken {
+  id            String    @id @default(cuid())
+  userId        String
+  jti           String    @unique   // matches the refresh JWT's jti claim
+  tokenHash     String              // sha256(rawRefreshToken) hex
+  familyId      String              // rotation chain; reuse revokes the whole family
+  platform      String?             // "ios" | "android"
+  deviceId      String?
+  userAgent     String?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  replacedByJti String?
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([familyId])
+  @@map("mobile_refresh_tokens")
+}
+```
+
+`User` gains `mobileRefreshTokens MobileRefreshToken[]`.
+
+### Migration
+
+- `20260613073832_add_mobile_refresh_token` — creates `mobile_refresh_tokens` (+ unique
+  index on `jti`, indexes on `userId`/`familyId`, FK to `users` ON DELETE CASCADE).
+  Additive only. Applied to Neon (via `prisma migrate dev`, which reads `.env`) **and**
+  local Docker (via `prisma migrate deploy` with the local `DATABASE_URL`). ⚠️ Note the
+  tooling footgun: Prisma reads `.env` (Neon); the Next dev server reads `.env.local`
+  (local Docker). `prisma migrate dev` therefore hits Neon by default — apply to local
+  Docker explicitly to keep both in sync.
+
+## FcmToken Platform (2026-06-14, Flutter Phase 4 — push)
+
+### Altered: FcmToken
+
+- Added `platform String?` — `"ios" | "android" | "web"`. Native (Flutter)
+  device tokens set it via `POST /api/notifications/fcm-token { token, platform }`;
+  web-push registers without it (stays null). Purely additive, nullable; the FCM
+  send path (`src/lib/notifications.ts → sendEachForMulticast`) sends to all of a
+  user's tokens regardless of platform — `platform` is for diagnostics / future
+  platform-targeted payloads.
+
+### Migration
+
+- `20260614154012_add_fcm_token_platform` — `ALTER TABLE "fcm_tokens" ADD COLUMN "platform" TEXT;`.
+  Additive, nullable. ⚠️ **Local Docker ONLY so far** (operator chose to hold the Neon
+  deploy until release). Because `prisma migrate dev` hits Neon by default (reads `.env`)
+  and local Docker is migration-drifted (42 history rows vs 39 folder migrations — see
+  [[prisma-env-neon-vs-local]]), this was applied surgically: `prisma db execute --url <docker>`
+  to add the column, then the `_prisma_migrations` row was inserted manually (sha256 of the
+  migration.sql as the checksum). **Before deploy: run `prisma migrate deploy` against Neon.**

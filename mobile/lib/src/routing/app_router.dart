@@ -4,9 +4,21 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/presentation/login_screen.dart';
-import '../features/client/presentation/client_dashboard_screen.dart';
+import '../features/client/presentation/badges_screen.dart';
+import '../features/client/presentation/client_settings_screen.dart';
+import '../features/client/presentation/client_shell.dart';
+import '../features/client/presentation/metric_detail_screen.dart';
+import '../features/client/presentation/reschedule_requests_screen.dart';
+import '../features/client/presentation/session_detail_screen.dart';
+import '../features/client/presentation/unavailability_screen.dart';
+import '../features/client/presentation/workout_history_screen.dart';
 import '../features/shared/presentation/splash_screen.dart';
-import '../features/trainer/presentation/trainer_home_screen.dart';
+import '../features/trainer/data/trainer_models.dart';
+import '../features/trainer/presentation/trainer_client_detail_screen.dart';
+import '../features/trainer/presentation/trainer_leaves_screen.dart';
+import '../features/trainer/presentation/trainer_reschedule_screen.dart';
+import '../features/trainer/presentation/trainer_session_detail_screen.dart';
+import '../features/trainer/presentation/trainer_shell.dart';
 
 /// Role-based routing that mirrors src/middleware.ts:
 ///   TRAINER / KICKBOXING_TRAINER / CROSSFIT_TRAINER → /trainer
@@ -22,9 +34,76 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: auth,
     routes: [
       GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(path: '/trainer', builder: (_, _) => const TrainerHomeScreen()),
-      GoRoute(path: '/client', builder: (_, _) => const ClientDashboardScreen()),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (_, _) => _fadePage(const LoginScreen()),
+      ),
+      GoRoute(
+        path: '/trainer',
+        pageBuilder: (_, _) => _fadePage(const TrainerShell()),
+        routes: [
+          GoRoute(
+            path: 'sessions/:id',
+            builder: (_, state) => TrainerSessionDetailScreen(
+              sessionId: state.pathParameters['id']!,
+            ),
+          ),
+          GoRoute(
+            path: 'clients/:id',
+            builder: (_, state) => TrainerClientDetailScreen(
+              clientProfileId: state.pathParameters['id']!,
+              client: state.extra is TrainerClient
+                  ? state.extra as TrainerClient
+                  : null,
+            ),
+          ),
+          GoRoute(
+            path: 'leaves',
+            builder: (_, _) => const TrainerLeavesScreen(),
+          ),
+          GoRoute(
+            path: 'reschedule-requests',
+            builder: (_, _) => const TrainerRescheduleScreen(),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/client',
+        pageBuilder: (_, _) => _fadePage(const ClientShell()),
+        routes: [
+          GoRoute(
+            path: 'sessions/:id',
+            builder: (_, state) =>
+                SessionDetailScreen(sessionId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: 'workouts',
+            builder: (_, _) => const WorkoutHistoryScreen(),
+          ),
+          GoRoute(
+            path: 'progress/:metric',
+            builder: (_, state) => MetricDetailScreen(
+              metricKey: state.pathParameters['metric']!,
+            ),
+          ),
+          GoRoute(
+            path: 'badges',
+            builder: (_, _) => const BadgesScreen(),
+          ),
+          GoRoute(
+            path: 'unavailability',
+            builder: (_, _) => const UnavailabilityScreen(),
+          ),
+          GoRoute(
+            path: 'reschedule-requests',
+            builder: (_, _) => const RescheduleRequestsScreen(),
+          ),
+          GoRoute(
+            path: 'settings',
+            builder: (_, _) => const ClientSettingsScreen(),
+          ),
+        ],
+      ),
       GoRoute(path: '/unsupported', builder: (_, _) => const _UnsupportedRoleScreen()),
     ],
     redirect: (context, state) {
@@ -51,6 +130,16 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
   );
 });
+
+/// Cross-fade page transition used for the top-level destinations, so the
+/// animated splash dissolves into login / the role home instead of a hard cut
+/// (mirrors the PWA splash fading out over the page).
+CustomTransitionPage<void> _fadePage(Widget child) => CustomTransitionPage<void>(
+      child: child,
+      transitionDuration: const Duration(milliseconds: 350),
+      transitionsBuilder: (_, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
+    );
 
 class _UnsupportedRoleScreen extends ConsumerWidget {
   const _UnsupportedRoleScreen();

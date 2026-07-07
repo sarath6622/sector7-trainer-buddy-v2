@@ -1,14 +1,17 @@
-import type { NextAuthOptions } from 'next-auth';
+import type { NextAuthOptions, Session } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { getServerSession as getNextAuthServerSession } from 'next-auth';
+import { headers } from 'next/headers';
 import { compare } from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { sessionFromAccessToken } from '@/lib/mobile-auth';
+import { AppError } from '@/lib/errors';
 
 /**
  * Compute the primary role from a roles array based on priority.
  * Primary role is used for routing and navigation.
  */
-function computePrimaryRole(roles: string[]): string {
+export function computePrimaryRole(roles: string[]): string {
   const rolePriority: Record<string, number> = {
     SUPER_ADMIN: 0,
     BRANCH_ADMIN: 1,
@@ -121,9 +124,69 @@ export const authOptions: NextAuthOptions = {
 
 /**
  * Server-side session getter. Use in API routes and server components.
+ *
+ * Accepts EITHER a NextAuth cookie (web) OR a mobile `Authorization: Bearer`
+ * access token (Flutter app). When a Bearer header is present we use only the
+ * JWT path — an invalid/expired token returns null (there is no cookie to fall
+ * back to). The returned shape is identical for both paths, so RBAC, branch
+ * scoping, and audit logging in the 150+ route handlers work unchanged.
+ *
+ * See src/lib/mobile-auth.ts and docs/flutter-migration-plan.md §3.
  */
-export function getServerSession() {
+export async function getServerSession(): Promise<Session | null> {
+  const authz = (await headers()).get('authorization');
+  if (authz?.startsWith('Bearer ')) {
+    const token = authz.slice(7).trim();
+    return token ? sessionFromAccessToken(token) : null;
+  }
   return getNextAuthServerSession(authOptions);
+}
+
+/**
+ * Auth guard for route handlers. Returns the session, or throws an `AppError`
+ * the route's `catch → toErrorResponse` turns into the right HTTP status:
+ *
+ *   - **401 UNAUTHORIZED** when there is no session — no, expired, or invalid
+ *     token/cookie. Distinct from 403 so the mobile client can tell "token
+ *     expired → silently refresh and retry" from "logged in but not allowed".
+ *   - **403 FORBIDDEN** when the session holds none of `allowedRoles`.
+ *
+ * Replaces the old conflated `if (!session || !hasRole(...)) → 403`, which made
+ * an expired mobile access token look like a permission error (the app's
+ * refresh-on-401 never fired). `matchAllRoles` checks every role the user holds
+ * (mirrors `hasRole(session.user.roles ?? [session.user.role], ...)`); the
+ * default checks the computed primary role.
+ *
+ * Branch scoping and audit logging are unchanged — callers use the returned
+ * session exactly as before.
+ */
+export async function requireRole(
+  allowedRoles: string[],
+  opts: { matchAllRoles?: boolean } = {},
+): Promise<Session> {
+  return assertSessionRole(await getServerSession(), allowedRoles, opts);
+}
+
+/**
+ * Pure auth/authz check (no request context) behind {@link requireRole}, split
+ * out so the 401-vs-403 decision is unit-testable. Throws 401 when `session` is
+ * null, 403 when it lacks an allowed role; otherwise returns the session.
+ */
+export function assertSessionRole(
+  session: Session | null,
+  allowedRoles: string[],
+  opts: { matchAllRoles?: boolean } = {},
+): Session {
+  if (!session) {
+    throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+  }
+  const subject = opts.matchAllRoles
+    ? (session.user.roles ?? [session.user.role])
+    : session.user.role;
+  if (!hasRole(subject, allowedRoles)) {
+    throw new AppError('FORBIDDEN', 'Forbidden', 403);
+  }
+  return session;
 }
 
 /**

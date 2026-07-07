@@ -26,6 +26,17 @@ class AuthUser {
 
   String get fullName => '$firstName $lastName';
 
+  AuthUser copyWith({String? firstName, String? lastName}) => AuthUser(
+        id: id,
+        email: email,
+        role: role,
+        branchId: branchId,
+        firstName: firstName ?? this.firstName,
+        lastName: lastName ?? this.lastName,
+        trainerProfileId: trainerProfileId,
+        clientProfileId: clientProfileId,
+      );
+
   bool get isTrainer =>
       role == 'TRAINER' ||
       role == 'KICKBOXING_TRAINER' ||
