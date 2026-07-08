@@ -132,6 +132,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ data: payload, serverNow });
   } catch (err) {
     if (err instanceof ZodError) {
+      console.error(
+        '[PUT /api/sessions/[id]/rest-timer] Invalid payload:',
+        JSON.stringify(err.issues),
+      );
       return NextResponse.json(
         { error: 'Invalid payload', code: 'VALIDATION_ERROR', issues: err.issues },
         { status: 422 },
