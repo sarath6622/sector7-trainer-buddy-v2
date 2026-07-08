@@ -73,6 +73,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     );
   } catch (err) {
     if (err instanceof ZodError) {
+      // Log the issues — a silent 422 here hid the client-side validation gap
+      // behind the "invalid payload" reports from prod.
+      console.error(
+        '[POST /api/sessions/[id]/workouts] Invalid payload:',
+        JSON.stringify(err.issues),
+      );
       return NextResponse.json(
         { error: 'Invalid payload', code: 'VALIDATION_ERROR', issues: err.issues },
         { status: 422 },

@@ -4,12 +4,15 @@ import {
   diffExercises,
   hasDraftRows,
   isSetComplete,
+  isSetFieldValid,
   normalizeSet,
+  sanitizeRecoveredExercises,
   setSignature,
   signaturesOf,
   type ExerciseEntry,
   type SetData,
 } from '@/components/workout/WorkoutLogger';
+import { workoutEntrySchema } from '@/lib/validators';
 
 // Covers the "only save once the work fields are entered" rule and the per-set
 // "saved" signatures that drive the green state in the workout logger.
@@ -66,6 +69,104 @@ describe('isSetComplete', () => {
     expect(isSetComplete(makeSet({ durationSec: 60 }), 'DURATION')).toBe(true);
     expect(isSetComplete(makeSet({ durationSec: 60 }), 'CARDIO')).toBe(true);
     expect(isSetComplete(makeSet(), 'CARDIO')).toBe(false);
+  });
+});
+
+// The prod "Invalid payload" bug: the set cells are free-text inputs behind a
+// bare parseFloat, so values the server rejects (0 reps, decimal reps, rest over
+// 60 min) were typeable, counted as "complete" under the old presence-only
+// gate, entered the full-snapshot POST and 422'd the save for the ENTIRE
+// session from then on. isSetComplete now mirrors workoutSetSchema, so a
+// server-invalid set stays a local draft until the offending cell is fixed.
+describe('server-invalid values stay local drafts', () => {
+  it('zero reps/duration and negative weight are not complete', () => {
+    expect(isSetComplete(makeSet({ weightKg: -5, reps: 15 }), 'WEIGHTED')).toBe(false);
+    expect(isSetComplete(makeSet({ weightKg: 20, reps: 0 }), 'WEIGHTED')).toBe(false);
+    expect(isSetComplete(makeSet({ reps: 0 }), 'BODYWEIGHT')).toBe(false);
+    expect(isSetComplete(makeSet({ durationSec: 0 }), 'CARDIO')).toBe(false);
+  });
+
+  it('0 kg is a valid weight (free-weight movement under a WEIGHTED exercise)', () => {
+    expect(isSetComplete(makeSet({ weightKg: 0, reps: 15 }), 'WEIGHTED')).toBe(true);
+  });
+
+  it('decimals in integer fields are not complete', () => {
+    expect(isSetComplete(makeSet({ weightKg: 20, reps: 12.5 }), 'WEIGHTED')).toBe(false);
+    expect(isSetComplete(makeSet({ weightKg: 20, reps: 12, restSec: 90.5 }), 'WEIGHTED')).toBe(
+      false,
+    );
+  });
+
+  it('rest beyond the 1h cap is not complete; boundary + decimal kg still are', () => {
+    expect(isSetComplete(makeSet({ weightKg: 20, reps: 12, restSec: 3660 }), 'WEIGHTED')).toBe(
+      false,
+    );
+    expect(isSetComplete(makeSet({ weightKg: 37.5, reps: 12, restSec: 3600 }), 'WEIGHTED')).toBe(
+      true,
+    );
+  });
+
+  it('buildSavePayload output always passes the server schema', () => {
+    const entry = makeEntry({
+      sets: [
+        makeSet({ setNumber: 1, weightKg: -5, reps: 15 }), // negative kg → dropped
+        makeSet({ setNumber: 2, weightKg: 20, reps: 12.5 }), // decimal reps → dropped
+        makeSet({ setNumber: 3, weightKg: 37.5, reps: 15 }), // valid → kept
+      ],
+    });
+    const payload = buildSavePayload([entry]);
+    expect(payload[0]!.sets.map((s) => s.setNumber)).toEqual([3]);
+    for (const e of payload) {
+      expect(workoutEntrySchema.safeParse(e).success).toBe(true);
+    }
+  });
+
+  it('an invalid set counts as a draft so a refetch cannot wipe it', () => {
+    const entry = makeEntry({ sets: [makeSet({ weightKg: 20, reps: 12.5 })] });
+    expect(hasDraftRows([entry], buildSavePayload([entry]))).toBe(true);
+  });
+});
+
+// Drives the per-cell red border: flags exactly the value the server would
+// reject, while an empty cell is never an error.
+describe('isSetFieldValid', () => {
+  it('matches the server constraints per field', () => {
+    expect(isSetFieldValid('weightKg', -5)).toBe(false);
+    expect(isSetFieldValid('weightKg', 0)).toBe(true);
+    expect(isSetFieldValid('weightKg', 0.5)).toBe(true);
+    expect(isSetFieldValid('reps', 12.5)).toBe(false);
+    expect(isSetFieldValid('reps', 12)).toBe(true);
+    expect(isSetFieldValid('restSec', 3660)).toBe(false);
+    expect(isSetFieldValid('restSec', 0)).toBe(true);
+    expect(isSetFieldValid('reps', undefined)).toBe(true);
+  });
+});
+
+// Outboxes written before the client mirrored the server schema can hold
+// poisoned sets; replaying them verbatim would 422 on every mount forever.
+describe('sanitizeRecoveredExercises', () => {
+  it('drops server-invalid sets but keeps valid ones and structural rows', () => {
+    const recovered = [
+      {
+        exerciseId: 'ex-1',
+        orderIndex: 0,
+        isCompleted: false,
+        sets: [
+          normalizeSet(makeSet({ setNumber: 1, weightKg: -5, reps: 15 })),
+          normalizeSet(makeSet({ setNumber: 2, weightKg: 20, reps: 8 })),
+        ],
+      },
+      {
+        exerciseId: 'ex-2',
+        orderIndex: 1,
+        isCompleted: false,
+        sets: [normalizeSet(makeSet({ setNumber: 1, weightKg: 10, reps: 0 }))],
+      },
+    ];
+    const clean = sanitizeRecoveredExercises(recovered);
+    expect(clean[0]!.sets.map((s) => s.setNumber)).toEqual([2]);
+    expect(clean[1]!.exerciseId).toBe('ex-2'); // structural row survives
+    expect(clean[1]!.sets).toEqual([]);
   });
 });
 

@@ -34,6 +34,7 @@ import {
   type CuratedMuscleGroupId,
 } from '@/lib/muscle-groups';
 import { writeOutbox, readOutbox, clearOutbox } from '@/lib/workout-outbox';
+import { workoutSetSchema } from '@/lib/validators';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -303,16 +304,33 @@ function progressUnitFor(
 // are treated as not-yet-entered: excluded from the save payload so a half-
 // typed set never hits the DB, and never rendered in the saved (green) state.
 const hasValue = (v: number | null | undefined) => v !== undefined && v !== null;
+
+// Per-field mirror of the server's workoutSetSchema constraints (reps/duration
+// are positive ints, weight > 0, rest 0–3600s, …). The set cells are free-text
+// inputs behind a bare parseFloat, so values the API rejects (0 reps, 12.5 reps)
+// are typeable; checking with the same schema lets the UI flag the exact cell.
+export function isSetFieldValid(key: keyof SetData, value: number | string | undefined): boolean {
+  if (value === undefined || key === 'notes') return true;
+  return workoutSetSchema.shape[key].safeParse(value).success;
+}
+
 export function isSetComplete(set: SetData, exerciseType: ExerciseType): boolean {
-  switch (exerciseType) {
-    case 'WEIGHTED':
-      return hasValue(set.reps) && hasValue(set.weightKg);
-    case 'BODYWEIGHT':
-      return hasValue(set.reps);
-    case 'DURATION':
-    case 'CARDIO':
-      return hasValue(set.durationSec);
-  }
+  const requiredFilled = (() => {
+    switch (exerciseType) {
+      case 'WEIGHTED':
+        return hasValue(set.reps) && hasValue(set.weightKg);
+      case 'BODYWEIGHT':
+        return hasValue(set.reps);
+      case 'DURATION':
+      case 'CARDIO':
+        return hasValue(set.durationSec);
+    }
+  })();
+  // …and every entered value must be one the server will accept. The POST is a
+  // full session snapshot, so a single rejected value (0 reps, decimal reps)
+  // 422s the save for EVERYTHING logged after it — such a set must stay a
+  // local draft until the offending cell is corrected.
+  return requiredFilled && workoutSetSchema.safeParse(normalizeSet(set)).success;
 }
 
 // Canonical wire shape for a single set. Shared by the save payload, the
@@ -331,7 +349,7 @@ export function normalizeSet(s: SetData) {
   };
 }
 
-type SavePayloadEntry = {
+export type SavePayloadEntry = {
   exerciseId: string;
   orderIndex: number;
   isCompleted: boolean;
@@ -380,6 +398,18 @@ export function buildSavePayload(exercises: ExerciseEntry[]): SavePayloadEntry[]
     orderIndex: idx,
     isCompleted: entry.isCompleted,
     sets: entry.sets.filter((s) => isSetComplete(s, entry.exerciseType)).map(normalizeSet),
+  }));
+}
+
+// Drop any recovered set the server would reject. Outboxes written before the
+// client mirrored workoutSetSchema can carry invalid values (0 reps, decimal
+// reps); a validation reject is deterministic, so replaying them verbatim
+// would 422 on every mount forever. Exercises keep their structural row even
+// when all of their sets are dropped.
+export function sanitizeRecoveredExercises(exercises: SavePayloadEntry[]): SavePayloadEntry[] {
+  return exercises.map((e) => ({
+    ...e,
+    sets: e.sets.filter((s) => workoutSetSchema.safeParse(s).success),
   }));
 }
 
@@ -1132,7 +1162,15 @@ export function WorkoutLogger({
       } else {
         const err = await res.json().catch(() => ({}));
         setAutoSaveStatus('error');
-        toast.error(err.error || 'Auto-save failed');
+        // Backstop — client-side validation should keep rejected values out of
+        // the payload, but if a 422 still happens, name the field instead of
+        // surfacing the opaque "Invalid payload".
+        const issue = err?.issues?.[0];
+        toast.error(
+          issue?.path?.length
+            ? `Couldn't save — invalid ${issue.path[issue.path.length - 1]}: ${issue.message}`
+            : err.error || 'Auto-save failed',
+        );
       }
     } catch {
       setAutoSaveStatus('error');
@@ -1300,14 +1338,19 @@ export function WorkoutLogger({
     const record = readOutbox<SavePayloadEntry>(sessionInstanceId);
     if (!record || record.exercises.length === 0) return;
 
+    // Strip sets the server would 422 (outboxes written before the client
+    // validated against workoutSetSchema can hold 0-reps / decimal-reps rows) —
+    // otherwise one bad value blocks the replay of everything else in it.
+    const exercises = sanitizeRecoveredExercises(record.exercises);
+
     // lastSavedPayloadRef holds the freshly-hydrated server snapshot. If every
     // exercise and complete set in the outbox is already persisted, this is
     // stale leftover — just drop it.
     const serverSigs = signaturesOf(lastSavedPayloadRef.current);
     const serverExIds = new Set(lastSavedPayloadRef.current.map((e) => e.exerciseId));
-    const outboxSigs = signaturesOf(record.exercises);
+    const outboxSigs = signaturesOf(exercises);
     const hasUnsynced =
-      record.exercises.some((e) => !serverExIds.has(e.exerciseId)) ||
+      exercises.some((e) => !serverExIds.has(e.exerciseId)) ||
       [...outboxSigs].some((sig) => !serverSigs.has(sig));
     if (!hasUnsynced) {
       clearOutbox(sessionInstanceId);
@@ -1319,8 +1362,8 @@ export function WorkoutLogger({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          exercises: record.exercises,
-          dirtyExerciseIds: record.exercises.map((e) => e.exerciseId),
+          exercises,
+          dirtyExerciseIds: exercises.map((e) => e.exerciseId),
           removedExerciseIds: [],
           removedSetsByExerciseId: {},
         }),
@@ -1330,9 +1373,13 @@ export function WorkoutLogger({
         // Pull the now-persisted data back so the UI shows it with full
         // metadata (the outbox only carries ids, not exercise names/types).
         onForegroundRef.current?.();
+      } else if (res.status === 422) {
+        // A validation reject is deterministic — the same payload would fail
+        // on every future mount/reconnect too. Drop it instead of retrying.
+        clearOutbox(sessionInstanceId);
       }
-      // On a non-ok response (e.g. still-expired session) leave the outbox in
-      // place — the next mount or `online` event retries.
+      // On any other non-ok response (e.g. still-expired session) leave the
+      // outbox in place — the next mount or `online` event retries.
     } catch {
       /* offline — keep the outbox and retry on reconnect */
     }
@@ -2196,6 +2243,14 @@ export function WorkoutLogger({
                                   {
                                     const mode = inputModeFor(col.key);
                                     const draftKey = `${exIdx}-${setIdx}-${col.key as string}`;
+                                    // Value the server would reject (0 reps,
+                                    // decimal reps, rest > 60 min) — the set
+                                    // stays a local draft until it's fixed, so
+                                    // flag the exact cell.
+                                    const fieldInvalid = !isSetFieldValid(
+                                      col.key,
+                                      set[col.key] as number | string | undefined,
+                                    );
                                     return (
                                       <Input
                                         key={col.key as string}
@@ -2216,10 +2271,12 @@ export function WorkoutLogger({
                                         // focus even with user-scalable=no in PWA standalone.
                                         // Saved rows turn green so the trainer knows the value
                                         // is persisted; editing flips the row back to neutral.
-                                        className={`h-11 rounded-xl text-center text-base font-semibold tabular-nums border focus:border-blue-500 focus-visible:ring-0 ${
-                                          setSaved
-                                            ? 'border-emerald-600/40 text-emerald-400'
-                                            : 'border-zinc-700'
+                                        className={`h-11 rounded-xl text-center text-base font-semibold tabular-nums border focus-visible:ring-0 ${
+                                          fieldInvalid
+                                            ? 'border-red-500/70 text-red-400 focus:border-red-500'
+                                            : setSaved
+                                              ? 'border-emerald-600/40 text-emerald-400 focus:border-blue-500'
+                                              : 'border-zinc-700 focus:border-blue-500'
                                         }`}
                                         value={
                                           col.key === 'notes'

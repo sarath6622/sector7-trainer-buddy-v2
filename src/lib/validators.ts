@@ -451,7 +451,10 @@ export const listAuditLogsSchema = paginationSchema.extend({
 export const workoutSetSchema = z.object({
   setNumber: z.number().int().positive(),
   reps: z.number().int().positive().optional(),
-  weightKg: z.number().positive().optional(),
+  // 0 is a valid weight: free-weight/bodyweight movements logged under a
+  // WEIGHTED exercise (e.g. unweighted squats). PR/badge eval already skips
+  // logs whose max weight is 0.
+  weightKg: z.number().min(0).optional(),
   durationSec: z.number().int().positive().optional(),
   rpe: z.number().int().min(1).max(10).optional(),
   // Seconds rested before this set. Auto-filled by the workout logger from
