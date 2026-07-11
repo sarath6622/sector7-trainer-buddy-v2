@@ -1486,3 +1486,11 @@
 - Placed as the 3rd card on `/client` dashboard, before the engagement stats strip; skeleton updated
 - Tests: `tests/unit/workout-calendar.test.ts` (7 passing); lint + type-check clean
 - Scope cut per operator: no double-session / high-intensity markers
+
+#### Ad-hoc (2026-07-11): PWA pull-to-refresh
+
+- `src/components/layout/PullToRefresh.tsx` — Chrome-style pull-to-refresh gesture for the installed PWA (native gesture is disabled by `overscroll-behavior-y: none` and standalone mode has no refresh UI). Floating spinner badge follows the damped pull; release past 70px triggers a full `window.location.reload()` (universal — pages fetch client-side, so `router.refresh()` wouldn't refresh them; workout logging survives reloads via the durable outbox)
+- Wrapped `{children}` inside the dashboard `<main>` scroller in `src/app/(dashboard)/layout.tsx` — covers all admin/trainer/client pages
+- Guards: engages only when the scroller is at the top, vertical-dominant swipes only (calendar/chart h-scroll untouched), skips touches inside nested scrollers that are mid-scroll, offline pull shows a toast instead of reloading, single-fire while a refresh is in flight
+- Tests: `tests/unit/pull-to-refresh.test.tsx` (8 passing); lint + type-check clean
+- Not yet verified on a physical device (touch gesture) — needs an on-device eyeball on iOS standalone PWA

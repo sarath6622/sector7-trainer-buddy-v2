@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { RoleTabBar } from '@/components/layout/RoleTabBar';
+import { PullToRefresh } from '@/components/layout/PullToRefresh';
 import { NAV_BY_ROLE, type NavItem } from '@/lib/constants';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
 import type { NotificationPayload, LeaveStatusChangedPayload } from '@/lib/pusher';
@@ -206,7 +207,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopNav user={user} navItems={navItems} onLogout={handleLogout} />
         <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
-          {children}
+          <PullToRefresh>{children}</PullToRefresh>
         </main>
         {!hideTabBar && <RoleTabBar role={role} navItems={navItems} navBadges={navBadges} />}
       </div>
