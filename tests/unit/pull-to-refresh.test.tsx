@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PullToRefresh } from '@/components/layout/PullToRefresh';
 
 vi.mock('sonner', () => ({
@@ -134,13 +134,43 @@ describe('PullToRefresh', () => {
     expect(onRefresh).not.toHaveBeenCalled();
   });
 
-  it('only fires once while a refresh is in flight', () => {
-    const onRefresh = vi.fn();
+  it('only fires once while a refresh is in flight, then re-arms when it settles', async () => {
+    let resolveRefresh = () => {};
+    const onRefresh = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
     const { content } = renderInScroller(onRefresh);
 
     pullGesture(content, 10, 210);
     pullGesture(content, 10, 210);
-
     expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    resolveRefresh();
+    const indicator = screen.getByTestId('ptr-indicator');
+    await waitFor(() => expect(indicator.style.opacity).toBe('0'));
+
+    pullGesture(content, 10, 210);
+    expect(onRefresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the indicator spinning until an async refresh settles', async () => {
+    let resolveRefresh = () => {};
+    const onRefresh = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    const { content } = renderInScroller(onRefresh);
+    const indicator = screen.getByTestId('ptr-indicator');
+
+    pullGesture(content, 10, 210);
+    expect(indicator.style.opacity).toBe('1');
+
+    resolveRefresh();
+    await waitFor(() => expect(indicator.style.opacity).toBe('0'));
   });
 });

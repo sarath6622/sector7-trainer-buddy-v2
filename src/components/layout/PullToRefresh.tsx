@@ -14,8 +14,11 @@ const DAMPING = 0.5;
 
 interface PullToRefreshProps {
   children: React.ReactNode;
-  /** Called when a pull past the threshold is released. Defaults to a full page reload. */
-  onRefresh?: () => void;
+  /**
+   * Called when a pull past the threshold is released; the indicator spins
+   * until the returned promise settles. Defaults to a full page reload.
+   */
+  onRefresh?: () => void | Promise<void>;
 }
 
 /**
@@ -143,7 +146,13 @@ export function PullToRefresh({ children, onRefresh }: PullToRefreshProps) {
           skipSplashOnNextLoad();
           window.location.reload();
         });
-      refresh();
+      // Keep spinning until an async refresh settles, then retract. (For the
+      // full-reload default the page unloads first, so this never runs.)
+      Promise.resolve(refresh()).finally(() => {
+        refreshingRef.current = false;
+        setRefreshing(false);
+        setPullBoth(0);
+      });
     };
 
     const onTouchEnd = () => {

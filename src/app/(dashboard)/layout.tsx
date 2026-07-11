@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
@@ -23,6 +23,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isAdmin = role === 'SUPER_ADMIN' || role === 'BRANCH_ADMIN';
 
   const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
+
+  // Pull-to-refresh: soft refresh instead of a full reload — refetch server
+  // data and remount only the page subtree (via key) so its client fetches
+  // re-run. The shell (TopNav, sidebar, tab bar) stays mounted, so no
+  // full-page skeleton or boot splash.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const handleRefresh = useCallback(async () => {
+    router.refresh();
+    setRefreshKey((k) => k + 1);
+    // Brief hold so the spinner retracts smoothly instead of flashing away
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }, [router]);
 
   // ── Real-time: subscribe to the current user's channel ────────────────────
   const userId = session?.user?.id ?? null;
@@ -207,7 +219,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopNav user={user} navItems={navItems} onLogout={handleLogout} />
         <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
-          <PullToRefresh>{children}</PullToRefresh>
+          <PullToRefresh onRefresh={handleRefresh}>
+            <Fragment key={refreshKey}>{children}</Fragment>
+          </PullToRefresh>
         </main>
         {!hideTabBar && <RoleTabBar role={role} navItems={navItems} navBadges={navBadges} />}
       </div>
