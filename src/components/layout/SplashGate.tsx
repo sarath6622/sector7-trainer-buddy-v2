@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { shouldPlaySplash } from '@/lib/splash';
 
 // Must be slightly longer than GONE_AT in SplashScreen.tsx (~3330ms)
 const SPLASH_DURATION_MS = 3600;
@@ -19,7 +20,7 @@ export function SplashGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !shouldPlaySplash()) return;
 
     el.setAttribute('inert', '');
     el.setAttribute('aria-hidden', 'true');

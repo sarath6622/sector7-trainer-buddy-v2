@@ -1494,3 +1494,10 @@
 - Guards: engages only when the scroller is at the top, vertical-dominant swipes only (calendar/chart h-scroll untouched), skips touches inside nested scrollers that are mid-scroll, offline pull shows a toast instead of reloading, single-fire while a refresh is in flight
 - Tests: `tests/unit/pull-to-refresh.test.tsx` (8 passing); lint + type-check clean
 - Not yet verified on a physical device (touch gesture) — needs an on-device eyeball on iOS standalone PWA
+
+#### Ad-hoc (2026-07-11): Splash screen gating (once per 24h, never on pull-to-refresh)
+
+- `src/lib/splash.ts` — `shouldPlaySplash()` (memoized per page load so SplashScreen + SplashGate always agree): skips if a one-shot `sessionStorage` flag is set (consumed without touching the daily stamp) or if the splash played within the last 24h (`localStorage` timestamp); otherwise plays and stamps. Storage errors fall back to always playing. `skipSplashOnNextLoad()` sets the one-shot flag
+- `SplashScreen.tsx` + `SplashGate.tsx` gate their render/inert behavior on `shouldPlaySplash()`
+- `PullToRefresh.tsx` default reload now calls `skipSplashOnNextLoad()` first — a refresh is never treated as a cold start
+- Tests: `tests/unit/splash-gating.test.ts` (6 passing; in-memory Storage stub per the workout-outbox pattern — jsdom storage is unreliable here); lint + type-check clean

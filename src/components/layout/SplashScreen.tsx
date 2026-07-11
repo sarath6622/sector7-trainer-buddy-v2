@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { shouldPlaySplash } from '@/lib/splash';
 
 const useIsClient = () =>
   useSyncExternalStore(
@@ -91,6 +92,7 @@ export function SplashScreen() {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!shouldPlaySplash()) return;
     const fadeTimer = setTimeout(() => {
       const el = overlayRef.current;
       if (!el) return;
@@ -107,7 +109,7 @@ export function SplashScreen() {
     };
   }, []);
 
-  if (!isClient || gone) return null;
+  if (!isClient || gone || !shouldPlaySplash()) return null;
 
   return (
     <>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { skipSplashOnNextLoad } from '@/lib/splash';
 
 /** Damped pull distance (px) required to trigger a refresh on release. */
 const PULL_THRESHOLD = 70;
@@ -135,7 +136,13 @@ export function PullToRefresh({ children, onRefresh }: PullToRefreshProps) {
       refreshingRef.current = true;
       setRefreshing(true);
       setPullBoth(PULL_THRESHOLD);
-      const refresh = onRefreshRef.current ?? (() => window.location.reload());
+      const refresh =
+        onRefreshRef.current ??
+        (() => {
+          // A refresh is not a cold start — never replay the boot splash for it.
+          skipSplashOnNextLoad();
+          window.location.reload();
+        });
       refresh();
     };
 
