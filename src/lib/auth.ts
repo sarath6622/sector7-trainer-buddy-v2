@@ -30,7 +30,7 @@ function computePrimaryRole(roles: string[]): string {
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: 'jwt',
-    maxAge: 24 * 60 * 60, // 24 hours
+    maxAge: 7 * 24 * 60 * 60, // 7 days — sessions roll on activity, so regulars stay signed in
   },
   pages: {
     signIn: '/login',
