@@ -1901,45 +1901,49 @@ export function WorkoutLogger({
             })()}
 
           {/* ── Empty state — show muscle-group picker so the trainer can plan
-          the session by tapping focus cards. Falls back to the dashed
-          "no exercises" card only if we don't know who the client is
-          (clientProfileId is required by the picker to fetch suggestions). */}
-          {exercises.length === 0 && !showSearch && clientProfileId && (
+          the session by tapping focus cards. `groupsOnly`: Continue commits
+          the focus (which unmounts the picker via the size check below) and
+          lands on the empty log — exercises are added from scratch via
+          Search, never from the suggested-exercise list. Falls back to the
+          dashed "no exercises" card if we don't know who the client is
+          (clientProfileId is required for the recency hints). */}
+          {exercises.length === 0 && !showSearch && clientProfileId && focusGroupIds.size === 0 && (
             <MuscleGroupPicker
               clientProfileId={clientProfileId}
               sessionInstanceId={sessionInstanceId}
               allowCancel={false}
+              groupsOnly
               onAdd={addExercisesFromPicker}
               onGroupsPicked={(ids) => setFocusGroupIds(new Set(ids))}
-              onRequestSearch={(ids) => {
-                setSearchMuscleGroups(new Set(ids));
-                setShowSearch(true);
-              }}
             />
           )}
-          {exercises.length === 0 && !showSearch && !clientProfileId && (
-            <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-                <Dumbbell className="h-6 w-6 text-muted-foreground" />
+          {exercises.length === 0 &&
+            !showSearch &&
+            (!clientProfileId || focusGroupIds.size > 0) && (
+              <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                  <Dumbbell className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold">No exercises yet</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Tap &ldquo;Add Exercise&rdquo; below to start logging
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowSearch(true)}
+                  className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+                >
+                  <Plus className="h-4 w-4" /> Add First Exercise
+                </button>
               </div>
-              <div className="space-y-1">
-                <p className="text-base font-semibold">No exercises yet</p>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Tap &ldquo;Add Exercise&rdquo; below to start logging
-                </p>
-              </div>
-              <button
-                onClick={() => setShowSearch(true)}
-                className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
-              >
-                <Plus className="h-4 w-4" /> Add First Exercise
-              </button>
-            </div>
-          )}
+            )}
 
           {/* ── Mid-session "By Muscle" picker — bottom sheet so the workout list
-          stays in place underneath. Continues UNION today's focus so adding
-          a new group extends the session plan rather than replacing it.
+          stays in place underneath. Continue UNIONs today's focus (adding a
+          new group extends the session plan rather than replacing it) and
+          closes the sheet — `groupsOnly`, so no suggested-exercise step; the
+          opt-in "Suggestions" sheet below is the only suggestions surface.
           AnimatePresence keeps the picker mounted long enough for the
           slide-down exit animation to play before the DOM cleanup. ── */}
           <AnimatePresence>
@@ -1949,15 +1953,17 @@ export function WorkoutLogger({
                 clientProfileId={clientProfileId}
                 sessionInstanceId={sessionInstanceId}
                 allowCancel
+                groupsOnly
                 onCancel={() => setPickerOpen(false)}
                 onAdd={addExercisesFromPicker}
-                onGroupsPicked={(ids) =>
+                onGroupsPicked={(ids) => {
                   setFocusGroupIds((prev) => {
                     const next = new Set(prev);
                     for (const id of ids) next.add(id);
                     return next;
-                  })
-                }
+                  });
+                  setPickerOpen(false);
+                }}
                 presentation="sheet"
                 excludeExerciseIds={exercises.map((e) => e.exerciseId)}
                 initialGroupIds={focusGroupIds.size > 0 ? [...focusGroupIds] : undefined}

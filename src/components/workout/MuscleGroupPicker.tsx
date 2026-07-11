@@ -137,6 +137,11 @@ interface MuscleGroupPickerProps {
    *  groups are forwarded so the search modal can pre-seed its filter chips
    *  and the trainer doesn't have to re-tap "Chest". */
   onRequestSearch?: (groupIds: CuratedMuscleGroupId[]) => void;
+  /** Commit focus groups only — Continue fires `onGroupsPicked` and nothing
+   *  else: no suggestions fetch, no suggested-exercise step. The parent
+   *  decides what happens next (unmount the picker, close the sheet).
+   *  Exercises are then added from scratch via the catalog search. */
+  groupsOnly?: boolean;
 }
 
 export function MuscleGroupPicker({
@@ -151,6 +156,7 @@ export function MuscleGroupPicker({
   excludeExerciseIds,
   sessionInstanceId,
   onRequestSearch,
+  groupsOnly,
 }: MuscleGroupPickerProps) {
   const [step, setStep] = useState<'groups' | 'exercises'>('groups');
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<CuratedMuscleGroupId>>(
@@ -309,6 +315,7 @@ export function MuscleGroupPicker({
         const ids = [...selectedGroupIds];
         if (ids.length === 0) return;
         onGroupsPicked?.(ids);
+        if (groupsOnly) return;
         void fetchSuggestions();
       }}
       loading={loading}
