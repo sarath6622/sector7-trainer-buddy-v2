@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useRef, useState, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
@@ -13,7 +13,7 @@ import { usePusherChannel } from '@/hooks/usePusherChannel';
 import type { NotificationPayload, LeaveStatusChangedPayload } from '@/lib/pusher';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const hideTabBar = /\/session\/[^/]+/.test(pathname);
@@ -54,11 +54,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     },
   });
 
+  // "Unauthenticated" can be a false negative: next-auth's client reports it
+  // whenever the /api/auth/session fetch fails, which happens transiently
+  // mid-deploy even with a perfectly valid cookie. Retry the session fetch
+  // once before treating it as a real logout and redirecting.
+  const sessionRetriedRef = useRef(false);
   useEffect(() => {
-    if (status !== 'loading' && !session?.user) {
-      router.push('/login');
+    if (status === 'authenticated') {
+      sessionRetriedRef.current = false;
+      return;
     }
-  }, [status, session, router]);
+    if (status === 'loading') return;
+
+    let cancelled = false;
+    (async () => {
+      if (!sessionRetriedRef.current) {
+        sessionRetriedRef.current = true;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (cancelled) return;
+        // update() refetches the session INTO the provider — on success the
+        // status flips to authenticated and this effect re-runs into the
+        // early return above.
+        const fresh = await update().catch(() => null);
+        if (cancelled || fresh?.user) return;
+      }
+      if (!cancelled) router.push('/login');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, router, update]);
 
   // iOS standalone PWA cold-start: WebKit briefly lays the document out taller
   // than the screen, leaving a phantom scrollable region that drags the whole

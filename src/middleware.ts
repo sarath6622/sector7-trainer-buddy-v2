@@ -5,21 +5,18 @@ import type { NextRequest } from 'next/server';
 /**
  * Public paths that don't require a NextAuth session at the middleware layer.
  *
- * - `/login`, `/api/auth` — NextAuth's own flow.
+ * - `/api/auth` — NextAuth's own flow.
  * - `/tv` — the gym TV display page, authenticated with a bearer token in
  *   localStorage/URL. The page renders a "no token" message when missing.
  * - `/api/admin/tv/dashboard`, `/api/admin/tv/live` — bearer-token API routes
  *   for the TV. Route handlers enforce auth via `assertTvOrAdmin` (bearer OR
  *   admin session). Other `/api/admin/tv/*` routes (devices, tv-control) stay
  *   gated by the session middleware because they require an admin session.
+ *
+ * `/login` is NOT in this list — it gets its own branch in middleware() that
+ * bounces already-authenticated users back to their dashboard.
  */
-const PUBLIC_PATHS = [
-  '/login',
-  '/api/auth',
-  '/tv',
-  '/api/admin/tv/dashboard',
-  '/api/admin/tv/live',
-];
+const PUBLIC_PATHS = ['/api/auth', '/tv', '/api/admin/tv/dashboard', '/api/admin/tv/live'];
 
 /** Role-to-path prefix mapping for route protection */
 const ROLE_PATH_MAP: Record<string, string[]> = {
@@ -47,6 +44,25 @@ function isPublicPath(pathname: string): boolean {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // /login: bounce already-authenticated users back to their dashboard. A
+  // transient session-fetch failure (e.g. mid-deploy) can strand a user with
+  // a valid cookie on the login form — this sends them straight back in.
+  // Page-route-only cost: /api/* never reaches the middleware (see matcher).
+  if (pathname === '/login' || pathname.startsWith('/login/')) {
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    const defaultPath = token?.role ? ROLE_DEFAULT_PATH[token.role as string] : undefined;
+    // Only bounce tokens that would survive the branchId guard below —
+    // otherwise the dashboard redirect would just loop back here.
+    if (token && defaultPath && token.branchId) {
+      const callbackUrl = request.nextUrl.searchParams.get('callbackUrl');
+      const isSafeRelative = callbackUrl?.startsWith('/') && !callbackUrl.startsWith('//');
+      return NextResponse.redirect(
+        new URL(isSafeRelative && callbackUrl ? callbackUrl : defaultPath, request.url),
+      );
+    }
+    return NextResponse.next();
+  }
 
   // Allow public paths
   if (isPublicPath(pathname)) {

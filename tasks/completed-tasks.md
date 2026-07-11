@@ -1507,3 +1507,10 @@
 - Full `window.location.reload()` tore down the whole app on pull-to-refresh, showing the dashboard boot skeleton including the header row. Now the dashboard layout passes `onRefresh` to `PullToRefresh`: `router.refresh()` (server data) + a `refreshKey` bump that remounts only the page subtree via `<Fragment key>` so client fetches re-run — TopNav/sidebar/tab bar never unmount, no boot skeleton, no splash
 - `PullToRefresh` `onRefresh` may now return a promise; the spinner holds until it settles, then retracts and the gesture re-arms (full-reload default unchanged as fallback)
 - Tests updated/added in `tests/unit/pull-to-refresh.test.tsx` (10 passing); lint + type-check + prod build clean
+
+#### Ad-hoc (2026-07-11): False-logout hardening (deploy-window session hiccups)
+
+- Context: deploy-time "logouts" were (a) the predicted one-time 24h-token tail from the maxAge 7d fix and (b) a real bug — a transient /api/auth/session fetch failure makes next-auth report unauthenticated with a valid cookie, and the dashboard layout bounced straight to /login, which never sent authed users back
+- `src/middleware.ts` — /login now gets its own branch (before PUBLIC_PATHS, which no longer lists it): authenticated tokens with a known role + branchId are redirected to a safe relative callbackUrl or their role dashboard; tokens without branchId/known role fall through to the form (avoids redirect loops). Matcher UNTOUCHED — /api/\* still never reaches middleware (the 8c4cee2 CPU win is preserved; cost is one getToken on /login page loads only)
+- `src/app/(dashboard)/layout.tsx` — on "unauthenticated", waits 1s and retries the session once via useSession().update() (which refetches into the provider) before redirecting to /login; retry re-arms after each authenticated period
+- Tests: `tests/unit/middleware-login-bounce.test.ts` (7 passing — bounce, callbackUrl preference, open-redirect guard, no-token/no-branchId/unknown-role fall-throughs, protected-page redirect regression); lint + type-check + prod build clean
