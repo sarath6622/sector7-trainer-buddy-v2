@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRestTimer } from '@/hooks/useRestTimer';
 import { useSessionPause } from '@/hooks/useSessionPause';
 import { useRestAutofill } from '@/hooks/useRestAutofill';
+import { useKeyboardViewport } from '@/hooks/useKeyboardInset';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
 import type { WorkoutUpdatedPayload } from '@/lib/pusher';
 import { useRouter } from 'next/navigation';
@@ -110,6 +111,31 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
   const restTimer = useRestTimer(id);
   const sessionPause = useSessionPause(id);
   const { lastFinishedRestSec, consumeRest } = useRestAutofill(id, restTimer);
+  // Size the session container from the *visual* viewport height (the on-screen
+  // area above the keyboard) instead of `100dvh`. iOS standalone PWAs overlay
+  // the keyboard without shrinking `dvh`/`innerHeight`, so a full-height
+  // container leaves its scroll body running behind the keyboard and the
+  // focused cell hidden under it. visualViewport.height ends the scrollport
+  // exactly at the keyboard top, so the cell can scroll into view — the
+  // iOS-recommended PWA keyboard pattern. Falls back to `100dvh` until measured.
+  // Mirrors the trainer session page, which got this fix first.
+  const { height: viewportHeight, inset: keyboardInset } = useKeyboardViewport();
+  const keyboardOpen = keyboardInset > 0;
+  const viewportBasis = viewportHeight != null ? `${viewportHeight}px` : '100dvh';
+  const containerHeight = `calc(${viewportBasis} - 3.5rem - env(safe-area-inset-top))`;
+
+  // When the keyboard opens, the container shrinks to the visual-viewport height
+  // a frame or two later. Re-scroll the focused cell into view once that's
+  // happened so it sits above the keyboard — the cell's own onFocus scroll can
+  // fire before the resize lands and miss. Keyed on the open/close transition
+  // (not the px) so it runs once per open and doesn't fight manual scrolling.
+  useEffect(() => {
+    if (!keyboardOpen) return;
+    const el = document.activeElement;
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      requestAnimationFrame(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    }
+  }, [keyboardOpen]);
 
   // 1Hz tick — mirrors the trainer page so SessionHero can re-derive elapsed
   // time, idle escalation, and rest-done staleness once a second. Declared
@@ -216,7 +242,7 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
   return (
     <div
       className="-m-4 md:-m-6 flex flex-col bg-background"
-      style={{ height: 'calc(100dvh - 3.5rem - env(safe-area-inset-top))' }}
+      style={{ height: containerHeight }}
     >
       {/* ── Sticky hero card ── */}
       {/* No back button here — exit paths live in the global top nav
@@ -319,8 +345,12 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* Rest timer — floating pill when sheet is closed */}
-      {!restTimerOpen && (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
+      {/* Rest timer — floating pill when sheet is closed. Hidden while the
+          keyboard is up (matches the trainer page) so it can't cover the row
+          being typed into on keyboards that resize the viewport. */}
+      {!restTimerOpen &&
+        !keyboardOpen &&
+        (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
         <RestTimerPillFloating
           remaining={restTimer.remaining}
           isPaused={restTimer.isPaused}
