@@ -163,7 +163,11 @@ POST   /api/admin/schedules/generate     → { month: "2026-04", scheduleIds?: s
 ### Session Instances
 
 ```
-GET    /api/admin/sessions               → ?date&trainerId&clientId&status&page&pageSize → Paginated<SessionInstance>
+GET    /api/admin/sessions               → ?date&dateFrom&dateTo&trainerId&clientId&status&search&page&pageSize → Paginated<SessionInstance> + stats
+       search = case-insensitive match on client OR trainer first/last name (server-side).
+       Response also carries stats: { total, byStatus: Record<SessionStatus, number> } —
+       counted over the ENTIRE filtered range (date/trainer/client/search filters applied,
+       status filter deliberately ignored so the breakdown always shows every status).
 PUT    /api/admin/sessions/[id]          → { scheduledDate?, scheduledTime?, trainerProfileId? } → SessionInstance
 DELETE /api/admin/sessions/[id]          → {} → { success }
 ```

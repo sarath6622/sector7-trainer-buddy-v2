@@ -20,6 +20,7 @@ export async function GET(req: Request) {
       trainerId: searchParams.get('trainerId') ?? undefined,
       clientId: searchParams.get('clientId') ?? undefined,
       status: searchParams.get('status') ?? undefined,
+      search: searchParams.get('search') ?? undefined,
       page: searchParams.get('page') ?? undefined,
       pageSize: searchParams.get('pageSize') ?? undefined,
     });
@@ -31,7 +32,8 @@ export async function GET(req: Request) {
       );
     }
 
-    const { date, dateFrom, dateTo, trainerId, clientId, status, page, pageSize } = parsed.data;
+    const { date, dateFrom, dateTo, trainerId, clientId, status, search, page, pageSize } =
+      parsed.data;
 
     const where: Prisma.SessionInstanceWhereInput = {
       branchId: session.user.branchId,
@@ -52,10 +54,27 @@ export async function GET(req: Request) {
     }
     if (trainerId) where.trainerProfileId = trainerId;
     if (clientId) where.clientProfileId = clientId;
+    if (search) {
+      where.OR = [
+        { client: { user: { firstName: { contains: search, mode: 'insensitive' } } } },
+        { client: { user: { lastName: { contains: search, mode: 'insensitive' } } } },
+        { trainer: { user: { firstName: { contains: search, mode: 'insensitive' } } } },
+        { trainer: { user: { lastName: { contains: search, mode: 'insensitive' } } } },
+      ];
+    }
+
+    // Stats are counted over the full filtered range but WITHOUT the status
+    // filter, so the breakdown always shows every status (see api-contracts.md).
+    const statsWhere: Prisma.SessionInstanceWhereInput = { ...where };
     if (status) where.status = status;
 
-    const [total, data] = await Promise.all([
+    const [total, statusGroups, data] = await Promise.all([
       prisma.sessionInstance.count({ where }),
+      prisma.sessionInstance.groupBy({
+        by: ['status'],
+        where: statsWhere,
+        _count: { _all: true },
+      }),
       prisma.sessionInstance.findMany({
         where,
         include: {
@@ -72,8 +91,16 @@ export async function GET(req: Request) {
       }),
     ]);
 
+    const byStatus: Record<string, number> = {};
+    let statsTotal = 0;
+    for (const group of statusGroups) {
+      byStatus[group.status] = group._count._all;
+      statsTotal += group._count._all;
+    }
+
     return NextResponse.json({
       data,
+      stats: { total: statsTotal, byStatus },
       pagination: {
         page: page ?? 1,
         pageSize: pageSize ?? 20,

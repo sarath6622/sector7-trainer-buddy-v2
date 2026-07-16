@@ -233,6 +233,7 @@ export const listSessionsSchema = paginationSchema.extend({
   trainerId: cuidSchema.optional(),
   clientId: cuidSchema.optional(),
   status: sessionStatusSchema.optional(),
+  search: z.string().trim().max(100).optional(),
 });
 
 export const updateSessionSchema = z.object({

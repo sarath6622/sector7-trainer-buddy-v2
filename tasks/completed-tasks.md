@@ -1514,3 +1514,21 @@
 - `src/middleware.ts` — /login now gets its own branch (before PUBLIC_PATHS, which no longer lists it): authenticated tokens with a known role + branchId are redirected to a safe relative callbackUrl or their role dashboard; tokens without branchId/known role fall through to the form (avoids redirect loops). Matcher UNTOUCHED — /api/\* still never reaches middleware (the 8c4cee2 CPU win is preserved; cost is one getToken on /login page loads only)
 - `src/app/(dashboard)/layout.tsx` — on "unauthenticated", waits 1s and retries the session once via useSession().update() (which refetches into the provider) before redirecting to /login; retry re-arms after each authenticated period
 - Tests: `tests/unit/middleware-login-bounce.test.ts` (7 passing — bounce, callbackUrl preference, open-redirect guard, no-token/no-branchId/unknown-role fall-throughs, protected-page redirect regression); lint + type-check + prod build clean
+
+---
+
+### Ad-hoc: Admin Sessions page — filters, stats & full redesign
+
+- **Agent:** @ui (+ thin @backend additions to the existing sessions route)
+- **Completed:** 2026-07-16
+- **Files Changed:**
+  - `src/app/api/admin/sessions/route.ts` — response now carries `stats: { total, byStatus }` (groupBy over the full filtered range, status filter deliberately excluded) + new `search` param (case-insensitive contains on client/trainer first+last name, applied to stats too)
+  - `src/lib/validators.ts` — `listSessionsSchema` + `search` (trim, max 100)
+  - `src/lib/sessionStatsLabel.ts` (new) — scope/date describers + shared time/date formatters
+  - `src/lib/sessionOverrun.ts` (new) — `overrunMinutes()` for IN_PROGRESS overrun detection
+  - `src/app/(dashboard)/admin/sessions/page.tsx` — full redesign: clickable status stat-cards ARE the status filter; one-row toolbar (server-side search, trainer select, cascading client picker restricted to the trainer's mapped clients via `/api/admin/mappings?trainerId=`, date presets, reset); scope line; day-grouped list with initials avatars; filtered-out person column hidden; "+Xm over" pill on overrunning sessions; refetch dims list; rows open a detail drawer
+  - `src/app/(dashboard)/admin/sessions/SessionDetailSheet.tsx` (new) — right-side Sheet: contact, timeline, full workout log with volume, notes; SCHEDULED sessions get Reschedule (PATCH) + two-step Cancel (DELETE) — both endpoints already audit + notify
+  - `tests/unit/session-stats-label.test.ts` (8) + `tests/unit/session-overrun.test.ts` (6)
+- **Memory Updated:** `memory/api-contracts.md` (GET /api/admin/sessions: stats block + search param)
+- **Verified:** live against local dev: stats breakdown, stats ignore status filter by design, trainer-scoped stats, mapped-client cascade, name search, detail endpoint. Lint + type-check clean for changed files
+- **Notes:** no schema changes; no new dependencies; list/stats read-only, mutations reuse existing audited endpoints
