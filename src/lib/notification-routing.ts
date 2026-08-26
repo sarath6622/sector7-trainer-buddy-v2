@@ -63,6 +63,8 @@ export function notificationKind(n: RoutableNotification): NotificationKind {
     case 'SCHEDULE_CREATED':
       return 'session';
     case 'NO_SHOW':
+    case 'SESSION_OVERRUN':
+    case 'SESSION_AUTO_CLOSED':
       return 'alert';
     case 'LEAVE_REQUESTED':
     case 'LEAVE_APPROVED':
@@ -85,6 +87,22 @@ export function notificationKind(n: RoutableNotification): NotificationKind {
 
 export function notificationAction(n: RoutableNotification, role: string): NotificationAction {
   const base = roleBase(role);
+
+  // Overrun / auto-close notifications name their session, and only the
+  // trainer can act on one — send them to that session's screen (which has
+  // the End button) instead of the generic schedule list. Admins fall through
+  // to /admin/sessions via the 'alert' branch below.
+  const type = typeof n.metadata?.type === 'string' ? n.metadata.type : '';
+  const sessionInstanceId =
+    typeof n.metadata?.sessionInstanceId === 'string' ? n.metadata.sessionInstanceId : '';
+  if (base === 'trainer' && sessionInstanceId) {
+    if (type === 'SESSION_OVERRUN') {
+      return { href: `/trainer/session/${sessionInstanceId}`, label: 'End session' };
+    }
+    if (type === 'SESSION_AUTO_CLOSED') {
+      return { href: `/trainer/session/${sessionInstanceId}`, label: 'View session' };
+    }
+  }
 
   switch (notificationKind(n)) {
     case 'reschedule':

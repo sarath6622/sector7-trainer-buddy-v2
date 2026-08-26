@@ -5,7 +5,16 @@ import {
   notifySessionStarted,
   notifyNoShow,
   notifySessionBooked,
+  notifySessionOverrun,
+  notifySessionAutoClosed,
+  notifyAdminsSessionAutoClosed,
 } from '@/services/notification.service';
+import {
+  dueOverrunStage,
+  elapsedMinutes,
+  isStaleForAutoClose,
+  openForLabel,
+} from '@/lib/sessionOverrun';
 import {
   evaluateStreakBadges,
   evaluateSessionMilestoneBadges,
@@ -810,4 +819,252 @@ export async function getActiveSession(trainerProfileId: string, branchId: strin
       },
     },
   });
+}
+
+// ─── Overrun reminders + 24h auto-close (cron) ───────────────────────────────
+//
+// Trainers forget to tap "End Session", so an instance can sit IN_PROGRESS
+// indefinitely (observed in production: 45 days). `processOverrunReminders` is
+// driven by `/api/cron/session-overrun-reminders` on a ~15 minute external
+// pinger and does two things per pass:
+//
+//   1. nudges the trainer once at the booked end and once 15 minutes later
+//   2. force-closes anything still open after 24h
+//
+// Like the carry-forward cron it scans **every branch** — this is one of the
+// documented exceptions to branch scoping (engineering-principles §1), because
+// there is no request session to scope by. Per-branch data never crosses over:
+// each notification is written with the session's own `branchId`.
+
+/** Written to `endedByUserId` when the cron closes a session nobody ended. */
+export const SYSTEM_ACTOR_ID = 'system';
+
+export interface OverrunScanResult {
+  scanned: number;
+  remindersSent: number;
+  autoClosed: number;
+}
+
+/**
+ * One reminder/auto-close pass. Idempotent: reminders dedupe against
+ * `notification_logs` (metadata.sessionInstanceId + metadata.stage) and
+ * auto-close is self-limiting because the row leaves IN_PROGRESS.
+ */
+export async function processOverrunReminders(
+  now: Date = new Date(),
+): Promise<OverrunScanResult> {
+  const open = await findOpenSessionsForScan();
+
+  if (open.length === 0) return { scanned: 0, remindersSent: 0, autoClosed: 0 };
+
+  const stale = open.filter((s) => isStaleForAutoClose(s.startedAt, now));
+  const nudgeable = open.filter((s) => !isStaleForAutoClose(s.startedAt, now));
+
+  const remindersSent = await sendDueOverrunReminders(nudgeable, now);
+  const autoClosed = await autoCloseStaleSessions(stale, now);
+
+  return { scanned: open.length, remindersSent, autoClosed };
+}
+
+type OpenSession = Awaited<ReturnType<typeof findOpenSessionsForScan>>[number];
+
+/** Every session still IN_PROGRESS, across all branches, with the names the
+ *  reminder and auto-close notifications need. */
+function findOpenSessionsForScan() {
+  return prisma.sessionInstance.findMany({
+    where: { status: 'IN_PROGRESS', startedAt: { not: null } },
+    select: {
+      id: true,
+      branchId: true,
+      durationMin: true,
+      startedAt: true,
+      clientProfileId: true,
+      trainerProfileId: true,
+      client: { select: { user: { select: { firstName: true, lastName: true } } } },
+      trainer: { select: { user: { select: { id: true, firstName: true, lastName: true } } } },
+    },
+  });
+}
+
+function fullName(u: { firstName: string; lastName: string }) {
+  return `${u.firstName} ${u.lastName}`;
+}
+
+/**
+ * Send the highest *unsent* reminder stage for each overrunning session.
+ *
+ * Only the highest due stage is sent, never a backlog: a session first seen
+ * 20 minutes late gets one stage-2 nudge, not stage 1 and 2 back to back.
+ * Because the due stage only ever climbs, once stage 2 is logged the session
+ * goes quiet permanently — the 24h auto-close is what handles it after that.
+ */
+async function sendDueOverrunReminders(sessions: OpenSession[], now: Date): Promise<number> {
+  const due = sessions
+    .map((s) => ({ session: s, stage: dueOverrunStage(s.startedAt, s.durationMin, now) }))
+    .filter((d): d is { session: OpenSession; stage: 1 | 2 } => d.stage !== 0);
+
+  if (due.length === 0) return 0;
+
+  // One query for every stage already logged across all due sessions, rather
+  // than a findFirst per session per stage.
+  const logs = await prisma.notificationLog.findMany({
+    where: {
+      AND: [
+        { metadata: { path: ['type'], equals: 'SESSION_OVERRUN' } },
+        {
+          OR: due.map((d) => ({
+            metadata: { path: ['sessionInstanceId'], equals: d.session.id },
+          })),
+        },
+      ],
+    },
+    select: { metadata: true },
+  });
+
+  const sentStages = new Map<string, Set<number>>();
+  for (const log of logs) {
+    const meta = log.metadata as { sessionInstanceId?: unknown; stage?: unknown } | null;
+    const id = typeof meta?.sessionInstanceId === 'string' ? meta.sessionInstanceId : null;
+    const stage = typeof meta?.stage === 'number' ? meta.stage : null;
+    if (!id || stage === null) continue;
+    const set = sentStages.get(id) ?? new Set<number>();
+    set.add(stage);
+    sentStages.set(id, set);
+  }
+
+  const toSend = due.filter((d) => !sentStages.get(d.session.id)?.has(d.stage));
+
+  // Sequential, not Promise.all: each send writes a notification_logs row that
+  // the *next* pass reads back for dedup, and the volume here is a handful.
+  for (const { session, stage } of toSend) {
+    await notifySessionOverrun({
+      branchId: session.branchId,
+      trainerUserId: session.trainer.user.id,
+      clientName: fullName(session.client.user),
+      sessionInstanceId: session.id,
+      openFor: openForLabel(session.startedAt, now),
+      stage,
+    });
+  }
+
+  return toSend.length;
+}
+
+/**
+ * Force-close sessions left open past 24h.
+ *
+ * `actualDurationMin` falls back to the **booked** duration and `endedAt` to
+ * the booked end time, so the row reads as a coherent completed session rather
+ * than a 45-hour one. The real close time and the fact that nobody ended it
+ * live in the audit entry (`SESSION_AUTO_CLOSED`), which is the record of
+ * truth here — and both the trainer and branch admins are told, so a wrong
+ * duration can be corrected.
+ *
+ * Badge evaluation is deliberately skipped (unlike `endSession`): streak and
+ * milestone badges recompute from the client's full COMPLETED history, so the
+ * auto-closed session still counts the next time a real session ends.
+ */
+async function autoCloseStaleSessions(sessions: OpenSession[], now: Date): Promise<number> {
+  if (sessions.length === 0) return 0;
+
+  // Branch admins, fetched once per branch rather than once per session.
+  const branchIds = [...new Set(sessions.map((s) => s.branchId))];
+  const admins = await prisma.user.findMany({
+    where: {
+      branchId: { in: branchIds },
+      roles: { hasSome: ['SUPER_ADMIN', 'BRANCH_ADMIN'] },
+      isActive: true,
+    },
+    select: { id: true, branchId: true },
+  });
+  const adminsByBranch = new Map<string, string[]>();
+  for (const a of admins) {
+    adminsByBranch.set(a.branchId, [...(adminsByBranch.get(a.branchId) ?? []), a.id]);
+  }
+
+  let closed = 0;
+
+  for (const s of sessions) {
+    const startedAt = s.startedAt;
+    if (!startedAt) continue;
+
+    const endedAt = new Date(startedAt.getTime() + s.durationMin * 60_000);
+    const openFor = openForLabel(startedAt, now);
+
+    try {
+      await prisma.sessionInstance.update({
+        where: { id: s.id },
+        data: {
+          status: 'COMPLETED',
+          endedAt,
+          endedByUserId: SYSTEM_ACTOR_ID,
+          actualDurationMin: s.durationMin,
+          pausedAt: null,
+        },
+      });
+    } catch (error) {
+      console.error(`[OverrunScan] Failed to auto-close session ${s.id}:`, error);
+      continue;
+    }
+
+    closed++;
+
+    // `actorId` is FK-constrained to users, so the audit is attributed to the
+    // trainer who owned the session; `autoClosed` + `closedBy` in metadata are
+    // what mark it as system-initiated.
+    await auditLog({
+      action: 'SESSION_AUTO_CLOSED',
+      actorId: s.trainer.user.id,
+      subjectType: 'SessionInstance',
+      subjectId: s.id,
+      branchId: s.branchId,
+      oldValue: { status: 'IN_PROGRESS', startedAt: startedAt.toISOString(), endedAt: null },
+      newValue: {
+        status: 'COMPLETED',
+        endedAt: endedAt.toISOString(),
+        actualDurationMin: s.durationMin,
+      },
+      metadata: {
+        autoClosed: true,
+        closedBy: SYSTEM_ACTOR_ID,
+        closedAt: now.toISOString(),
+        openForMinutes: elapsedMinutes(startedAt, now),
+        durationSource: 'BOOKED',
+        clientProfileId: s.clientProfileId,
+        trainerProfileId: s.trainerProfileId,
+      },
+    });
+
+    // Any screen still holding this session open drops out of live mode.
+    void triggerSessionEvent(s.id, 'SESSION_ENDED', {
+      sessionId: s.id,
+      endedAt: endedAt.toISOString(),
+      actualDurationMin: s.durationMin,
+    });
+
+    const clientName = fullName(s.client.user);
+    await notifySessionAutoClosed({
+      branchId: s.branchId,
+      trainerUserId: s.trainer.user.id,
+      clientName,
+      sessionInstanceId: s.id,
+      durationMin: s.durationMin,
+    });
+
+    const adminIds = adminsByBranch.get(s.branchId) ?? [];
+    if (adminIds.length > 0) {
+      await notifyAdminsSessionAutoClosed({
+        branchId: s.branchId,
+        adminUserIds: adminIds,
+        trainerName: fullName(s.trainer.user),
+        clientName,
+        sessionInstanceId: s.id,
+        durationMin: s.durationMin,
+      });
+    }
+
+    console.log(`[OverrunScan] Auto-closed session ${s.id} (open for ${openFor})`);
+  }
+
+  return closed;
 }

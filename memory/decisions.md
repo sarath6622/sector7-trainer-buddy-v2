@@ -602,3 +602,43 @@ Exercises present in `exercises` but absent from `dirtyExerciseIds` are left unt
 
 1. **Per-set removal scoping.** The POST body gains optional `removedSetsByExerciseId: Record<string, number[]>` — per dirty exercise, the set numbers this device explicitly deleted. When present (the WorkoutLogger always sends it, even empty), set deletion inside a dirty exercise is limited to exactly those numbers, so set rows the writer never saw survive. Incoming sets still upsert by `setNumber` (same-set conflicts stay last-writer-wins per set). Omitted → old delete-by-absence, so pre-per-set bundles and legacy callers are unaffected.
 2. **Draft rows count as unsaved (client only).** The "only persist complete sets" change (2026-06-10) made half-typed rows invisible to the payload-hash dirty check, so the 10s poll / Pusher refetch rehydrated over them mid-type — the reported "typed workout gets deleted" bug. `hasDraftRows()` now flags half-typed sets and extra blank rows; it extends `hasUnsaved` (poll pause + rehydration guard) while the auto-save debounce stays keyed to the saveable-payload hash so unchanged payloads are never re-POSTed.
+
+## ADR-048: Session Overrun Reminders + 24h Auto-Close
+
+**Date:** 2026-08-26
+**Status:** Accepted. Built, unit-tested (38 new tests), dry-run against the local DB. **Not yet deployed — needs the cron-job.org job wired up (see "Operational" below).**
+
+**Context:** A session only leaves `IN_PROGRESS` when the trainer taps "End Session". Trainers forget. The operator hit this with a session open for **45 days**, and a read-only dry-run of the local DB found **9 abandoned sessions** (45–104 days old, all 60-min bookings). The trainer dashboard already *displays* these ("Incomplete Sessions" card, `openForLabel`), but nothing ever pushed a reminder, so a forgotten session sat there until someone noticed.
+
+An earlier attempt (2026-06-17) was built and reverted before landing in git. This ADR supersedes that spec on two points, both operator decisions taken 2026-08-26.
+
+**Decisions:**
+
+- **Trainer-only notifications.** The original spec and this one agree, and the operator reconfirmed it against a proposal to also notify the client. Rationale: only `TRAINER`/`KICKBOXING_TRAINER` can call `POST /api/trainer/sessions/[id]/end`, so a client notification would be unactionable noise on a member's phone. Clients are told nothing about overruns.
+- **Two nudges, keyed to the booked duration, not a flat hour.** Stage 1 at `elapsed >= durationMin`, stage 2 at `durationMin + 15`. A 30-minute slot is chased sooner than a 90-minute one.
+- **Only the highest *due* stage is sent, never a backlog.** A session first seen 20 minutes late gets one stage-2 nudge, not stage 1 and 2 back-to-back. Because the due stage only climbs, once stage 2 is logged the session goes silent permanently — which is exactly what let the 45-day session rot under the old two-nudges-then-stop design. The 24h auto-close is what closes that gap.
+- **24h auto-close** (the operator's escalation choice over "daily re-nudge only" and over "two nudges then stop"). Past 24h wall-clock a session is treated as abandoned rather than overrunning: `status = COMPLETED`, `endedByUserId = 'system'`, `actualDurationMin = durationMin` (the **booked** value — nothing measured it).
+  - `endedAt` is set to the **booked end** (`startedAt + durationMin`), not the moment of the cron pass, so the row stays internally consistent: `endedAt - startedAt == actualDurationMin`. A 45-day-old row would otherwise claim a 60-minute duration across a 45-day span.
+  - The real close time, the true open duration, and `durationSource: 'BOOKED'` are recorded in the audit entry, which is the record of truth for what actually happened.
+  - Both the trainer **and the branch admins** are notified, precisely because the duration is a guess someone may want to correct.
+- **Auto-close deliberately skips badge evaluation** (unlike `endSession`). `evaluateStreakBadges` / `evaluateSessionMilestoneBadges` recompute from the client's full `COMPLETED` history, so an auto-closed session still counts the next time a real session ends. A session nobody bothered to close should not mint achievements at 3am.
+- **Audit actor is the trainer, not `'system'`.** `audit_logs.actorId` is FK-constrained to `users.id`, so a literal `'system'` string would violate the constraint (and `auditLog()` swallows write failures, so it would fail *silently*). The entry is attributed to the owning trainer with `metadata.autoClosed = true` + `metadata.closedBy = 'system'` marking it system-initiated. `session_instances.endedByUserId` has **no** FK, so the `'system'` sentinel is safe there.
+- **Dedup via `notification_logs`, no migration.** A `findMany` with Postgres JSON-path filters (`metadata.type` + an OR-fan over `metadata.sessionInstanceId`) fetches every already-sent stage for the whole batch in **one** query, rather than a `findFirst` per session per stage. Chosen over a schema column (Neon/Docker migration-history drift — see the `workout-migration-prod-divergence` note) and over Redis (durability: the open-ended stage-2 must never re-fire every 15 minutes). **Verified against real local Postgres**, including numeric `stage` equality — mocks cannot catch a malformed JSON filter.
+- **External pinger, not Vercel Cron.** Vercel Hobby caps crons at once/day. `GET` and `POST` are both exported since cron-job.org defaults to GET and the handler is idempotent.
+
+**Consequences:**
+
+- **Session accounting shifts for auto-closed sessions.** `getSessionCounts` computes `used = completed + noShow` and `remaining = scheduled + inProgress`. An abandoned session currently counts as *remaining* — i.e. the client is being credited a session they actually attended (attendance was already marked `PRESENT` at start). After auto-close it counts as *used*. This is a **correction**, not a regression, but it is real: each affected client's remaining count drops by one, and `carryforward.service` / `analytics.service` / `pt-package.service` all count `COMPLETED`, so package windows and utilisation numbers move too.
+- **The first production run will auto-close the entire backlog at once** (9 sessions locally; prod is likely similar), each firing a trainer notification plus one per branch admin. Recommended: hit the endpoint **manually once** to drain the backlog under observation, then wire the 15-minute schedule.
+- No schema change, no migration, no new dependency. Reminders cost one `sessionInstance.findMany` + one `notificationLog.findMany` per pass.
+- Wall-clock is used throughout, deliberately ignoring `accumulatedPausedSec`: the question is "was this left open?", not "how much training happened" (that remains `actualDurationMin` via `endSession`, which does net out pauses).
+
+**Files:** `lib/sessionOverrun.ts` (policy constants + pure helpers, shared with the admin Sessions page), `services/session.service.ts` (`processOverrunReminders` + private `sendDueOverrunReminders` / `autoCloseStaleSessions`), `services/notification.service.ts` (3 triggers), `lib/notification-routing.ts` (deep links), `app/api/cron/session-overrun-reminders/route.ts`.
+
+**Operational (NOT done — required before this does anything):**
+
+1. Deploy to `main` → Vercel.
+2. `curl -H "Authorization: Bearer $CRON_SECRET" https://<prod-origin>/api/cron/session-overrun-reminders` once, manually, to drain the backlog and confirm the response shape.
+3. Create a cron-job.org job hitting that URL every 15 minutes with the same bearer header.
+
+**Migrations:** none.

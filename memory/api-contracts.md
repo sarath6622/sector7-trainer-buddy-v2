@@ -1033,3 +1033,48 @@ Auth: channel is public. Payloads are non-sensitive (first/last name + lift
 weight — same as the wall display already broadcasts via polling). The TV
 client auths to the polling endpoints with its bearer token; the Pusher
 channel is just a notification stream.
+
+---
+
+## Cron Routes
+
+Scheduled/background entry points. All share the same auth: an
+`Authorization: Bearer ${CRON_SECRET}` header, `500 MISCONFIGURED` when the env
+var is unset, `401 UNAUTHORIZED` on a wrong token. They scan **all branches**
+(no request session to scope by) — one of the two documented exceptions to
+branch scoping in `rules/engineering-principles.md` §1. Data never crosses
+branches: every write uses the scanned row's own `branchId`.
+
+```
+POST  /api/cron/process-cycles                 → Vercel Cron, daily 20:00 UTC
+        Processes expired PtPackage windows. See carryforward.service.
+
+GET|POST /api/cron/session-overrun-reminders   → EXTERNAL pinger, every ~15 min
+        Overrun reminders + 24h auto-close. See ADR-048.
+        Response: { data: { scanned, remindersSent, autoClosed } }
+
+        Not a Vercel Cron: the Hobby plan caps crons at once/day, which is
+        useless for a reminder that must land minutes after a session's booked
+        end. Driven by cron-job.org hitting the public prod origin. GET is
+        accepted as well as POST because cron-job.org defaults to GET and the
+        handler is idempotent.
+
+        Idempotent by construction:
+          • reminders dedupe against notification_logs
+            (metadata.type = 'SESSION_OVERRUN' + metadata.sessionInstanceId
+             + numeric metadata.stage)
+          • auto-close is self-limiting — the row leaves IN_PROGRESS
+```
+
+### Notification metadata added
+
+Both are consumed by `lib/notification-routing.ts` (kind `alert`; trainers
+deep-link to `/trainer/session/{id}`, admins fall through to `/admin/sessions`).
+
+```
+{ type: 'SESSION_OVERRUN',     sessionInstanceId, stage: 1 | 2 }
+{ type: 'SESSION_AUTO_CLOSED', sessionInstanceId }
+```
+
+`stage` is load-bearing — it is the dedup key. Anything writing a
+SESSION_OVERRUN notification must keep emitting both fields.

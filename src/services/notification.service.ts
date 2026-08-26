@@ -318,3 +318,113 @@ export async function notifyUser({
     console.error('[Notification] Failed to send notification:', error);
   }
 }
+
+// ─── Session Overrun Notifications ──────────────────
+//
+// Sent by the `/api/cron/session-overrun-reminders` scan, not by a user
+// action. Dedup is the caller's job: it reads back `notification_logs` and
+// matches on `metadata.sessionInstanceId` + `metadata.stage`, so these
+// functions must keep writing both fields (see `processOverrunReminders`).
+
+/**
+ * Nudge a trainer that a session is still IN_PROGRESS past its booked
+ * duration. Stage 1 fires at the planned end, stage 2 fifteen minutes later.
+ * Only the trainer is notified — they are the only role that can end a
+ * session (`POST /api/trainer/sessions/[id]/end`).
+ */
+export async function notifySessionOverrun({
+  branchId,
+  trainerUserId,
+  clientName,
+  sessionInstanceId,
+  openFor,
+  stage,
+}: {
+  branchId: string;
+  trainerUserId: string;
+  clientName: string;
+  sessionInstanceId: string;
+  openFor: string;
+  stage: 1 | 2;
+}) {
+  try {
+    await sendNotification({
+      branchId,
+      recipientId: trainerUserId,
+      title: stage === 1 ? 'Session still running' : 'Session still not ended',
+      body:
+        stage === 1
+          ? `${clientName} • open for ${openFor} — tap to end it`
+          : `${clientName} • still open after ${openFor} — please end the session`,
+      channel: 'IN_APP',
+      metadata: { type: 'SESSION_OVERRUN', sessionInstanceId, stage },
+    });
+  } catch (error) {
+    console.error('[Notification] Failed to send session overrun:', error);
+  }
+}
+
+/**
+ * Tell the trainer their forgotten session was closed for them after 24h.
+ * The recorded duration is the booked one, not measured — the body says so,
+ * because the trainer may want to correct it.
+ */
+export async function notifySessionAutoClosed({
+  branchId,
+  trainerUserId,
+  clientName,
+  sessionInstanceId,
+  durationMin,
+}: {
+  branchId: string;
+  trainerUserId: string;
+  clientName: string;
+  sessionInstanceId: string;
+  durationMin: number;
+}) {
+  try {
+    await sendNotification({
+      branchId,
+      recipientId: trainerUserId,
+      title: 'Session auto-closed',
+      body: `${clientName} • left open over 24h — closed at the booked ${durationMin} min`,
+      channel: 'IN_APP',
+      metadata: { type: 'SESSION_AUTO_CLOSED', sessionInstanceId },
+    });
+  } catch (error) {
+    console.error('[Notification] Failed to send session auto-closed:', error);
+  }
+}
+
+/**
+ * Give branch admins oversight of auto-closes — the recorded duration is a
+ * fallback, so someone with edit rights should know it happened.
+ */
+export async function notifyAdminsSessionAutoClosed({
+  branchId,
+  adminUserIds,
+  trainerName,
+  clientName,
+  sessionInstanceId,
+  durationMin,
+}: {
+  branchId: string;
+  adminUserIds: string[];
+  trainerName: string;
+  clientName: string;
+  sessionInstanceId: string;
+  durationMin: number;
+}) {
+  await Promise.allSettled(
+    adminUserIds.map((recipientId) =>
+      sendNotification({
+        branchId,
+        recipientId,
+        title: 'Session auto-closed',
+        body: `${trainerName} → ${clientName} • never ended — closed at the booked ${durationMin} min`,
+        channel: 'IN_APP',
+        metadata: { type: 'SESSION_AUTO_CLOSED', sessionInstanceId },
+      }),
+    ),
+  );
+}

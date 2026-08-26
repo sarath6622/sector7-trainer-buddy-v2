@@ -111,3 +111,43 @@ describe('notificationAction', () => {
     expect(notificationAction(n('Welcome to Sector 7'), 'SUPER_ADMIN').href).toBe('/admin');
   });
 });
+
+describe('session overrun notifications', () => {
+  it('classifies overrun and auto-close as alerts', () => {
+    expect(notificationKind(n('x', { type: 'SESSION_OVERRUN', sessionInstanceId: 's1' }))).toBe(
+      'alert',
+    );
+    expect(
+      notificationKind(n('x', { type: 'SESSION_AUTO_CLOSED', sessionInstanceId: 's1' })),
+    ).toBe('alert');
+  });
+
+  it('deep-links a trainer to the session screen with the End action', () => {
+    const action = notificationAction(
+      n('Session still running', { type: 'SESSION_OVERRUN', sessionInstanceId: 's1', stage: 1 }),
+      'TRAINER',
+    );
+    expect(action).toEqual({ href: '/trainer/session/s1', label: 'End session' });
+  });
+
+  it('deep-links an auto-closed session to view, not end', () => {
+    const action = notificationAction(
+      n('Session auto-closed', { type: 'SESSION_AUTO_CLOSED', sessionInstanceId: 's1' }),
+      'KICKBOXING_TRAINER',
+    );
+    expect(action).toEqual({ href: '/trainer/session/s1', label: 'View session' });
+  });
+
+  it('sends admins to the sessions list, not the trainer-only session screen', () => {
+    const action = notificationAction(
+      n('Session auto-closed', { type: 'SESSION_AUTO_CLOSED', sessionInstanceId: 's1' }),
+      'BRANCH_ADMIN',
+    );
+    expect(action.href).toBe('/admin/sessions');
+  });
+
+  it('falls back to the schedule when the session id is missing', () => {
+    const action = notificationAction(n('Session still running', { type: 'SESSION_OVERRUN' }), 'TRAINER');
+    expect(action.href).toBe('/trainer/schedule');
+  });
+});

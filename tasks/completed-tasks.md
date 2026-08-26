@@ -4,6 +4,60 @@
 
 ---
 
+## Session Overrun Reminders + 24h Auto-Close (2026-08-26)
+
+### S7-SESS-OVERRUN: Nudge trainers who never ended a session, close what they abandon
+
+- **Agent:** @backend
+- **Completed:** 2026-08-26
+- **Branch:** `feat/session-overrun-reminders` (off `main`, via a throwaway
+  worktree — the Flutter branch must never touch main)
+
+**Problem:** a session only leaves `IN_PROGRESS` when the trainer taps "End
+Session", and trainers forget. The operator hit one open for **45 days**. A
+read-only dry-run of the local DB found **9 abandoned sessions**, 45–104 days
+old. The trainer dashboard already *showed* them; nothing ever pushed.
+
+**Built:**
+
+- Reminder 1 at the session's booked `durationMin`, reminder 2 at `+15`.
+  Trainer only — no client notifications (only trainers can end a session).
+  Only the highest *due* stage is sent, so a late-detected session gets one
+  nudge, not a backlog.
+- 24h auto-close: `status = COMPLETED`, `endedByUserId = 'system'`,
+  `actualDurationMin` = the booked duration, `endedAt` = the booked end (keeps
+  the row internally consistent). Audited as `SESSION_AUTO_CLOSED`, Pusher
+  `SESSION_ENDED` emitted, trainer + branch admins notified.
+- Dedup reads back `notification_logs` via Postgres JSON-path filters — one
+  query per pass, no migration.
+
+- **Files Changed:**
+  - `src/lib/sessionOverrun.ts` (extended — policy constants, `elapsedMinutes`,
+    `dueOverrunStage`, `isStaleForAutoClose`, `openForLabel`)
+  - `src/services/session.service.ts` (added `processOverrunReminders`)
+  - `src/services/notification.service.ts` (3 triggers)
+  - `src/lib/notification-routing.ts` (deep links to the session screen)
+  - `src/app/api/cron/session-overrun-reminders/route.ts` (created)
+  - `tests/unit/session-overrun.test.ts` (extended)
+  - `tests/unit/session-overrun-scan.test.ts` (created)
+  - `tests/unit/notification-routing.test.ts` (extended)
+- **Memory Updated:** `api-contracts.md` (new Cron Routes section),
+  `decisions.md` (ADR-048)
+- **Verification:** 38 new unit tests, all passing. `type-check` clean, `lint`
+  0 errors. Suite failure count unchanged from baseline (49 pre-existing
+  Prisma-mock failures before and after). JSON-path dedup filter verified
+  against real local Postgres (mocks can't catch a bad filter). Policy
+  dry-run against the 9 real abandoned rows.
+- **NOT done — the feature is inert until these happen:** deploy to `main`,
+  then hit the endpoint once manually to drain the backlog under observation,
+  then create the cron-job.org job (every 15 min, `Bearer $CRON_SECRET`).
+- **Flagged to operator:** auto-close moves a session from `remaining` to
+  `used` in `getSessionCounts` (`used = completed + noShow`). This corrects
+  accounting the abandoned rows were getting wrong, but each affected client's
+  remaining count drops by one. See ADR-048 "Consequences".
+
+---
+
 ## Fuzzy Exercise Search (2026-08-26)
 
 ### S7-EX-FUZZY: Exercise picker finds the lift the trainer actually typed
