@@ -3,6 +3,7 @@ import { getServerSession, hasRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { getSessionCounts } from '@/services/session.service';
 import { prisma } from '@/lib/prisma';
+import { buildWeighInNudge } from '@/lib/weighIn';
 
 export async function GET() {
   try {
@@ -139,6 +140,20 @@ export async function GET() {
       muscleMass: previousOf('muscleMass'),
     };
 
+    // ── Weigh-in nudge ───────────────────────────────────────────────────────
+    // Reuses the branch's measurement-reminder window — the same threshold that
+    // flags stale clients on the trainer/admin client lists — so operators tune
+    // one number and both surfaces agree.
+    const branchSettings = await prisma.branchSettings.findUnique({
+      where: { branchId },
+      select: { measurementReminderDays: true },
+    });
+    const weighIn = buildWeighInNudge(
+      allProgressEntries,
+      branchSettings?.measurementReminderDays ?? 30,
+      now,
+    );
+
     // ── Engagement stats ─────────────────────────────────────────────────────
 
     // All-time completed sessions
@@ -239,6 +254,7 @@ export async function GET() {
         packageExpiry,
         latestProgress,
         prevProgress,
+        weighIn,
         prs,
         engagementStats: {
           streak,

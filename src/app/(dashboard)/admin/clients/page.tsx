@@ -118,7 +118,7 @@ interface ClientUser {
   isActive: boolean;
   clientProfile: {
     id: string;
-    currentWeight: number | null;
+    intakeWeight: number | null;
     fitnessGoals: string | null;
     ptPackages: ActivePackage[];
     measurementStale: boolean;

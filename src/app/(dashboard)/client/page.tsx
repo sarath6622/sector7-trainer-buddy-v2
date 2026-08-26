@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
@@ -29,6 +29,7 @@ import { SessionTimer } from '@/components/timer/SessionTimer';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 import { WorkoutCalendarCard } from '@/components/calendar/WorkoutCalendarCard';
 import { MetricDetailSheet, type BodyMetric } from '@/components/progress/MetricDetailSheet';
+import { WeighInNudge, type WeighInNudgeData } from '@/components/progress/WeighInNudge';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -88,6 +89,7 @@ interface DashboardData {
   trainer?: { name: string; sessionsPerMonth: number };
   latestProgress: ProgressSnapshot | null;
   prevProgress: ProgressSnapshot | null;
+  weighIn?: WeighInNudgeData;
   prs: PR[];
 }
 
@@ -156,6 +158,43 @@ function Delta({
   );
 }
 
+// ─── Weigh-in nudge snooze ────────────────────────────────────────────────────
+// Dismissal is client-side only — the server holds no per-client nudge state, so
+// a reinstall or a second device simply gets asked again. That's acceptable for a
+// nudge; it is deliberately not a hard blocker.
+
+const WEIGH_IN_SNOOZE_KEY = 'sector7.weighInNudge.snoozedUntil';
+const WEIGH_IN_SNOOZE_DAYS = 7;
+
+function isWeighInSnoozed(): boolean {
+  try {
+    const until = window.localStorage.getItem(WEIGH_IN_SNOOZE_KEY);
+    return until != null && Date.now() < Number(until);
+  } catch {
+    // Private mode / storage blocked — fail open and show the prompt.
+    return false;
+  }
+}
+
+function setWeighInSnooze() {
+  try {
+    window.localStorage.setItem(
+      WEIGH_IN_SNOOZE_KEY,
+      String(Date.now() + WEIGH_IN_SNOOZE_DAYS * 86_400_000),
+    );
+  } catch {
+    // Worst case the prompt returns on the next visit.
+  }
+}
+
+function clearWeighInSnooze() {
+  try {
+    window.localStorage.removeItem(WEIGH_IN_SNOOZE_KEY);
+  } catch {
+    // No-op.
+  }
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ClientDashboard() {
@@ -174,6 +213,11 @@ export default function ClientDashboard() {
     { name: string; icon: string; description?: string; imageUrl?: string }[]
   >([]);
   const [metricSheet, setMetricSheet] = useState<BodyMetric | null>(null);
+  const [showWeighIn, setShowWeighIn] = useState(false);
+  const [weighInLogged, setWeighInLogged] = useState(false);
+  // Only arm the prompt on the first load — later refetches (session ended,
+  // weight logged) must not pop it back open mid-interaction.
+  const weighInArmed = useRef(false);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -181,6 +225,10 @@ export default function ClientDashboard() {
       if (res.ok) {
         const json = await res.json();
         setData(json.data);
+        if (!weighInArmed.current) {
+          weighInArmed.current = true;
+          if (json.data?.weighIn?.shouldPrompt && !isWeighInSnoozed()) setShowWeighIn(true);
+        }
       }
     } finally {
       setLoading(false);
@@ -288,6 +336,19 @@ export default function ClientDashboard() {
   const hasPRs = prs.length > 0;
   const showFitnessJourney = hasBodyMetrics || hasPRs;
 
+  function dismissWeighIn() {
+    setShowWeighIn(false);
+    // Only snooze a genuine "not now" — once logged, the server stops asking.
+    if (!weighInLogged) setWeighInSnooze();
+  }
+
+  function handleWeighInLogged() {
+    setWeighInLogged(true);
+    clearWeighInSnooze();
+    // Refresh so the weight card and deltas behind the prompt show the new value.
+    void fetchDashboard();
+  }
+
   function handleCelebrationDone() {
     setCelebrationBadges([]);
     // Mark all as seen so they don't replay next visit
@@ -304,6 +365,19 @@ export default function ClientDashboard() {
       {/* ── Badge celebration overlay ── */}
       {celebrationBadges.length > 0 && (
         <BadgeCelebration badges={celebrationBadges} onDone={handleCelebrationDone} />
+      )}
+
+      {/* ── Weigh-in nudge ── queued behind the badge celebration so the two
+           overlays never stack on top of each other. ── */}
+      {celebrationBadges.length === 0 && showWeighIn && data.weighIn && (
+        <WeighInNudge
+          data={data.weighIn}
+          streak={engagementStats?.streak}
+          allTimeCompleted={engagementStats?.allTimeCompleted}
+          topPr={prs[0] ?? null}
+          onDismiss={dismissWeighIn}
+          onLogged={handleWeighInLogged}
+        />
       )}
 
       {/* Greeting */}

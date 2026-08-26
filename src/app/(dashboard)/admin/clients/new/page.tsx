@@ -31,8 +31,8 @@ export default function NewClientPage() {
     emergencyContactName: '',
     emergencyContactPhone: '',
     height: '',
-    currentWeight: '',
-    bodyFatPercentage: '',
+    intakeWeight: '',
+    intakeBodyFat: '',
     medicalConditions: '',
     fitnessGoals: '',
     sessionDurationOverrideMin: '',
@@ -64,9 +64,9 @@ export default function NewClientPage() {
           emergencyContactName: form.emergencyContactName || undefined,
           emergencyContactPhone: form.emergencyContactPhone || undefined,
           height: form.height ? parseFloat(form.height) : undefined,
-          currentWeight: form.currentWeight ? parseFloat(form.currentWeight) : undefined,
-          bodyFatPercentage: form.bodyFatPercentage
-            ? parseFloat(form.bodyFatPercentage)
+          intakeWeight: form.intakeWeight ? parseFloat(form.intakeWeight) : undefined,
+          intakeBodyFat: form.intakeBodyFat
+            ? parseFloat(form.intakeBodyFat)
             : undefined,
           medicalConditions: form.medicalConditions || undefined,
           fitnessGoals: form.fitnessGoals || undefined,
@@ -234,21 +234,21 @@ export default function NewClientPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="weight">Weight (kg)</Label>
+              <Label htmlFor="weight">Starting weight (kg)</Label>
               <Input
                 id="weight"
                 type="number"
-                value={form.currentWeight}
-                onChange={(e) => updateForm('currentWeight', e.target.value)}
+                value={form.intakeWeight}
+                onChange={(e) => updateForm('intakeWeight', e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="bodyFat">Body Fat %</Label>
+              <Label htmlFor="bodyFat">Starting body fat %</Label>
               <Input
                 id="bodyFat"
                 type="number"
-                value={form.bodyFatPercentage}
-                onChange={(e) => updateForm('bodyFatPercentage', e.target.value)}
+                value={form.intakeBodyFat}
+                onChange={(e) => updateForm('intakeBodyFat', e.target.value)}
               />
             </div>
           </div>

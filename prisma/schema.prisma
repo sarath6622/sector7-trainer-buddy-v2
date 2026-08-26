@@ -421,8 +421,12 @@ model ClientProfile {
   emergencyContactName   String?
   emergencyContactPhone  String?
   height                 Float?
-  currentWeight          Float?
-  bodyFatPercentage      Float?
+  /// Weight recorded by the admin when the client was signed up. Immutable
+  /// historical fact — NOT the client's current weight. The live timeline lives
+  /// in ProgressEntry; client creation seeds it with entry #1. See ADR-050.
+  intakeWeight           Float?
+  /// Body-fat % recorded at signup. Same caveat as intakeWeight.
+  intakeBodyFat          Float?
   medicalConditions      String?
   fitnessGoals           String?
   sessionDurationOverrideMin Int?

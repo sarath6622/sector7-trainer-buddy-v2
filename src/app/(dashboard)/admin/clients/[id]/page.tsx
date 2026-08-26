@@ -121,8 +121,8 @@ interface ClientData {
     emergencyContactName: string | null;
     emergencyContactPhone: string | null;
     height: number | null;
-    currentWeight: number | null;
-    bodyFatPercentage: number | null;
+    intakeWeight: number | null;
+    intakeBodyFat: number | null;
     medicalConditions: string | null;
     fitnessGoals: string | null;
     sessionDurationOverrideMin: number | null;
@@ -282,8 +282,8 @@ export default function ClientProfilePage() {
     emergencyContactName: '',
     emergencyContactPhone: '',
     height: '',
-    currentWeight: '',
-    bodyFatPercentage: '',
+    intakeWeight: '',
+    intakeBodyFat: '',
     medicalConditions: '',
     fitnessGoals: '',
     sessionDurationOverrideMin: '',
@@ -306,8 +306,8 @@ export default function ClientProfilePage() {
         emergencyContactName: data.clientProfile?.emergencyContactName ?? '',
         emergencyContactPhone: data.clientProfile?.emergencyContactPhone ?? '',
         height: data.clientProfile?.height?.toString() ?? '',
-        currentWeight: data.clientProfile?.currentWeight?.toString() ?? '',
-        bodyFatPercentage: data.clientProfile?.bodyFatPercentage?.toString() ?? '',
+        intakeWeight: data.clientProfile?.intakeWeight?.toString() ?? '',
+        intakeBodyFat: data.clientProfile?.intakeBodyFat?.toString() ?? '',
         medicalConditions: data.clientProfile?.medicalConditions ?? '',
         fitnessGoals: data.clientProfile?.fitnessGoals ?? '',
         sessionDurationOverrideMin:
@@ -447,9 +447,9 @@ export default function ClientProfilePage() {
           emergencyContactName: form.emergencyContactName || undefined,
           emergencyContactPhone: form.emergencyContactPhone || undefined,
           height: form.height ? parseFloat(form.height) : undefined,
-          currentWeight: form.currentWeight ? parseFloat(form.currentWeight) : undefined,
-          bodyFatPercentage: form.bodyFatPercentage
-            ? parseFloat(form.bodyFatPercentage)
+          intakeWeight: form.intakeWeight ? parseFloat(form.intakeWeight) : undefined,
+          intakeBodyFat: form.intakeBodyFat
+            ? parseFloat(form.intakeBodyFat)
             : undefined,
           medicalConditions: form.medicalConditions || undefined,
           fitnessGoals: form.fitnessGoals || undefined,
@@ -896,21 +896,21 @@ export default function ClientProfilePage() {
                     className="h-9 text-xs border-white/[0.08]"
                   />
                 </Field>
-                <Field label="Weight (kg)">
+                <Field label="Intake weight (kg)">
                   <Input
                     type="number"
-                    value={form.currentWeight}
-                    onChange={(e) => f('currentWeight', e.target.value)}
+                    value={form.intakeWeight}
+                    onChange={(e) => f('intakeWeight', e.target.value)}
                     className="h-9 text-xs border-white/[0.08]"
                   />
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Body Fat %">
+                <Field label="Intake body fat %">
                   <Input
                     type="number"
-                    value={form.bodyFatPercentage}
-                    onChange={(e) => f('bodyFatPercentage', e.target.value)}
+                    value={form.intakeBodyFat}
+                    onChange={(e) => f('intakeBodyFat', e.target.value)}
                     className="h-9 text-xs border-white/[0.08]"
                   />
                 </Field>

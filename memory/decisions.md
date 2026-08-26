@@ -642,3 +642,133 @@ An earlier attempt (2026-06-17) was built and reverted before landing in git. Th
 3. Create a cron-job.org job hitting that URL every 15 minutes with the same bearer header.
 
 **Migrations:** none.
+
+---
+
+## ADR-049: Client Weigh-In Nudge — Motivational, Dismissible, Client-Side Snooze
+
+**Date:** 2026-08-26
+**Status:** Accepted
+**Context:** Clients stop logging their weight, so their progress charts go flat and
+the platform loses the one self-reportable metric that makes progression legible.
+Trainers and admins already see a "No measurements" badge for stale clients, but
+nothing ever told the *client*.
+
+**Decision:**
+
+1. **The nudge lives on the client dashboard (PWA), shown as a dismissible modal
+   after login.** Not a blocker, not a route guard, not a push notification. The
+   Flutter mobile client is deliberately out of scope for v1 — it has all the data
+   it needs locally (`progressEntriesProvider` carries `recordedAt`), so it can be
+   added later without any further backend work.
+
+2. **Reuse `BranchSettings.measurementReminderDays` (default 30) as the threshold**
+   rather than introducing a second, client-facing number. Operators tune one value
+   and the client prompt, the trainer client list, and the admin client list all
+   agree on what "stale" means.
+
+3. **Only `weightKg` starts the clock.** A progress entry carrying just a body-fat
+   reading or a tape measurement does not reset `daysSinceLastWeighIn`. Weight is
+   the metric a client can self-report accurately without a trainer present, so it
+   is the only one worth nudging them about.
+
+4. **The payload rides on `GET /api/client/dashboard` as a `weighIn` block**, not a
+   dedicated endpoint. That route already loads every progress entry for the
+   per-metric latest/previous logic, so the nudge costs exactly one extra small
+   query (`BranchSettings`) and zero extra round trips on the page that shows it.
+
+5. **The pitch is progression, not compliance.** The modal leads with net change
+   since the first weigh-in, the number of weigh-ins and the span they cover, a
+   sparkline whose dashed tail renders the current silence as a visible gap, and
+   supporting stats (session count, streak, top PR). Saving pays the client back
+   immediately with their recalculated total change.
+
+6. **Dismissal state is client-side only** — `localStorage`
+   (`sector7.weighInNudge.snoozedUntil`, 7 days). The server holds no per-client
+   nudge state. A reinstall or a second device simply asks again.
+
+7. **No goal-weight ring.** `ClientProfile.fitnessGoals` is free text and there is
+   no numeric target field, so "% to goal" is not expressible today. Rejected for
+   v1 rather than faked. Adding `targetWeightKg` remains the highest-leverage
+   follow-up if a real progress ring is wanted.
+
+**Consequences:**
+
+- Zero schema change, zero migration.
+- The nudge cannot be centrally suppressed or A/B'd — there is no server-side flag
+  or per-client state. If it proves annoying, the fix is a code change or an
+  operator raising `measurementReminderDays` for the branch.
+- Snooze does not sync across devices; a client using both phone and laptop can be
+  asked twice in the same week.
+- The prompt is queued behind the existing badge celebration so the two overlays
+  never stack.
+- `ClientProfile.currentWeight` remains admin-entered and unsynced from progress
+  entries — it is effectively the intake weight, and nothing in this feature reads
+  it. Treat it as untrustworthy for "current" anywhere else too.
+  **Superseded same day by ADR-050**, which renamed it to `intakeWeight` and made
+  client creation seed `ProgressEntry` with the intake numbers.
+
+---
+
+## ADR-050: Intake Measurements Seed the Progress Timeline; `currentWeight` Renamed
+
+**Date:** 2026-08-26
+**Status:** Accepted
+**Supersedes:** the `ClientProfile.currentWeight` consequence noted in ADR-049.
+
+**Context:** `ClientProfile.currentWeight` and `ClientProfile.bodyFatPercentage` were
+written in exactly two places — `createUser` and `updateUser`, both admin-only — and
+read in exactly one: pre-filling the admin edit form that writes them. Nothing else in
+the codebase consumed either field. `progress.service.ts` never touched `ClientProfile`
+at all, so neither column was ever updated when a real measurement was logged.
+
+They were effectively write-only fields whose names claimed to be live values. Nothing
+was broken by this yet, but `currentWeight` sitting next to `height` in the schema is an
+obvious trap for the next feature that wants "the client's weight today".
+
+It also had a concrete cost: the ADR-049 weigh-in nudge computes "how far you've come"
+from the client's *first `ProgressEntry`*. A client whose admin recorded 80 kg at signup
+in January but whose first logged weigh-in was 75 kg in June was told they had lost
+1 kg, not 6 — their best number was invisible because intake never entered the timeline.
+
+**Decision:**
+
+1. **Rename** `currentWeight` -> `intakeWeight` and `bodyFatPercentage` -> `intakeBodyFat`
+   (migration `20260826124934_rename_client_intake_measurements`). Hand-written as
+   `ALTER TABLE ... RENAME COLUMN` — Prisma renders a field rename as DROP + ADD, which
+   would have destroyed the 62 intake weights and 19 body-fat values already stored.
+
+2. **Client creation seeds `ProgressEntry`.** When `createUser` is given an intake
+   weight and/or body fat, it now also calls `createProgressEntry` with
+   `notes: 'Recorded at signup'`, recorded by the creating admin. Reusing that service
+   (rather than writing the row directly) means intake measurements get the same audit
+   entry and body-composition badge evaluation as any other measurement.
+
+3. **The seed is non-blocking.** Wrapped in try/catch — a failure to write the baseline
+   must never stop a client from being created. It is logged, not thrown.
+
+4. **`ProgressEntry` is the single source of truth for body measurements.** The two
+   renamed columns are an immutable historical record of signup day and must not be read
+   as current values anywhere.
+
+5. **Admin form labels updated** — "Starting weight (kg)" / "Starting body fat %" on
+   client creation, "Intake weight (kg)" / "Intake body fat %" on the edit form.
+
+**Consequences:**
+
+- The weigh-in nudge's baseline is now the day the client joined, for every client
+  created from here on.
+- **Existing clients are not backfilled.** Anyone already in the system whose intake
+  weight predates their first `ProgressEntry` still has the truncated baseline. A
+  one-off backfill (insert a `ProgressEntry` dated `clientProfile.createdAt` from
+  `intakeWeight`, where the client has no entry at or before that date) is a follow-up
+  and was deliberately not run as part of this change.
+- Editing `intakeWeight` on the admin form after signup corrects the column but does
+  **not** rewrite the seeded `ProgressEntry`. Correcting an actual measurement is done
+  where measurements live (`PUT /api/trainer/progress/[id]`). This is a deliberate
+  split: the column is a historical record, the entry is a measurement.
+- `createUser` requests now send `intakeWeight` / `intakeBodyFat`. Any external caller
+  still posting `currentWeight` / `bodyFatPercentage` will have those fields silently
+  ignored by Zod. The admin UI is the only known caller.
+- `user.service.ts` now imports `progress.service.ts`. Verified non-circular
+  (progress -> badge -> libs only).

@@ -54,8 +54,22 @@ GET    /api/admin/users                  → ?role=TRAINER|CLIENT&search&status=
                                             `activeCount` (sibling of `pagination`) is the branch-wide active
                                             tally for this role, ignoring search/status (stable header stat).
 POST   /api/admin/users                  → { email, firstName, lastName, phone, role, ...profileFields } → User
+                                            Client profileFields: gender, dateOfBirth, emergencyContactName,
+                                            emergencyContactPhone, height, intakeWeight, intakeBodyFat,
+                                            medicalConditions, fitnessGoals, sessionDurationOverrideMin.
+                                            RENAMED 2026-08-26 (ADR-050): currentWeight → intakeWeight,
+                                            bodyFatPercentage → intakeBodyFat. Old names are now silently
+                                            dropped by Zod — update any caller that still sends them.
+                                            SIDE EFFECT: supplying intakeWeight and/or intakeBodyFat also
+                                            creates the client's first ProgressEntry (notes "Recorded at
+                                            signup", recordedByUserId = the creating admin), so the progress
+                                            timeline starts on signup day. Non-blocking — a failure to seed
+                                            it is logged and the client is still created.
 GET    /api/admin/users/[id]             → {} → User (with profile)
 PUT    /api/admin/users/[id]             → { ...updatedFields } → User
+                                            Same intakeWeight / intakeBodyFat rename applies. Editing these
+                                            corrects the stored intake values only — it does NOT rewrite the
+                                            seeded ProgressEntry (see ADR-050).
 DELETE /api/admin/users/[id]             → {} → { success } (soft delete)
 GET    /api/admin/users/[id]/clients     → {} → { data: TrainerClient[] }
                                             For a trainer user. Returns clients with an active PtPackage
@@ -392,10 +406,34 @@ interface ExerciseInput {
 
 ```
 GET    /api/client/dashboard             → {} → { sessionCount, nextSession, activeSession, trainer,
-                                                   latestProgress, prevProgress, prs }
-       latestProgress/prevProgress: { weightKg, bodyFatPercent, muscleMass, recordedAt } (latest 2 entries)
+                                                   packageExpiry, latestProgress, prevProgress, prs,
+                                                   engagementStats, weighIn }
+       latestProgress/prevProgress: { weightKg, bodyFatPercent, muscleMass } — per-metric latest
+       and previous non-null values (entries are sparse, so each metric is resolved independently).
+       NOTE: recordedAt is NOT returned here; use `weighIn.lastWeighIn.recordedAt` for weight recency.
        prs: [{ exerciseName, muscle, maxWeightKg }] top 4 by max weight across all workout sets
+       engagementStats: { streak, allTimeCompleted, daysSinceLastSession, monthAttendanceRate }
+       weighIn: weigh-in nudge payload — see below
        Updated: 2026-03-28 (added latestProgress, prevProgress, prs)
+       Updated: 2026-08-26 (added weighIn; documented packageExpiry + engagementStats, which
+                shipped earlier without a contract entry)
+
+       weighIn: {
+         shouldPrompt: boolean          // true when the client is due a weigh-in nudge
+         reason: 'NEVER_LOGGED' | 'STALE' | null
+         thresholdDays: number          // BranchSettings.measurementReminderDays (default 30)
+         daysSinceLastWeighIn: number | null
+         lastWeighIn: { weightKg: number, recordedAt: string } | null
+         firstWeighIn: { weightKg: number, recordedAt: string } | null
+         totalChangeKg: number | null   // last − first, null when fewer than 2 weigh-ins
+         entryCount: number             // weigh-ins with a non-null weightKg
+         trackedDays: number | null     // whole days between first and last weigh-in
+         series: [{ date: string, value: number }]  // ascending, last 12 weigh-ins, sparkline
+       }
+       Only weight (`weightKg`) counts toward the nudge — a progress entry with only body-fat or
+       measurements does NOT reset `daysSinceLastWeighIn`. Dismissal/snooze state is client-side
+       only (localStorage `sector7.weighInNudge.snoozedUntil`); the server holds no per-client
+       nudge state and this block is computed on every request. See ADR-049.
 
 GET    /api/client/sessions              → ?month → SessionInstance[] (own sessions)
 GET    /api/client/sessions/[id]         → {} → SessionInstance (with workout details, exerciseType included)

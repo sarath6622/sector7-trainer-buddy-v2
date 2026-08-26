@@ -2,6 +2,7 @@ import { hash } from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
+import { createProgressEntry } from '@/services/progress.service';
 import type { Prisma, UserRole, DayOfWeek } from '@prisma/client';
 
 interface ShiftInput {
@@ -39,8 +40,8 @@ interface CreateUserInput {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   height?: number;
-  currentWeight?: number;
-  bodyFatPercentage?: number;
+  intakeWeight?: number;
+  intakeBodyFat?: number;
   medicalConditions?: string;
   fitnessGoals?: string;
   sessionDurationOverrideMin?: number;
@@ -62,8 +63,8 @@ interface UpdateUserInput {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   height?: number;
-  currentWeight?: number;
-  bodyFatPercentage?: number;
+  intakeWeight?: number;
+  intakeBodyFat?: number;
   medicalConditions?: string;
   fitnessGoals?: string;
   sessionDurationOverrideMin?: number;
@@ -214,7 +215,7 @@ export async function createUser(input: CreateUserInput) {
       });
     }
   } else if (roles.includes('CLIENT')) {
-    await prisma.clientProfile.create({
+    const clientProfile = await prisma.clientProfile.create({
       data: {
         userId: user.id,
         branchId,
@@ -223,13 +224,33 @@ export async function createUser(input: CreateUserInput) {
         emergencyContactName: userData.emergencyContactName,
         emergencyContactPhone: userData.emergencyContactPhone,
         height: userData.height,
-        currentWeight: userData.currentWeight,
-        bodyFatPercentage: userData.bodyFatPercentage,
+        intakeWeight: userData.intakeWeight,
+        intakeBodyFat: userData.intakeBodyFat,
         medicalConditions: userData.medicalConditions,
         fitnessGoals: userData.fitnessGoals,
         sessionDurationOverrideMin: userData.sessionDurationOverrideMin,
       },
     });
+
+    // Seed the measurement timeline with the intake numbers so the client's
+    // progress history starts on the day they joined, not on whenever someone
+    // first remembered to log a weigh-in. Without this, "how far you've come"
+    // silently discards everything achieved before the first manual entry.
+    // Non-blocking: a client must still be created if this fails (ADR-050).
+    if (userData.intakeWeight != null || userData.intakeBodyFat != null) {
+      try {
+        await createProgressEntry({
+          clientProfileId: clientProfile.id,
+          recordedByUserId: actorId,
+          branchId,
+          weightKg: userData.intakeWeight,
+          bodyFatPercent: userData.intakeBodyFat,
+          notes: 'Recorded at signup',
+        });
+      } catch (error) {
+        console.error('[createUser] intake progress entry failed:', error);
+      }
+    }
   }
 
   const fullUser = await prisma.user.findUnique({
@@ -568,9 +589,9 @@ export async function updateUser(
     if (input.emergencyContactPhone !== undefined)
       clientUpdate.emergencyContactPhone = input.emergencyContactPhone;
     if (input.height !== undefined) clientUpdate.height = input.height;
-    if (input.currentWeight !== undefined) clientUpdate.currentWeight = input.currentWeight;
-    if (input.bodyFatPercentage !== undefined)
-      clientUpdate.bodyFatPercentage = input.bodyFatPercentage;
+    if (input.intakeWeight !== undefined) clientUpdate.intakeWeight = input.intakeWeight;
+    if (input.intakeBodyFat !== undefined)
+      clientUpdate.intakeBodyFat = input.intakeBodyFat;
     if (input.medicalConditions !== undefined)
       clientUpdate.medicalConditions = input.medicalConditions;
     if (input.fitnessGoals !== undefined) clientUpdate.fitnessGoals = input.fitnessGoals;

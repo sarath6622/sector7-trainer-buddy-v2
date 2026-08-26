@@ -267,8 +267,8 @@ model ClientProfile {
   emergencyContactName   String?
   emergencyContactPhone  String?
   height                 Float?    // cm
-  currentWeight          Float?    // kg
-  bodyFatPercentage      Float?
+  intakeWeight           Float?    // kg, recorded at signup — NOT a live value
+  intakeBodyFat          Float?    // %, recorded at signup — NOT a live value
   medicalConditions      String?
   fitnessGoals           String?
   sessionDurationOverrideMin Int?  // null = use branch default
@@ -1072,3 +1072,22 @@ enum SecondaryMetric {
 DEFAULT ARRAY[]::TEXT[]`, backfills it from the old single `pinnedPanel`
   (one-element array where set), then drops `pinnedPanel`. Applied to local
   Docker and Neon.
+
+---
+
+## ClientProfile Intake Measurements (2026-08-26, ADR-050)
+
+`currentWeight` → **`intakeWeight`**, `bodyFatPercentage` → **`intakeBodyFat`**
+(migration `20260826124934_rename_client_intake_measurements`, `ALTER TABLE ... RENAME
+COLUMN` so existing data is preserved).
+
+Both are admin-entered at client creation and were never synced from `progress_entries`
+— the old names claimed to be live values that nothing kept up to date. They are now
+named as what they are: an immutable record of what was measured on signup day.
+
+**The live body-measurement timeline is `ProgressEntry`, and only `ProgressEntry`.**
+`createUser` now seeds it with entry #1 (`notes: 'Recorded at signup'`) whenever intake
+weight and/or body fat is supplied, so a client's progress history starts the day they
+joined rather than whenever someone first remembered to log a weigh-in.
+
+Do not read `intakeWeight` / `intakeBodyFat` as current values anywhere.

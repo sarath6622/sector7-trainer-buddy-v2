@@ -1638,3 +1638,159 @@ costing a second tap before typing.
 - **Memory Updated:** `memory/api-contracts.md` (GET /api/admin/sessions: stats block + search param)
 - **Verified:** live against local dev: stats breakdown, stats ignore status filter by design, trainer-scoped stats, mapped-client cascade, name search, detail endpoint. Lint + type-check clean for changed files
 - **Notes:** no schema changes; no new dependencies; list/stats read-only, mutations reuse existing audited endpoints
+
+---
+
+## S7-CL-02 — Client Weigh-In Nudge (PWA)
+
+**Agent:** @backend + @ui
+**Completed:** 2026-08-26
+**ADR:** ADR-049
+
+### Goal
+
+Prompt clients on the dashboard when they haven't logged their weight in a while,
+framed as motivation (how far they've come) rather than a compliance nag, and let
+them close the loop inline without leaving the page.
+
+### Files added
+
+- `src/lib/weighIn.ts` — `buildWeighInNudge(entries, thresholdDays, now)`. Pure, no
+  Prisma. Decides `shouldPrompt` / `reason`, and assembles days-since, first/last
+  weigh-in, net change, entry count, tracked span, and a 12-point sparkline series.
+- `src/components/progress/WeighInNudge.tsx` — the modal. Progression hero, hand-rolled
+  SVG sparkline whose dashed tail renders the current silence as a visible gap,
+  supporting stat chips (sessions / streak / top PR), inline weight input, and a
+  saved state that immediately recomputes and shows the new total change.
+- `tests/unit/weigh-in-nudge.test.ts` — 19 cases: never-logged, threshold boundaries
+  (28/29/30/31 days), branch-specific and zero thresholds, body-fat-only entries not
+  resetting the clock, future-dated entries, unordered input, rounding, single-entry,
+  series ordering and the 12-point cap, unparseable dates, non-finite weights.
+
+### Files modified
+
+- `src/app/api/client/dashboard/route.ts` — added the `weighIn` block. Costs one extra
+  `BranchSettings` query; the progress entries it computes from were already loaded by
+  the existing per-metric latest/previous logic.
+- `src/app/(dashboard)/client/page.tsx` — renders the nudge, queued behind the badge
+  celebration so the overlays never stack. Arms once per page load via a ref so
+  refetches (session ended, weight logged) can't pop it back open. 7-day localStorage
+  snooze on dismiss, cleared on save.
+- `memory/api-contracts.md` — documented `weighIn`, and backfilled `packageExpiry` +
+  `engagementStats`, which had shipped earlier without a contract entry. Also corrected
+  the stale claim that `latestProgress` returns `recordedAt` — it does not.
+- `memory/decisions.md` — ADR-049.
+
+### Decisions
+
+- Threshold reuses `BranchSettings.measurementReminderDays` (default 30) — the same
+  value already driving the trainer/admin "No measurements" badge.
+- Only `weightKg` resets the clock; body-fat-only or measurement-only entries don't.
+- Dismissal is client-side only (`sector7.weighInNudge.snoozedUntil`, 7 days).
+- No goal-weight ring: there is no numeric target field, and `ClientProfile.currentWeight`
+  is admin-entered and never synced from progress entries, so it is NOT a usable
+  "current weight". Adding `targetWeightKg` is the follow-up if a ring is wanted.
+- The sparkline's "now" is derived from the server's `daysSinceLastWeighIn`, not
+  `Date.now()` — keeps the render pure (react-hooks/purity) and immune to clock skew.
+
+### Checks
+
+- `npm run type-check` — 0 errors.
+- `npm run lint` — 0 errors in changed files (3 remaining errors are pre-existing, all
+  inside `mobile/build/` Flutter artifacts; 8 `<img>` warnings pre-existing).
+- `npx vitest run tests/unit/weigh-in-nudge.test.ts` — 19/19 passing.
+- Full unit suite: 41 failures, all pre-existing (stale Prisma mocks / drifted return
+  shapes in service tests I did not touch).
+- Live smoke test against the local Docker DB as `ammu@gmail.com`: `shouldPrompt: true`,
+  `reason: STALE`, 59 days since last weigh-in, −3.7 kg over 44 weigh-ins. Posting a
+  weight via the modal's endpoint flipped `shouldPrompt` to false and recalculated the
+  total to −4.2 kg. The smoke-test row was deleted afterwards, restoring the 59-day
+  stale state for manual testing.
+
+### Not done
+
+- **Not verified in a browser.** No browser automation is installed in this repo, so
+  the modal's layout, dark mode, and the sparkline gap have not been looked at on a
+  real screen. Needs an eyeball at 320px before shipping.
+- Flutter mobile client not covered — out of scope for v1 (see ADR-049). It needs no
+  backend work when it is picked up.
+
+---
+
+## S7-CL-03 — Intake Measurements Seed the Progress Timeline
+
+**Agent:** @architect + @backend
+**Completed:** 2026-08-26
+**ADR:** ADR-050 (supersedes an ADR-049 consequence)
+
+### Goal
+
+`ClientProfile.currentWeight` / `bodyFatPercentage` were write-only fields — set by the
+admin at signup, never synced from `progress_entries`, and read only to re-fill the form
+that wrote them. Their names claimed to be live values. They also cost the ADR-049
+weigh-in nudge its true baseline: a client weighed at 80 kg on signup whose first logged
+entry was 75 kg six months later was told they'd lost 1 kg, not 6.
+
+### Migration
+
+`prisma/migrations/20260826124934_rename_client_intake_measurements` —
+`currentWeight` → `intakeWeight`, `bodyFatPercentage` → `intakeBodyFat`.
+
+Hand-written as `ALTER TABLE ... RENAME COLUMN`. Prisma renders a field rename as
+DROP + ADD, which would have destroyed the stored intake data. Applied to LOCAL Docker
+only (Rule 0) via `migrate deploy` with a forced local `DATABASE_URL`/`DIRECT_URL` —
+`migrate dev` cannot run in this non-interactive shell.
+
+**Data verified identical across the rename:** 79 client_profiles rows, 62 non-null
+weights, 19 non-null body-fat values, before and after.
+
+**NOT applied to Neon.** That is a separate deliberate deploy step.
+
+### Files changed
+
+- `prisma/schema.prisma` — both fields renamed, with doc comments stating they are
+  signup-day records, not live values.
+- `src/services/user.service.ts` — renamed fields; `createUser` now calls
+  `createProgressEntry` when intake weight and/or body fat is supplied
+  (`notes: 'Recorded at signup'`, recorded by the creating admin). Wrapped in try/catch
+  so it can never block client creation. Reusing the service means the intake entry gets
+  the same audit log and badge evaluation as any other measurement.
+- `src/lib/validators.ts` — `createUserSchema` field rename.
+- `src/app/(dashboard)/admin/clients/new/page.tsx` — renamed; labels now "Starting
+  weight (kg)" / "Starting body fat %".
+- `src/app/(dashboard)/admin/clients/[id]/page.tsx` — renamed; labels now "Intake
+  weight (kg)" / "Intake body fat %".
+- `src/app/(dashboard)/admin/clients/page.tsx` — interface rename.
+- `prisma/seed.ts`, `prisma/seed-dev-ammu.ts` — renamed.
+- `tests/unit/user-service.test.ts` — updated the one test that asserted on the old
+  field name (it was genuinely passing before the rename, unlike the file's 18
+  pre-existing failures).
+- `tests/unit/intake-progress-seed.test.ts` — NEW, 7 cases: weight-only, weight+body fat,
+  body-fat-only, profile still stores the values, no entry when neither given, no entry
+  for a trainer, and creation still succeeds when the seed write throws.
+- `memory/schema.md`, `memory/api-contracts.md`, `memory/decisions.md` (ADR-050).
+
+### Checks
+
+- Local migration applied; `npx prisma generate` succeeded; dev server restarted to pick
+  up the regenerated client.
+- `npm run type-check` — 0 errors.
+- `npm run lint` — 0 findings in changed files.
+- `npx vitest run tests/unit/intake-progress-seed.test.ts` — 7/7 passing.
+- Full unit suite: 41 failures, matching the pre-existing baseline exactly. Baseline was
+  measured in a throwaway `git worktree` at HEAD (18 failures in `user-service.test.ts`
+  before, 18 after the test fix) — NOT via `git stash`.
+- **Live end-to-end**: created a client through `POST /api/admin/users` with
+  `intakeWeight: 82.5, intakeBodyFat: 24.1` → profile stored both, a `progress_entries`
+  row appeared with 82.5 / 24.1 / "Recorded at signup", and both `USER_CREATED` and
+  `PROGRESS_CREATED` audit entries were written. Test client and its rows deleted after.
+- No references to the old names remain in `src/`, `prisma/`, or `mobile/lib/`.
+
+### Not done
+
+- **Existing clients are not backfilled.** Clients whose intake weight predates their
+  first `ProgressEntry` still have the truncated baseline. Suggested follow-up: insert a
+  `ProgressEntry` dated `clientProfile.createdAt` from `intakeWeight` where the client
+  has no entry at or before that date.
+- Neon migration not applied — deliberate, separate deploy step.
+- Admin forms not eyeballed in a browser after the relabel.

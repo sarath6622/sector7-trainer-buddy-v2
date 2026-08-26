@@ -141,8 +141,8 @@ async function main() {
       lastName: 'Sharma',
       phone: '+91-9002000001',
       height: 163,
-      currentWeight: 58,
-      bodyFatPercentage: 24,
+      intakeWeight: 58,
+      intakeBodyFat: 24,
       fitnessGoals: 'Tone up and build lean muscle',
       emergencyContactName: 'Vikram Sharma',
       emergencyContactPhone: '+91-9002000010',
@@ -153,8 +153,8 @@ async function main() {
       lastName: 'Iyer',
       phone: '+91-9002000002',
       height: 178,
-      currentWeight: 82,
-      bodyFatPercentage: 18,
+      intakeWeight: 82,
+      intakeBodyFat: 18,
       fitnessGoals: 'Build strength and gain muscle mass',
       emergencyContactName: 'Lakshmi Iyer',
       emergencyContactPhone: '+91-9002000011',
@@ -165,8 +165,8 @@ async function main() {
       lastName: 'Pillai',
       phone: '+91-9002000003',
       height: 158,
-      currentWeight: 65,
-      bodyFatPercentage: 28,
+      intakeWeight: 65,
+      intakeBodyFat: 28,
       fitnessGoals: 'Weight loss and improve stamina',
       emergencyContactName: 'Suresh Pillai',
       emergencyContactPhone: '+91-9002000012',
@@ -177,8 +177,8 @@ async function main() {
       lastName: 'Das',
       phone: '+91-9002000004',
       height: 175,
-      currentWeight: 78,
-      bodyFatPercentage: 20,
+      intakeWeight: 78,
+      intakeBodyFat: 20,
       fitnessGoals: 'Athletic performance and flexibility',
       emergencyContactName: 'Priya Das',
       emergencyContactPhone: '+91-9002000013',
@@ -189,8 +189,8 @@ async function main() {
       lastName: 'Gupta',
       phone: '+91-9002000005',
       height: 160,
-      currentWeight: 55,
-      bodyFatPercentage: 22,
+      intakeWeight: 55,
+      intakeBodyFat: 22,
       fitnessGoals: 'Posture correction and core strength',
       emergencyContactName: 'Rahul Gupta',
       emergencyContactPhone: '+91-9002000014',
@@ -201,8 +201,8 @@ async function main() {
       lastName: 'Kumar',
       phone: '+91-9002000006',
       height: 180,
-      currentWeight: 90,
-      bodyFatPercentage: 25,
+      intakeWeight: 90,
+      intakeBodyFat: 25,
       fitnessGoals: 'Fat loss and muscle definition',
       emergencyContactName: 'Sita Kumar',
       emergencyContactPhone: '+91-9002000015',
@@ -234,8 +234,8 @@ async function main() {
         userId: user.id,
         branchId: branch.id,
         height: c.height,
-        currentWeight: c.currentWeight,
-        bodyFatPercentage: c.bodyFatPercentage,
+        intakeWeight: c.intakeWeight,
+        intakeBodyFat: c.intakeBodyFat,
         fitnessGoals: c.fitnessGoals,
         emergencyContactName: c.emergencyContactName,
         emergencyContactPhone: c.emergencyContactPhone,
@@ -865,8 +865,8 @@ async function main() {
     for (let week = 1; week <= 3; week++) {
       const date = new Date(2026, 2, week * 7);
       const clientIdx = clients.indexOf(c);
-      const baseWeight = clientData[clientIdx]!.currentWeight;
-      const baseFat = clientData[clientIdx]!.bodyFatPercentage;
+      const baseWeight = clientData[clientIdx]!.intakeWeight;
+      const baseFat = clientData[clientIdx]!.intakeBodyFat;
 
       await prisma.progressEntry.create({
         data: {

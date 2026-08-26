@@ -512,7 +512,7 @@ describe('updateUser', () => {
 
     await userService.updateUser(
       'u1',
-      { height: 180, currentWeight: 75, fitnessGoals: 'Build muscle' },
+      { height: 180, intakeWeight: 75, fitnessGoals: 'Build muscle' },
       'branch-1',
       'actor-1',
     );
@@ -521,7 +521,7 @@ describe('updateUser', () => {
       where: { id: 'cp1' },
       data: expect.objectContaining({
         height: 180,
-        currentWeight: 75,
+        intakeWeight: 75,
         fitnessGoals: 'Build muscle',
       }),
     });
