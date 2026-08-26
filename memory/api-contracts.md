@@ -240,7 +240,23 @@ GET    /api/trainer/exercises/[id]         → identical
 PUT    /api/trainer/exercises/[id]         → identical
 DELETE /api/trainer/exercises/[id]         → identical
 POST   /api/trainer/exercises/bulk-import  → identical
+
+# Shared read used by the workout logger (any authenticated role)
+GET    /api/exercises                      → ?search&muscleGroup&muscleGroups&category&exerciseType&page&pageSize
+                                             → Paginated<Exercise> & { relaxed: boolean }
 ```
+
+**Fuzzy `search` (2026-08-26).** `search` is no longer a SQL substring match. The
+catalog is scored in memory by `src/lib/exerciseSearch.ts` and returned ranked by
+relevance, because trainers type the lift the way they say it — "incline press"
+for "Incline Chest Press (Machine)" — which no `contains` predicate finds.
+Matching is word-order independent, tolerates typos ("deadlft"), compound words
+("benchpress"), and query words spanning two catalog words ("tricep pushdown").
+
+`relaxed: true` means the strict pass found nothing and the payload holds near
+misses instead — the UI must label them as guesses, not hits. `pagination.total`
+counts matches after scoring, so it stays honest for both passes. Applies to
+every route calling `exerciseService.listExercises` (admin, trainer, shared).
 
 ### Analytics
 

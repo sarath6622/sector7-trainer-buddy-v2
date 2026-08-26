@@ -490,6 +490,10 @@ export function WorkoutLogger({
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ExerciseOption[]>([]);
+  // True when the server found no strict match and fell back to near
+  // misses. They're worth showing — a trainer mistyping a lift shouldn't
+  // hit a dead end — but they must be labelled as guesses, not hits.
+  const [searchRelaxed, setSearchRelaxed] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   // Filter chips inside the search modal. Either filter alone (no query)
   // still triggers a fetch so trainers can browse "all chest" without typing.
@@ -749,6 +753,7 @@ export function WorkoutLogger({
       // Empty modal — show the prompt state, not a 500-row dump of the catalog.
       if (!query.trim() && groupIds.length === 0 && !type) {
         setSearchResults([]);
+        setSearchRelaxed(false);
         setSearchLoading(false);
         return;
       }
@@ -763,6 +768,7 @@ export function WorkoutLogger({
         if (res.ok) {
           const r = await res.json();
           setSearchResults(r.data);
+          setSearchRelaxed(Boolean(r.relaxed));
         }
       } catch {
         /* silent — abort or network */
@@ -1591,6 +1597,7 @@ export function WorkoutLogger({
                 setShowSearch(false);
                 setSearchQuery('');
                 setSearchResults([]);
+                setSearchRelaxed(false);
                 setSearchMuscleGroups(new Set());
                 setSearchExerciseType(null);
                 setSearchSelectedIds(new Set());
@@ -1781,46 +1788,60 @@ export function WorkoutLogger({
                           Searching…
                         </div>
                       ) : visibleResults.length > 0 ? (
-                        <div className="divide-y divide-border/50">
-                          {visibleResults.map((ex) => {
-                            const cfg = TYPE_CONFIG[ex.exerciseType];
-                            const Icon = cfg.icon;
-                            const isSelected = searchSelectedIds.has(ex.id);
-                            return (
-                              <button
-                                key={ex.id}
-                                onClick={() => toggleResult(ex.id)}
-                                aria-pressed={isSelected}
-                                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                                  isSelected ? 'bg-primary/5' : 'active:bg-muted/60'
-                                }`}
-                              >
-                                <div
-                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
-                                >
-                                  <Icon className={`h-4 w-4 ${cfg.text}`} />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-medium">{ex.name}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {ex.targetMuscleGroup}
-                                    {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
-                                    {` · ${cfg.label}`}
-                                  </p>
-                                </div>
-                                <div
-                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
-                                    isSelected
-                                      ? 'bg-primary text-primary-foreground'
-                                      : 'bg-muted text-muted-foreground'
+                        <>
+                          {searchRelaxed && (
+                            <div className="flex items-start gap-2 border-b border-border/50 bg-amber-500/10 px-4 py-2.5">
+                              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                              <p className="text-[11px] leading-snug text-muted-foreground">
+                                No exact match for{' '}
+                                <span className="font-semibold text-foreground">
+                                  “{searchQuery.trim()}”
+                                </span>{' '}
+                                — showing the closest exercises.
+                              </p>
+                            </div>
+                          )}
+                          <div className="divide-y divide-border/50">
+                            {visibleResults.map((ex) => {
+                              const cfg = TYPE_CONFIG[ex.exerciseType];
+                              const Icon = cfg.icon;
+                              const isSelected = searchSelectedIds.has(ex.id);
+                              return (
+                                <button
+                                  key={ex.id}
+                                  onClick={() => toggleResult(ex.id)}
+                                  aria-pressed={isSelected}
+                                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                                    isSelected ? 'bg-primary/5' : 'active:bg-muted/60'
                                   }`}
                                 >
-                                  <Check className="h-3.5 w-3.5" />
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
+                                  <div
+                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
+                                  >
+                                    <Icon className={`h-4 w-4 ${cfg.text}`} />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium">{ex.name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {ex.targetMuscleGroup}
+                                      {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
+                                      {` · ${cfg.label}`}
+                                    </p>
+                                  </div>
+                                  <div
+                                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
+                                      isSelected
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'bg-muted text-muted-foreground'
+                                    }`}
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
                       ) : allHiddenByLog ? (
                         <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
                           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15">

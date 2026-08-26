@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { auditLog } from '@/lib/audit';
 import { expandCuratedGroups } from '@/lib/muscle-groups';
+import { searchExerciseCatalog } from '@/lib/exerciseSearch';
 import type {
   ExerciseCategory,
   DifficultyLevel,
@@ -168,6 +169,11 @@ export async function getExerciseById(exerciseId: string) {
   return exercise;
 }
 
+/** Upper bound on rows pulled in for in-memory search scoring. The exercise
+ *  library is a curated catalog in the low hundreds; this is a guard rail, not
+ *  an expected limit. */
+const MAX_SEARCH_CANDIDATES = 1000;
+
 /**
  * List exercises with search, filter, and pagination
  */
@@ -181,14 +187,6 @@ export async function listExercises({
   pageSize,
 }: ListExercisesInput) {
   const where: Record<string, unknown> = { isActive: true };
-
-  if (search) {
-    where.OR = [
-      { name: { contains: search, mode: 'insensitive' } },
-      { targetMuscleGroup: { contains: search, mode: 'insensitive' } },
-      { equipmentRequired: { contains: search, mode: 'insensitive' } },
-    ];
-  }
 
   // Prefer the curated-groups expansion when provided — it pulls in aliases
   // (e.g. "back" → Back, Lats, Lower Back) that the old substring match on
@@ -215,6 +213,32 @@ export async function listExercises({
     where.exerciseType = exerciseType;
   }
 
+  // Free-text search is ranked in memory instead of matched in SQL: trainers
+  // type "incline press" for "Incline Chest Press (Machine)", and no `contains`
+  // predicate finds that. `searchExerciseCatalog` scores the filtered catalog
+  // (a few hundred curated rows) and falls back to near misses when nothing
+  // matches strictly, so the picker is never a dead end.
+  if (search && search.trim().length > 0) {
+    const candidates = await prisma.exercise.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      take: MAX_SEARCH_CANDIDATES,
+    });
+    const { matches, relaxed } = searchExerciseCatalog(search, candidates);
+    const start = (page - 1) * pageSize;
+
+    return {
+      data: matches.slice(start, start + pageSize),
+      pagination: {
+        page,
+        pageSize,
+        total: matches.length,
+        totalPages: Math.ceil(matches.length / pageSize),
+      },
+      relaxed,
+    };
+  }
+
   const [exercises, total] = await Promise.all([
     prisma.exercise.findMany({
       where,
@@ -233,6 +257,7 @@ export async function listExercises({
       total,
       totalPages: Math.ceil(total / pageSize),
     },
+    relaxed: false,
   };
 }
 

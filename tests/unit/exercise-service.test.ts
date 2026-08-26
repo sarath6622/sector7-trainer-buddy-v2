@@ -145,26 +145,66 @@ describe('listExercises', () => {
     expect(result.pagination.totalPages).toBe(1);
   });
 
-  it('should apply search filter', async () => {
+  // Search is scored in memory (see `@/lib/exerciseSearch`), so the SQL side
+  // only applies the non-text filters and hands the catalog over for ranking.
+  it('should rank search results instead of filtering them in SQL', async () => {
+    const catalog = [
+      { id: 'ex-1', name: 'Bench Press', targetMuscleGroup: 'Chest', equipmentRequired: 'Barbell' },
+      {
+        id: 'ex-2',
+        name: 'Incline Chest Press (Machine)',
+        targetMuscleGroup: 'Chest',
+        equipmentRequired: 'Machine',
+      },
+    ];
+    (prisma.exercise.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(catalog);
+
+    const result = await exerciseService.listExercises({
+      search: 'incline press',
+      page: 1,
+      pageSize: 20,
+    });
+
+    // "incline press" is not a substring of any name — the old SQL `contains`
+    // returned nothing here.
+    expect(result.data.map((e) => e.id)).toEqual(['ex-2']);
+    expect(result.pagination.total).toBe(1);
+    expect(result.relaxed).toBe(false);
+    expect(prisma.exercise.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { isActive: true } }),
+    );
+  });
+
+  it('should keep chip filters in SQL while searching', async () => {
     (prisma.exercise.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (prisma.exercise.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
 
     await exerciseService.listExercises({
-      search: 'bench',
+      search: 'press',
+      exerciseType: 'WEIGHTED',
       page: 1,
       pageSize: 20,
     });
 
     expect(prisma.exercise.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          isActive: true,
-          OR: expect.arrayContaining([
-            expect.objectContaining({ name: { contains: 'bench', mode: 'insensitive' } }),
-          ]),
-        }),
+        where: expect.objectContaining({ isActive: true, exerciseType: 'WEIGHTED' }),
       }),
     );
+  });
+
+  it('should fall back to near misses when nothing matches strictly', async () => {
+    (prisma.exercise.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'ex-1', name: 'Cable Fly', targetMuscleGroup: 'Chest', equipmentRequired: 'Cable' },
+    ]);
+
+    const result = await exerciseService.listExercises({
+      search: 'cabel fly',
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(result.data.map((e) => e.id)).toEqual(['ex-1']);
+    expect(result.relaxed).toBe(true);
   });
 });
 
