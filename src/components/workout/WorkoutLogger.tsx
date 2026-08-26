@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
@@ -792,6 +793,9 @@ export function WorkoutLogger({
     };
   }, [searchQuery, searchMuscleGroups, searchExerciseType, searchExercises]);
 
+  // Fallback focus for any path that opens the search without a tap gesture to
+  // ride (`openSearch` already focuses synchronously). Re-focusing an input
+  // that already has focus is a no-op, so this never disturbs the keyboard.
   useEffect(() => {
     if (showSearch) setTimeout(() => searchRef.current?.focus(), 50);
   }, [showSearch]);
@@ -879,11 +883,22 @@ export function WorkoutLogger({
   // nothing. The "All" chip stays the default; focus is still used by the
   // separate Suggestions recall.
   function openSearch() {
-    // Pop the mobile keyboard up front so the trainer can type immediately —
-    // must run synchronously here while we still have the tap gesture.
+    // Raise the soft keyboard immediately so the trainer can type without a
+    // second tap. iOS only opens it for a focus() that happens inside the
+    // originating tap gesture, so the whole sequence stays synchronous:
+    //   1. prime — focus a throwaway input, which raises the keyboard now,
+    //      before the real one exists;
+    //   2. flushSync — mount the modal on the spot instead of on React's next
+    //      render, so the real input is in the DOM while we still hold the
+    //      gesture;
+    //   3. focus it — a handoff between two inputs, which keeps the keyboard
+    //      up rather than dismissing and re-raising it.
     primeMobileKeyboard();
-    setSearchMuscleGroups(new Set());
-    setShowSearch(true);
+    flushSync(() => {
+      setSearchMuscleGroups(new Set());
+      setShowSearch(true);
+    });
+    searchRef.current?.focus();
     // No scroll-to-top here: the body is pinned while the overlay is open
     // (see the scroll-lock effect), so the page stays put and the fixed modal
     // sits over the current view.
@@ -1952,7 +1967,7 @@ export function WorkoutLogger({
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowSearch(true)}
+                  onClick={openSearch}
                   className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
                 >
                   <Plus className="h-4 w-4" /> Add First Exercise

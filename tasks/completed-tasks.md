@@ -4,6 +4,58 @@
 
 ---
 
+## Fuzzy Exercise Search (2026-08-26)
+
+### S7-EX-FUZZY: Exercise picker finds the lift the trainer actually typed
+
+**Problem:** on `/trainer/session/[id]`, searching "incline press" returned
+nothing while "incline chest press" returned two hits. `listExercises` matched
+the whole query as one SQL substring (`contains`), so any query whose words are
+not contiguous in the catalog name failed. Trainers don't know how a lift is
+spelled in the catalog.
+
+- **New** `src/lib/exerciseSearch.ts` — pure, in-memory relevance scorer over
+  name / targetMuscleGroup / equipmentRequired. Phrase-level bands (exact →
+  prefix → contains → compact) rank above a token pass that is word-order
+  independent, typo-tolerant (bounded Levenshtein, edits scaled to word
+  length), and matches query words spanning two catalog words.
+- **Relaxed fallback** — when the strict pass (every query word must land)
+  returns nothing, a second pass requiring one strong token hit returns up to
+  25 near misses, flagged `relaxed: true` so the UI labels them as guesses.
+  The picker is never a dead end.
+- **`exercise.service.listExercises`** — chip filters (muscle group, category,
+  type, isActive) stay in SQL; free-text search pulls the filtered catalog
+  (capped at 1000 rows — the library is ~142) and ranks in memory. Pagination
+  totals count scored matches, so they stay honest.
+- **`WorkoutLogger`** — new `searchRelaxed` state renders a "No exact match for
+  X — showing the closest exercises" banner above near-miss results.
+- **Contract** — `GET /api/exercises` (and admin/trainer equivalents) now return
+  `relaxed: boolean` alongside `data` / `pagination`. Additive; documented in
+  `memory/api-contracts.md`.
+- **Tests** — `tests/unit/exercise-search.test.ts` (16 cases: word order, gaps,
+  typos, compounds, spanning, ranking, relaxed fallback, empty query) plus 3
+  rewritten `listExercises` cases in `tests/unit/exercise-service.test.ts`.
+  Verified end-to-end against the local Docker catalog.
+- No schema change, no migration.
+
+### S7-EX-KBD: Search modal raises the mobile keyboard on open
+
+**Problem:** tapping "+" / "Search" opened the picker with the input unfocused,
+costing a second tap before typing.
+
+- `openSearch()` now runs the whole sequence inside the tap gesture: prime a
+  throwaway input (raises the keyboard before the real one exists) →
+  `flushSync` the modal into the DOM → `focus()` the real input. iOS only opens
+  the keyboard for a `focus()` inside the originating gesture, and the previous
+  `setTimeout(…, 50)` handoff ran a task too late to qualify.
+- The empty-state "Add First Exercise" button called `setShowSearch(true)`
+  directly, bypassing the priming entirely — now calls `openSearch()`.
+- The 50ms deferred focus stays as a fallback for non-gesture opens.
+- Not unit-tested: jsdom has no soft keyboard, and an `activeElement` assertion
+  would have passed against the old timer-based code too. Needs a device check.
+
+---
+
 ## Phase 23 — Kickboxing Sessions & Attendance (2026-04-24)
 
 ### S7-KB-01: Schema
