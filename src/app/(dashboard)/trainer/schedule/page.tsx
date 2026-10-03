@@ -8,9 +8,6 @@ import {
   Loader2,
   CalendarPlus,
   Calendar as CalendarIconLucide,
-  ChevronDown,
-  Search,
-  Users,
   User,
   MoreHorizontal,
   CalendarClock,
@@ -24,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SessionCalendar, type SessionCalendarHandle } from '@/components/calendar/SessionCalendar';
+import { ClientCombobox } from '@/components/forms/ClientCombobox';
 import type { EventInput, EventClickArg } from '@fullcalendar/core';
 import { cn } from '@/lib/utils';
 
@@ -169,87 +167,6 @@ const SESSION_STATUS_LABEL: Record<string, string> = {
   COMPLETED: 'Completed',
   NO_SHOW: 'No Show',
 };
-
-// ─── Client picker (in-memory search over the trainer's assigned clients) ──────
-
-function ClientCombobox({
-  clients,
-  value,
-  onChange,
-}: {
-  clients: SchedulerClient[];
-  value: string;
-  onChange: (clientProfileId: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const selected = clients.find((c) => c.clientProfileId === value);
-  const filtered = clients.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => {
-          setOpen((o) => !o);
-          setSearch('');
-        }}
-        className="flex h-10 w-full items-center gap-2 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors hover:bg-muted/50"
-      >
-        <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className={selected ? 'flex-1 text-left' : 'flex-1 text-left text-muted-foreground'}>
-          {selected?.name ?? 'Select client'}
-        </span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-lg bg-popover shadow-lg ring-1 ring-foreground/10">
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-            <Search className="h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search clients..."
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-          <div className="max-h-[200px] overflow-y-auto p-1">
-            {filtered.map((c) => (
-              <button
-                key={c.clientProfileId}
-                type="button"
-                onClick={() => {
-                  onChange(c.clientProfileId);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center rounded-md px-2.5 py-2 text-sm transition-colors ${
-                  value === c.clientProfileId
-                    ? 'bg-accent text-accent-foreground'
-                    : 'hover:bg-accent/50'
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
-            {filtered.length === 0 && (
-              <p className="px-2.5 py-3 text-center text-xs text-muted-foreground">No clients</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Schedule Sessions Modal (mirrors the admin scheduling modal) ─────────────
 
@@ -493,7 +410,7 @@ function ScheduleSessionsModal({
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Client</Label>
             <ClientCombobox
-              clients={clients}
+              options={clients.map((c) => ({ value: c.clientProfileId, label: c.name }))}
               value={clientProfileId}
               onChange={(v) => {
                 setClientProfileId(v);
