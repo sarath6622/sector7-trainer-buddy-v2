@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ClientCombobox } from '@/components/forms/ClientCombobox';
 
 const OPTIONS = [
@@ -74,5 +74,61 @@ describe('ClientCombobox', () => {
     fireEvent.click(screen.getByRole('button'));
     fireEvent.keyDown(screen.getByPlaceholderText('Search clients...'), { key: 'Escape' });
     expect(screen.queryByRole('listbox')).toBeNull();
+  });
+});
+
+describe('ClientCombobox scroll-into-view on open', () => {
+  let scrollIntoView: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    scrollIntoView = vi.fn();
+    // jsdom has no layout, so Element.prototype.scrollIntoView is a stub.
+    Element.prototype.scrollIntoView = scrollIntoView;
+    // Run rAF callbacks synchronously so the effect's scroll is observable.
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  });
+
+  it('does not scroll by default — a dialog must not move under the user', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button'));
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('scrolls the picker to the top of the scrollport when opted in', () => {
+    setup({ scrollIntoViewOnOpen: true });
+    fireEvent.click(screen.getByRole('button'));
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+  });
+
+  it('does not scroll while closed', () => {
+    setup({ scrollIntoViewOnOpen: true });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('re-scrolls when the keyboard raises and shrinks the visual viewport', () => {
+    // visualViewport is absent in jsdom; emulate iOS raising the keyboard by
+    // shrinking it after open, which is what useKeyboardViewport reads.
+    const listeners: Record<string, (() => void)[]> = { resize: [], scroll: [] };
+    const vv = {
+      height: 800,
+      offsetTop: 0,
+      addEventListener: (e: string, cb: () => void) => listeners[e]?.push(cb),
+      removeEventListener: () => {},
+    };
+    vi.stubGlobal('visualViewport', vv);
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
+
+    setup({ scrollIntoViewOnOpen: true });
+    fireEvent.click(screen.getByRole('button'));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    // Keyboard up: visual viewport shrinks by more than the 24px jitter floor.
+    vv.height = 450;
+    act(() => listeners.resize?.forEach((cb) => cb()));
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
   });
 });

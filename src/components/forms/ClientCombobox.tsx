@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Search, Users } from 'lucide-react';
+import { useKeyboardViewport } from '@/hooks/useKeyboardInset';
 import { cn } from '@/lib/utils';
 
 export interface ClientComboboxOption {
@@ -32,6 +33,7 @@ export function ClientCombobox({
   searchPlaceholder = 'Search clients...',
   emptyLabel = 'No clients',
   showInitials = false,
+  scrollIntoViewOnOpen = false,
   className,
 }: {
   options: ClientComboboxOption[];
@@ -42,11 +44,19 @@ export function ClientCombobox({
   emptyLabel?: string;
   /** Render an initials avatar on the trigger and in the list. */
   showInitials?: boolean;
+  /**
+   * Scroll the picker to the top of its scrollport when it opens. Off by
+   * default: inside a dialog the list already has the room it needs, and
+   * scrolling the dialog body out from under the user would be jarring.
+   */
+  scrollIntoViewOnOpen?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const { inset: keyboardInset } = useKeyboardViewport();
+  const keyboardOpen = keyboardInset > 0;
   const selected = options.find((o) => o.value === value);
   const filtered = options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()));
 
@@ -57,6 +67,29 @@ export function ClientCombobox({
     if (open) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
+
+  // Bring the picker to the top of the scrollport when it opens, so the list
+  // drops into empty space instead of wherever the row happened to sit. On a
+  // phone an unscrolled picker near the fold puts its list straight behind the
+  // keyboard. The document never scrolls in the dashboard shell — <main> is the
+  // scroll container — so scrollIntoView moves <main>, landing the picker just
+  // under the TopNav; how much context stays above it is the caller's
+  // `scroll-mt-*`.
+  //
+  // `keyboardOpen` is a dependency, not just `open`: the search field
+  // autofocuses, so iOS raises the keyboard a frame or two later and shrinks
+  // the visual viewport under our feet. Re-running once that lands keeps the
+  // picker pinned. Keyed on the open/close transitions rather than the px, so
+  // it fires once per change and doesn't fight manual scrolling.
+  useEffect(() => {
+    if (!open || !scrollIntoViewOnOpen) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const frame = requestAnimationFrame(() =>
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [open, scrollIntoViewOnOpen, keyboardOpen]);
 
   return (
     <div ref={containerRef} className={cn('relative', className)}>
@@ -82,12 +115,17 @@ export function ClientCombobox({
         >
           {selected?.label ?? placeholder}
         </span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <ChevronDown
+          className={cn(
+            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ease-out',
+            open && 'rotate-180'
+          )}
+        />
       </button>
       {open && (
         <div
           role="listbox"
-          className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-lg bg-popover shadow-lg ring-1 ring-foreground/10"
+          className="absolute left-0 top-full z-50 mt-1 w-full origin-top overflow-hidden rounded-lg bg-popover shadow-lg ring-1 ring-foreground/10 duration-150 ease-out animate-in fade-in-0 zoom-in-95 slide-in-from-top-2"
         >
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <Search className="h-3.5 w-3.5 text-muted-foreground" />

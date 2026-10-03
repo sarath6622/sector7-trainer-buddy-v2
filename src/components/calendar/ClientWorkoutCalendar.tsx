@@ -48,7 +48,11 @@ export function ClientWorkoutCalendar({ clients }: { clients: CalendarClient[] }
           value={selected.id}
           onChange={setSelectedId}
           showInitials
-          className="w-full sm:max-w-xs"
+          scrollIntoViewOnOpen
+          // scroll-mt clears the card's own title row, so opening the picker
+          // parks the whole card at the top of the scrollport rather than
+          // beheading it.
+          className="w-full scroll-mt-14 sm:max-w-xs"
         />
       </div>
 
