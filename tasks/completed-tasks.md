@@ -16,13 +16,13 @@
 **Problem:** a session only leaves `IN_PROGRESS` when the trainer taps "End
 Session", and trainers forget. The operator hit one open for **45 days**. A
 read-only dry-run of the local DB found **9 abandoned sessions**, 45–104 days
-old. The trainer dashboard already *showed* them; nothing ever pushed.
+old. The trainer dashboard already _showed_ them; nothing ever pushed.
 
 **Built:**
 
 - Reminder 1 at the session's booked `durationMin`, reminder 2 at `+15`.
   Trainer only — no client notifications (only trainers can end a session).
-  Only the highest *due* stage is sent, so a late-detected session gets one
+  Only the highest _due_ stage is sent, so a late-detected session gets one
   nudge, not a backlog.
 - 24h auto-close: `status = COMPLETED`, `endedByUserId = 'system'`,
   `actualDurationMin` = the booked duration, `endedAt` = the booked end (keeps
@@ -1794,3 +1794,249 @@ weights, 19 non-null body-fat values, before and after.
   has no entry at or before that date.
 - Neon migration not applied — deliberate, separate deploy step.
 - Admin forms not eyeballed in a browser after the relabel.
+
+---
+
+## S7-UX-31 — Trainer "Today" Card Redesign
+
+**Agent:** @ui
+**Completed:** 2026-10-03
+
+### Goal
+
+With nothing booked, the trainer dashboard's "Today" card rendered a dead end — an icon,
+"No sessions today", "Enjoy your rest day." and no way out of it. Operator then supplied a
+mockup covering both states, and the whole block was rebuilt to it.
+
+Operator originally framed this as "assign a workout". That is not a concept this schema
+has — `WorkoutLog` is hard-wired to a `sessionInstanceId`, so a workout cannot exist
+outside a session. The nearest real capability is **booking a session**, which trainers
+may already do for themselves via `POST /api/trainer/sessions/bulk`. Pre-assigned workout
+plans would need a new model + migration and were explicitly deferred (operator's call).
+
+### What changed
+
+- The single `rounded-3xl` card wrapper is gone. "TODAY" + the date are now a plain
+  section label, and each session is its own card on the page background.
+- **Empty state:** bordered card, calendar glyph with a brand-coloured tick, "No sessions
+  scheduled" / "Your schedule is clear today.", and a solid **+ Schedule session** button
+  that deep-links to `/trainer/schedule?book=today` (opens the existing booking modal in
+  single-slot mode, start time prefilled to the next :00/:30).
+- **Session rows:** big 12h clock + meridiem on the left, client / duration / status pill
+  in the middle, the one action that matters on the right. The live session, or else the
+  soonest still-scheduled one, carries a brand-coloured left edge.
+- **Below the list:** an outlined **+ Schedule session** button.
+- Trainers with **no assigned clients** get no booking actions anywhere, just "No clients
+  assigned to you yet. Ask your admin to map some."
+
+### Deliberate deviations from the mockup
+
+- **"No show" is kept.** The mockup shows only "Start session"; dropping no-show would
+  have removed the trainer's only way to mark one from the dashboard. It sits as a quiet
+  text button under the start button.
+- **"Start session" is on every scheduled row**, not just the imminent one — a trainer
+  must be able to start any of today's sessions early.
+- **The live "in 1h 35m" / "27m late" countdown is kept**, moved into the time column.
+  It is real floor signal (it escalates muted → brand → amber → red), and the middle
+  column is only ~90px at 390px wide once the action button has its share, so it could
+  not sit inline next to "60 min" without wrapping.
+- **Completed rows keep a view-workout action**, as a compact icon button.
+
+### Files changed
+
+- `src/components/trainer/TodayEmptyState.tsx` (created)
+- `src/components/trainer/TodaySessionTile.tsx` (created)
+- `src/app/(dashboard)/trainer/page.tsx` — composes both; derives
+  `nextTodaySessionId`; `StartsInLabel` reduced from a pill to inline coloured text.
+  Dead `STATUS_STYLE` / `TodayStatusStyle` removed (the tile owns status styling now).
+- `src/app/(dashboard)/trainer/schedule/page.tsx` — honours `?book=today` /
+  `?book=YYYY-MM-DD`, prefilling the modal and then stripping the param via
+  `router.replace` so a refresh or back-nav doesn't reopen it. Default export is now a
+  `Suspense` wrapper around `TrainerScheduleInner` because `useSearchParams` requires one
+  (same shape as `/tv`). Added `nextHalfHourSlot()` — next :00/:30 from now, clamped so a
+  late-night tap never rolls the time onto tomorrow.
+- `tests/unit/trainer-today-empty-state.test.tsx` (created) — 3 cases.
+- `tests/unit/trainer-today-session-tile.test.tsx` (created) — 12 cases.
+
+### Checks
+
+- `npm run type-check` — 0 errors.
+- `npm run lint` — 0 findings in changed files. (3 errors remain repo-wide, all in
+  gitignored, untracked `mobile/build/**` Flutter output that ESLint still walks.)
+- `npx vitest run` on both new files — 15/15 passing.
+- Full unit suite: 47 failures across 10 files, all backend service/auth specs on the
+  known pre-existing Prisma-mock baseline — identical before and after. None import
+  anything this task touched.
+- **Live end-to-end in Chrome** at 390x844 (iPhone 14 Pro, dark) against local Docker
+  Postgres:
+  - empty state as the `ravi@sector7.com` trainer — matches the mockup;
+  - populated list as `sarath@sector7.in` with three seeded sessions (09:00 completed,
+    12:00 overdue, 14:00 and 17:30 scheduled) — rows render at three lines with no
+    wrapping; seeded rows deleted afterwards;
+  - tapped the empty-state CTA → landed on `/trainer/schedule`, URL cleaned of
+    `?book=today`, modal open on "Sat, Oct 3 - 11:30 AM to 12:30 PM".
+
+### Not done
+
+- Not verified on Sarath's actual iPhone, only at iPhone viewport in desktop Chrome.
+- Long client names still truncate ("Test Sarath Ku...") at 390px — unavoidable with a
+  full-width "Start session" button on the same row.
+- Pre-assigned workouts (the literal "assign a workout") not built — needs @architect.
+- The `PWAInstallPrompt` hydration-mismatch warning seen in the console is pre-existing
+  and unrelated.
+
+### Follow-up 2026-10-05 — de-duplicated the in-progress card
+
+Operator: _"there is a duplication now, if the sessions are in progress then why show it in
+Today as well... why waste a lot of space for duplicate content"_. Correct — a live session
+rendered twice, and the "N sessions in progress" card cost most of a screen above the fold.
+
+`ActiveSessionsCard` was doing two unrelated jobs:
+
+- **live** — today's `IN_PROGRESS` sessions. Pure duplication of the Today list; the only
+  thing it added was the ticking elapsed clock.
+- **stale** — `IN_PROGRESS` sessions from _previous_ days, never ended. These are **not**
+  duplicates: the Today query is date-scoped (`?date=today`), so this is the only place
+  they ever surface.
+
+So the live half was removed, not the card. Changes:
+
+- `src/components/trainer/UnfinishedSessionsCard.tsx` (created) — the stale half only,
+  extracted from `page.tsx` and slimmed (one amber header line, one row per session,
+  "Resume & end"). `openForLabel()` moved here with it and is now injectable-`now` so it
+  can be tested.
+- `src/components/trainer/TodaySessionTile.tsx` — the live elapsed clock (`InlineTimer`)
+  now rides in the tile's `meta` slot under the time, so nothing was lost. Accent border
+  now matches the accent bar: emerald for a live tile, brand for the next scheduled one
+  (a live tile used to get a green bar inside an orange border).
+- `src/app/(dashboard)/trainer/page.tsx` — `nextTodaySessionId` became
+  `accentedSessionIds`: **every** live session is accented, or — when nothing is running —
+  just the soonest scheduled one. Previously only the first of several live sessions got
+  the edge. Net −175 lines.
+- `tests/unit/trainer-unfinished-sessions.test.tsx` (created) — 8 cases covering
+  `openForLabel` boundaries (minutes/hours/days, singular/plural, never-started fallback)
+  and the card's empty / singular / plural / action behaviour.
+- `tests/unit/trainer-today-session-tile.test.tsx` — added the accent-border case.
+
+**Checks:** type-check 0 errors; lint clean in changed files; 24/24 across the three
+trainer component specs; full unit suite still 47 failures on the known pre-existing
+Prisma-mock baseline. Verified in Chrome at 390x844 against two genuinely live sessions in
+the local DB — each renders once, green-accented, timers ticking, and the Client Calendar
+now reaches the first screen.
+
+### Follow-up 2026-10-05 (2) — session card slimmed to a single row
+
+Operator supplied a tighter card mockup: time | client over one meta line | one action,
+with the status pill gone and the live clock inline as _"60 min · 04:57 left"_. Their note:
+_"its okay to remove the more options button"_ (the mockup's kebab).
+
+**Rows went from three lines to two** (~230px → ~145px each):
+
+- **Status pill removed.** A green "Resume" next to an orange countdown already says the
+  session is running. Terminal states, which have no live clock, now say their status in
+  words on the meta line instead — "60 min · Completed" (emerald), "· No show" (red),
+  "· Cancelled" (muted).
+- **The clock moved inline** after the duration, and now counts **down**, not up.
+  New `InlineRemaining` in `src/components/timer/SessionTimer.tsx` — "04:57 left",
+  flipping to "04:57 over" in destructive once it runs past. Remaining time is the number
+  a trainer acts on; elapsed made them do the subtraction. (`InlineTimer` is untouched and
+  still exported; it just has no callers now.)
+- **Accent bar and coloured border removed**, and with them `isNext` /
+  `accentedSessionIds`. The button colour and the countdown's own escalation
+  (muted → brand → amber → red) carry the emphasis.
+- **Resume** is now a green pill with a play icon (was a square, with a ping overlay).
+  **Start session** shortened to **Start** to buy back width for the client name.
+- **No kebab**, per the operator. The no-show action stays as the quiet text button under
+  Start — removing the kebab removed the only other place it could have gone.
+
+**Files:** `src/components/trainer/TodaySessionTile.tsx` (rewritten),
+`src/components/timer/SessionTimer.tsx` (+`InlineRemaining`),
+`src/app/(dashboard)/trainer/page.tsx` (accent logic dropped, meta switched to
+`InlineRemaining`), `tests/unit/trainer-today-session-tile.test.tsx` (rewritten, 13 cases),
+`tests/unit/inline-remaining.test.tsx` (created, 7 cases — pad/h:mm:ss/over flip/tick/
+zero-crossing, on fake timers).
+
+**Checks:** type-check 0 errors; lint clean in changed files; 28/28 across the four
+trainer/timer specs; full unit suite still 47 failures on the known pre-existing
+Prisma-mock baseline (613 passing, up from 606). Verified in Chrome at 390x844 against two
+genuinely live sessions plus a temporary scheduled row (deleted after) — live, scheduled
+and the countdown all render on two lines with no wrapping.
+
+### Follow-up 2026-10-05 (3) — time de-emphasised, divider added
+
+Operator: _"reduce the size of the time 12:00, add a vertical bar"_.
+
+- Time dropped from `text-xl` (20px) to `text-base` (16px), so it no longer outweighs the
+  client name; column narrowed 56px → 48px (`tabular-nums` keeps every time the same
+  width, so one fixed column fits them all).
+- A 1px `bg-border` rule now separates the time from the client block. It is what keeps
+  the time a distinct column now that size alone no longer does.
+- Read "vertical bar" as that divider rather than restoring the removed left accent edge —
+  shrinking the time is what creates the need for one. The accent edge stays gone.
+- The divider cost ~5px and pushed "Test Sarath Kumar" into truncation, so the row gap
+  went `gap-3` → `gap-2.5` and the Resume button `px-4` → `px-3.5`. The name fits again.
+
+### Follow-up 2026-10-05 (4) — one shared width for every row action
+
+Operator: _"can you make the buttons have same width? currently the start button is
+smaller"_. Start was `text-xs` with `px-3` (~63px) against Resume's `text-sm` + `px-3.5`
+(~91px) — each button sized to its own label, so the right edge zig-zagged down the list.
+
+A shared `ACTION_BASE` class now fixes all three at `w-23` (92px, the width Resume already
+occupied, so the tight live rows kept their name space) with `text-sm` and no horizontal
+padding — content centres inside the fixed box instead of pushing it wider.
+
+- Start and Resume are identical in size, differing only in fill.
+- The completed row's bare 40px eye icon became an outlined **View** button at the same
+  width, so the column lines up on every row type. It stays visually quiet (no fill,
+  muted text) — a finished session should not shout as loud as a live one.
+- The loading state drops the play icon and shows "Starting…" alone; with the icon it
+  would not fit 92px.
+
+`tests/unit/trainer-today-session-tile.test.tsx` gained a case pinning all three actions
+to the same width class, so a future tweak to one cannot silently desync the column.
+
+### Follow-up 2026-10-05 (5) — button text down to text-xs
+
+Operator: _"reduce the text size of all text in button to text-xs? currently the button is
+looking big"_.
+
+- `ACTION_BASE` label `text-sm` → `text-xs`; the `Play` / `Eye` glyphs went `h-4` → `h-3.5`
+  so a 16px icon isn't sitting beside 12px text.
+- Shrinking the label alone did not shrink the button — the fixed box just gained padding,
+  so it still read chunky. Width came down with it: `w-23` (92px) → `w-20` (80px), sized to
+  the longest label ("Starting…" / "Resume" + icon ≈ 61px).
+- **Vertical padding went UP, `py-2.5` → `py-3`, on purpose.** `text-xs` drops the line box
+  to 16px, which would have made the button 36px tall — under the 40px minimum touch target
+  `rules/coding-standards.md` sets for interactive elements (and well under the 44px in
+  `rules/engineering-principles.md` §6). `py-3` holds it at exactly 40px. Anyone shrinking
+  this further should change the fill, not the hit area.
+- The width assertion in `trainer-today-session-tile.test.tsx` moved to `w-20` with it.
+
+The secondary "No show" text button is untouched at `text-[11px]` — raising it to `text-xs`
+would make it _larger_, against the intent, and it is deliberately de-emphasised.
+
+### Follow-up 2026-10-05 (6) — greeting and date share one row
+
+Operator: _"can you make this render in the right and left?"_ — the "Good afternoon /
+Test Sarath" block and the "TODAY / Monday, 5 Oct" block were stacked, burning a whole
+band of vertical space on four short lines.
+
+The Today section header moved up into the page header row: greeting on the left, date
+right-aligned, `items-end` so the date sits on the same baseline as the name. The Today
+list no longer renders its own header. **~50px reclaimed** — the first session card now
+starts that much higher.
+
+- The left block takes `min-w-0` + `truncate` so a long trainer first name shortens rather
+  than pushing the date off the row.
+- `UnfinishedSessionsCard` still renders between the header row and the session list. When
+  it fires, "TODAY" is separated from the list it labels by that alert — acceptable, since
+  it only appears when a session was left running on a previous day.
+
+Checked in both states (live sessions, and the empty state as `ravi@sector7.com`).
+
+### Still not done
+
+- Not verified on Sarath's actual iPhone.
+- Scheduled rows are marginally taller than live ones because of the "No show" text.
+- Pre-assigned workouts (the original "assign a workout") still unbuilt — needs @architect.

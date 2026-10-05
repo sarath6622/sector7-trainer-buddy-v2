@@ -6,15 +6,12 @@ import { useSession } from 'next-auth/react';
 import {
   Play,
   Square,
-  UserX,
+  Plus,
   Clock,
-  AlertTriangle,
   CheckCircle2,
   XCircle,
   CalendarDays,
   TrendingUp,
-  Eye,
-  Timer,
   CalendarCheck,
   UmbrellaOff,
   ChevronRight,
@@ -23,8 +20,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/use-confirm';
-import { InlineTimer } from '@/components/timer/SessionTimer';
+import { InlineRemaining } from '@/components/timer/SessionTimer';
 import { ClientWorkoutCalendar } from '@/components/calendar/ClientWorkoutCalendar';
+import { TodayEmptyState } from '@/components/trainer/TodayEmptyState';
+import { TodaySessionTile } from '@/components/trainer/TodaySessionTile';
+import { UnfinishedSessionsCard } from '@/components/trainer/UnfinishedSessionsCard';
 
 interface SessionData {
   id: string;
@@ -103,79 +103,6 @@ function greeting() {
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
 }
-
-interface TodayStatusStyle {
-  label: string;
-  /** status pill */
-  bg: string;
-  text: string;
-  dot: string;
-  /** left time-block */
-  timeBg: string;
-  timeText: string;
-  /** tile shell + left accent bar */
-  tileBg: string;
-  tileBorder: string;
-  bar: string;
-}
-
-const STATUS_STYLE: Record<string, TodayStatusStyle> = {
-  SCHEDULED: {
-    label: 'Scheduled',
-    bg: 'bg-blue-500/10',
-    text: 'text-blue-400',
-    dot: 'bg-blue-400',
-    timeBg: 'bg-blue-500/10',
-    timeText: 'text-blue-400',
-    tileBg: 'bg-card',
-    tileBorder: 'border-border/50',
-    bar: 'bg-blue-500/70',
-  },
-  IN_PROGRESS: {
-    label: 'In Progress',
-    bg: 'bg-emerald-500/15',
-    text: 'text-emerald-400',
-    dot: 'bg-emerald-400 animate-pulse',
-    timeBg: 'bg-emerald-500/15',
-    timeText: 'text-emerald-400',
-    tileBg: 'bg-emerald-500/[0.06]',
-    tileBorder: 'border-emerald-500/30',
-    bar: 'bg-emerald-500',
-  },
-  COMPLETED: {
-    label: 'Completed',
-    bg: 'bg-zinc-500/10',
-    text: 'text-zinc-400',
-    dot: 'bg-zinc-400',
-    timeBg: 'bg-muted',
-    timeText: 'text-muted-foreground',
-    tileBg: 'bg-card',
-    tileBorder: 'border-border/50',
-    bar: 'bg-zinc-500/40',
-  },
-  NO_SHOW: {
-    label: 'No Show',
-    bg: 'bg-red-500/10',
-    text: 'text-red-400',
-    dot: 'bg-red-400',
-    timeBg: 'bg-red-500/10',
-    timeText: 'text-red-400',
-    tileBg: 'bg-card',
-    tileBorder: 'border-border/50',
-    bar: 'bg-red-500/60',
-  },
-  CANCELLED: {
-    label: 'Cancelled',
-    bg: 'bg-zinc-500/10',
-    text: 'text-zinc-400',
-    dot: 'bg-zinc-500',
-    timeBg: 'bg-muted',
-    timeText: 'text-muted-foreground',
-    tileBg: 'bg-card',
-    tileBorder: 'border-border/50',
-    bar: 'bg-zinc-500/30',
-  },
-};
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -357,162 +284,94 @@ export default function TrainerDashboard() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 pb-8">
-      {/* ── Header ── */}
-      <div>
-        <p className="text-sm text-muted-foreground">{greeting()}</p>
-        <h1 className="text-2xl font-bold tracking-tight">{firstName}</h1>
+      {/* ── Header — greeting left, today's date right on the same row ── */}
+      <div className="flex items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">{greeting()}</p>
+          <h1 className="truncate text-2xl font-bold tracking-tight">{firstName}</h1>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
+            Today
+          </p>
+          <p className="mt-0.5 text-[15px] text-muted-foreground">
+            {new Date().toLocaleDateString('en-IN', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'short',
+            })}
+          </p>
+        </div>
       </div>
 
-      {/* ── Active sessions (live + never-ended, unified into one card) ── */}
-      <ActiveSessionsCard
-        live={todaySessions.filter((s) => s.status === 'IN_PROGRESS' && !!s.startedAt)}
-        stale={staleSessions}
+      {/* ── Sessions left running on a previous day (not in the Today list) ── */}
+      <UnfinishedSessionsCard
+        sessions={staleSessions.map((s) => ({
+          id: s.id,
+          scheduledDate: s.scheduledDate,
+          startedAt: s.startedAt,
+          clientFirstName: s.client.user.firstName,
+          clientLastName: s.client.user.lastName,
+        }))}
         onOpen={(id) => router.push(`/trainer/session/${id}`)}
       />
 
-      {/* ── Today's Sessions ── */}
-      <div className="overflow-hidden rounded-3xl bg-card ring-1 ring-border/50">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
-            <Clock className="h-5 w-5 text-primary" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold leading-tight">Today</h2>
-            <p className="text-xs text-muted-foreground">
-              {new Date().toLocaleDateString('en-IN', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'short',
-              })}
-            </p>
-          </div>
-          {todaySessions.length > 0 && (
-            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-              {todaySessions.length} session{todaySessions.length > 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-
+      {/* ── Today's Sessions — its header now lives in the page header row ── */}
+      <div className="space-y-3">
         {todaySessions.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 px-4 pb-7 pt-2 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50">
-              <CalendarCheck className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm font-semibold">No sessions today</p>
-            <p className="text-xs text-muted-foreground">Enjoy your rest day.</p>
-          </div>
+          <TodayEmptyState clientCount={clients.length} onNavigate={(href) => router.push(href)} />
         ) : (
-          <div className="space-y-2.5 px-3 pb-3">
-            {todaySessions.map((session) => {
-              const st = STATUS_STYLE[session.status] ?? STATUS_STYLE.SCHEDULED!;
-              const isLoading = actionLoading === session.id;
-              const isCancelled = session.status === 'CANCELLED';
-              const clientFirst = session.client.user.firstName;
-              const clientLast = session.client.user.lastName;
-              const [clock, ampm] = formatTime12(session.scheduledTime).split(' ');
+          <>
+            {todaySessions.map((session) => (
+              <TodaySessionTile
+                key={session.id}
+                session={{
+                  id: session.id,
+                  scheduledTime: session.scheduledTime,
+                  durationMin: session.durationMin,
+                  status: session.status,
+                  clientFirstName: session.client.user.firstName,
+                  clientLastName: session.client.user.lastName,
+                }}
+                isLoading={actionLoading === session.id}
+                meta={
+                  session.status === 'SCHEDULED' ? (
+                    <StartsInLabel
+                      scheduledDate={session.scheduledDate}
+                      scheduledTime={session.scheduledTime}
+                    />
+                  ) : session.status === 'IN_PROGRESS' && session.startedAt ? (
+                    // Time remaining, not elapsed — it is the number a trainer
+                    // acts on, and it replaces the old separate "in progress" card.
+                    <InlineRemaining
+                      startedAt={session.startedAt}
+                      expectedDurationMin={session.durationMin}
+                    />
+                  ) : null
+                }
+                onStart={handleStartSession}
+                onNoShow={handleNoShow}
+                onOpen={(s) =>
+                  router.push(
+                    s.status === 'COMPLETED'
+                      ? `/trainer/sessions/${s.id}`
+                      : `/trainer/session/${s.id}`,
+                  )
+                }
+              />
+            ))}
 
-              return (
-                <div
-                  key={session.id}
-                  className={`relative overflow-hidden rounded-2xl border ${st.tileBorder} ${st.tileBg} p-3 ${
-                    isCancelled ? 'opacity-60' : ''
-                  }`}
-                >
-                  {/* Status accent bar */}
-                  <span className={`absolute inset-y-0 left-0 w-1 ${st.bar}`} aria-hidden />
-
-                  <div className="flex items-center gap-3">
-                    {/* Time block */}
-                    <div
-                      className={`flex h-12 w-14 shrink-0 flex-col items-center justify-center rounded-xl ${st.timeBg}`}
-                    >
-                      <span className={`text-sm font-bold leading-none ${st.timeText}`}>
-                        {clock}
-                      </span>
-                      <span
-                        className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide opacity-70 ${st.timeText}`}
-                      >
-                        {ampm}
-                      </span>
-                    </div>
-
-                    {/* Client + meta */}
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={`truncate text-sm font-semibold ${isCancelled ? 'line-through' : ''}`}
-                      >
-                        {clientFirst} {clientLast}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {session.durationMin} min
-                        </span>
-                        {session.status === 'SCHEDULED' && (
-                          <StartsInLabel
-                            scheduledDate={session.scheduledDate}
-                            scheduledTime={session.scheduledTime}
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Status pill */}
-                    <span
-                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${st.bg} ${st.text}`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
-                      {st.label}
-                    </span>
-                  </div>
-
-                  {/* Action buttons */}
-                  {session.status === 'SCHEDULED' && (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => handleStartSession(session.id)}
-                        disabled={isLoading}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 py-2.5 text-xs font-semibold text-white shadow-sm shadow-emerald-950/30 transition-all hover:from-emerald-400 hover:to-emerald-500 active:scale-[0.98] disabled:opacity-50"
-                      >
-                        <Play className="h-3.5 w-3.5 fill-current" />
-                        {isLoading ? 'Starting…' : 'Start'}
-                      </button>
-                      <button
-                        onClick={() => handleNoShow(session.id)}
-                        disabled={isLoading}
-                        className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-2.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/15 active:scale-[0.98] disabled:opacity-50"
-                      >
-                        <UserX className="h-3.5 w-3.5" />
-                        No Show
-                      </button>
-                    </div>
-                  )}
-
-                  {session.status === 'IN_PROGRESS' && (
-                    <button
-                      onClick={() => router.push(`/trainer/session/${session.id}`)}
-                      className="relative mt-3 flex w-full items-center justify-center gap-1.5 overflow-hidden rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 py-2.5 text-xs font-semibold text-white shadow-sm shadow-emerald-950/30 transition-all hover:from-emerald-400 hover:to-emerald-500 active:scale-[0.98] [touch-action:manipulation] [-webkit-tap-highlight-color:transparent]"
-                    >
-                      <span className="absolute inset-0 animate-ping rounded-xl bg-emerald-400 opacity-20" />
-                      <Square className="relative h-3.5 w-3.5" />
-                      <span className="relative">Resume Session</span>
-                    </button>
-                  )}
-
-                  {session.status === 'COMPLETED' && (
-                    <button
-                      onClick={() => router.push(`/trainer/sessions/${session.id}`)}
-                      className="mt-2.5 flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      View workout
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+            {clients.length > 0 && (
+              <button
+                type="button"
+                onClick={() => router.push('/trainer/schedule?book=today')}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/60 py-3.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 active:scale-[0.99] [touch-action:manipulation] [-webkit-tap-highlight-color:transparent]"
+              >
+                <Plus className="h-4.5 w-4.5" strokeWidth={2.5} />
+                Schedule session
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -878,10 +737,10 @@ function fmtCountdown(mins: number): string {
 }
 
 /**
- * Live "Starts in N" chip for an upcoming scheduled session. Re-renders every
- * 30s so the label stays current without a per-second timer, and shifts colour
- * as the start time nears and passes:
- *   > 60m → muted · ≤ 60m → blue · ≤ 15m → amber · due/overdue → red.
+ * Live "Starts in N" label for an upcoming scheduled session, rendered inline
+ * after the duration. Re-renders every 30s so it stays current without a
+ * per-second timer, and shifts colour as the start time nears and passes:
+ *   > 60m → muted · ≤ 60m → brand · ≤ 15m → amber · due/overdue → red.
  */
 function StartsInLabel({
   scheduledDate,
@@ -901,216 +760,15 @@ function StartsInLabel({
   let label: string;
   let tone: string;
   if (diffMin <= 0) {
-    label = diffMin === 0 ? 'Due now' : `Overdue ${fmtCountdown(-diffMin)}`;
-    tone = 'bg-red-500/10 text-red-400';
+    label = diffMin === 0 ? 'due now' : `${fmtCountdown(-diffMin)} late`;
+    tone = 'text-red-400';
   } else {
-    label = `Starts in ${fmtCountdown(diffMin)}`;
+    label = `in ${fmtCountdown(diffMin)}`;
     tone =
-      diffMin <= 15
-        ? 'bg-amber-500/10 text-amber-400'
-        : diffMin <= 60
-          ? 'bg-primary/10 text-primary'
-          : 'bg-muted text-muted-foreground';
+      diffMin <= 15 ? 'text-amber-400' : diffMin <= 60 ? 'text-primary' : 'text-muted-foreground';
   }
 
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${tone}`}
-    >
-      <Timer className="h-3 w-3" />
-      {label}
-    </span>
-  );
+  return <span className={`font-medium tabular-nums ${tone}`}>{label}</span>;
 }
 
 // ─── Active sessions (live + never-ended) ─────────────────────────────────────
-
-/** Human "Open for N minutes/hours/days" label for a never-ended session,
- *  measured from when it actually started (falling back to its scheduled date).
- *  Replaces a live HH:MM:SS timer, which is meaningless for a session left
- *  running for days (e.g. a 32-day-old "780:31:26"). */
-function openForLabel(s: SessionData): string {
-  const ref = new Date(s.startedAt ?? s.scheduledDate).getTime();
-  const mins = Math.floor((Date.now() - ref) / 60_000);
-  if (mins < 60) {
-    const m = Math.max(1, mins);
-    return `Open for ${m} minute${m === 1 ? '' : 's'}`;
-  }
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `Open for ${hrs} hour${hrs === 1 ? '' : 's'}`;
-  const days = Math.floor(hrs / 24);
-  return `Open for ${days} day${days === 1 ? '' : 's'}`;
-}
-
-/**
- * Single card for every IN_PROGRESS session, replacing the old separate
- * "Session in progress" banner and "Incomplete Sessions" alert that both
- * rendered the same never-ended session.
- *
- *   • live  — in progress today: green accent + live ticking timer, tap to resume.
- *   • stale — in progress from a previous day (never ended): amber accent, a
- *             static "open Nd" age, and an explicit "Resume & End" action.
- *
- * Theme/header adapt to the mix (pure-live → green, pure-stale → amber,
- * both → neutral card with per-row colour). A session can only ever appear
- * in one group, so nothing is shown twice.
- */
-function ActiveSessionsCard({
-  live,
-  stale,
-  onOpen,
-}: {
-  live: SessionData[];
-  stale: SessionData[];
-  onOpen: (id: string) => void;
-}) {
-  // Defensive de-dupe: never let a session land in both groups. (The two
-  // source queries are already disjoint by date, but this guarantees the
-  // double-render bug can't come back.)
-  const staleIds = new Set(stale.map((s) => s.id));
-  const liveSessions = live.filter((s) => !staleIds.has(s.id));
-
-  const total = liveSessions.length + stale.length;
-  if (total === 0) return null;
-
-  const hasLive = liveSessions.length > 0;
-  const hasStale = stale.length > 0;
-  const mixed = hasLive && hasStale;
-  const staleOnly = hasStale && !hasLive;
-
-  const attention = hasStale; // anything needing "end it" gets the amber treatment
-
-  // Stale/incomplete is a cleanup task, not a critical alert — keep its shell
-  // neutral and let colour live only on the warning icon + the action button.
-  const shell =
-    hasLive && !mixed ? 'bg-emerald-500/[0.06] ring-emerald-500/25' : 'bg-card ring-border/50';
-
-  const heading = mixed
-    ? 'Active Sessions'
-    : hasLive
-      ? liveSessions.length === 1
-        ? 'Session in progress'
-        : `${liveSessions.length} sessions in progress`
-      : 'Incomplete Sessions';
-
-  const subtitle = staleOnly
-    ? 'Never ended — resume to close them out.'
-    : mixed
-      ? 'Some were never ended — resume to close them out.'
-      : liveSessions.length === 1
-        ? 'Tap to jump back into your session.'
-        : 'Tap any session to jump back in.';
-
-  return (
-    <div className={`overflow-hidden rounded-3xl ring-1 ${shell}`}>
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
-            attention ? 'bg-amber-500/10' : 'bg-emerald-500/15'
-          }`}
-        >
-          {attention ? (
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-          ) : (
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            </span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2
-            className={`text-base font-bold leading-tight ${
-              mixed ? 'text-foreground' : hasLive ? 'text-emerald-400' : 'text-amber-500'
-            }`}
-          >
-            {heading}
-          </h2>
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
-        </div>
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
-            attention ? 'bg-muted text-muted-foreground' : 'bg-emerald-500/15 text-emerald-400'
-          }`}
-        >
-          {total}
-        </span>
-      </div>
-
-      {/* Rows */}
-      <div className="space-y-2.5 px-3 pb-3">
-        {/* Live tiles — running today, with a live timer */}
-        {liveSessions.map((s) => {
-          const [clock, ampm] = formatTime12(s.scheduledTime).split(' ');
-          return (
-            <button
-              key={s.id}
-              onClick={() => onOpen(s.id)}
-              className="relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-3 text-left transition-all hover:bg-emerald-500/[0.1] active:scale-[0.99]"
-            >
-              <span className="absolute inset-y-0 left-0 w-1 bg-emerald-500" aria-hidden />
-              <div className="flex h-12 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-emerald-500/15">
-                <span className="text-sm font-bold leading-none text-emerald-400">{clock}</span>
-                <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-400 opacity-70">
-                  {ampm}
-                </span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">
-                  {s.client.user.firstName} {s.client.user.lastName}
-                </p>
-                <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live · {s.durationMin} min
-                </p>
-              </div>
-              <span className="font-mono text-lg font-bold tabular-nums text-emerald-400">
-                <InlineTimer startedAt={s.startedAt!} expectedDurationMin={s.durationMin} />
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-emerald-500/70" />
-            </button>
-          );
-        })}
-
-        {/* Stale tiles — never ended. Kept calm/neutral: colour lives only on
-            the header warning icon and the action button. */}
-        {stale.map((s) => {
-          const day = new Date(s.scheduledDate).toLocaleDateString('en-IN', { day: 'numeric' });
-          const mon = new Date(s.scheduledDate).toLocaleDateString('en-IN', { month: 'short' });
-          return (
-            <div key={s.id} className="rounded-2xl border border-border/50 bg-muted/20 p-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-muted">
-                  <span className="text-sm font-bold leading-none text-foreground">{day}</span>
-                  <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                    {mon}
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">
-                    {s.client.user.firstName} {s.client.user.lastName}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {formatTime12(s.scheduledTime)} · {s.durationMin} min
-                  </p>
-                </div>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  <Timer className="h-3 w-3" />
-                  {openForLabel(s)}
-                </span>
-              </div>
-              <button
-                onClick={() => onOpen(s.id)}
-                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 py-2.5 text-xs font-bold text-amber-950 transition-colors hover:bg-amber-400 active:scale-[0.98]"
-              >
-                <Square className="h-3.5 w-3.5" />
-                Resume &amp; End Session
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}

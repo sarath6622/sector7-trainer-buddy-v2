@@ -226,3 +226,35 @@ export function InlineTimer({
     </span>
   );
 }
+
+/**
+ * Inline "MM:SS left" countdown to a session's expected end, flipping to
+ * "MM:SS over" (destructive) once it runs past.
+ *
+ * Companion to {@link InlineTimer}, which counts up. On the trainer's Today
+ * list the time *remaining* is the number they act on — "04:57 left" tells a
+ * trainer to start wrapping up; "55:03 elapsed" makes them do the subtraction.
+ */
+export function InlineRemaining({
+  startedAt,
+  expectedDurationMin,
+  pausedAt = null,
+  accumulatedPausedSec = 0,
+}: {
+  startedAt: string;
+  expectedDurationMin: number;
+  pausedAt?: number | null;
+  accumulatedPausedSec?: number;
+}) {
+  const elapsedSec = useElapsedTimer(startedAt, pausedAt, accumulatedPausedSec);
+  const remainingSec = expectedDurationMin * 60 - elapsedSec;
+  const isOvertime = remainingSec <= 0;
+
+  return (
+    <span className={isOvertime ? 'text-destructive' : 'text-primary'}>
+      {/* Mono only on the digits — mono widens the trailing word oddly. */}
+      <span className="font-mono tabular-nums">{formatTime(Math.abs(remainingSec))}</span>{' '}
+      {isOvertime ? 'over' : 'left'}
+    </span>
+  );
+}

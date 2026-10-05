@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus,
   AlertTriangle,
@@ -112,6 +113,18 @@ function buildMonthCalendar(yearMonth: string): (string | null)[][] {
 /** Local YYYY-MM-DD for a Date — avoids the UTC shift toISOString() introduces in IST. */
 function localYMD(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Next :00 or :30 from now, as "HH:MM" — the default start time when a booking
+ * is opened for today, so an on-the-fly session lands on the next clean slot.
+ * Clamped so a late-night tap never rolls the time onto tomorrow.
+ */
+function nextHalfHourSlot(): string {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() <= 30 ? 30 : 60, 0, 0);
+  if (now.getHours() === 0 && now.getMinutes() === 0) return '23:30';
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 }
 
 /** The seven Mon→Sun dates of the week containing `date`. */
@@ -788,7 +801,19 @@ function RescheduleSessionDialog({
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
+// `useSearchParams` needs a Suspense boundary to keep the route prerenderable
+// (same shape as /tv). The real page lives in TrainerScheduleInner.
 export default function TrainerSchedulePage() {
+  return (
+    <Suspense fallback={<Skeleton className="h-96 w-full rounded-2xl" />}>
+      <TrainerScheduleInner />
+    </Suspense>
+  );
+}
+
+function TrainerScheduleInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [sessions, setSessions] = useState<SessionInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<SessionInstance | null>(null);
@@ -911,6 +936,31 @@ export default function TrainerSchedulePage() {
     setPresetStartTime(null);
     setPresetDurationMin(null);
   }
+
+  // Deep link from the trainer dashboard's empty "Today" card:
+  // /trainer/schedule?book=today (or ?book=YYYY-MM-DD) opens the booking modal
+  // straight onto that date, so a clear day is two taps from a booked session.
+  const bookParamHandled = useRef(false);
+  useEffect(() => {
+    if (bookParamHandled.current) return;
+    const book = searchParams.get('book');
+    if (!book) return;
+
+    const todayYMD = localYMD(new Date());
+    const date = book === 'today' ? todayYMD : book;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+
+    bookParamHandled.current = true;
+    const [y, m, d] = date.split('-').map(Number);
+    setSelectedDay(new Date(y!, m! - 1, d!));
+    setPresetDate(date);
+    // Only today gets a "now-ish" time; a future date keeps the modal default.
+    setPresetStartTime(date === todayYMD ? nextHalfHourSlot() : null);
+    setPresetDurationMin(60);
+    setBookOpen(true);
+    // Drop the param so a refresh or back-nav doesn't reopen the modal.
+    router.replace('/trainer/schedule');
+  }, [searchParams, router]);
 
   function handleEventClick(info: EventClickArg) {
     const session = sessions.find((s) => s.id === info.event.id);
