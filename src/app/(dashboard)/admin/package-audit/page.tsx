@@ -81,13 +81,25 @@ const STATE_TONE: Record<string, string> = {
   NO_PACKAGE: 'bg-zinc-500/10 text-zinc-500 ring-zinc-500/20',
 };
 
+/**
+ * One sentence per state, used for both the table tooltips and the legend in
+ * the intro panel — so the two can never drift apart.
+ */
 const STATE_HELP: Record<string, string> = {
-  ACTIVE: 'Inside the paid window with sessions left.',
-  GRACE: 'The month has elapsed but sessions are still owed — still counting.',
-  EXHAUSTED: 'Every paid session has been used.',
-  CLOSED: 'An admin set a hard end date and it has passed.',
-  NO_PACKAGE: 'No package has ever been assigned.',
+  ACTIVE: 'Still inside the paid month, with sessions left.',
+  GRACE:
+    'The paid month has run out but sessions are still owed, so they keep counting. Normal, not an error.',
+  EXHAUSTED: 'Every session on the package has been used.',
+  CLOSED: 'An admin set an explicit end date and it has passed.',
+  NO_PACKAGE: 'This client has never been given a package.',
 };
+
+/** Order the states are explained in — roughly a package's life. */
+const STATE_ORDER = ['ACTIVE', 'GRACE', 'EXHAUSTED', 'CLOSED', 'NO_PACKAGE'] as const;
+
+function stateLabel(key: string) {
+  return key === 'NO_PACKAGE' ? 'none' : key.toLowerCase();
+}
 
 type SortKey =
   | 'clientName'
@@ -297,6 +309,40 @@ export default function PackageAuditPage() {
           <Download className="mr-1.5 h-3.5 w-3.5" />
           Export CSV
         </Button>
+      </div>
+
+      {/* Read this before the numbers: the two column groups mean different
+          things, and that difference is the whole point of the page. */}
+      <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          <span className="font-medium text-foreground">Reading this table:</span> the first group
+          of columns is the package the client is paying for <em>now</em>. The “all time” columns
+          cover every package they have ever held — a renewal starts a fresh package, so the current
+          count restarts while the all-time total keeps climbing. An amber{' '}
+          <span className="font-medium text-amber-500">+n</span> next to Used is an onboarding
+          adjustment: sessions recorded before the app, which count toward the total but have no
+          session records behind them.
+        </p>
+
+        <dl className="mt-3 grid gap-x-5 gap-y-2 border-t border-border/50 pt-3 sm:grid-cols-2">
+          {STATE_ORDER.map((key) => (
+            <div key={key} className="flex items-start gap-2">
+              <dt>
+                <span
+                  className={cn(
+                    'rounded px-1.5 py-0.5 text-[10px] font-medium ring-1',
+                    STATE_TONE[key],
+                  )}
+                >
+                  {stateLabel(key)}
+                </span>
+              </dt>
+              <dd className="flex-1 text-xs leading-relaxed text-muted-foreground">
+                {STATE_HELP[key]}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
       {summary && (
@@ -524,7 +570,7 @@ export default function PackageAuditPage() {
                           STATE_TONE[stateKey],
                         )}
                       >
-                        {stateKey === 'NO_PACKAGE' ? 'none' : stateKey.toLowerCase()}
+                        {stateLabel(stateKey)}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.currentPaid || '—'}</td>
@@ -576,15 +622,6 @@ export default function PackageAuditPage() {
           </table>
         </div>
       )}
-
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        <span className="font-medium">Reading this table:</span> the first group of columns is the
-        package the client is paying for <em>now</em>. The “all time” columns cover every package
-        they have ever held — a renewal starts a fresh package, so the current count restarts while
-        the all-time total keeps climbing. An amber <span className="text-amber-500">+n</span> next
-        to Used is an onboarding adjustment: sessions recorded before the app, which count toward
-        the total but have no session records behind them.
-      </p>
 
       <PackageHistoryDrawer row={selected} onClose={() => setSelected(null)} />
     </div>
@@ -713,7 +750,7 @@ function PackageHistoryDrawer({ row, onClose }: { row: AuditRow | null; onClose:
                               STATE_TONE[p.state],
                             )}
                           >
-                            {p.state.toLowerCase()}
+                            {stateLabel(p.state)}
                           </span>
                         </div>
                       </div>
