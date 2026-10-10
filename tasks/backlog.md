@@ -451,3 +451,17 @@
 - [x] **S7-PP-09** | @architect | S | Memory updates: `memory/schema.md`, `memory/api-contracts.md`, ADR-027/028/029/030 in `memory/decisions.md` (incl. duration + totalSessions + onboarding follow-ups).
 - [x] **S7-PP-10** | @architect+@ui | M | (Follow-up, 2026-05-08) Plan duration in days for end-date auto-derivation. ADR-028.
 - [x] **S7-PP-11** | @architect+@backend+@ui | L | (Follow-up, 2026-05-08) Per-package `totalSessions`, onboarding backfill (`onboardingUsedSessions`/`onboardingNotes`), package-window counts helper, `GET /api/admin/mappings/[id]/window-counts` endpoint, scheduling modal rewired. ADR-029, ADR-030.
+
+---
+
+## Phase 27 — Package Counting Audit & Reconciliation
+
+> Driver: clients dispute their session counts. The counting math itself was fixed by
+> S7-BC-03 (anchored cycles, `src/lib/billing-cycle.ts`), but not every surface was
+> migrated and nothing shows a client's lifetime total.
+
+- [x] **S7-PC-07** | @backend+@ui | L | **Admin Package Audit table** — `/admin/package-audit` + `GET /api/admin/package-audit` + `src/services/package-audit.service.ts`. One row per client: plan, cycle, state, current paid/used/booked/left, and lifetime paid/used across every package ever held, plus the onboarding offset broken out. Two queries, no N+1 (229 rows in 57ms). Sortable, searchable, state-filter tiles, CSV export. Read-only — reports, changes no counting logic. 10 unit tests. Contract documented before implementation.
+- [ ] **S7-PC-08** | @backend | M | **`/admin/clients` still uses the pre-`billing-cycle` formula.** `user.service.ts` has 4 remaining copies of `endDate ?? startDate + 30d` (lines ~434, ~451 and the `getClientIdsBySessionBucket` pre-pass). Verified 2026-10-10: this under-reports by **~1,518 sessions across 172 clients** versus `getPackageWindowCounts`, so the clients list, the `low_sessions`/`used_up` attention filters, and the new audit page disagree with each other. Migrate to `getPackageState`/`getCountingWindowEnd`.
+- [ ] **S7-PC-09** | @backend | S | `src/app/api/admin/clients/expiring/route.ts` computes `usedSessions` with its own third copy of the window math. Fold into `billing-cycle`.
+- [ ] **S7-PC-10** | @ui | S | **Lint error blocking a clean `npm run lint`:** `src/components/packages/PackageCycleStrip.tsx:125` — "Cannot call impure function during render". Pre-existing, unrelated to the audit page, but it is an _error_ not a warning so CI would fail on it.
+- [ ] **S7-PC-11** | @architect | M | **Packages are not renewed in the system.** The audit shows **68 clients whose lifetime used exceeds lifetime paid**, and **48 of them have only ONE package row** (7 have none at all). One package was created at signup and never renewed while the client kept training for months, so the DB holds no record of the later payments — `lifetimePaid` is not a trustworthy "what they paid" figure for those clients. Decide whether renewals must create a new `PtPackage` (and enforce it in the admin flow) before any billing report is built on this data.

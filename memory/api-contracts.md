@@ -186,6 +186,104 @@ PUT    /api/admin/sessions/[id]          → { scheduledDate?, scheduledTime?, t
 DELETE /api/admin/sessions/[id]          → {} → { success }
 ```
 
+### Package Audit (Phase 27 — added 2026-10-10)
+
+```
+GET    /api/admin/package-audit   → ?search&state&page&pageSize → { data: PackageAuditRow[], summary }
+       Role: BRANCH_ADMIN | SUPER_ADMIN. Branch-scoped. Read-only — computes nothing it stores.
+       One row per CLIENT (not per package). Clients with no package ever are included
+       with hasActivePackage=false and zeroed current-package fields.
+       `state` filter accepts a PackageState or 'NO_PACKAGE'.
+       Counting uses src/lib/billing-cycle.ts (getPackageState + getCountingWindowEnd),
+       mirroring getPackageWindowCounts, so figures agree with the trainer scheduling card.
+```
+
+```typescript
+PackageAuditRow = {
+  clientProfileId: string;
+  clientName: string;
+  email: string;
+  isActive: boolean;              // the USER account, not the package
+  trainerName: string | null;     // trainer on the current package
+
+  // ── Current package (null/0 when there is no active package) ──
+  hasActivePackage: boolean;
+  planName: string | null;        // null = custom (no catalog plan)
+  sessionsPerMonth: number;
+  durationDays: number;
+  packageStart: string | null;    // ISO
+  hardEndDate: string | null;     // ISO; admin hard stop, normally null
+  state: PackageState | null;     // ACTIVE | GRACE | EXHAUSTED | CLOSED
+  cycleLabel: string | null;      // e.g. "11 Sep – 10 Oct"
+  currentPaid: number;            // totalSessions on the active package
+  currentUsed: number;            // COMPLETED + NO_SHOW in window + onboardingUsedSessions
+  currentUpcoming: number;        // SCHEDULED + IN_PROGRESS
+  currentRemaining: number;       // max(0, paid - used - upcoming)
+  onboardingUsed: number;         // part of currentUsed with NO SessionInstance rows (ADR-030)
+
+  // ── Lifetime across every package this client has ever held ──
+  packageCount: number;
+  lifetimePaid: number;           // Σ totalSessions over all packages
+  lifetimeUsed: number;           // all COMPLETED + NO_SHOW ever + Σ onboardingUsedSessions
+  lifetimeSessionRows: number;    // real rows only, excludes onboarding offsets
+  lifetimeOnboarding: number;     // Σ onboardingUsedSessions over all packages
+  lastSessionDate: string | null; // ISO date of the most recent consumed session
+
+  // ── Full package history, newest first — drives the client drawer ──
+  packages: PackageHistoryEntry[];
+  unattributedUsed: number;   // consumed sessions inside NO package window
+  packagesOverlap: boolean;   // active package is not the latest-starting one — contradictory data
+  currentCountDiffers: boolean; // drawer's current-package total != currentUsed (see note)
+}
+
+PackageHistoryEntry = {
+  id: string;
+  isActive: boolean;
+  planName: string | null;
+  trainerName: string | null;
+  sessionsPerMonth: number;
+  totalSessions: number;         // paid for in THIS package
+  onboardingUsed: number;
+  startDate: string;             // ISO
+  endDate: string | null;        // ISO; stored admin hard stop, normally null
+  windowStart: string;           // ISO — EFFECTIVE counting window
+  windowEnd: string;             // ISO — clipped at the next package's start
+  state: PackageState;
+  used: number;                  // sessionRows + onboardingUsed
+  upcoming: number;              // 0 for an inactive package
+  remaining: number;
+  sessionRows: number;           // real rows attributed here, excludes the onboarding offset
+  windowInvalid: boolean;        // stored endDate precedes startDate — corrupt row
+}
+
+summary = {
+  clients: number;
+  withActivePackage: number;
+  byState: Record<PackageState | 'NO_PACKAGE', number>;
+  lifetimePaid: number;
+  lifetimeUsed: number;
+  overConsumed: number;           // clients whose lifetimeUsed > lifetimePaid
+}
+```
+
+> Why both views: `current*` answers "what is left on the package they are paying
+> for now"; `lifetime*` answers "how many sessions has this person actually had",
+> which is what clients mean when they dispute a count. They differ because a
+> renewal creates a NEW PtPackage and the per-package counter restarts (S7-PC-03).
+> `packages[]` exposes every package so an admin can see what was used during each
+> earlier one. Each consumed session is ATTRIBUTED to exactly one package — the
+> latest whose `startDate` is on or before it — so the timeline is partitioned by
+> construction and the invariant **Σ packages[].used + unattributedUsed ===
+> lifetimeUsed** always holds, however the stored windows overlap. (Prod contains
+> overlapping packages and at least one row whose `endDate` precedes its own
+> `startDate`, so a window-clipping rule was not safe.) `windowStart`/`windowEnd`
+> are for DISPLAY only and may be trimmed where the next package takes over.
+>
+> A package's attributed total can legitimately differ from `currentUsed`: once a
+> package is EXHAUSTED, billing stops counting at its nominal end while sessions
+> keep being delivered. `currentCountDiffers` marks those rows so the UI explains
+> the gap instead of showing two numbers that disagree.
+
 ### Conflict Detection
 
 ```

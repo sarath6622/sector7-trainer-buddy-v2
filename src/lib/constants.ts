@@ -17,6 +17,7 @@ import {
   Clock,
   Package,
   Monitor,
+  Scale,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -32,6 +33,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   // People
   { label: 'Clients', href: '/admin/clients', icon: Users, group: 'People' },
   { label: 'Trainers', href: '/admin/trainers', icon: UserCheck, group: 'People' },
+  { label: 'Package Audit', href: '/admin/package-audit', icon: Scale, group: 'People' },
   // Operations
   { label: 'Shifts', href: '/admin/shifts', icon: Clock, group: 'Operations' },
   { label: 'Scheduling', href: '/admin/scheduling', icon: Calendar, group: 'Operations' },
