@@ -637,6 +637,13 @@ model WorkoutLog {
   // most-recent transition into completed; null when isCompleted=false.
   isCompleted       Boolean  @default(false)
   completedAt       DateTime?
+  // ADR-052 (2026-10-10): trainer's free-text note about this exercise within
+  // this session — "went light, shoulder niggle", "form broke down on set 3".
+  // Deliberately per-exercise: `SessionInstance.notes` is the scheduling note
+  // and `WorkoutSet.notes` is occupied by CARDIO distance (km/m), so neither
+  // could carry this. Trainer-private: written only from the trainer's session
+  // logger and excluded from the client read path (/api/client/sessions/[id]).
+  notes             String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

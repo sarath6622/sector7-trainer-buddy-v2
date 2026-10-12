@@ -535,6 +535,10 @@ GET    /api/client/dashboard             → {} → { sessionCount, nextSession,
 
 GET    /api/client/sessions              → ?month → SessionInstance[] (own sessions)
 GET    /api/client/sessions/[id]         → {} → SessionInstance (with workout details, exerciseType included)
+       ADR-052: `workoutLogs` uses an explicit `select`, NOT `include`, so the trainer's
+       private `WorkoutLog.notes` never reaches the client app. `include` returns every
+       scalar — any new trainer-facing field on WorkoutLog must be opted into that select
+       deliberately, or it leaks here the moment the column is added.
 GET    /api/client/attendance             → ?month → AttendanceRecord[]
 GET    /api/client/workouts              → ?dateFrom&dateTo&exerciseId&muscleGroup → WorkoutLog[]
 GET    /api/client/workout-calendar      → ?month=YYYY-MM → { days: [{ date, sessionIds, isPR }], totalDays }
@@ -616,7 +620,7 @@ PUT    /api/sessions/[id]/workouts/[logId]          → { sets?: WorkoutSet[] } 
 DELETE /api/sessions/[id]/workouts/[logId]          → {} → { data: { success: true } }
 ```
 
-`WorkoutEntry` shape (ADR-037 added `isCompleted`):
+`WorkoutEntry` shape (ADR-037 added `isCompleted`, ADR-052 added `notes`):
 
 ```typescript
 interface WorkoutEntry {
@@ -626,8 +630,22 @@ interface WorkoutEntry {
   // added but not yet logged (survives tab switch / reload).
   // Only *complete* sets (reps+kg etc.) are ever included.
   isCompleted?: boolean; // ADR-037; omitted → service preserves existing flag
+  notes?: string; // ADR-052; trainer's private per-exercise note, max 1000 chars
+  // Tri-state, and the distinction matters:
+  //   omitted → service PRESERVES the stored note. This is what the client's
+  //             own logger sends (it has no notes UI), so a client autosave
+  //             cannot blank the trainer's note on this shared write path.
+  //   ''      → CLEARS the note to NULL (whitespace-only is treated the same).
+  //   text    → stored as given.
+  // A writer that renders the field must ALWAYS send the key, '' included —
+  // omitting an empty note would make clearing one impossible.
 }
 ```
+
+**Trainer-private (ADR-052).** `notes` is written only from
+`/trainer/session/[id]` (the `allowExerciseNotes` prop on `WorkoutLogger`, default
+off) and is **omitted from the client read path** — see `GET /api/client/sessions/[id]`
+below. Trainer and admin reads return it.
 
 **Scoped writes (2026-06-12, ADR-041).** `dirtyExerciseIds` / `removedExerciseIds`
 make the POST a _partial_ write instead of a full snapshot replace. The client
@@ -699,6 +717,18 @@ now accept the **client themselves** (caller's `clientProfileId` matches the URL
 `[id]`). Auth helper: `canReadClientTrainingData` in `@/lib/auth`. No new URLs
 were introduced — the existing trainer-namespaced paths serve both sides via the
 shared logger.
+
+**⚠ ADR-052 — route access ≠ permission to read trainer notes.** Because the client
+can legitimately call `workout-history` for their own data (their session page's
+History tab uses this exact endpoint), the per-exercise trainer note is gated on a
+*separate* helper, `canReadTrainerPrivateNotes(user)` (staff roles only), passed down
+as `listWorkoutHistory({ includeNotes })`. That flag drives the Prisma `select`, so for
+a client caller the column never leaves the database and the `notes` key is **absent**
+from each exercise — not `null`. `/api/admin/users/[id]/workout-history` passes `true`
+unconditionally since it is already admin-gated.
+
+Any future endpoint that serves both a client and staff must gate notes on
+`canReadTrainerPrivateNotes`, never on access to the route.
 
 ### Session Pause (Phase 2 — 2026-05-10)
 

@@ -480,6 +480,12 @@ export const workoutEntrySchema = z.object({
   // existing completion state untouched (auto-save fires every 800ms; we
   // don't want a keystroke that doesn't touch the toggle to clobber it).
   isCompleted: z.boolean().optional(),
+  // ADR-052: trainer's free-text note about this exercise in this session.
+  // Same omitted-means-untouched contract as `isCompleted` — a caller that
+  // doesn't know about notes (offline sync bundles, the legacy
+  // /api/trainer/workouts route) must not blank one out. An empty string IS
+  // meaningful: it's how the logger clears a note the trainer deleted.
+  notes: z.string().max(1000).optional(),
 });
 
 export const createWorkoutSchema = z.object({

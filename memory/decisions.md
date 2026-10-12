@@ -772,3 +772,91 @@ in January but whose first logged weigh-in was 75 kg in June was told they had l
   ignored by Zod. The admin UI is the only known caller.
 - `user.service.ts` now imports `progress.service.ts`. Verified non-circular
   (progress -> badge -> libs only).
+
+---
+
+## ADR-052: Per-Exercise Trainer Notes on the Workout Log
+
+**Date:** 2026-10-12
+**Status:** Accepted
+**Agent:** @architect + @backend + @ui
+
+**Context:**
+
+Trainers asked for "a field in the workout enter page where they can add notes about
+that particular workout — nothing specific, just some kind of notes." The driver is the
+things that never fit a numeric cell: *went light, shoulder niggle*, *form broke down on
+set 3*, *skipped — knee pain*.
+
+The schema already had two `notes` columns and neither could carry it:
+
+| Column | Scope | Why it doesn't fit |
+| --- | --- | --- |
+| `SessionInstance.notes` | whole session | written by the scheduling / reschedule paths; an admin field, and one note per session is too coarse to say which lift went badly |
+| `WorkoutSet.notes` | one set | **already occupied** — it stores CARDIO distance in km/m (see `colsFor`), so it renders as a numeric column, not free text |
+
+So the per-exercise level — one note per `WorkoutLog` — was genuinely missing.
+
+**Decision:**
+
+1. **New nullable column `WorkoutLog.notes TEXT`.** Migration
+   `20261010120000_add_workout_log_trainer_notes`. No backfill: NULL reads as "no note".
+   Capped at 1000 chars in `workoutEntrySchema`, mirrored by the textarea's `maxLength`
+   so the field cannot compose a payload the server would 422.
+
+2. **Trainer-private.** The operator's call: the trainer said "for their own
+   requirements", so it is a working memo, not client-facing feedback. Two independent
+   guards, because `WorkoutLogger` is shared by the trainer and client session pages:
+   - **Write/render:** the new `allowExerciseNotes` prop, default `false`. Only
+     `/trainer/session/[id]` passes it. The client page renders no note UI.
+   - **Read:** `/api/client/sessions/[id]` switched from `include` to an explicit
+     `select` on `workoutLogs`. `include` returns every scalar, so it would have leaked
+     the column the moment it was added. **Any new trainer-facing field on `WorkoutLog`
+     must now be opted into that select deliberately.**
+
+3. **Absent means preserve; `''` means clear.** Same contract as ADR-037's
+   `isCompleted`, with one addition. The service treats `notes === undefined` as "leave
+   the stored value alone" and `''`/whitespace as "clear to NULL". This is what stops
+   the **client's** autosave — which omits the key entirely — from blanking the
+   trainer's note on the shared write path (ADR-036). Verified live: a client save of a
+   set left the trainer's note intact.
+
+4. **The payload key tracks *ownership*, not content.** `buildSavePayload` takes
+   `{ includeNotes }`, mirroring `allowExerciseNotes`. When false the key is omitted and
+   the payload is byte-identical to the pre-ADR-052 shape. When true the key is
+   **always** written, `''` included — omitting an empty note would make clearing one
+   impossible, since the server would read the absence as "preserve".
+
+**Consequences:**
+
+- Notes ride the existing ADR-036 dirty-scoping: a note-only edit marks its exercise
+  dirty and saves on the standard ~5s debounce, with no immediate flush (notes are prose;
+  per-keystroke flushes would hammer the endpoint the way the set cells deliberately
+  avoid).
+- Outbox recovery now compares stored notes explicitly. Per-set signatures don't cover
+  notes, so a note-only edit lost to a killed PWA would otherwise have been judged
+  "already synced" and dropped.
+- The note is only readable with the card expanded, so a collapsed card shows an amber
+  "Note" chip in its header — otherwise a note written last week is invisible.
+
+**Read-back in the History tab (added same day, on operator feedback).** A note nobody
+can read back is useless, so `WorkoutHistoryList` renders it under the set chips of each
+exercise. This forced a third access rule:
+
+  `GET /api/trainer/clients/[id]/workout-history` is readable by **the client
+  themselves** (ADR-036) — their own session page renders the same History tab through
+  the same endpoint. Route access therefore cannot be the gate. The note is gated on a
+  new `canReadTrainerPrivateNotes(user)` helper (staff roles only), passed to
+  `listWorkoutHistory` as `includeNotes`, which drives the Prisma `select` so the column
+  **never leaves the database** for a client caller rather than being nulled in the
+  mapper. The admin route passes `true` unconditionally — it is already role-gated.
+
+  The rule to remember: **`canReadClientTrainingData` ≠ permission to read notes.** A
+  client may read their own sets and history; they may not read what was written about
+  them. Any future endpoint serving both roles must gate notes separately.
+- **Admin surfaces still use `include`** and therefore now receive the column
+  (`/admin/sessions` detail sheet, scheduling). Nothing renders it today. Admins are
+  staff, not the client, so this was left alone rather than widened in scope.
+- **Still not surfaced on the trainer's past-session review page**
+  (`/trainer/sessions/[id]`) or the admin session detail sheet. The History tab covers
+  the main read-back need; those two pages build their own layouts from separate reads.
