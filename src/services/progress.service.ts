@@ -541,10 +541,18 @@ export async function listWorkoutHistory({
   clientProfileId,
   branchId,
   limit = 20,
+  includeNotes = false,
 }: {
   clientProfileId: string;
   branchId: string;
   limit?: number;
+  /**
+   * ADR-052: include each exercise's trainer-private note. Off by default —
+   * this endpoint is readable by the client themselves (ADR-036), and the
+   * same History tab renders on their session page. Callers must gate this
+   * on `canReadTrainerPrivateNotes`, never on route access.
+   */
+  includeNotes?: boolean;
 }) {
   const client = await prisma.clientProfile.findFirst({
     where: { id: clientProfileId, branchId },
@@ -569,6 +577,8 @@ export async function listWorkoutHistory({
         select: {
           id: true,
           orderIndex: true,
+          // Only selected for staff — see `includeNotes` above.
+          notes: includeNotes,
           exercise: {
             select: {
               id: true,
@@ -607,6 +617,9 @@ export async function listWorkoutHistory({
       name: log.exercise.name,
       targetMuscleGroup: log.exercise.targetMuscleGroup,
       exerciseType: log.exercise.exerciseType,
+      // `notes` is absent from the row entirely when includeNotes is false,
+      // so the key never reaches a client payload.
+      ...(includeNotes ? { notes: log.notes ?? null } : {}),
       sets: log.sets.map((set) => ({
         setNumber: set.setNumber,
         reps: set.reps,

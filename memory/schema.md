@@ -400,6 +400,9 @@ model WorkoutLog {
   sessionInstanceId String
   exerciseId        String
   orderIndex        Int      // order in the workout
+  isCompleted       Boolean  @default(false)  // ADR-037 mark-complete
+  completedAt       DateTime?                 // most recent transition into completed
+  notes             String?                   // ADR-052 trainer's private per-exercise note
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

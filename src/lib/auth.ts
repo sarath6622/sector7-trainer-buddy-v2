@@ -163,3 +163,19 @@ export function canReadClientTrainingData(
   }
   return false;
 }
+
+/**
+ * May this user see trainer-private annotations on a client's training data?
+ *
+ * ADR-052: `WorkoutLog.notes` is the trainer's working memo about an exercise
+ * ("went light, shoulder niggle"), not client-facing feedback. Staff only.
+ *
+ * Deliberately separate from `canReadClientTrainingData`, which also admits the
+ * client themselves — they may read their own sets and history, but not the
+ * notes written about them. Any endpoint that both roles can call must gate the
+ * notes on THIS check, not on access to the route.
+ */
+export function canReadTrainerPrivateNotes(user: { role?: string; roles?: string[] }): boolean {
+  const roles = user.roles ?? (user.role ? [user.role] : []);
+  return hasRole(roles, ['TRAINER', 'KICKBOXING_TRAINER', 'SUPER_ADMIN', 'BRANCH_ADMIN']);
+}

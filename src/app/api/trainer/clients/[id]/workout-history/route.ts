@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, canReadClientTrainingData } from '@/lib/auth';
+import {
+  getServerSession,
+  canReadClientTrainingData,
+  canReadTrainerPrivateNotes,
+} from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import * as progressService from '@/services/progress.service';
 
@@ -8,6 +12,11 @@ import * as progressService from '@/services/progress.service';
  * Returns recent workout sessions (with exercises + sets) for a client.
  *
  * Auth: trainer/admin in branch, OR the client themselves (ADR-036).
+ *
+ * ADR-052: the per-exercise trainer note rides along ONLY for staff. The client
+ * can legitimately call this route for their own history (their session page's
+ * History tab does), so the note is gated on the caller's role rather than on
+ * access to the route.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -24,6 +33,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       clientProfileId,
       branchId: session.user.branchId,
       limit,
+      includeNotes: canReadTrainerPrivateNotes(session.user),
     });
 
     return NextResponse.json({ data });

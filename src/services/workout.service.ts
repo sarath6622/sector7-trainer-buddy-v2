@@ -36,6 +36,12 @@ interface WorkoutEntryInput {
   // toggle must not clobber it). When provided, the service syncs both the
   // boolean and completedAt timestamp.
   isCompleted?: boolean;
+  // ADR-052: trainer's per-exercise note. Same omitted-means-preserve
+  // contract as isCompleted, so a caller that doesn't send notes (offline
+  // sync bundles, the legacy /api/trainer/workouts route) can't blank one.
+  // '' is a real value — it's how the logger clears a deleted note, and it
+  // is stored as NULL so "no note" has a single representation in the DB.
+  notes?: string;
 }
 
 /**
@@ -230,6 +236,7 @@ export async function createWorkoutLogs({
           orderIndex?: number;
           isCompleted?: boolean;
           completedAt?: Date | null;
+          notes?: string | null;
         } = {};
         if (existing.orderIndex !== entry.orderIndex) {
           updateData.orderIndex = entry.orderIndex;
@@ -237,6 +244,14 @@ export async function createWorkoutLogs({
         if (entry.isCompleted !== undefined && entry.isCompleted !== existing.isCompleted) {
           updateData.isCompleted = entry.isCompleted;
           updateData.completedAt = entry.isCompleted ? new Date() : null;
+        }
+        // ADR-052: normalize '' → null so a cleared note and a never-written
+        // note are the same row state, then write only on a real change (the
+        // 800ms auto-save would otherwise bump updatedAt on every keystroke
+        // elsewhere in the card).
+        if (entry.notes !== undefined) {
+          const nextNotes = entry.notes.trim() === '' ? null : entry.notes;
+          if (nextNotes !== existing.notes) updateData.notes = nextNotes;
         }
         if (Object.keys(updateData).length > 0) {
           await tx.workoutLog.update({ where: { id: existing.id }, data: updateData });
@@ -289,6 +304,8 @@ export async function createWorkoutLogs({
             // sent the toggle; default false otherwise.
             isCompleted: entry.isCompleted ?? false,
             completedAt: entry.isCompleted ? new Date() : null,
+            // ADR-052 — '' normalizes to null (see the update branch above).
+            notes: entry.notes && entry.notes.trim() !== '' ? entry.notes : null,
             sets: {
               create: entry.sets.map((set) => ({
                 setNumber: set.setNumber,

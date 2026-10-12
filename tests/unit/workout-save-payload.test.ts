@@ -49,6 +49,7 @@ function makeEntry(over: Partial<ExerciseEntry> = {}): ExerciseEntry {
     sets: [makeSet()],
     collapsed: false,
     isCompleted: false,
+    notes: '',
     ...over,
   };
 }
@@ -208,6 +209,73 @@ describe('buildSavePayload', () => {
     expect(payload[1]!.orderIndex).toBe(1);
     expect(payload[1]!.sets).toHaveLength(1);
   });
+
+  // ADR-052. `includeNotes` encodes *ownership* of the field, not whether
+  // there's text: the server reads an absent `notes` as "preserve what's
+  // stored", so a writer with no notes UI (the client's own session page)
+  // must omit the key entirely, and a writer that has one must always send
+  // it — '' included — or a cleared note could never be cleared.
+  describe('trainer notes (ADR-052)', () => {
+    it('omits notes entirely by default — the pre-ADR-052 payload shape', () => {
+      const entry = makeEntry({ notes: 'went light today' });
+      const payload = buildSavePayload([entry]);
+      expect('notes' in payload[0]!).toBe(false);
+    });
+
+    it('omits notes for a notes-less writer even when the entry holds text', () => {
+      // The client's session page hydrates no note (the read path drops the
+      // column) but this guards the case where one is somehow present: its
+      // save must still not speak about notes.
+      const entry = makeEntry({ notes: 'trainer-only text' });
+      const payload = buildSavePayload([entry], { includeNotes: false });
+      expect('notes' in payload[0]!).toBe(false);
+    });
+
+    it('includes the note when the writer owns the field', () => {
+      const entry = makeEntry({ notes: 'shoulder niggle on set 3' });
+      const payload = buildSavePayload([entry], { includeNotes: true });
+      expect(payload[0]!.notes).toBe('shoulder niggle on set 3');
+    });
+
+    it("sends '' so a cleared note actually clears — the key must be present", () => {
+      // The bug this guards: omitting an empty note makes the server preserve
+      // the stored text, so deleting a note in the UI would silently no-op.
+      const entry = makeEntry({ notes: '' });
+      const payload = buildSavePayload([entry], { includeNotes: true });
+      expect('notes' in payload[0]!).toBe(true);
+      expect(payload[0]!.notes).toBe('');
+    });
+
+    it('carries a note on an exercise with no complete set yet', () => {
+      // Notes have no completeness gate — a trainer can note "skipped, knee
+      // pain" without logging a single set.
+      const entry = makeEntry({ sets: [makeSet()], notes: 'skipped — knee pain' });
+      const payload = buildSavePayload([entry], { includeNotes: true });
+      expect(payload[0]!.sets).toEqual([]);
+      expect(payload[0]!.notes).toBe('skipped — knee pain');
+    });
+
+    it('a note-bearing payload still passes the server schema', () => {
+      const entry = makeEntry({
+        sets: [makeSet({ weightKg: 60, reps: 10 })],
+        notes: 'went light — shoulder niggle',
+      });
+      const payload = buildSavePayload([entry], { includeNotes: true });
+      expect(workoutEntrySchema.safeParse(payload[0]).success).toBe(true);
+    });
+
+    it('rejects a note past the 1000-char cap the textarea enforces', () => {
+      // Keeps the textarea's maxLength and the schema's max in lockstep — if
+      // they drift, the field can compose a payload the server 422s.
+      const entry = makeEntry({ notes: 'x'.repeat(1001) });
+      const payload = buildSavePayload([entry], { includeNotes: true });
+      expect(workoutEntrySchema.safeParse(payload[0]).success).toBe(false);
+
+      const atCap = makeEntry({ notes: 'x'.repeat(1000) });
+      const okPayload = buildSavePayload([atCap], { includeNotes: true });
+      expect(workoutEntrySchema.safeParse(okPayload[0]).success).toBe(true);
+    });
+  });
 });
 
 describe('set signatures', () => {
@@ -242,6 +310,29 @@ describe('diffExercises', () => {
     const { dirtyExerciseIds, removedExerciseIds } = diffExercises(A, Aedited);
     expect(dirtyExerciseIds).toEqual(['ex-a']);
     expect(removedExerciseIds).toEqual([]);
+  });
+
+  // ADR-052: notes ride the same dirty-scoping as sets. Without this the
+  // auto-save would compute an empty diff for a note-only edit and never POST.
+  it('flags an exercise whose note changed even though no set did', () => {
+    const noted = buildSavePayload(
+      [makeEntry({ exerciseId: 'ex-a', sets: [makeSet({ weightKg: 10, reps: 10 })] })],
+      { includeNotes: true },
+    );
+    const renoted = buildSavePayload(
+      [
+        makeEntry({
+          exerciseId: 'ex-a',
+          sets: [makeSet({ weightKg: 10, reps: 10 })],
+          notes: 'form broke down',
+        }),
+      ],
+      { includeNotes: true },
+    );
+    const { dirtyExerciseIds, removedSetsByExerciseId } = diffExercises(noted, renoted);
+    expect(dirtyExerciseIds).toEqual(['ex-a']);
+    // The sets are identical, so nothing may be marked for deletion.
+    expect(removedSetsByExerciseId).toEqual({});
   });
 
   it('treats a brand-new exercise as dirty and leaves the untouched one alone', () => {

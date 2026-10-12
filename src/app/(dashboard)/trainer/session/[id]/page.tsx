@@ -39,6 +39,9 @@ interface SessionData {
     exerciseId: string;
     orderIndex: number;
     updatedAt?: string;
+    // ADR-052: trainer's private per-exercise note. Trainer reads only — the
+    // client session route omits the column.
+    notes?: string | null;
     exercise: {
       id: string;
       name: string;
@@ -681,6 +684,9 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           clientProfileId={session.client.id}
           clientName={`${session.client.user.firstName} ${session.client.user.lastName}`}
           existingLogs={session.workoutLogs}
+          // ADR-052 — the trainer's own session screen is the one place the
+          // per-exercise note can be read and written.
+          allowExerciseNotes
           onUnsavedChange={setHasUnsaved}
           onForeground={() => {
             // Phone unlocked / tab refocused — pull fresh server state so the

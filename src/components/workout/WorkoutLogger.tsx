@@ -23,6 +23,7 @@ import {
   Loader2,
   AlertCircle,
   History as HistoryIcon,
+  StickyNote,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -117,6 +118,10 @@ export interface ExerciseEntry {
   // default-collapsed. Tapping still expands them so the user can add or
   // edit sets; "Unmark" inside the card flips this back to false.
   isCompleted: boolean;
+  // ADR-052: trainer's free-text note about this exercise in this session.
+  // Always a string locally ('' = no note) so the textarea is never
+  // uncontrolled; the service normalizes '' back to NULL on write.
+  notes: string;
 }
 
 type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -140,10 +145,20 @@ interface WorkoutLoggerProps {
   // its rest cell renders the live countdown instead of the idle button.
   restTimerRemaining?: number | null;
   restTimerPaused?: boolean;
+  // ADR-052: show the per-exercise trainer note field. Off by default — the
+  // client's own session page renders this same logger, and the note is the
+  // trainer's private working memo ("went light, shoulder niggle"), so it is
+  // neither rendered nor sent from the client side. The client read path
+  // (/api/client/sessions/[id]) omits the column too, so a client bundle
+  // can't surface it even if this flag were flipped by mistake.
+  allowExerciseNotes?: boolean;
   existingLogs?: {
     id: string;
     exerciseId: string;
     orderIndex: number;
+    // ADR-052 — absent on the client read path by design, and on any legacy
+    // caller that narrows the shape. Hydrates to '' when missing.
+    notes?: string | null;
     // ADR-037 — optional for backwards-compat with any legacy caller that
     // narrows the shape; the API returns it on all reads.
     isCompleted?: boolean;
@@ -354,6 +369,13 @@ export type SavePayloadEntry = {
   exerciseId: string;
   orderIndex: number;
   isCompleted: boolean;
+  // ADR-052. Present ⇔ the writer owns the notes field (`includeNotes`), and
+  // then it is ALWAYS present — including as '' — because the server reads an
+  // absent `notes` as "preserve what's stored". Omitting it when empty would
+  // make clearing a note impossible; sending it from a writer that has no
+  // notes UI (the client's own session page) would blank the trainer's note
+  // on the client's next autosave. So the key tracks ownership, not content.
+  notes?: string;
   sets: ReturnType<typeof normalizeSet>[];
 };
 
@@ -393,11 +415,22 @@ export function hasDraftRows(exercises: ExerciseEntry[], lastSaved: SavePayloadE
 // kg without reps) is dropped so it never hits the DB. The backend replaces the
 // session's logs with exactly this, so an exercise with no complete set yet
 // persists as a zero-set log. `orderIndex` is the entry's position in the list.
-export function buildSavePayload(exercises: ExerciseEntry[]): SavePayloadEntry[] {
+// `includeNotes` mirrors the logger's `allowExerciseNotes` prop: only a writer
+// that actually renders the notes field may speak about notes. When false the
+// `notes` key is omitted and the payload is byte-identical to the pre-ADR-052
+// shape, so the client's session page can't blank a note it never showed. When
+// true the key is always written — '' included — which is what lets the trainer
+// clear a note (the service maps '' to NULL).
+export function buildSavePayload(
+  exercises: ExerciseEntry[],
+  { includeNotes = false }: { includeNotes?: boolean } = {},
+): SavePayloadEntry[] {
   return exercises.map((entry, idx) => ({
     exerciseId: entry.exerciseId,
     orderIndex: idx,
     isCompleted: entry.isCompleted,
+    // No completeness gate — any text the trainer typed IS the note.
+    ...(includeNotes ? { notes: entry.notes } : {}),
     sets: entry.sets.filter((s) => isSetComplete(s, entry.exerciseType)).map(normalizeSet),
   }));
 }
@@ -486,6 +519,7 @@ export function WorkoutLogger({
   onConsumeRest,
   restTimerRemaining,
   restTimerPaused,
+  allowExerciseNotes = false,
   existingLogs,
 }: WorkoutLoggerProps) {
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
@@ -577,6 +611,11 @@ export function WorkoutLogger({
   // every keystroke strips a trailing "." or ".0" — making decimals like 100.5
   // impossible to type. Cleared on blur so the field reverts to the canonical value.
   const [cellDrafts, setCellDrafts] = useState<Record<string, string>>({});
+  // ADR-052: cards whose note box the trainer has explicitly opened. A card
+  // that already HAS a note always shows the box, so this only tracks the
+  // "tapped Add note but hasn't typed yet" state — without it the box would
+  // vanish mid-edit the moment the field went back to empty.
+  const [noteOpenFor, setNoteOpenFor] = useState<Record<string, boolean>>({});
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -670,7 +709,9 @@ export function WorkoutLogger({
       //      would re-collapse everything except the last exercise on every
       //      tick. The reported bug: expanding one card auto-collapses it on
       //      the next poll and expands the bottom one.
-      const currentHash = JSON.stringify(buildSavePayload(prev));
+      const currentHash = JSON.stringify(
+        buildSavePayload(prev, { includeNotes: allowExerciseNotes }),
+      );
       const hasUnsavedLocal =
         prev.length > 0 &&
         (currentHash !== lastSavedHashRef.current ||
@@ -690,6 +731,8 @@ export function WorkoutLogger({
           category: log.exercise.category,
           exerciseType: log.exercise.exerciseType,
           secondaryMetric: log.exercise.secondaryMetric ?? 'KM',
+          // ADR-052 — '' when the column is NULL or the read path omitted it.
+          notes: log.notes ?? '',
           // A zero-set log is an exercise that was added but not yet logged.
           // Give it one blank placeholder row so the card shows an editable
           // set, matching a freshly-added exercise.
@@ -726,7 +769,7 @@ export function WorkoutLogger({
       // doesn't re-POST the data we just hydrated, and so the next diff is
       // measured against the freshly-synced server state. Shape must match the
       // payload built in `currentPayload`.
-      const hydratedPayload = buildSavePayload(initial);
+      const hydratedPayload = buildSavePayload(initial, { includeNotes: allowExerciseNotes });
       lastSavedHashRef.current = JSON.stringify(hydratedPayload);
       lastSavedPayloadRef.current = hydratedPayload;
       return initial;
@@ -742,7 +785,10 @@ export function WorkoutLogger({
       if (id) seeded.add(id);
     }
     if (seeded.size > 0) setFocusGroupIds(seeded);
-  }, [existingLogs]);
+    // `allowExerciseNotes` only feeds the last-saved-hash seed below; it is
+    // fixed per mount (trainer page true, client page false), so listing it
+    // satisfies exhaustive-deps without causing a real re-hydration.
+  }, [existingLogs, allowExerciseNotes]);
 
   const searchExercises = useCallback(
     async (
@@ -936,6 +982,7 @@ export function WorkoutLogger({
         // Expand only the last addition so the trainer lands on a fresh card
         collapsed: idx !== fresh.length - 1,
         isCompleted: false,
+        notes: '',
         lastSet: p.lastSet
           ? {
               reps: p.lastSet.reps,
@@ -1011,6 +1058,19 @@ export function WorkoutLogger({
       }
       return reordered;
     });
+  }
+
+  /**
+   * Write the trainer's per-exercise note (ADR-052).
+   *
+   * Deliberately NOT flushed immediately: notes are typed prose, so letting
+   * every keystroke trigger a save would hammer the endpoint the way the
+   * set cells avoid. The standard ~5s typing debounce picks it up, and the
+   * outbox mirrors it synchronously in the meantime, so a backgrounded PWA
+   * can't lose a half-typed note.
+   */
+  function setExerciseNotes(tempId: string, value: string) {
+    setExercises((prev) => prev.map((e) => (e.tempId === tempId ? { ...e, notes: value } : e)));
   }
 
   function addSet(exerciseIndex: number) {
@@ -1103,7 +1163,10 @@ export function WorkoutLogger({
   // Snapshot of the current state in the exact shape we POST. Memoized so
   // its identity is stable across renders that don't actually change the
   // logged workout, which keeps the auto-save effect from churning.
-  const currentPayload = useMemo(() => buildSavePayload(exercises), [exercises]);
+  const currentPayload = useMemo(
+    () => buildSavePayload(exercises, { includeNotes: allowExerciseNotes }),
+    [exercises, allowExerciseNotes],
+  );
   const currentHash = useMemo(() => JSON.stringify(currentPayload), [currentPayload]);
   // Two tiers of "unsaved":
   //   • hasUnsavedPayload — the saveable snapshot differs from the last save;
@@ -1370,9 +1433,19 @@ export function WorkoutLogger({
     const serverSigs = signaturesOf(lastSavedPayloadRef.current);
     const serverExIds = new Set(lastSavedPayloadRef.current.map((e) => e.exerciseId));
     const outboxSigs = signaturesOf(exercises);
+    // ADR-052: notes are not part of the per-set signatures, so an outbox
+    // holding ONLY a note edit (trainer types a note, phone is killed before
+    // the 5s autosave) would read as fully synced and be dropped. Compare the
+    // stored notes explicitly. Only entries that carry the key are considered
+    // — an outbox written by a notes-less writer says nothing about notes.
+    const serverNotes = new Map(lastSavedPayloadRef.current.map((e) => [e.exerciseId, e.notes]));
+    const hasUnsyncedNote = exercises.some(
+      (e) => e.notes !== undefined && e.notes !== (serverNotes.get(e.exerciseId) ?? ''),
+    );
     const hasUnsynced =
       exercises.some((e) => !serverExIds.has(e.exerciseId)) ||
-      [...outboxSigs].some((sig) => !serverSigs.has(sig));
+      [...outboxSigs].some((sig) => !serverSigs.has(sig)) ||
+      hasUnsyncedNote;
     if (!hasUnsynced) {
       clearOutbox(sessionInstanceId);
       return;
@@ -2101,6 +2174,19 @@ export function WorkoutLogger({
                           {entry.sets.length} {entry.sets.length === 1 ? 'set' : 'sets'}
                         </span>
                       )}
+                      {/* ADR-052: a note is only readable with the card open,
+                      so flag its existence on the header — otherwise a note
+                      written last week is invisible behind a collapsed card
+                      and the trainer has no reason to go looking. */}
+                      {allowExerciseNotes && entry.notes.trim() !== '' && (
+                        <span
+                          className="flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500"
+                          title={entry.notes}
+                        >
+                          <StickyNote className="h-2.5 w-2.5" />
+                          Note
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-0.5">
@@ -2436,6 +2522,66 @@ export function WorkoutLogger({
                             <Plus className="h-3.5 w-3.5" />
                             Add Set
                           </button>
+
+                          {/* ── ADR-052: per-exercise trainer note ──
+                          Placed between Add Set and Mark complete: the note is
+                          written once the work is logged and before the card
+                          is signed off. Collapsed to a one-line "Add note"
+                          button until it's needed — a textarea on every card
+                          would double the height of a 6-exercise log on a
+                          phone. Trainer-only (see `allowExerciseNotes`). */}
+                          {allowExerciseNotes &&
+                            (entry.notes.trim() !== '' || noteOpenFor[entry.tempId] ? (
+                              <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-2.5">
+                                <label
+                                  htmlFor={`note-${entry.tempId}`}
+                                  className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-500"
+                                >
+                                  <StickyNote className="h-3 w-3" />
+                                  Note
+                                </label>
+                                <textarea
+                                  id={`note-${entry.tempId}`}
+                                  value={entry.notes}
+                                  onChange={(e) => setExerciseNotes(entry.tempId, e.target.value)}
+                                  onFocus={(e) =>
+                                    // Same keyboard-occlusion dance the set
+                                    // cells do: on iOS standalone the keyboard
+                                    // overlays without resizing, so scroll the
+                                    // field above it on focus.
+                                    requestAnimationFrame(() =>
+                                      e.target.scrollIntoView({
+                                        block: 'center',
+                                        behavior: 'smooth',
+                                      }),
+                                    )
+                                  }
+                                  rows={2}
+                                  // Matches workoutEntrySchema's cap, so the
+                                  // field can't compose a payload the server
+                                  // will 422.
+                                  maxLength={1000}
+                                  placeholder="e.g. went light — shoulder niggle on the last set"
+                                  className="w-full resize-y rounded-lg border border-border/50 bg-background/60 px-2.5 py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground/60 focus:border-amber-500/50 focus:outline-none"
+                                />
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setNoteOpenFor((prev) => ({ ...prev, [entry.tempId]: true }));
+                                  // Focus after the field mounts so the
+                                  // keyboard comes up on the same tap.
+                                  requestAnimationFrame(() =>
+                                    document.getElementById(`note-${entry.tempId}`)?.focus(),
+                                  );
+                                }}
+                                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-amber-500/30 py-2.5 text-xs font-semibold text-amber-500/80 transition-colors active:bg-amber-500/10"
+                              >
+                                <StickyNote className="h-3.5 w-3.5" />
+                                Add note
+                              </button>
+                            ))}
+
                           {/* ADR-037: Mark-complete pill. Persists via the
                           5s auto-save debounce. On mark this card collapses
                           + sorts to the bottom; the next incomplete card

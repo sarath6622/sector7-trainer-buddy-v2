@@ -32,8 +32,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         trainer: {
           include: { user: { select: { firstName: true, lastName: true } } },
         },
+        // Explicit `select`, NOT `include` (ADR-052): WorkoutLog.notes is the
+        // trainer's private per-exercise note and must never reach the client
+        // app. `include` returns every scalar, so it would have leaked the
+        // column the moment it was added. Any new trainer-facing field on
+        // WorkoutLog must be opted in here deliberately.
         workoutLogs: {
-          include: {
+          select: {
+            id: true,
+            exerciseId: true,
+            orderIndex: true,
+            isCompleted: true,
+            completedAt: true,
+            createdAt: true,
+            updatedAt: true,
             exercise: {
               select: {
                 id: true,

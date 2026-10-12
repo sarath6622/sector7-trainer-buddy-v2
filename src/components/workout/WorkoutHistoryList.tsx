@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { History as HistoryIcon, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import {
+  History as HistoryIcon,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  StickyNote,
+} from 'lucide-react';
 
 interface HistorySet {
   setNumber: number;
@@ -16,6 +23,10 @@ interface HistoryExercise {
   name: string;
   targetMuscleGroup: string;
   exerciseType: string;
+  // ADR-052: trainer's per-exercise note. Absent entirely when the caller
+  // isn't staff — the client can read their own history through this same
+  // component, and the note is not written for them.
+  notes?: string | null;
   sets: HistorySet[];
 }
 
@@ -182,6 +193,19 @@ export function WorkoutHistoryList({ historyEndpoint, activeSessionId }: Workout
                           {formatSet(set, ex.exerciseType)}
                         </span>
                       ))}
+                    </div>
+                  )}
+                  {/* ADR-052: the trainer's note is the reason to look at an
+                  old session at all ("why was this light?"), so it reads as
+                  prose under the set chips rather than as another chip.
+                  `whitespace-pre-wrap` keeps any line breaks the trainer
+                  typed. Amber matches the note affordance in the Log tab. */}
+                  {ex.notes && (
+                    <div className="mt-1.5 inline-flex max-w-full items-start gap-1.5 rounded-lg border-l-2 border-amber-500/40 bg-amber-500/5 py-1 pl-2 pr-2.5">
+                      <StickyNote className="mt-0.5 h-3 w-3 shrink-0 text-amber-500/80" />
+                      <p className="whitespace-pre-wrap text-[11px] leading-snug text-foreground/80">
+                        {ex.notes}
+                      </p>
                     </div>
                   )}
                 </div>

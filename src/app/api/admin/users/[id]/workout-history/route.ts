@@ -38,6 +38,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       clientProfileId: user.clientProfile.id,
       branchId,
       limit,
+      // ADR-052: unconditional here — the route is already gated to
+      // SUPER_ADMIN / BRANCH_ADMIN above, so every caller is staff.
+      includeNotes: true,
     });
 
     return NextResponse.json({ data });
