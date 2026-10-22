@@ -7,7 +7,7 @@ import { SESSION_ROUTINE_SELECT } from '@/services/routine.service';
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['CLIENT'])) {
+    if (!session || !hasRole(session.user.roles, ['CLIENT'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 

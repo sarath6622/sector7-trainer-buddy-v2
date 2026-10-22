@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useActiveSurface } from '@/hooks/useActiveSurface';
 import { BellOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,8 +16,8 @@ const PAGE_SIZE = 20;
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const { data: session } = useSession();
-  const role = session?.user?.role ?? '';
+  // Head coach: link notifications into whichever side they are using.
+  const { activeRole: role } = useActiveSurface();
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);

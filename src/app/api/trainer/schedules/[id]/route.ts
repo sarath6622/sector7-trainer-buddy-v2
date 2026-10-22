@@ -15,7 +15,7 @@ interface Params {
 export async function PUT(req: Request, { params }: Params) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER'])) {
+    if (!session || !hasRole(session.user.roles, ['TRAINER'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 
@@ -62,7 +62,7 @@ export async function PUT(req: Request, { params }: Params) {
 export async function DELETE(req: Request, { params }: Params) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER'])) {
+    if (!session || !hasRole(session.user.roles, ['TRAINER'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 

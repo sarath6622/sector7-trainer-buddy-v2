@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { createProgressEntry } from '@/services/progress.service';
+import { assertAdminAccessChangeAllowed } from '@/services/staff.service';
 import type { Prisma, UserRole, DayOfWeek } from '@prisma/client';
 
 interface ShiftInput {
@@ -523,6 +524,18 @@ export async function updateUser(
     throw new AppError('NOT_FOUND', 'User not found', 404);
   }
 
+  if (input.roles !== undefined) {
+    await assertAdminAccessChangeAllowed({
+      targetId: id,
+      branchId,
+      actorId,
+      oldRoles: existingUser.roles,
+      newRoles: input.roles,
+      oldActive: existingUser.isActive,
+      newActive: existingUser.isActive,
+    });
+  }
+
   const oldValue = {
     firstName: existingUser.firstName,
     lastName: existingUser.lastName,
@@ -590,8 +603,7 @@ export async function updateUser(
       clientUpdate.emergencyContactPhone = input.emergencyContactPhone;
     if (input.height !== undefined) clientUpdate.height = input.height;
     if (input.intakeWeight !== undefined) clientUpdate.intakeWeight = input.intakeWeight;
-    if (input.intakeBodyFat !== undefined)
-      clientUpdate.intakeBodyFat = input.intakeBodyFat;
+    if (input.intakeBodyFat !== undefined) clientUpdate.intakeBodyFat = input.intakeBodyFat;
     if (input.medicalConditions !== undefined)
       clientUpdate.medicalConditions = input.medicalConditions;
     if (input.fitnessGoals !== undefined) clientUpdate.fitnessGoals = input.fitnessGoals;
@@ -637,6 +649,16 @@ export async function deleteUser(id: string, branchId: string, actorId: string) 
   if (!user) {
     throw new AppError('NOT_FOUND', 'User not found', 404);
   }
+
+  await assertAdminAccessChangeAllowed({
+    targetId: id,
+    branchId,
+    actorId,
+    oldRoles: user.roles,
+    newRoles: [],
+    oldActive: user.isActive,
+    newActive: false,
+  });
 
   // Soft delete
   await prisma.user.update({

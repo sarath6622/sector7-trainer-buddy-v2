@@ -87,6 +87,55 @@ GET    /api/admin/users/[id]/clients     → {} → { data: TrainerClient[] }
                                             Sorted alphabetically by client name. Auth: BRANCH_ADMIN | SUPER_ADMIN.
 ```
 
+ADMIN-ACCESS GUARDS (ADR-054), enforced on PUT and DELETE above as well as on the staff routes below:
+a change that removes admin access (roles losing every admin role, deactivation, soft delete) is
+rejected with `409 CANNOT_CHANGE_OWN_ACCESS` when the target is the caller, and
+`409 LAST_ADMIN` when the target is the branch's last active admin.
+
+### Staff & Access (ADR-054)
+
+> Added 2026-10-22. Per-person staff accounts replace the shared admin login. "Access level" is a
+> UI preset over `User.roles`; there is no HEAD_COACH enum value.
+> ADMIN = an admin role, no trainer role. HEAD_COACH = an admin role AND a trainer role.
+> TRAINER = a trainer role, no admin role. Admin roles: SUPER_ADMIN, BRANCH_ADMIN.
+> Trainer roles: TRAINER, KICKBOXING_TRAINER, CROSSFIT_TRAINER.
+
+```
+GET    /api/admin/staff                  → {} → { data: StaffMember[], activeAdminCount }
+                                            Every non-deleted user in the caller's branch holding an admin
+                                            or trainer role, active AND inactive. Sorted: active first, then
+                                            access level (HEAD_COACH, ADMIN, TRAINER), then name.
+                                            StaffMember = {
+                                              id, firstName, lastName, email, phone, profileImageUrl,
+                                              roles: UserRole[], accessLevel: 'ADMIN'|'HEAD_COACH'|'TRAINER',
+                                              isActive, lastLoginAt, activeClientCount,
+                                              trainerProfileId: string | null
+                                            }
+                                            activeClientCount = active PtPackages on their TrainerProfile.
+                                            Auth: BRANCH_ADMIN | SUPER_ADMIN.
+PATCH  /api/admin/staff/[id]             → { accessLevel?: 'ADMIN'|'HEAD_COACH'|'TRAINER', isActive?: boolean }
+                                            → { data: StaffMember }   (at least one field required)
+                                            accessLevel rewrites only the staff roles; CLIENT is preserved.
+                                              ADMIN      → keeps SUPER_ADMIN if held, else BRANCH_ADMIN; drops trainer roles.
+                                              HEAD_COACH → admin role as above + existing trainer roles (TRAINER if none).
+                                              TRAINER    → existing trainer roles (TRAINER if none); drops admin roles.
+                                            Gaining a trainer role creates the TrainerProfile if missing.
+                                            Errors: 404 NOT_FOUND (not staff / other branch),
+                                              409 CANNOT_CHANGE_OWN_ACCESS, 409 LAST_ADMIN,
+                                              409 HAS_ACTIVE_CLIENTS (dropping trainer roles while they still
+                                              have active packages; reassign first).
+                                            Audit: STAFF_ACCESS_UPDATED { old: {roles,isActive}, new: {roles,isActive} }.
+                                            Auth: BRANCH_ADMIN | SUPER_ADMIN.
+```
+
+Creating staff uses `POST /api/admin/users` with the matching `roles` (ADMIN → [BRANCH_ADMIN],
+HEAD_COACH → [BRANCH_ADMIN, TRAINER]); passwords are reset with `/api/admin/users/[id]/reset-password`.
+
+SESSION ROLES: route handlers authorise against `session.user.roles` (all roles), never the single
+`session.user.role`. The JWT re-reads roles/isActive from the DB at most once a minute per server
+instance, so revoked access stops working within about a minute. A deactivated or deleted user's
+session resolves to `roles: []`.
+
 ### Trainer-Client Mapping
 
 > Updated 2026-05-08 (Phase 25): mapping carries optional `planId` (catalog reference) plus

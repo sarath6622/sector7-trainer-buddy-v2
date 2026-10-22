@@ -973,3 +973,60 @@ prod Neon **before** the code deploys, because `getSessionById` selects
 - **Concurrent assigns** (left as is): a program can only be assigned per client, from that
   client's page or from the session's library fallback, and only by admins or that
   client's trainers. Two simultaneous assigns can leave two active copies; the newest wins.
+
+---
+
+## ADR-054: Per-Person Staff Accounts, Head Coach as Admin + Trainer, Role Revalidation
+
+**Date:** 2026-10-22
+**Status:** Accepted (operator choices made 2026-10-22, all four recommended options)
+
+**Context:** The gym ran on one shared admin login (`admin@sector7.com`). Sarath wants each
+person to have their own account with an access level: Admin, Trainer, Client, and a
+"Head Coach" who can use both the trainer and admin sides. `User.roles` was already an
+array, but login collapsed it to one "primary" `role` (admin beats trainer) and ~185 checks
+across routes, middleware and nav read only that, so an admin + trainer user was locked out
+of every `/trainer` page and `/api/trainer/*` route. There was no UI to create admins.
+
+**Decision:**
+
+- **No HEAD_COACH enum value.** A head coach is a user holding an admin role
+  (`BRANCH_ADMIN`/`SUPER_ADMIN`) AND a trainer role, with a TrainerProfile. "Access level"
+  (ADMIN / HEAD_COACH / TRAINER) is a UI preset computed by `accessLevelOf()` in
+  `src/lib/roles.ts`. No migration; every existing admin and trainer permission applies as is.
+- **Authorise on all roles.** Every route handler now calls
+  `hasRole(session.user.roles, …)`. `session.user.role` survives for display and legacy
+  callers only. Middleware allows the union of surfaces the roles grant.
+- **One surface at a time.** The shell derives the surface (admin / trainer / client) from
+  the URL and renders only that surface's nav and tab bar. A segmented "Admin | Trainer"
+  switch appears in the top bar for multi-surface users. The last surface is remembered in
+  the `s7_surface` cookie, which `/`, the login redirect and the `/login` bounce honour.
+  Notification deep links follow the active surface.
+- **Staff & Access page** (`/admin/staff`, `GET /api/admin/staff`,
+  `PATCH /api/admin/staff/[id]`): list staff, change access level, deactivate/reactivate,
+  reset password, create Admin / Head Coach accounts (trainers still use the trainer form
+  for shifts). Any admin or head coach may grant or remove admin access.
+- **Guards** (`assertAdminAccessChangeAllowed`, also wired into `PUT`/`DELETE
+/api/admin/users/[id]`): you cannot remove your own admin access, and the branch's last
+  active admin cannot lose it. Dropping the trainer side is refused while the person still
+  has active packages (`HAS_ACTIVE_CLIENTS`).
+- **Role revalidation.** The JWT lives 7 days and rolls on activity, so a revoked admin,
+  or the old shared login once deactivated, would otherwise keep working indefinitely. The
+  `jwt` callback re-reads `roles`/`isActive`/`deletedAt`/profile ids from the DB, cached
+  in-memory per server instance for 60s. Inactive or deleted users resolve to `roles: []`.
+  A DB error keeps the existing token (no mass logout mid-deploy). App Router
+  `getServerSession` cannot write the refreshed cookie, which is why the cache exists:
+  without it every API call after the first minute would hit the DB.
+
+**Consequences:**
+
+- Revocation latency is up to ~60s per server instance. The middleware only sees the new
+  roles once the client next refreshes `/api/auth/session` (window focus), but every API
+  call is authorised on fresh roles, so a revoked user sees empty/403 pages until then.
+- Cost: one indexed `users` lookup per active user per minute per warm instance.
+- Role changes take effect without re-login, including promotion to head coach (the
+  trainerProfileId is picked up on revalidation).
+- Any new route MUST check `session.user.roles`, never `session.user.role`.
+- Test mocks of `hasRole` must accept arrays; `createMockSession` now sets `roles`.
+- Not built: self-service password change (admins set temporary passwords and staff
+  can't change them yet), per-person 2FA, and finer-grained permissions inside the admin side.

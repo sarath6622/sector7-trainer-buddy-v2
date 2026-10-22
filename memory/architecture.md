@@ -44,6 +44,13 @@ API routes are thin — they validate input, call a service function, and return
 Request → API Route (validate + auth) → Service (business logic) → Prisma (data) → Response
 ```
 
+**Auth and roles (ADR-054):** a user may hold several roles. Routes authorise against
+`session.user.roles`; the NextAuth `jwt` callback re-reads roles from the DB at most once a
+minute per instance, so access changes and deactivation apply without re-login. Shared role
+helpers (surfaces, access levels, landing paths) live in `src/lib/roles.ts`, which is
+edge-safe and used by the middleware. A head coach (admin + trainer) switches surfaces from
+the top bar (`SurfaceSwitcher`); the shell renders one surface's nav at a time.
+
 ### 2. Branch Scoping
 
 Every service function receives `branchId` as a mandatory parameter. The Next.js middleware extracts `branchId` from the authenticated user's session and injects it into the request context. No service function ever runs without branch scoping.

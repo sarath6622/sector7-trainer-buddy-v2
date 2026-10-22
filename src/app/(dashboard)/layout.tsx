@@ -10,6 +10,8 @@ import { RoleTabBar } from '@/components/layout/RoleTabBar';
 import { PullToRefresh } from '@/components/layout/PullToRefresh';
 import { NAV_BY_ROLE, type NavItem } from '@/lib/constants';
 import { usePusherChannel } from '@/hooks/usePusherChannel';
+import { useActiveSurface, rememberSurface } from '@/hooks/useActiveSurface';
+import { roleLabel, surfaceOf } from '@/lib/roles';
 import type { NotificationPayload, LeaveStatusChangedPayload } from '@/lib/pusher';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -18,9 +20,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const hideTabBar = /\/session\/[^/]+/.test(pathname);
 
-  const role = session?.user?.role ?? '';
-  const roles = session?.user?.roles ?? [role];
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'BRANCH_ADMIN';
+  // ADR-054: a head coach holds admin + trainer roles. The shell renders one
+  // side at a time, chosen by the URL, and the top bar switches between them.
+  const { roles, surface, surfaceRoles, activeRole, surfaces } = useActiveSurface();
+  const isAdminSurface = surface === 'admin';
+
+  useEffect(() => {
+    const fromPath = surfaceOf(pathname);
+    if (surfaces.length > 1 && fromPath && surfaces.includes(fromPath)) rememberSurface(fromPath);
+  }, [pathname, surfaces]);
 
   const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
 
@@ -103,7 +111,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   const fetchPendingLeaveCount = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdminSurface) return;
     try {
       const res = await fetch('/api/admin/leaves/pending-count');
       if (res.ok) {
@@ -113,7 +121,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     } catch {
       // silently ignore
     }
-  }, [isAdmin]);
+  }, [isAdminSurface]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -210,24 +218,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     firstName: session.user.firstName ?? '',
     lastName: session.user.lastName ?? '',
     email: session.user.email ?? '',
-    role,
+    role: activeRole,
+    roleLabel: roleLabel(roles),
   };
 
-  // Merge nav items from all roles (deduplicated by href), primary role items first
-  const navItems = roles.reduce<NavItem[]>(
-    (acc, r) => {
-      const items = NAV_BY_ROLE[r] ?? [];
-      for (const item of items) {
-        if (!acc.some((existing) => existing.href === item.href)) {
-          acc.push(item);
-        }
-      }
-      return acc;
-    },
-    [...(NAV_BY_ROLE[role] ?? [])],
-  );
+  // Merge nav items from this surface's roles (deduplicated by href), so a
+  // TRAINER + CROSSFIT_TRAINER still sees both, but a head coach on the
+  // trainer side does not get the admin nav mixed in.
+  const navItems = surfaceRoles.reduce<NavItem[]>((acc, r) => {
+    for (const item of NAV_BY_ROLE[r] ?? []) {
+      if (!acc.some((existing) => existing.href === item.href)) acc.push(item);
+    }
+    return acc;
+  }, []);
   const navBadges: Record<string, number> =
-    isAdmin && pendingLeaveCount > 0 ? { '/admin/leaves': pendingLeaveCount } : {};
+    isAdminSurface && pendingLeaveCount > 0 ? { '/admin/leaves': pendingLeaveCount } : {};
 
   function handleLogout() {
     signOut({ callbackUrl: '/login' });
@@ -242,13 +247,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopNav user={user} navItems={navItems} onLogout={handleLogout} />
+        <TopNav
+          user={user}
+          navItems={navItems}
+          surfaces={surfaces}
+          activeSurface={surface}
+          onLogout={handleLogout}
+        />
         <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
           <PullToRefresh onRefresh={handleRefresh}>
             <Fragment key={refreshKey}>{children}</Fragment>
           </PullToRefresh>
         </main>
-        {!hideTabBar && <RoleTabBar role={role} navItems={navItems} navBadges={navBadges} />}
+        {!hideTabBar && <RoleTabBar role={activeRole} navItems={navItems} navBadges={navBadges} />}
       </div>
     </div>
   );

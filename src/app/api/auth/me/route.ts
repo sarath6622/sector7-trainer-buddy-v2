@@ -14,6 +14,7 @@ export async function GET() {
           id: session.user.id,
           email: session.user.email,
           role: session.user.role,
+          roles: session.user.roles,
           branchId: session.user.branchId,
           firstName: session.user.firstName,
           lastName: session.user.lastName,

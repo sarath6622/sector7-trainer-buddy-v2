@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockGetServerSession = vi.fn();
 vi.mock('@/lib/auth', () => ({
   getServerSession: () => mockGetServerSession(),
-  hasRole: (userRole: string, allowedRoles: string[]) => allowedRoles.includes(userRole),
+  hasRole: (userRole: string | string[], allowedRoles: string[]) =>
+    [userRole].flat().some((r) => allowedRoles.includes(r)),
 }));
 
 // ─── Mock PT package service ────────────────────────────────────────

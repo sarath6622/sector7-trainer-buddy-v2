@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockGetServerSession = vi.fn();
 vi.mock('@/lib/auth', () => ({
   getServerSession: () => mockGetServerSession(),
-  hasRole: (role: string, allowed: string[]) => allowed.includes(role),
+  hasRole: (role: string | string[], allowed: string[]) =>
+    [role].flat().some((r) => allowed.includes(r)),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -29,6 +30,7 @@ function trainerSession(trainerProfileId: string | null = TRAINER) {
       id: 'trainer-user-1',
       email: 'trainer@sector7.com',
       role: 'TRAINER',
+      roles: ['TRAINER'],
       branchId: BRANCH,
       trainerProfileId,
       firstName: 'Kishore',
@@ -54,7 +56,7 @@ describe('GET /api/trainer/packages/[id]/window-counts', () => {
   it('returns 403 for non-trainer roles', async () => {
     mockGetServerSession.mockResolvedValue({
       ...trainerSession(),
-      user: { ...trainerSession().user, role: 'BRANCH_ADMIN' },
+      user: { ...trainerSession().user, role: 'BRANCH_ADMIN', roles: ['BRANCH_ADMIN'] },
     });
     const res = await getWindowCounts(req('/api/trainer/packages/pkg-1/window-counts'), {
       params: Promise.resolve({ id: 'pkg-1' }),

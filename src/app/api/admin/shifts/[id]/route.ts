@@ -11,7 +11,7 @@ interface RouteParams {
 export async function PUT(req: Request, { params }: RouteParams) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['SUPER_ADMIN', 'BRANCH_ADMIN'])) {
+    if (!session || !hasRole(session.user.roles, ['SUPER_ADMIN', 'BRANCH_ADMIN'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 
@@ -44,7 +44,7 @@ export async function PUT(req: Request, { params }: RouteParams) {
 export async function DELETE(_req: Request, { params }: RouteParams) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['SUPER_ADMIN', 'BRANCH_ADMIN'])) {
+    if (!session || !hasRole(session.user.roles, ['SUPER_ADMIN', 'BRANCH_ADMIN'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 

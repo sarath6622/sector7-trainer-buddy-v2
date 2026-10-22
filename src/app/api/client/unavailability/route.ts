@@ -10,7 +10,7 @@ import * as unavailabilityService from '@/services/clientUnavailability.service'
 export async function POST(req: Request) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['CLIENT'])) {
+    if (!session || !hasRole(session.user.roles, ['CLIENT'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['CLIENT'])) {
+    if (!session || !hasRole(session.user.roles, ['CLIENT'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 

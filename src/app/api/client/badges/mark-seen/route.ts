@@ -6,7 +6,7 @@ import { markBadgesSeen } from '@/services/badge.service';
 export async function POST() {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['CLIENT'])) {
+    if (!session || !hasRole(session.user.roles, ['CLIENT'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 

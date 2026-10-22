@@ -133,6 +133,17 @@ export const createUserSchema = z.object({
 
 export const updateUserSchema = createUserSchema.partial().omit({ password: true, email: true });
 
+// ─── ADMIN: STAFF & ACCESS (ADR-054) ─────────────────
+
+export const updateStaffAccessSchema = z
+  .object({
+    accessLevel: z.enum(['ADMIN', 'HEAD_COACH', 'TRAINER']).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => v.accessLevel !== undefined || v.isActive !== undefined, {
+    message: 'Provide accessLevel or isActive',
+  });
+
 export const listUsersSchema = paginationSchema.extend({
   role: userRoleSchema.optional(),
   search: z.string().trim().max(100).optional(),

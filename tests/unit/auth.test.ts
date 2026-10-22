@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { hasRole } from '@/lib/auth';
+import { hasRole, clearAccessCache } from '@/lib/auth';
 
 // ─── Mock Prisma ────────────────────────────────────────────────────
 vi.mock('@/lib/prisma', () => ({
@@ -252,6 +252,14 @@ describe('JWT and session callbacks', () => {
   });
 
   it('jwt callback preserves token when no user (subsequent calls)', async () => {
+    clearAccessCache();
+    mockedPrisma.user.findUnique.mockResolvedValue({
+      roles: ['CLIENT'],
+      isActive: true,
+      deletedAt: null,
+      trainerProfile: null,
+      clientProfile: { id: 'cp1' },
+    } as never);
     const jwt = authOptions.callbacks!.jwt!;
     const existingToken = { id: 'u1', role: 'CLIENT', sub: 'u1' };
 
@@ -286,5 +294,89 @@ describe('JWT and session callbacks', () => {
     expect(result.user.branchId).toBe('b1');
     expect(result.user.firstName).toBe('Admin');
     expect(result.user.lastName).toBe('User');
+  });
+});
+
+// ─── Role revalidation (ADR-054) ────────────────────────────────────
+
+describe('jwt role revalidation', () => {
+  const jwt = authOptions.callbacks!.jwt!;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const run = (token: Record<string, unknown>) => jwt({ token, user: undefined } as any);
+
+  function dbUser(overrides: Record<string, unknown> = {}) {
+    return {
+      roles: ['BRANCH_ADMIN'],
+      isActive: true,
+      deletedAt: null,
+      trainerProfile: null,
+      clientProfile: null,
+      ...overrides,
+    } as never;
+  }
+
+  beforeEach(() => {
+    clearAccessCache();
+    mockedPrisma.user.findUnique.mockReset();
+  });
+
+  it('picks up roles granted since login (admin promoted to head coach)', async () => {
+    mockedPrisma.user.findUnique.mockResolvedValue(
+      dbUser({ roles: ['BRANCH_ADMIN', 'TRAINER'], trainerProfile: { id: 'tp9' } }),
+    );
+
+    const token = await run({ id: 'u1', role: 'BRANCH_ADMIN', roles: ['BRANCH_ADMIN'] });
+
+    expect(token.roles).toEqual(['BRANCH_ADMIN', 'TRAINER']);
+    expect(token.role).toBe('BRANCH_ADMIN');
+    expect(token.trainerProfileId).toBe('tp9');
+  });
+
+  it('strips every role from a deactivated user', async () => {
+    mockedPrisma.user.findUnique.mockResolvedValue(dbUser({ isActive: false }));
+
+    const token = await run({ id: 'u1', role: 'BRANCH_ADMIN', roles: ['BRANCH_ADMIN'] });
+
+    expect(token.roles).toEqual([]);
+    expect(token.role).toBe('');
+  });
+
+  it('strips every role from a soft-deleted or missing user', async () => {
+    mockedPrisma.user.findUnique.mockResolvedValueOnce(dbUser({ deletedAt: new Date() }));
+    expect((await run({ id: 'u1', roles: ['BRANCH_ADMIN'] })).roles).toEqual([]);
+
+    clearAccessCache();
+    mockedPrisma.user.findUnique.mockResolvedValueOnce(null as never);
+    expect((await run({ id: 'u2', roles: ['TRAINER'] })).roles).toEqual([]);
+  });
+
+  it('keeps the token unchanged when the DB lookup fails', async () => {
+    mockedPrisma.user.findUnique.mockRejectedValue(new Error('connection reset'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const token = await run({ id: 'u1', role: 'BRANCH_ADMIN', roles: ['BRANCH_ADMIN'] });
+
+    expect(token.roles).toEqual(['BRANCH_ADMIN']);
+  });
+
+  it('reads the DB at most once per minute per user', async () => {
+    mockedPrisma.user.findUnique.mockResolvedValue(dbUser());
+
+    await run({ id: 'u1', roles: ['BRANCH_ADMIN'] });
+    await run({ id: 'u1', roles: ['BRANCH_ADMIN'] });
+    await run({ id: 'u1', roles: ['BRANCH_ADMIN'] });
+
+    expect(mockedPrisma.user.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it('session falls back to [role] for tokens minted without roles', async () => {
+    const sessionCb = authOptions.callbacks!.session!;
+    const result = await sessionCb({
+      session: { user: {}, expires: '' },
+      token: { id: 'u1', role: 'TRAINER' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    expect(result.user.roles).toEqual(['TRAINER']);
   });
 });

@@ -16,6 +16,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { Logo } from './Logo';
 import { NotificationBell } from './NotificationBell';
+import { SurfaceSwitcher } from './SurfaceSwitcher';
+import type { Surface } from '@/lib/roles';
 import type { NavItem } from '@/lib/constants';
 import { groupNavItems } from '@/lib/nav-groups';
 import { cn } from '@/lib/utils';
@@ -26,9 +28,13 @@ interface TopNavProps {
     lastName: string;
     email: string;
     role: string;
+    roleLabel?: string;
     branchName?: string;
   };
   navItems: NavItem[];
+  /** Surfaces the user can switch between (admin / trainer for a head coach). */
+  surfaces?: Surface[];
+  activeSurface?: Surface | null;
   branches?: { id: string; name: string }[];
   activeBranchId?: string;
   onBranchChange?: (branchId: string) => void;
@@ -38,6 +44,8 @@ interface TopNavProps {
 export function TopNav({
   user,
   navItems,
+  surfaces = [],
+  activeSurface = null,
   branches = [],
   activeBranchId,
   onBranchChange,
@@ -46,8 +54,10 @@ export function TopNav({
   const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
   const activeBranch = branches.find((b) => b.id === activeBranchId);
   const pathname = usePathname();
-  const roleLabel = user.role.replace('_', ' ');
+  const roleLabel = user.roleLabel ?? user.role.replace(/_/g, ' ');
   const { theme, setTheme } = useTheme();
+  // The Admin / Trainer switch needs room on small phones (360px).
+  const hasSwitcher = surfaces.length > 1;
 
   function toggleTheme() {
     setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -60,14 +70,16 @@ export function TopNav({
     >
       <div className="flex h-12 items-center justify-between px-3 lg:h-14 lg:px-4">
         {/* Left side — logo */}
-        <Link href="/" className="lg:hidden">
-          <Logo className="h-7" />
+        <Link href="/" className="shrink-0 lg:hidden">
+          <Logo className={hasSwitcher ? 'h-6 sm:h-7' : 'h-7'} />
         </Link>
         {/* Desktop spacer (logo is in sidebar) */}
         <div className="hidden lg:block" />
 
         {/* Right side — notifications, theme, profile, hamburger */}
-        <div className="flex items-center gap-1.5 lg:gap-2">
+        <div
+          className={cn('flex items-center lg:gap-2', hasSwitcher ? 'gap-1 sm:gap-1.5' : 'gap-1.5')}
+        >
           {/* Branch selector (admin only) */}
           {branches.length > 1 && onBranchChange && (
             <DropdownMenu>
@@ -86,6 +98,9 @@ export function TopNav({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+
+          {/* Admin / Trainer switch (head coach only) */}
+          <SurfaceSwitcher surfaces={surfaces} active={activeSurface} />
 
           {/* Notifications */}
           <NotificationBell />

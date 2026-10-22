@@ -3,28 +3,62 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { getServerSession as getNextAuthServerSession } from 'next-auth';
 import { compare } from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { computePrimaryRole } from '@/lib/roles';
+
+/** How long a server instance trusts a token's roles before re-reading them. */
+const ROLES_REVALIDATE_MS = 60_000;
+
+interface FreshAccess {
+  roles: string[];
+  trainerProfileId: string | null;
+  clientProfileId: string | null;
+  checkedAt: number;
+}
 
 /**
- * Compute the primary role from a roles array based on priority.
- * Primary role is used for routing and navigation.
+ * Per-instance cache of each user's current roles (ADR-054). The JWT lives for
+ * 7 days and rolls on activity, so without this a removed admin, or the old
+ * shared admin login once deactivated, would keep working indefinitely.
+ * App Router `getServerSession` cannot write the refreshed cookie back, so the
+ * cache is what keeps this to one indexed lookup per user per minute.
  */
-function computePrimaryRole(roles: string[]): string {
-  const rolePriority: Record<string, number> = {
-    SUPER_ADMIN: 0,
-    BRANCH_ADMIN: 1,
-    TRAINER: 2,
-    KICKBOXING_TRAINER: 3,
-    CROSSFIT_TRAINER: 4,
-    CLIENT: 5,
-  };
+const accessCache = new Map<string, FreshAccess>();
 
-  const sortedRoles = [...roles].sort((a, b) => {
-    const priorityA = rolePriority[a] ?? 999;
-    const priorityB = rolePriority[b] ?? 999;
-    return priorityA - priorityB;
-  });
+async function loadFreshAccess(userId: string): Promise<FreshAccess | null> {
+  const cached = accessCache.get(userId);
+  if (cached && Date.now() - cached.checkedAt < ROLES_REVALIDATE_MS) return cached;
 
-  return sortedRoles[0] || 'CLIENT';
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        roles: true,
+        isActive: true,
+        deletedAt: true,
+        trainerProfile: { select: { id: true } },
+        clientProfile: { select: { id: true } },
+      },
+    });
+    const fresh: FreshAccess = {
+      // A deactivated or deleted user keeps a session object but holds no roles,
+      // so every role-gated route and page rejects them.
+      roles: user && user.isActive && !user.deletedAt ? user.roles : [],
+      trainerProfileId: user?.trainerProfile?.id ?? null,
+      clientProfileId: user?.clientProfile?.id ?? null,
+      checkedAt: Date.now(),
+    };
+    accessCache.set(userId, fresh);
+    return fresh;
+  } catch (error) {
+    // A DB blip (e.g. mid-deploy) must not log everyone out: keep the token as is.
+    console.error('[auth] role revalidation failed:', error);
+    return null;
+  }
+}
+
+/** Test hook: forget cached roles. */
+export function clearAccessCache() {
+  accessCache.clear();
 }
 
 export const authOptions: NextAuthOptions = {
@@ -100,6 +134,17 @@ export const authOptions: NextAuthOptions = {
         token.lastName = user.lastName;
         token.trainerProfileId = user.trainerProfileId;
         token.clientProfileId = user.clientProfileId;
+        return token;
+      }
+
+      if (token.id) {
+        const fresh = await loadFreshAccess(token.id);
+        if (fresh) {
+          token.roles = fresh.roles;
+          token.role = fresh.roles.length > 0 ? computePrimaryRole(fresh.roles) : '';
+          token.trainerProfileId = fresh.trainerProfileId;
+          token.clientProfileId = fresh.clientProfileId;
+        }
       }
       return token;
     },
@@ -107,7 +152,9 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
-        session.user.roles = (token.roles as string[]) || [];
+        // Tokens always carry `roles`; the fallback covers any minted before it existed.
+        session.user.roles =
+          (token.roles as string[] | undefined) ?? (token.role ? [token.role as string] : []);
         session.user.branchId = token.branchId as string;
         session.user.firstName = token.firstName as string;
         session.user.lastName = token.lastName as string;

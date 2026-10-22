@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useVisiblePolling } from '@/hooks/useVisiblePolling';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useActiveSurface } from '@/hooks/useActiveSurface';
 import { Bell, BellOff, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { buttonVariants } from '@/components/ui/button';
@@ -30,8 +30,8 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { data: session } = useSession();
-  const role = session?.user?.role ?? '';
+  // Head coach: link notifications into whichever side they are using.
+  const { activeRole: role } = useActiveSurface();
   // -1 = not yet initialised (skip toast on first load)
   const prevUnreadRef = useRef(-1);
 

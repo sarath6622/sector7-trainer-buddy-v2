@@ -19,6 +19,7 @@ import {
   Package,
   Monitor,
   Scale,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -35,6 +36,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Clients', href: '/admin/clients', icon: Users, group: 'People' },
   { label: 'Trainers', href: '/admin/trainers', icon: UserCheck, group: 'People' },
   { label: 'Package Audit', href: '/admin/package-audit', icon: Scale, group: 'People' },
+  { label: 'Staff & Access', href: '/admin/staff', icon: ShieldCheck, group: 'People' },
   // Operations
   { label: 'Shifts', href: '/admin/shifts', icon: Clock, group: 'Operations' },
   { label: 'Scheduling', href: '/admin/scheduling', icon: Calendar, group: 'Operations' },

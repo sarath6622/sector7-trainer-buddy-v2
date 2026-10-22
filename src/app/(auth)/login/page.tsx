@@ -8,14 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react';
+import { SURFACE_COOKIE, defaultPathFor } from '@/lib/roles';
 
-const ROLE_REDIRECT: Record<string, string> = {
-  SUPER_ADMIN: '/admin',
-  BRANCH_ADMIN: '/admin',
-  TRAINER: '/trainer',
-  KICKBOXING_TRAINER: '/trainer',
-  CLIENT: '/client',
-};
+function readCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]!) : null;
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -50,8 +48,8 @@ function LoginForm() {
       const meResponse = await fetch('/api/auth/me');
       if (meResponse.ok) {
         const { data } = await meResponse.json();
-        const role = data.user.role as string;
-        const redirectTo = callbackUrl ?? ROLE_REDIRECT[role] ?? '/';
+        const roles = (data.user.roles as string[] | undefined) ?? [data.user.role as string];
+        const redirectTo = callbackUrl ?? defaultPathFor(roles, readCookie(SURFACE_COOKIE)) ?? '/';
         router.push(redirectTo);
         router.refresh();
       } else {

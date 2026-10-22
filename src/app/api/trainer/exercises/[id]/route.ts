@@ -7,7 +7,7 @@ import * as exerciseService from '@/services/exercise.service';
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER'])) {
+    if (!session || !hasRole(session.user.roles, ['TRAINER'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 
@@ -23,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER'])) {
+    if (!session || !hasRole(session.user.roles, ['TRAINER'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 
@@ -48,7 +48,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['TRAINER'])) {
+    if (!session || !hasRole(session.user.roles, ['TRAINER'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 

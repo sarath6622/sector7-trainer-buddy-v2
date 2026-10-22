@@ -43,6 +43,7 @@ export function createMockSession(
     userId?: string;
     email?: string;
     role?: string;
+    roles?: string[];
     branchId?: string;
   } = {},
 ) {
@@ -51,6 +52,7 @@ export function createMockSession(
       id: overrides.userId ?? 'test-user-id',
       email: overrides.email ?? 'test@sector7.com',
       role: overrides.role ?? 'BRANCH_ADMIN',
+      roles: overrides.roles ?? [overrides.role ?? 'BRANCH_ADMIN'],
       branchId: overrides.branchId ?? 'test-branch-id',
       firstName: 'Test',
       lastName: 'User',

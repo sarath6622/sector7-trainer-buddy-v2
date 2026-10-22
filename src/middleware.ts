@@ -1,6 +1,7 @@
 import { getToken } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { SURFACE_COOKIE, defaultPathFor, surfaceOf, surfacesFor } from '@/lib/roles';
 
 /**
  * Public paths that don't require a NextAuth session at the middleware layer.
@@ -18,25 +19,19 @@ import type { NextRequest } from 'next/server';
  */
 const PUBLIC_PATHS = ['/api/auth', '/tv', '/api/admin/tv/dashboard', '/api/admin/tv/live'];
 
-/** Role-to-path prefix mapping for route protection */
-const ROLE_PATH_MAP: Record<string, string[]> = {
-  SUPER_ADMIN: ['/admin'],
-  BRANCH_ADMIN: ['/admin'],
-  TRAINER: ['/trainer'],
-  KICKBOXING_TRAINER: ['/trainer'],
-  CROSSFIT_TRAINER: ['/trainer'],
-  CLIENT: ['/client'],
-};
+/**
+ * Every role the token holds (ADR-054). A head coach (admin + trainer) may open
+ * both /admin and /trainer. Older tokens without `roles` fall back to `role`.
+ */
+function tokenRoles(token: { role?: unknown; roles?: unknown }): string[] {
+  if (Array.isArray(token.roles)) return token.roles as string[];
+  return typeof token.role === 'string' && token.role ? [token.role] : [];
+}
 
-/** Default redirect path after login for each role */
-const ROLE_DEFAULT_PATH: Record<string, string> = {
-  SUPER_ADMIN: '/admin',
-  BRANCH_ADMIN: '/admin',
-  TRAINER: '/trainer',
-  KICKBOXING_TRAINER: '/trainer',
-  CROSSFIT_TRAINER: '/trainer',
-  CLIENT: '/client',
-};
+/** Landing path for this token, preferring the surface they last switched to. */
+function landingPath(token: { role?: unknown; roles?: unknown }, request: NextRequest) {
+  return defaultPathFor(tokenRoles(token), request.cookies.get(SURFACE_COOKIE)?.value);
+}
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
@@ -51,7 +46,7 @@ export async function middleware(request: NextRequest) {
   // Page-route-only cost: /api/* never reaches the middleware (see matcher).
   if (pathname === '/login' || pathname.startsWith('/login/')) {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-    const defaultPath = token?.role ? ROLE_DEFAULT_PATH[token.role as string] : undefined;
+    const defaultPath = token ? landingPath(token, request) : undefined;
     // Only bounce tokens that would survive the branchId guard below —
     // otherwise the dashboard redirect would just loop back here.
     if (token && defaultPath && token.branchId) {
@@ -94,7 +89,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const role = token.role as string;
   const branchId = token.branchId as string | undefined;
 
   // Guard: branchId must be present for any non-auth route
@@ -105,8 +99,7 @@ export async function middleware(request: NextRequest) {
 
   // Root path → redirect to role-specific dashboard
   if (pathname === '/') {
-    const defaultPath = ROLE_DEFAULT_PATH[role] ?? '/login';
-    return NextResponse.redirect(new URL(defaultPath, request.url));
+    return NextResponse.redirect(new URL(landingPath(token, request) ?? '/login', request.url));
   }
 
   // Role-based route protection for dashboard pages
@@ -115,15 +108,14 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/trainer') ||
     pathname.startsWith('/client')
   ) {
-    const allowedPaths = ROLE_PATH_MAP[role];
-    if (!allowedPaths) {
+    const surfaces = surfacesFor(tokenRoles(token));
+    if (surfaces.length === 0) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    const hasAccess = allowedPaths.some((p) => pathname.startsWith(p));
-    if (!hasAccess) {
-      const defaultPath = ROLE_DEFAULT_PATH[role] ?? '/login';
-      return NextResponse.redirect(new URL(defaultPath, request.url));
+    const surface = surfaceOf(pathname);
+    if (!surface || !surfaces.includes(surface)) {
+      return NextResponse.redirect(new URL(landingPath(token, request) ?? '/login', request.url));
     }
   }
 

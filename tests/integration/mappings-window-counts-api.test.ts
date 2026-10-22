@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockGetServerSession = vi.fn();
 vi.mock('@/lib/auth', () => ({
   getServerSession: () => mockGetServerSession(),
-  hasRole: (role: string, allowed: string[]) => allowed.includes(role),
+  hasRole: (role: string | string[], allowed: string[]) =>
+    [role].flat().some((r) => allowed.includes(r)),
 }));
 
 const mockGetPackageWindowCounts = vi.fn();

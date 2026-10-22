@@ -4,6 +4,38 @@
 
 ---
 
+## Staff & Access — per-person roles, Head Coach (2026-10-22)
+
+### S7-AUTH-01: Admin / Head Coach / Trainer accounts, surface switcher, role revalidation
+
+- **Agent:** @architect + @backend + @ui + @qa
+- **Completed:** 2026-10-22, on `main` working tree, **not committed, not deployed. No migration.**
+- **Decisions:** ADR-054 (operator picked: head coach = admin + trainer combo, top-bar switcher,
+  new Staff & Access page, any admin may grant admin access).
+- **Files Changed:**
+  - `src/lib/roles.ts` (created): access levels, surfaces, landing paths, primary role
+  - `src/lib/auth.ts`: role revalidation in `jwt` (60s per-instance cache), `roles` fallback
+  - `src/middleware.ts`: multi-surface access, `s7_surface` cookie on `/` and `/login` bounce
+  - 137 route files: `hasRole(session.user.role, …)` changed to `hasRole(session.user.roles, …)`
+  - `src/services/staff.service.ts` (created); `src/services/user.service.ts` (admin guards on update/delete)
+  - `src/app/api/admin/staff/route.ts`, `src/app/api/admin/staff/[id]/route.ts` (created)
+  - `src/lib/validators.ts` (`updateStaffAccessSchema`); `src/lib/constants.ts` (nav item)
+  - `src/app/(dashboard)/admin/staff/page.tsx` (created)
+  - Shell: `src/app/(dashboard)/layout.tsx`, `src/components/layout/TopNav.tsx`,
+    `src/components/layout/SurfaceSwitcher.tsx` (created), `src/hooks/useActiveSurface.ts` (created),
+    `NotificationBell.tsx`, `notifications/page.tsx`
+  - `src/app/page.tsx`, `src/app/(auth)/login/page.tsx`, `src/app/api/auth/me/route.ts` (returns `roles`)
+  - Tests: `tests/unit/roles.test.ts`, `middleware-roles.test.ts`, `staff-service.test.ts`,
+    `tests/integration/staff-api.test.ts`, `auth.test.ts` (revalidation block),
+    `tests/e2e/staff.spec.ts` (4 specs). `tests/helpers.ts` + 7 integration mocks updated for `roles`.
+- **Verification:** unit/integration 874 pass / 49 fail, the same 49 that fail on clean `HEAD`
+  (0 new). Playwright: full suite 13/13. Type-check clean; lint has 0 errors in `src`/`tests`.
+  Header checked at 360px and 390px: no overflow.
+- **Memory Updated:** api-contracts.md (Staff & Access + session-roles rule), decisions.md
+  (ADR-054), architecture.md.
+
+---
+
 ## Training Routines — Phase 28 A + B (2026-10-18)
 
 ### S7-RT-01 … S7-RT-09: Hevy-style routines, assignable per client, started from the session logger

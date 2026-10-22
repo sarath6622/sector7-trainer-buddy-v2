@@ -1,13 +1,7 @@
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/auth';
-
-const ROLE_REDIRECT: Record<string, string> = {
-  SUPER_ADMIN: '/admin',
-  BRANCH_ADMIN: '/admin',
-  TRAINER: '/trainer',
-  KICKBOXING_TRAINER: '/trainer',
-  CLIENT: '/client',
-};
+import { SURFACE_COOKIE, defaultPathFor } from '@/lib/roles';
 
 export default async function RootPage() {
   const session = await getServerSession();
@@ -16,6 +10,6 @@ export default async function RootPage() {
     redirect('/login');
   }
 
-  const destination = ROLE_REDIRECT[session.user.role] ?? '/login';
-  redirect(destination);
+  const preferred = (await cookies()).get(SURFACE_COOKIE)?.value;
+  redirect(defaultPathFor(session.user.roles, preferred) ?? '/login');
 }

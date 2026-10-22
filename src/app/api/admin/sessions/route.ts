@@ -8,7 +8,7 @@ import type { Prisma } from '@prisma/client';
 export async function GET(req: Request) {
   try {
     const session = await getServerSession();
-    if (!session || !hasRole(session.user.role, ['SUPER_ADMIN', 'BRANCH_ADMIN'])) {
+    if (!session || !hasRole(session.user.roles, ['SUPER_ADMIN', 'BRANCH_ADMIN'])) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
     }
 
