@@ -721,7 +721,7 @@ shared logger.
 **⚠ ADR-052 — route access ≠ permission to read trainer notes.** Because the client
 can legitimately call `workout-history` for their own data (their session page's
 History tab uses this exact endpoint), the per-exercise trainer note is gated on a
-*separate* helper, `canReadTrainerPrivateNotes(user)` (staff roles only), passed down
+_separate_ helper, `canReadTrainerPrivateNotes(user)` (staff roles only), passed down
 as `listWorkoutHistory({ includeNotes })`. That flag drives the Prisma `select`, so for
 a client caller the column never leaves the database and the `notes` key is **absent**
 from each exercise — not `null`. `/api/admin/users/[id]/workout-history` passes `true`
@@ -1199,6 +1199,150 @@ Auth: channel is public. Payloads are non-sensitive (first/last name + lift
 weight — same as the wall display already broadcasts via polling). The TV
 client auths to the polling endpoints with its bearer token; the Pusher
 channel is just a notification stream.
+
+---
+
+## Training Routines (ADR-053 — Added 2026-10-18)
+
+Hevy-style routines grouped into programs. A **library** program
+(`clientProfileId = null`) is a branch template. **Assigning** deep-copies it
+into a **client copy** (`clientProfileId` set). A client has at most one
+active copy, and library edits never reach existing copies. All routes are
+branch-scoped, and every mutation writes `auditLog()`.
+
+Roles:
+
+- `STAFF` = TRAINER | BRANCH_ADMIN | SUPER_ADMIN.
+- **manage-client** = BRANCH_ADMIN/SUPER_ADMIN for any client in the branch, or
+  a TRAINER who holds an **active `PtPackage`** with that client. Otherwise
+  `403 ROUTINE_FORBIDDEN`.
+
+```
+GET    /api/routine-programs                         → { data: ProgramSummary[] }
+       Library programs only. ?includeArchived=true to include archived. Role: STAFF.
+POST   /api/routine-programs                         → body ProgramInput → 201 { data: ProgramDetail }
+       Creates a LIBRARY program. Role: STAFF.
+GET    /api/routine-programs/[id]                    → { data: ProgramDetail }
+       Library: STAFF. Client copy: STAFF, or the CLIENT who owns it.
+PUT    /api/routine-programs/[id]                    → body ProgramInput → { data: ProgramDetail }
+       Replaces the whole nested document (delete-then-recreate in one transaction).
+       Library: STAFF. Client copy: manage-client.
+       Sessions already linked to a replaced routine keep their history; their
+       routineId is preserved when the routine's id is sent back (see RoutineInput.id).
+DELETE /api/routine-programs/[id]                    → { data: { id } }
+       Library programs only: soft-archive (isArchived=true). Role: STAFF.
+       Client copies are removed with DELETE /clients/[clientProfileId] below.
+POST   /api/routine-programs/[id]/assign             → body { clientProfileId } → 201 { data: ProgramDetail }
+       [id] must be a non-archived LIBRARY program. Deep-copies it to the client and
+       deactivates the client's previous active copy (same transaction). Role: manage-client.
+GET    /api/routine-programs/clients/[clientProfileId] → { data: ClientProgram | null }
+       The client's active copy plus the rotation pointer.
+       Role: canReadClientTrainingData (staff, or the client themselves).
+DELETE /api/routine-programs/clients/[clientProfileId] → { data: { id } | null }
+       Deactivates the client's active copy (unassign). Role: manage-client.
+
+POST   /api/sessions/[id]/routine                    → body { routineId } → { data: ApplyRoutineResult }
+       TRAINER of the session only (clients cannot start a routine, operator decision).
+       Session must be IN_PROGRESS (409 SESSION_NOT_ACTIVE otherwise). routineId must
+       belong to the session client's ACTIVE copy (404 ROUTINE_NOT_FOUND otherwise).
+       One transaction: sets SessionInstance.routineId and creates ZERO-SET WorkoutLog
+       rows for the routine's exercises not already in the session, appended after the
+       existing ones in routine order. Idempotent. Fires WORKOUT_UPDATED so the client's
+       page refetches. Audit: SESSION_ROUTINE_APPLIED.
+       SWITCHING (2026-10-22): if the session already follows a DIFFERENT routine, that
+       routine's UNTOUCHED exercises (no sets, not completed, no note) that are not in the
+       new routine are removed first. Anything with logged work is kept.
+DELETE /api/sessions/[id]/routine                    → { data: { routineId: null; removedExerciseIds: string[] } }
+       TRAINER of the session only. Clears routineId and removes the routine's UNTOUCHED
+       exercises (no sets, not completed, no note); exercises with logged work stay.
+       Fires WORKOUT_UPDATED. Audit: SESSION_ROUTINE_DETACHED.
+```
+
+```typescript
+RoutineSetType = 'WARMUP' | 'NORMAL' | 'FAILURE' | 'DROP';
+
+ProgramInput = {
+  name: string;                       // 1–80
+  notes?: string | null;              // ≤ 2000, "Program Notes" shown to the client
+  routines: RoutineInput[];           // 1–14, order = array order
+};
+RoutineInput = {
+  id?: string;                        // existing routine id → kept on PUT so linked sessions stay linked
+  name: string;                       // 1–80, e.g. "Day A — Push"
+  notes?: string | null;              // ≤ 1000
+  exercises: RoutineExerciseInput[];  // 1–30, order = array order, exerciseId unique within a routine
+};
+RoutineExerciseInput = {
+  exerciseId: string;                 // active Exercise
+  restSec?: number | null;            // 0–600
+  notes?: string | null;              // ≤ 500, coaching cue shown every time
+  sets: RoutineSetInput[];            // 1–10, setNumber = position + 1
+};
+RoutineSetInput = {
+  setType?: RoutineSetType;           // default NORMAL
+  targetRepsMin?: number | null;      // 1–200
+  targetRepsMax?: number | null;      // 1–200, ≥ targetRepsMin when both set
+  targetWeightKg?: number | null;     // 0–1000
+  targetDurationSec?: number | null;  // 1–36000
+  targetStepsCount?: number | null;   // 1–100000
+  targetDistance?: number | null;     // > 0, in the exercise's secondaryMetric unit (KM/METERS)
+};
+
+ProgramSummary = {
+  id: string; name: string; notes: string | null; isArchived: boolean;
+  routineCount: number; exerciseCount: number;
+  routines: { id: string; name: string; exerciseCount: number }[];
+  updatedAt: string;
+};
+ProgramDetail = {
+  id: string; name: string; notes: string | null;
+  clientProfileId: string | null; sourceProgramId: string | null;
+  isActive: boolean; isArchived: boolean; updatedAt: string;
+  routines: RoutineDetail[];          // by orderIndex
+};
+RoutineDetail = {
+  id: string; name: string; notes: string | null; orderIndex: number;
+  exercises: {
+    id: string; exerciseId: string; orderIndex: number;
+    restSec: number | null; notes: string | null;
+    exercise: { id: string; name: string; targetMuscleGroup: string; category: string;
+                exerciseType: ExerciseType; secondaryMetric: SecondaryMetric };
+    sets: { setNumber: number; setType: RoutineSetType; targetRepsMin: number | null;
+            targetRepsMax: number | null; targetWeightKg: number | null;
+            targetDurationSec: number | null; targetStepsCount: number | null;
+            targetDistance: number | null }[];
+  }[];
+};
+ClientProgram = ProgramDetail & {
+  nextRoutineId: string | null;       // rotation: routine after the one used in the client's most
+                                      // recent session that has a routineId from THIS copy (wraps);
+                                      // first routine when none used yet. A session only counts if
+                                      // it is IN_PROGRESS/COMPLETED and has ≥1 logged set
+                                      // (2026-10-22) — abandoned or emptied routine sessions don't.
+  lastUsed: { routineId: string; sessionId: string; scheduledDate: string } | null;
+};
+ApplyRoutineResult = {
+  routineId: string;
+  addedExerciseIds: string[];
+  skippedExerciseIds: string[];
+  removedExerciseIds: string[];       // untouched exercises of the PREVIOUS routine (switching)
+};
+```
+
+**Session payloads gain `routine`.** `GET /api/trainer/sessions/[id]` and
+`GET /api/client/sessions/[id]` both add:
+
+```typescript
+routine: {
+  id: string; name: string; notes: string | null;
+  exercises: { exerciseId: string; orderIndex: number; restSec: number | null;
+               notes: string | null; sets: RoutineDetail['exercises'][number]['sets'] }[];
+} | null;
+```
+
+The logger renders target strips and ghost rows from this block on either
+device. Routine notes are coaching cues and are client-visible, unlike the
+trainer-private `WorkoutLog.notes` (ADR-052).
 
 ---
 

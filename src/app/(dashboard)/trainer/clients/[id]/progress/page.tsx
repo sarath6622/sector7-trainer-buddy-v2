@@ -35,6 +35,7 @@ import WorkoutProgressionPanel, {
   type ExerciseSummary,
 } from '@/components/charts/WorkoutProgressionPanel';
 import { BadgeGrid, type EarnedBadge, type LockedBadge } from '@/components/badges/BadgeGrid';
+import { ClientProgramCard } from '@/components/routines/ClientProgramCard';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -357,6 +358,9 @@ export default function TrainerClientProgressPage() {
           <p className="text-xs text-muted-foreground">{entries.length} entries recorded</p>
         </div>
       </div>
+
+      {/* ADR-053: the client's training program (assign / edit copy / next up) */}
+      <ClientProgramCard clientProfileId={clientProfileId} editBasePath="/trainer/routines" />
 
       {/* Tabs — top-level navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>

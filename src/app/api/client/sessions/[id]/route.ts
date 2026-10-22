@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession, hasRole } from '@/lib/auth';
 import { toErrorResponse } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
+import { SESSION_ROUTINE_SELECT } from '@/services/routine.service';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -59,6 +60,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           },
           orderBy: { orderIndex: 'asc' },
         },
+        // ADR-053: routine targets render on the client's logger too (read-only
+        // guidance — clients can't start a routine). Routine notes are
+        // coaching cues, so unlike WorkoutLog.notes they are client-visible.
+        routine: { select: SESSION_ROUTINE_SELECT },
       },
     });
 

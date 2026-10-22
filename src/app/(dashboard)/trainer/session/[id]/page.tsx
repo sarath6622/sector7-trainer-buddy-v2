@@ -19,6 +19,7 @@ import type {
 } from '@/lib/pusher';
 import { RestTimerPillInline, RestTimerSheet } from '@/components/session/RestTimerUI';
 import { SessionHero, initials, lastActivityMsOf } from '@/components/session/SessionHero';
+import type { SessionRoutine } from '@/lib/routine-format';
 
 interface SessionData {
   id: string;
@@ -60,6 +61,8 @@ interface SessionData {
       createdAt?: string;
     }[];
   }[];
+  // ADR-053: set when this session was started from a routine.
+  routine?: SessionRoutine | null;
 }
 
 // `initials` + `lastActivityMsOf` live in @/components/session/SessionHero;
@@ -617,7 +620,9 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           progress ring; remaining sessions sit beneath in an "Others in Session"
           card showing idle time, so the trainer can spot a stalled client at a
           glance without leaving the active client's workout log. */}
-      <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+      {/* -top-4/-top-6 cancels <main>'s padding: a sticky `top-0` would otherwise
+          stick 16px below the header, leaving a gap above the full-width hero. */}
+      <div className="sticky -top-4 z-20 border-b bg-background/95 backdrop-blur md:-top-6">
         {(() => {
           const activeTab = tabs.find((s) => s.id === activeId) ?? tabs[0];
           const otherTabs = tabs.filter((s) => s.id !== activeId);
@@ -630,7 +635,12 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           const expectedMin = defaultDurationMin ?? detailed.durationMin ?? s.durationMin;
 
           return (
-            <div role="tablist" aria-label="Active sessions" className="px-3 pb-2.5 space-y-2">
+            <div
+              role="tablist"
+              aria-label="Active sessions"
+              // Flush hero: bottom padding only when the other-session chips sit below it.
+              className={`space-y-2 px-3 ${otherTabs.length > 0 ? 'pb-2.5' : ''}`}
+            >
               <SessionHero
                 name={heroName}
                 initials={heroInitials}
@@ -679,7 +689,11 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
       {/* ── Workout logger — page owns scroll, button stays pinned to bottom ── */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
         <WorkoutLogger
-          key={session.id}
+          // ADR-053: remount when the session's routine changes (start / switch /
+          // remove) so the log is rebuilt from the server. The logger otherwise keeps
+          // its local copy, and skips hydration entirely when the server has zero
+          // exercises — which left removed routine exercises on screen.
+          key={`${session.id}:${session.routine?.id ?? 'none'}`}
           sessionInstanceId={session.id}
           clientProfileId={session.client.id}
           clientName={`${session.client.user.firstName} ${session.client.user.lastName}`}
@@ -687,6 +701,15 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
           // ADR-052 — the trainer's own session screen is the one place the
           // per-exercise note can be read and written.
           allowExerciseNotes
+          // ADR-053 — targets + "Start routine" (trainer-only).
+          routine={session.routine ?? null}
+          canApplyRoutine={isActive}
+          onRoutineChanged={() => {
+            void (async () => {
+              const refreshed = await fetchSession(session.id);
+              if (refreshed) setSessionMap((prev) => ({ ...prev, [session.id]: refreshed }));
+            })();
+          }}
           onUnsavedChange={setHasUnsaved}
           onForeground={() => {
             // Phone unlocked / tab refocused — pull fresh server state so the

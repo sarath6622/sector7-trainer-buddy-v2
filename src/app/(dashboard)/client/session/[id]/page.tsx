@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { WorkoutLogger } from '@/components/workout/WorkoutLogger';
 import { RestTimerPillFloating, RestTimerSheet } from '@/components/session/RestTimerUI';
 import { SessionHero, initials, lastActivityMsOf } from '@/components/session/SessionHero';
+import type { SessionRoutine } from '@/lib/routine-format';
 
 type ExerciseType = 'WEIGHTED' | 'BODYWEIGHT' | 'DURATION' | 'CARDIO';
 
@@ -79,6 +80,8 @@ interface SessionData {
   client?: { id: string; user: { firstName: string; lastName: string } };
   trainer: { user: { firstName: string; lastName: string } };
   workoutLogs: WorkoutLog[];
+  // ADR-053: targets when the trainer started this session from a routine.
+  routine?: SessionRoutine | null;
 }
 
 function formatTime12(t: string) {
@@ -240,22 +243,20 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
   const lastActivityMs = lastActivityMsOf(session);
 
   return (
-    <div
-      className="-m-4 md:-m-6 flex flex-col bg-background"
-      style={{ height: containerHeight }}
-    >
+    <div className="-m-4 md:-m-6 flex flex-col bg-background" style={{ height: containerHeight }}>
       {/* ── Sticky hero card ── */}
       {/* No back button here — exit paths live in the global top nav
           (hamburger menu + logo), which matches the trainer session page's
           chrome-free shell. Less competing UI; the hero gets the focus. */}
-      <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+      {/* -top-4/-top-6 cancels <main>'s padding so the hero sits flush under the header. */}
+      <div className="sticky -top-4 z-20 border-b bg-background/95 backdrop-blur md:-top-6">
         {/* Hero only renders once the trainer has started the session. For
             SCHEDULED, the body below shows a "Waiting for trainer to start"
             empty state instead — there's no elapsed timer to anchor a hero.
             For ended sessions we also skip the hero: the live timer would be
             meaningless and the read-only summary owns its own header. */}
         {!isScheduled && !isEnded && (
-          <div className="px-3 py-2.5">
+          <div className="px-3">
             <SessionHero
               // Client-side: the hero subject is the trainer ("With X").
               // The avatar initials match so the visual identity stays
@@ -322,7 +323,11 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
           <WorkoutLogger
-            key={session.id}
+            // ADR-053: remount when the session's routine changes (start / switch /
+            // remove) so the log is rebuilt from the server. The logger otherwise keeps
+            // its local copy, and skips hydration entirely when the server has zero
+            // exercises — which left removed routine exercises on screen.
+            key={`${session.id}:${session.routine?.id ?? 'none'}`}
             sessionInstanceId={session.id}
             // Client-scoped exercise progress modal opens inside the logger
             // (ADR-017 — passing clientProfileId enables the per-exercise
@@ -330,6 +335,8 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
             // but the WorkoutLogger handles `undefined` by hiding the button.
             clientProfileId={session.client?.id}
             existingLogs={session.workoutLogs}
+            // ADR-053: read-only targets; clients can't start a routine.
+            routine={session.routine ?? null}
             onUnsavedChange={setHasUnsaved}
             onForeground={() => {
               // Phone unlocked / tab refocused — refetch so stale data from a
@@ -351,14 +358,14 @@ export default function ClientSessionPage({ params }: { params: Promise<{ id: st
       {!restTimerOpen &&
         !keyboardOpen &&
         (restTimer.isRunning || restTimer.isPaused || restTimer.isDone) && (
-        <RestTimerPillFloating
-          remaining={restTimer.remaining}
-          isPaused={restTimer.isPaused}
-          isDone={restTimer.isDone}
-          onOpen={() => setRestTimerOpen(true)}
-          onStop={restTimer.stop}
-        />
-      )}
+          <RestTimerPillFloating
+            remaining={restTimer.remaining}
+            isPaused={restTimer.isPaused}
+            isDone={restTimer.isDone}
+            onOpen={() => setRestTimerOpen(true)}
+            onStop={restTimer.stop}
+          />
+        )}
 
       {/* Rest timer sheet */}
       {restTimerOpen && (

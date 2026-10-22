@@ -6,31 +6,31 @@
 
 ## Tech Stack
 
-| Layer             | Technology                           | Version | Notes                                           |
-| ----------------- | ------------------------------------ | ------- | ----------------------------------------------- |
-| **Framework**     | Next.js (App Router)                 | 16.2    | Full-stack: pages + API routes + server actions |
-| **Language**      | TypeScript                           | 5.x     | Strict mode enabled                             |
-| **Database**      | PostgreSQL                           | 16      | Primary data store                              |
-| **ORM**           | Prisma                               | 5.x     | Schema-first, migrations, type-safe queries     |
-| **Cache**         | Redis                                | 7.x     | Session store, rate limiting, real-time pub/sub |
-| **Auth**          | NextAuth.js (Auth.js)                | 4.24    | RBAC with JWT session strategy                  |
-| **Styling**       | Tailwind CSS                         | 4.x     | Utility-first, mobile-first, dark theme         |
-| **Font (Sans)**   | Inter                                | latest  | Primary UI font via next/font/google            |
-| **Font (Mono)**   | JetBrains Mono                       | latest  | Code/mono font via next/font/google             |
-| **UI Primitives** | shadcn/ui                            | latest  | Copy-paste components, fully customizable       |
-| **Charts**        | Recharts                             | 2.x     | Client progress, admin dashboards               |
-| **Calendar**      | @fullcalendar/react                  | 6.x     | Trainer schedule, admin scheduling view         |
-| **Forms**         | React Hook Form + Zod                | latest  | Validated forms with shared schemas             |
-| **Tables**        | TanStack Table                       | 8.x     | Client lists, audit logs, reports               |
-| **Excel Export**  | SheetJS (xlsx)                       | latest  | Dashboard data export                           |
-| **Notifications** | WhatsApp Business API + FCM          | —       | Dual channel with fallback                      |
-| **Real-Time**     | Socket.io or Pusher                  | —       | Session timer sync, live updates                |
-| **Offline**       | IndexedDB (Dexie.js) + Workbox       | —       | Workout logging, background sync                |
-| **Testing**       | Vitest + Testing Library + Supertest | —       | Unit + integration + API                        |
-| **E2E Testing**   | Playwright                           | latest  | Critical path testing                           |
-| **Linting**       | ESLint + Prettier                    | —       | Enforced via pre-commit hooks                   |
-| **Deployment**    | Vercel                               | —       | Edge-optimized, auto-scaling                    |
-| **Dev Infra**     | Docker Compose                       | —       | PostgreSQL + Redis for local dev                |
+| Layer             | Technology                           | Version | Notes                                                                                     |
+| ----------------- | ------------------------------------ | ------- | ----------------------------------------------------------------------------------------- |
+| **Framework**     | Next.js (App Router)                 | 16.2    | Full-stack: pages + API routes + server actions                                           |
+| **Language**      | TypeScript                           | 5.x     | Strict mode enabled                                                                       |
+| **Database**      | PostgreSQL                           | 16      | Primary data store                                                                        |
+| **ORM**           | Prisma                               | 5.x     | Schema-first, migrations, type-safe queries                                               |
+| **Cache**         | Redis                                | 7.x     | Session store, rate limiting, real-time pub/sub                                           |
+| **Auth**          | NextAuth.js (Auth.js)                | 4.24    | RBAC with JWT session strategy                                                            |
+| **Styling**       | Tailwind CSS                         | 4.x     | Utility-first, mobile-first, dark theme                                                   |
+| **Font (Sans)**   | Inter                                | latest  | Primary UI font via next/font/google                                                      |
+| **Font (Mono)**   | JetBrains Mono                       | latest  | Code/mono font via next/font/google                                                       |
+| **UI Primitives** | shadcn/ui                            | latest  | Copy-paste components, fully customizable                                                 |
+| **Charts**        | Recharts                             | 2.x     | Client progress, admin dashboards                                                         |
+| **Calendar**      | @fullcalendar/react                  | 6.x     | Trainer schedule, admin scheduling view                                                   |
+| **Forms**         | React Hook Form + Zod                | latest  | Validated forms with shared schemas                                                       |
+| **Tables**        | TanStack Table                       | 8.x     | Client lists, audit logs, reports                                                         |
+| **Excel Export**  | SheetJS (xlsx)                       | latest  | Dashboard data export                                                                     |
+| **Notifications** | WhatsApp Business API + FCM          | —       | Dual channel with fallback                                                                |
+| **Real-Time**     | Socket.io or Pusher                  | —       | Session timer sync, live updates                                                          |
+| **Offline**       | IndexedDB (Dexie.js) + Workbox       | —       | Workout logging, background sync                                                          |
+| **Testing**       | Vitest + Testing Library + Supertest | —       | Unit + integration + API                                                                  |
+| **E2E Testing**   | Playwright (`@playwright/test`)      | 1.63    | Critical path testing — `npm run test:e2e`, see `tests/e2e/README.md` (set up 2026-10-22) |
+| **Linting**       | ESLint + Prettier                    | —       | Enforced via pre-commit hooks                                                             |
+| **Deployment**    | Vercel                               | —       | Edge-optimized, auto-scaling                                                              |
+| **Dev Infra**     | Docker Compose                       | —       | PostgreSQL + Redis for local dev                                                          |
 
 ---
 
@@ -92,6 +92,7 @@ src/components/charts/      → Recharts wrappers (ProgressChart, AttendanceChar
 src/components/calendar/    → FullCalendar wrappers (TrainerCalendar, ScheduleCalendar)
 src/components/timer/       → Session timer (SessionTimer, TimerDisplay)
 src/components/layout/      → Shell (Sidebar, TopNav, RoleSwitcher, BranchSelector)
+src/components/routines/    → Training routines (ADR-053): ProgramEditorView, RoutineLibraryView, ClientProgramCard, RoutineStartCard (logger), MyProgramCard (client)
 src/app/(dashboard)/admin/  → Admin-specific page compositions
 src/app/(dashboard)/trainer/ → Trainer-specific page compositions
 src/app/(dashboard)/client/ → Client-specific page compositions

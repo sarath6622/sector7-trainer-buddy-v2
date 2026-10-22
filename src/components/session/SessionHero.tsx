@@ -251,7 +251,9 @@ export function SessionHero({
     <div
       role="region"
       aria-label={`${name}, ${status.label}`}
-      className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 px-3.5 py-2.5 text-white shadow-lg shadow-purple-900/20"
+      // Full-bleed, square: both session pages wrap the hero in `px-3`, so
+      // -mx-3 runs it edge to edge, matching the full-width exercise cards.
+      className="relative -mx-3 overflow-hidden bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 px-4 py-2.5 text-white shadow-lg shadow-purple-900/20"
     >
       <div className="flex items-center gap-3">
         {/* Avatar with story-ring progress */}

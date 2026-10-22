@@ -30,6 +30,19 @@ import { Input } from '@/components/ui/input';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 import { MuscleGroupPicker, GROUP_THEME, type PickedExercise } from './MuscleGroupPicker';
 import { WorkoutHistoryList } from './WorkoutHistoryList';
+import { RoutineStartCard, RoutineSwitcher } from '@/components/routines/RoutineStartCard';
+import {
+  SET_TYPE_LABEL,
+  SET_TYPE_SHORT,
+  formatRest,
+  formatSetTarget,
+  ghostTargets,
+  routineTargetsByExercise,
+  summarizeExerciseTarget,
+  targetToSetValues,
+  type RoutineSetTarget,
+  type SessionRoutine,
+} from '@/lib/routine-format';
 import {
   CURATED_MUSCLE_GROUPS,
   curatedGroupOf,
@@ -152,6 +165,16 @@ interface WorkoutLoggerProps {
   // (/api/client/sessions/[id]) omits the column too, so a client bundle
   // can't surface it even if this flag were flipped by mistake.
   allowExerciseNotes?: boolean;
+  // ADR-053: the routine this session was started from (null = free log).
+  // Drives the per-card target strip, ghost rows for planned-but-not-yet-added
+  // sets, and tap-a-set-number-to-fill. Read-only guidance on both devices.
+  routine?: SessionRoutine | null;
+  // ADR-053: show "Start routine" (trainer page only — clients can't start a
+  // routine). Needs `clientProfileId` to look up the client's program.
+  canApplyRoutine?: boolean;
+  // Called after a routine is applied/detached so the parent refetches the
+  // session (the server added the exercises; Pusher skips our own echo).
+  onRoutineChanged?: () => void;
   existingLogs?: {
     id: string;
     exerciseId: string;
@@ -511,7 +534,7 @@ export function diffExercises(
 export function WorkoutLogger({
   sessionInstanceId,
   clientProfileId,
-  clientName: _clientName,
+  clientName,
   onUnsavedChange,
   onForeground,
   onRequestRest,
@@ -520,8 +543,13 @@ export function WorkoutLogger({
   restTimerRemaining,
   restTimerPaused,
   allowExerciseNotes = false,
+  routine = null,
+  canApplyRoutine = false,
+  onRoutineChanged,
   existingLogs,
 }: WorkoutLoggerProps) {
+  // ADR-053: routine targets by exerciseId — O(1) lookup per card.
+  const routineTargets = useMemo(() => routineTargetsByExercise(routine), [routine]);
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ExerciseOption[]>([]);
@@ -590,21 +618,17 @@ export function WorkoutLogger({
     exerciseName: string;
     unit: string;
   } | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
   // Top-level view inside the session screen. 'log' is the live workout
   // logger; 'history' shows past sessions for the same client (read-only).
   // Switching between them keeps state in WorkoutLogger so auto-save and
   // pending picker state survive a quick peek at history.
   const [view, setView] = useState<'log' | 'history'>('log');
-  // 'groups' opens the standard muscle-group picker; 'suggestions' jumps
-  // straight to the exercise list with all 8 curated groups pre-selected so
-  // the trainer can recall every past exercise without picking again.
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  // True while a text input inside the logger has focus (phone keyboard up) —
+  // hides the floating "+" so it can't sit on top of the row being typed.
+  const [inputFocused, setInputFocused] = useState(false);
   // Today's focus — the curated muscle groups the trainer has committed to
-  // for this session. Fed by every Continue action in the picker (empty-state
-  // and "By Muscle"), and used as the filter when the trainer hits
-  // "Suggestions" so the recall list matches the day's plan instead of
-  // dumping every past exercise.
+  // for this session. Fed by the empty-state picker's Continue and seeded from
+  // already-logged exercises; shown as the TODAY chip row.
   const [focusGroupIds, setFocusGroupIds] = useState<Set<CuratedMuscleGroupId>>(new Set());
   // While a numeric cell is being edited we keep the raw keystroke string here,
   // keyed by `${exIdx}-${setIdx}-${field}`. Without this, coercing to a number on
@@ -926,8 +950,7 @@ export function WorkoutLogger({
   // trainer can search the whole catalog freely. Pre-seeding today's focus
   // (e.g. "Chest day") made people think they had to pick a group first — a
   // query like "squat" was silently scoped to the focus group and found
-  // nothing. The "All" chip stays the default; focus is still used by the
-  // separate Suggestions recall.
+  // nothing. The "All" chip stays the default.
   function openSearch() {
     // Raise the soft keyboard immediately so the trainer can type without a
     // second tap. iOS only opens it for a focus() that happens inside the
@@ -999,8 +1022,6 @@ export function WorkoutLogger({
       const incompleteHead = sorted.filter((e) => !e.isCompleted);
       return [...incompleteHead, ...additions, ...completedTail];
     });
-    setPickerOpen(false);
-    setSuggestionsOpen(false);
   }
 
   function removeExercise(tempId: string) {
@@ -1136,6 +1157,21 @@ export function WorkoutLogger({
       entry.sets = entry.sets
         .filter((_, i) => i !== setIndex)
         .map((s, i) => ({ ...s, setNumber: i + 1 }));
+      updated[exerciseIndex] = entry;
+      return updated;
+    });
+  }
+
+  // ADR-053: tap a set's number to copy its routine target into the row
+  // (Hevy's tap-to-copy). Only fields that have a target are written, so a
+  // tap never blanks something already typed. Explicit action — targets are
+  // never auto-filled, so planned numbers can't land in history as done.
+  function fillSetFromTarget(exerciseIndex: number, setIndex: number, target: RoutineSetTarget) {
+    setExercises((prev) => {
+      const updated = [...prev];
+      const entry = { ...updated[exerciseIndex]! };
+      const values = targetToSetValues(target, entry.exerciseType, entry.secondaryMetric);
+      entry.sets = entry.sets.map((s, i) => (i === setIndex ? { ...s, ...values } : s));
       updated[exerciseIndex] = entry;
       return updated;
     });
@@ -1513,7 +1549,15 @@ export function WorkoutLogger({
   }, [hasUnsaved, onUnsavedChange]);
 
   return (
-    <div className="space-y-3">
+    <div
+      className="space-y-3"
+      onFocus={(e) => {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+          setInputFocused(true);
+        }
+      }}
+      onBlur={() => setInputFocused(false)}
+    >
       {/* ── Badge celebration overlay ── */}
       {celebrationBadges.length > 0 && (
         <BadgeCelebration badges={celebrationBadges} onDone={() => setCelebrationBadges([])} />
@@ -1538,40 +1582,63 @@ export function WorkoutLogger({
         </div>
       )}
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 pt-2.5 items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Workout Log
-          </span>
-          {/* {clientName && (
+      {/* ── Header ── ADR-053: when the session follows a routine, the routine
+      IS the title ("Push Day") instead of the generic "Workout Log" label —
+      no separate banner competing with the session hero. */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 pt-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            {routine && view === 'log' ? (
+              <>
+                <h2 className="truncate text-xl font-bold leading-tight tracking-tight">
+                  {routine.name}
+                </h2>
+                {/* Wrong day tapped? Switch or remove it (trainer only). */}
+                {canApplyRoutine && clientProfileId && (
+                  <RoutineSwitcher
+                    clientProfileId={clientProfileId}
+                    clientName={clientName}
+                    sessionInstanceId={sessionInstanceId}
+                    currentRoutineId={routine.id}
+                    disabled={hasUnsaved}
+                    onChanged={() => onRoutineChanged?.()}
+                  />
+                )}
+              </>
+            ) : (
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Workout Log
+              </span>
+            )}
+            {/* {clientName && (
             <>
               <span className="text-xs text-muted-foreground/50">·</span>
               <span className="truncate text-xs font-semibold text-foreground">{clientName}</span>
             </>
           )} */}
-          {view === 'log' && exercises.length > 0 && (
-            <>
-              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                {exercises.length}
-              </span>
-              {/* ADR-037: surface completion progress alongside the total
+            {view === 'log' && exercises.length > 0 && (
+              <>
+                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  {exercises.length}
+                </span>
+                {/* ADR-037: surface completion progress alongside the total
               count so the user can see "4 (2 done)" at a glance without
               scanning every card. */}
-              {(() => {
-                const doneCount = exercises.filter((e) => e.isCompleted).length;
-                if (doneCount === 0) return null;
-                return (
-                  <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
-                    {doneCount} done
-                  </span>
-                );
-              })()}
-            </>
-          )}
-          {view === 'log' && (
-            <AutoSaveIndicator status={autoSaveStatus} onRetry={() => void saveWorkout()} />
-          )}
+                {(() => {
+                  const doneCount = exercises.filter((e) => e.isCompleted).length;
+                  if (doneCount === 0) return null;
+                  return (
+                    <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+                      {doneCount} done
+                    </span>
+                  );
+                })()}
+              </>
+            )}
+            {view === 'log' && (
+              <AutoSaveIndicator status={autoSaveStatus} onRetry={() => void saveWorkout()} />
+            )}
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {/* Log/History tab strip — flips the body between the live logger
@@ -1609,21 +1676,6 @@ export function WorkoutLogger({
               History
             </button>
           </div>
-          {/* "+" only on the Log tab and only when there's already at least
-              one exercise (or search is open) — the empty-state Add First
-              button owns the cold start. */}
-          {view === 'log' && (exercises.length > 0 || showSearch) && (
-            <button
-              onClick={() => (showSearch ? setShowSearch(false) : openSearch())}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center mt-2.5 rounded-xl transition-colors ${
-                showSearch
-                  ? 'bg-muted text-muted-foreground'
-                  : 'bg-primary/10 text-primary hover:bg-primary/15'
-              }`}
-            >
-              {showSearch ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-            </button>
-          )}
         </div>
       </div>
 
@@ -1649,9 +1701,8 @@ export function WorkoutLogger({
       {view === 'log' && (
         <>
           {/* ── Today's focus — colored pill row showing the muscle groups the
-          trainer committed to via the picker(s). Drives the "Suggestions"
-          filter and gives the trainer a quick visual reminder of the day's
-          plan when juggling multiple sessions. ── */}
+          trainer committed to via the picker. A quick visual reminder of the
+          day's plan when juggling multiple sessions. ── */}
           {focusGroupIds.size > 0 && (
             <div className="-mt-1 flex items-center gap-1.5 overflow-x-auto pb-0.5">
               <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -2016,6 +2067,21 @@ export function WorkoutLogger({
           Search, never from the suggested-exercise list. Falls back to the
           dashed "no exercises" card if we don't know who the client is
           (clientProfileId is required for the recency hints). */}
+          {/* ADR-053: "Start routine" — only when the client has a program;
+          renders nothing otherwise, so the cold start below is unchanged. */}
+          {exercises.length === 0 &&
+            !showSearch &&
+            canApplyRoutine &&
+            clientProfileId &&
+            !routine && (
+              <RoutineStartCard
+                clientProfileId={clientProfileId}
+                clientName={clientName}
+                sessionInstanceId={sessionInstanceId}
+                disabled={hasUnsaved}
+                onApplied={() => onRoutineChanged?.()}
+              />
+            )}
           {exercises.length === 0 && !showSearch && clientProfileId && focusGroupIds.size === 0 && (
             <MuscleGroupPicker
               clientProfileId={clientProfileId}
@@ -2048,82 +2114,37 @@ export function WorkoutLogger({
               </div>
             )}
 
-          {/* ── Mid-session "By Muscle" picker — bottom sheet so the workout list
-          stays in place underneath. Continue UNIONs today's focus (adding a
-          new group extends the session plan rather than replacing it) and
-          closes the sheet — `groupsOnly`, so no suggested-exercise step; the
-          opt-in "Suggestions" sheet below is the only suggestions surface.
-          AnimatePresence keeps the picker mounted long enough for the
-          slide-down exit animation to play before the DOM cleanup. ── */}
-          <AnimatePresence>
-            {exercises.length > 0 && pickerOpen && clientProfileId && (
-              <MuscleGroupPicker
-                key="picker-by-muscle"
-                clientProfileId={clientProfileId}
-                sessionInstanceId={sessionInstanceId}
-                allowCancel
-                groupsOnly
-                onCancel={() => setPickerOpen(false)}
-                onAdd={addExercisesFromPicker}
-                onGroupsPicked={(ids) => {
-                  setFocusGroupIds((prev) => {
-                    const next = new Set(prev);
-                    for (const id of ids) next.add(id);
-                    return next;
-                  });
-                  setPickerOpen(false);
-                }}
-                presentation="sheet"
-                excludeExerciseIds={exercises.map((e) => e.exerciseId)}
-                initialGroupIds={focusGroupIds.size > 0 ? [...focusGroupIds] : undefined}
-              />
-            )}
-          </AnimatePresence>
-
-          {/* ── Suggestions picker — bottom sheet pre-seeded with today's focus
-          so the recall list is filtered to "Chest & Back day" instead of
-          dumping every past exercise. Falls back to all 8 groups when focus
-          is empty. The Back button still lets them widen/narrow on the fly. */}
-          <AnimatePresence>
-            {suggestionsOpen && clientProfileId && (
-              <MuscleGroupPicker
-                key="picker-suggestions"
-                clientProfileId={clientProfileId}
-                sessionInstanceId={sessionInstanceId}
-                allowCancel
-                onCancel={() => setSuggestionsOpen(false)}
-                onAdd={addExercisesFromPicker}
-                initialGroupIds={
-                  focusGroupIds.size > 0
-                    ? [...focusGroupIds]
-                    : CURATED_MUSCLE_GROUPS.map((g) => g.id)
-                }
-                autoAdvance
-                presentation="sheet"
-                excludeExerciseIds={exercises.map((e) => e.exerciseId)}
-              />
-            )}
-          </AnimatePresence>
+          {/* ── ADR-053: no routine yet — offer one above the cards ── */}
+          {exercises.length > 0 && !routine && canApplyRoutine && clientProfileId && (
+            <RoutineStartCard
+              compact
+              clientProfileId={clientProfileId}
+              clientName={clientName}
+              sessionInstanceId={sessionInstanceId}
+              disabled={hasUnsaved}
+              onApplied={() => onRoutineChanged?.()}
+            />
+          )}
 
           {/* ── Exercise cards ── */}
           {exercises.map((entry, exIdx) => {
             const cfg = TYPE_CONFIG[entry.exerciseType] ?? TYPE_CONFIG.WEIGHTED;
-            const Icon = cfg.icon;
             const cols = colsFor(entry.exerciseType, entry.secondaryMetric);
+            const target = routineTargets.get(entry.exerciseId);
 
             return (
               <div
                 key={entry.tempId}
-                className={`overflow-hidden rounded-2xl bg-card shadow-sm transition-opacity ${
+                // Full-bleed: both pages that mount the logger wrap it in `px-4`,
+                // so -mx-4 takes the card edge to edge on a phone.
+                className={`-mx-4 overflow-hidden bg-card shadow-sm transition-opacity ${
                   entry.isCompleted ? 'opacity-70' : ''
                 }`}
+                // Top/bottom hairlines only — no left accent stripe. The
+                // completed cue moved to the number tile (emerald) below.
                 style={{
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  borderLeftWidth: 3,
-                  // Completed cards desaturate to emerald regardless of the
-                  // exercise type's normal accent — quick visual cue that
-                  // the card is in a different state.
-                  borderLeftColor: entry.isCompleted ? '#10b981' : cfg.accent,
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
                 }}
               >
                 {/* Card header — entire row toggles collapse so the trainer
@@ -2142,10 +2163,16 @@ export function WorkoutLogger({
                   }}
                   className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors active:bg-muted/30"
                 >
+                  {/* Position in the workout instead of the type icon.
+                  Emerald once the exercise is marked complete (ADR-037). */}
                   <div
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold tabular-nums ${
+                      entry.isCompleted
+                        ? 'bg-emerald-500/15 text-emerald-500'
+                        : `${cfg.bg} ${cfg.text}`
+                    }`}
                   >
-                    <Icon className={`h-4 w-4 ${cfg.text}`} />
+                    {exIdx + 1}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p
@@ -2246,6 +2273,38 @@ export function WorkoutLogger({
                       style={{ overflow: 'hidden' }}
                     >
                       <div className="border-t border-border/40 px-4 pb-4 pt-3">
+                        {/* ADR-053: routine target strip */}
+                        {target && target.sets.length > 0 && (
+                          // Plain typographic line — no box, no accent: the
+                          // target is reference info, not an action.
+                          <div className="mb-3">
+                            <p className="flex items-baseline gap-2 text-[13px]">
+                              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+                                Target
+                              </span>
+                              <span className="font-medium text-foreground">
+                                {summarizeExerciseTarget(
+                                  target.sets,
+                                  entry.exerciseType,
+                                  entry.secondaryMetric,
+                                )}
+                              </span>
+                              {target.restSec != null && (
+                                <>
+                                  <span aria-hidden className="text-muted-foreground/50">
+                                    ·
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {formatRest(target.restSec)?.toLowerCase()}
+                                  </span>
+                                </>
+                              )}
+                            </p>
+                            {target.notes && (
+                              <p className="mt-1 text-xs text-muted-foreground">{target.notes}</p>
+                            )}
+                          </div>
+                        )}
                         {/* Column header row */}
                         <div
                           className={`mb-2 grid items-center gap-2 ${getGridClass(cols.length)}`}
@@ -2281,17 +2340,53 @@ export function WorkoutLogger({
                                 key={setIdx}
                                 className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
                               >
-                                {/* Set number badge */}
+                                {/* Set number badge. ADR-053: when the routine
+                                plans this set, the badge is a button that fills
+                                the row with its target (ringed to say so). */}
                                 <div className="flex items-center justify-center">
-                                  <span
-                                    className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-                                    style={{
-                                      backgroundColor: cfg.accent + '22',
-                                      color: cfg.accent,
-                                    }}
-                                  >
-                                    {set.setNumber}
-                                  </span>
+                                  {(() => {
+                                    const setTarget = target?.sets.find(
+                                      (t) => t.setNumber === set.setNumber,
+                                    );
+                                    const targetText = setTarget
+                                      ? formatSetTarget(
+                                          setTarget,
+                                          entry.exerciseType,
+                                          entry.secondaryMetric,
+                                        )
+                                      : null;
+                                    const typeShort = setTarget
+                                      ? SET_TYPE_SHORT[setTarget.setType]
+                                      : null;
+                                    if (!setTarget || !targetText) {
+                                      return (
+                                        <span
+                                          className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
+                                          style={{
+                                            backgroundColor: cfg.accent + '22',
+                                            color: cfg.accent,
+                                          }}
+                                        >
+                                          {typeShort ?? set.setNumber}
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => fillSetFromTarget(exIdx, setIdx, setTarget)}
+                                        aria-label={`Fill set ${set.setNumber} with target ${targetText}`}
+                                        title={`${SET_TYPE_LABEL[setTarget.setType]} · ${targetText}. Tap to fill`}
+                                        className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ring-2 ring-primary/60 active:scale-95"
+                                        style={{
+                                          backgroundColor: cfg.accent + '22',
+                                          color: cfg.accent,
+                                        }}
+                                      >
+                                        {typeShort ?? set.setNumber}
+                                      </button>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* Dynamic fields */}
@@ -2387,6 +2482,9 @@ export function WorkoutLogger({
                                         // wheel mutations, trailing-zero stripping) while still
                                         // surfacing the right mobile keypad.
                                         type="text"
+                                        // "Set 1 kg" / "Set 2 reps" — for screen readers and
+                                        // the Playwright e2e tests.
+                                        aria-label={`Set ${set.setNumber} ${col.label}`}
                                         inputMode={mode}
                                         pattern={mode === 'decimal' ? '[0-9]*\\.?[0-9]*' : '[0-9]*'}
                                         enterKeyHint="done"
@@ -2510,6 +2608,32 @@ export function WorkoutLogger({
                             );
                           })}
                         </div>
+
+                        {/* ADR-053: ghost rows — planned sets not yet added.
+                        Rendered from the routine only (never in `exercises`
+                        state), so hasDraftRows / the save payload / the poll
+                        guard can't see them. Tapping one adds a real row. */}
+                        {target && ghostTargets(target.sets, entry.sets.length).length > 0 && (
+                          <div className="mt-2 space-y-1.5">
+                            {ghostTargets(target.sets, entry.sets.length).map((g) => (
+                              <button
+                                key={g.setNumber}
+                                type="button"
+                                onClick={() => addSet(exIdx)}
+                                className="flex h-10 w-full items-center gap-3 rounded-xl border border-dashed border-border/40 px-2 text-left text-xs text-muted-foreground/70 active:bg-muted/30"
+                              >
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/40 text-[11px] font-bold">
+                                  {SET_TYPE_SHORT[g.setType] ?? g.setNumber}
+                                </span>
+                                <span className="truncate">
+                                  {formatSetTarget(g, entry.exerciseType, entry.secondaryMetric) ??
+                                    SET_TYPE_LABEL[g.setType]}
+                                </span>
+                                <Plus className="ml-auto h-3.5 w-3.5 shrink-0" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Add Set — rest is initiated per-row via the cell's
                         idle button, so the bottom row no longer needs a
@@ -2651,62 +2775,6 @@ export function WorkoutLogger({
             );
           })}
 
-          {/* ── Bottom CTAs — three peers for adding more work to the session:
-          search the catalog, pick by curated muscle group, or recall every
-          past exercise this client has done. Only the search button is
-          shown when we don't have a clientProfileId (legacy callers). ── */}
-          {exercises.length > 0 && (
-            <div className={clientProfileId ? 'grid grid-cols-3 gap-2' : ''}>
-              <button
-                onClick={() => (showSearch ? setShowSearch(false) : openSearch())}
-                className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
-                  showSearch
-                    ? 'border-border/40 text-muted-foreground'
-                    : 'border-primary/30 text-primary hover:bg-primary/5'
-                }`}
-              >
-                {showSearch ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-                {showSearch ? 'Cancel' : 'Search'}
-              </button>
-              {clientProfileId && (
-                <>
-                  <button
-                    onClick={() => {
-                      setPickerOpen((v) => !v);
-                      setSuggestionsOpen(false);
-                      if (!pickerOpen)
-                        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
-                    }}
-                    className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
-                      pickerOpen
-                        ? 'border-border/40 text-muted-foreground'
-                        : 'border-violet-500/40 text-violet-400 hover:bg-violet-500/5'
-                    }`}
-                  >
-                    {pickerOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                    {pickerOpen ? 'Cancel' : 'By Muscle'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSuggestionsOpen((v) => !v);
-                      setPickerOpen(false);
-                      if (!suggestionsOpen)
-                        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
-                    }}
-                    className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-3 text-xs font-semibold transition-colors ${
-                      suggestionsOpen
-                        ? 'border-border/40 text-muted-foreground'
-                        : 'border-amber-500/40 text-amber-400 hover:bg-amber-500/5'
-                    }`}
-                  >
-                    {suggestionsOpen ? <X className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                    {suggestionsOpen ? 'Cancel' : 'Suggestions'}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
           {/* ── Exercise Progress Modal ── */}
           {progressModal && clientProfileId && (
             <ExerciseProgressModal
@@ -2716,6 +2784,22 @@ export function WorkoutLogger({
               unit={progressModal.unit}
               onClose={() => setProgressModal(null)}
             />
+          )}
+
+          {/* ── Floating "+" — add exercises (opens the catalog search). Sticky
+          to the bottom of the page's scroll area rather than `fixed`, so on
+          the trainer page it stays above the rest-timer dock instead of
+          covering it. The empty state keeps its own "Add First Exercise". ── */}
+          {exercises.length > 0 && !showSearch && !inputFocused && (
+            <div className="pointer-events-none sticky bottom-4 z-30 flex justify-end">
+              <button
+                onClick={openSearch}
+                aria-label="Add exercise"
+                className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/40 transition-transform active:scale-95"
+              >
+                <Plus className="h-6 w-6" />
+              </button>
+            </div>
           )}
         </>
       )}

@@ -4,6 +4,48 @@
 
 ---
 
+## Training Routines — Phase 28 A + B (2026-10-18)
+
+### S7-RT-01 … S7-RT-09: Hevy-style routines, assignable per client, started from the session logger
+
+- **Agent:** @architect + @backend + @ui + @qa
+- **Completed:** 2026-10-18. On branch `feat/S7-RT-training-routines`, **not committed,
+  not deployed, migration NOT on prod Neon**.
+- **Plan / decisions:** `tasks/phase-28-training-routines.md`, ADR-053.
+- **Files Changed:**
+  - `prisma/schema.prisma`; `prisma/migrations/20261018120000_add_training_routines/` (created)
+  - `src/services/routine.service.ts` (created); `src/services/session.service.ts` (routine block on `getSessionById`)
+  - `src/lib/validators.ts` (routine schemas); `src/lib/routine-format.ts` (created); `src/lib/constants.ts` (nav)
+  - `src/app/api/routine-programs/**` and `src/app/api/sessions/[id]/routine/route.ts` (created)
+  - `src/app/api/client/sessions/[id]/route.ts` (routine block on the client read)
+  - `src/components/routines/*` (created); `src/components/workout/WorkoutLogger.tsx`
+    (target strip, ghost rows, tap-to-fill, Start routine)
+  - Pages: `/trainer/routines`, `/admin/routines` (+ `new`, `[id]`); Program card on
+    `/trainer/clients/[id]/progress` and `/admin/clients/[id]`; My Program on `/client/workouts`;
+    `routine` passed through both session pages
+  - `scripts/seed-routine-library.ts` (created)
+  - Tests: `tests/unit/routine-service.test.ts` (31), `routine-format.test.ts` (15),
+    `program-draft.test.ts` (9). All green.
+- **Memory Updated:** api-contracts.md (Training Routines section), schema.md, decisions.md
+  (ADR-053), architecture.md.
+- **Verification:**
+  - `type-check` clean. `lint` clean apart from the pre-existing `mobile/build` errors.
+  - Unit suite: 47 failures, the exact pre-existing baseline. `session-service`'s 6
+    failures were reproduced on a clean HEAD worktree.
+  - API access matrix checked live (client 403s, cross-trainer 403, idempotent re-apply).
+  - Browser-verified at 390×844 in headless Chrome against local Docker: admin library
+    and editor; trainer assigns from the client page; trainer starts Day A in a live
+    session (6 exercises added, target strip, ghost rows, tap-to-fill = top of range);
+    the client sees the targets read-only with no Start button; client My Program shows
+    Day B as Next up.
+  - The test session and the test client copy were deleted afterwards. The seeded PPL
+    library stays in local Docker.
+- **Notes:** The seed comes from live logs: P→P→L rotation in 74% of transitions,
+  3 × 15 house standard, 60s rest at every quartile. Phase C (update-routine prompt,
+  save-session-as-routine, adherence) not started.
+
+---
+
 ## Session Overrun Reminders + 24h Auto-Close (2026-08-26)
 
 ### S7-SESS-OVERRUN: Nudge trainers who never ended a session, close what they abandon

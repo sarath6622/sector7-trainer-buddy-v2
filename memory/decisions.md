@@ -608,7 +608,7 @@ Exercises present in `exercises` but absent from `dirtyExerciseIds` are left unt
 **Date:** 2026-08-26
 **Status:** Accepted. Built, unit-tested (38 new tests), dry-run against the local DB. **Not yet deployed — needs the cron-job.org job wired up (see "Operational" below).**
 
-**Context:** A session only leaves `IN_PROGRESS` when the trainer taps "End Session". Trainers forget. The operator hit this with a session open for **45 days**, and a read-only dry-run of the local DB found **9 abandoned sessions** (45–104 days old, all 60-min bookings). The trainer dashboard already *displays* these ("Incomplete Sessions" card, `openForLabel`), but nothing ever pushed a reminder, so a forgotten session sat there until someone noticed.
+**Context:** A session only leaves `IN_PROGRESS` when the trainer taps "End Session". Trainers forget. The operator hit this with a session open for **45 days**, and a read-only dry-run of the local DB found **9 abandoned sessions** (45–104 days old, all 60-min bookings). The trainer dashboard already _displays_ these ("Incomplete Sessions" card, `openForLabel`), but nothing ever pushed a reminder, so a forgotten session sat there until someone noticed.
 
 An earlier attempt (2026-06-17) was built and reverted before landing in git. This ADR supersedes that spec on two points, both operator decisions taken 2026-08-26.
 
@@ -616,19 +616,19 @@ An earlier attempt (2026-06-17) was built and reverted before landing in git. Th
 
 - **Trainer-only notifications.** The original spec and this one agree, and the operator reconfirmed it against a proposal to also notify the client. Rationale: only `TRAINER`/`KICKBOXING_TRAINER` can call `POST /api/trainer/sessions/[id]/end`, so a client notification would be unactionable noise on a member's phone. Clients are told nothing about overruns.
 - **Two nudges, keyed to the booked duration, not a flat hour.** Stage 1 at `elapsed >= durationMin`, stage 2 at `durationMin + 15`. A 30-minute slot is chased sooner than a 90-minute one.
-- **Only the highest *due* stage is sent, never a backlog.** A session first seen 20 minutes late gets one stage-2 nudge, not stage 1 and 2 back-to-back. Because the due stage only climbs, once stage 2 is logged the session goes silent permanently — which is exactly what let the 45-day session rot under the old two-nudges-then-stop design. The 24h auto-close is what closes that gap.
+- **Only the highest _due_ stage is sent, never a backlog.** A session first seen 20 minutes late gets one stage-2 nudge, not stage 1 and 2 back-to-back. Because the due stage only climbs, once stage 2 is logged the session goes silent permanently — which is exactly what let the 45-day session rot under the old two-nudges-then-stop design. The 24h auto-close is what closes that gap.
 - **24h auto-close** (the operator's escalation choice over "daily re-nudge only" and over "two nudges then stop"). Past 24h wall-clock a session is treated as abandoned rather than overrunning: `status = COMPLETED`, `endedByUserId = 'system'`, `actualDurationMin = durationMin` (the **booked** value — nothing measured it).
   - `endedAt` is set to the **booked end** (`startedAt + durationMin`), not the moment of the cron pass, so the row stays internally consistent: `endedAt - startedAt == actualDurationMin`. A 45-day-old row would otherwise claim a 60-minute duration across a 45-day span.
   - The real close time, the true open duration, and `durationSource: 'BOOKED'` are recorded in the audit entry, which is the record of truth for what actually happened.
   - Both the trainer **and the branch admins** are notified, precisely because the duration is a guess someone may want to correct.
 - **Auto-close deliberately skips badge evaluation** (unlike `endSession`). `evaluateStreakBadges` / `evaluateSessionMilestoneBadges` recompute from the client's full `COMPLETED` history, so an auto-closed session still counts the next time a real session ends. A session nobody bothered to close should not mint achievements at 3am.
-- **Audit actor is the trainer, not `'system'`.** `audit_logs.actorId` is FK-constrained to `users.id`, so a literal `'system'` string would violate the constraint (and `auditLog()` swallows write failures, so it would fail *silently*). The entry is attributed to the owning trainer with `metadata.autoClosed = true` + `metadata.closedBy = 'system'` marking it system-initiated. `session_instances.endedByUserId` has **no** FK, so the `'system'` sentinel is safe there.
+- **Audit actor is the trainer, not `'system'`.** `audit_logs.actorId` is FK-constrained to `users.id`, so a literal `'system'` string would violate the constraint (and `auditLog()` swallows write failures, so it would fail _silently_). The entry is attributed to the owning trainer with `metadata.autoClosed = true` + `metadata.closedBy = 'system'` marking it system-initiated. `session_instances.endedByUserId` has **no** FK, so the `'system'` sentinel is safe there.
 - **Dedup via `notification_logs`, no migration.** A `findMany` with Postgres JSON-path filters (`metadata.type` + an OR-fan over `metadata.sessionInstanceId`) fetches every already-sent stage for the whole batch in **one** query, rather than a `findFirst` per session per stage. Chosen over a schema column (Neon/Docker migration-history drift — see the `workout-migration-prod-divergence` note) and over Redis (durability: the open-ended stage-2 must never re-fire every 15 minutes). **Verified against real local Postgres**, including numeric `stage` equality — mocks cannot catch a malformed JSON filter.
 - **External pinger, not Vercel Cron.** Vercel Hobby caps crons at once/day. `GET` and `POST` are both exported since cron-job.org defaults to GET and the handler is idempotent.
 
 **Consequences:**
 
-- **Session accounting shifts for auto-closed sessions.** `getSessionCounts` computes `used = completed + noShow` and `remaining = scheduled + inProgress`. An abandoned session currently counts as *remaining* — i.e. the client is being credited a session they actually attended (attendance was already marked `PRESENT` at start). After auto-close it counts as *used*. This is a **correction**, not a regression, but it is real: each affected client's remaining count drops by one, and `carryforward.service` / `analytics.service` / `pt-package.service` all count `COMPLETED`, so package windows and utilisation numbers move too.
+- **Session accounting shifts for auto-closed sessions.** `getSessionCounts` computes `used = completed + noShow` and `remaining = scheduled + inProgress`. An abandoned session currently counts as _remaining_ — i.e. the client is being credited a session they actually attended (attendance was already marked `PRESENT` at start). After auto-close it counts as _used_. This is a **correction**, not a regression, but it is real: each affected client's remaining count drops by one, and `carryforward.service` / `analytics.service` / `pt-package.service` all count `COMPLETED`, so package windows and utilisation numbers move too.
 - **The first production run will auto-close the entire backlog at once** (9 sessions locally; prod is likely similar), each firing a trainer notification plus one per branch admin. Recommended: hit the endpoint **manually once** to drain the backlog under observation, then wire the 15-minute schedule.
 - No schema change, no migration, no new dependency. Reminders cost one `sessionInstance.findMany` + one `notificationLog.findMany` per pass.
 - Wall-clock is used throughout, deliberately ignoring `accumulatedPausedSec`: the question is "was this left open?", not "how much training happened" (that remains `actualDurationMin` via `endSession`, which does net out pauses).
@@ -652,7 +652,7 @@ An earlier attempt (2026-06-17) was built and reverted before landing in git. Th
 **Context:** Clients stop logging their weight, so their progress charts go flat and
 the platform loses the one self-reportable metric that makes progression legible.
 Trainers and admins already see a "No measurements" badge for stale clients, but
-nothing ever told the *client*.
+nothing ever told the _client_.
 
 **Decision:**
 
@@ -727,7 +727,7 @@ was broken by this yet, but `currentWeight` sitting next to `height` in the sche
 obvious trap for the next feature that wants "the client's weight today".
 
 It also had a concrete cost: the ADR-049 weigh-in nudge computes "how far you've come"
-from the client's *first `ProgressEntry`*. A client whose admin recorded 80 kg at signup
+from the client's _first `ProgressEntry`_. A client whose admin recorded 80 kg at signup
 in January but whose first logged weigh-in was 75 kg in June was told they had lost
 1 kg, not 6 — their best number was invisible because intake never entered the timeline.
 
@@ -785,15 +785,15 @@ in January but whose first logged weigh-in was 75 kg in June was told they had l
 
 Trainers asked for "a field in the workout enter page where they can add notes about
 that particular workout — nothing specific, just some kind of notes." The driver is the
-things that never fit a numeric cell: *went light, shoulder niggle*, *form broke down on
-set 3*, *skipped — knee pain*.
+things that never fit a numeric cell: _went light, shoulder niggle_, _form broke down on
+set 3_, _skipped — knee pain_.
 
 The schema already had two `notes` columns and neither could carry it:
 
-| Column | Scope | Why it doesn't fit |
-| --- | --- | --- |
+| Column                  | Scope         | Why it doesn't fit                                                                                                                |
+| ----------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `SessionInstance.notes` | whole session | written by the scheduling / reschedule paths; an admin field, and one note per session is too coarse to say which lift went badly |
-| `WorkoutSet.notes` | one set | **already occupied** — it stores CARDIO distance in km/m (see `colsFor`), so it renders as a numeric column, not free text |
+| `WorkoutSet.notes`      | one set       | **already occupied** — it stores CARDIO distance in km/m (see `colsFor`), so it renders as a numeric column, not free text        |
 
 So the per-exercise level — one note per `WorkoutLog` — was genuinely missing.
 
@@ -821,7 +821,7 @@ So the per-exercise level — one note per `WorkoutLog` — was genuinely missin
    trainer's note on the shared write path (ADR-036). Verified live: a client save of a
    set left the trainer's note intact.
 
-4. **The payload key tracks *ownership*, not content.** `buildSavePayload` takes
+4. **The payload key tracks _ownership_, not content.** `buildSavePayload` takes
    `{ includeNotes }`, mirroring `allowExerciseNotes`. When false the key is omitted and
    the payload is byte-identical to the pre-ADR-052 shape. When true the key is
    **always** written, `''` included — omitting an empty note would make clearing one
@@ -843,20 +843,133 @@ So the per-exercise level — one note per `WorkoutLog` — was genuinely missin
 can read back is useless, so `WorkoutHistoryList` renders it under the set chips of each
 exercise. This forced a third access rule:
 
-  `GET /api/trainer/clients/[id]/workout-history` is readable by **the client
-  themselves** (ADR-036) — their own session page renders the same History tab through
-  the same endpoint. Route access therefore cannot be the gate. The note is gated on a
-  new `canReadTrainerPrivateNotes(user)` helper (staff roles only), passed to
-  `listWorkoutHistory` as `includeNotes`, which drives the Prisma `select` so the column
-  **never leaves the database** for a client caller rather than being nulled in the
-  mapper. The admin route passes `true` unconditionally — it is already role-gated.
+`GET /api/trainer/clients/[id]/workout-history` is readable by **the client
+themselves** (ADR-036) — their own session page renders the same History tab through
+the same endpoint. Route access therefore cannot be the gate. The note is gated on a
+new `canReadTrainerPrivateNotes(user)` helper (staff roles only), passed to
+`listWorkoutHistory` as `includeNotes`, which drives the Prisma `select` so the column
+**never leaves the database** for a client caller rather than being nulled in the
+mapper. The admin route passes `true` unconditionally — it is already role-gated.
 
-  The rule to remember: **`canReadClientTrainingData` ≠ permission to read notes.** A
-  client may read their own sets and history; they may not read what was written about
-  them. Any future endpoint serving both roles must gate notes separately.
+The rule to remember: **`canReadClientTrainingData` ≠ permission to read notes.** A
+client may read their own sets and history; they may not read what was written about
+them. Any future endpoint serving both roles must gate notes separately.
+
 - **Admin surfaces still use `include`** and therefore now receive the column
   (`/admin/sessions` detail sheet, scheduling). Nothing renders it today. Admins are
   staff, not the client, so this was left alone rather than widened in scope.
 - **Still not surfaced on the trainer's past-session review page**
   (`/trainer/sessions/[id]`) or the admin session detail sheet. The History tab covers
   the main read-back need; those two pages build their own layouts from separate reads.
+
+---
+
+## ADR-053: Training Routines — Library Templates, Per-Client Copies, Applied to a Session
+
+**Date:** 2026-10-18
+**Status:** Accepted
+
+**Context:** The gym admin asked for "a training routine like Hevy has, that we can
+assign to a client". Hevy's model (researched 2026-10-18):
+
+- A **routine** is a template of exercises with per-set type (warm-up / normal /
+  failure / drop), target reps or rep range, weight or time, per-exercise rest and notes.
+- **Folders** group routines.
+- **Start Routine** seeds a live workout that stays fully editable, with a PREVIOUS
+  column (tap to copy).
+- On finish, Hevy offers to update the routine.
+- **Hevy Coach** copies a program to a client ("Copy Program to Client"), one program
+  per client at a time.
+
+Sector 7 constraints shaped the design:
+
+1. Workouts only exist inside a `SessionInstance`.
+2. Logging is shared between trainer and client, with diff-scoped writes (ADR-036/041).
+3. `hasDraftRows()` treats more than one unsaved row per exercise as a draft, which
+   pauses the poll and Pusher rehydration.
+4. The logger dedupes exercises per session.
+
+Live data (1,930 sessions, 2026-03 → 2026-10) showed the gym already runs Push / Pull /
+Legs: 74% of consecutive sessions follow the P→P→L rotation, at a house standard of 3 × 15.
+
+**Decision:**
+
+- **Four tables** (`RoutineProgram → Routine → RoutineExercise → RoutineSet`), plus
+  `SessionInstance.routineId` (nullable, SET NULL). No change to `WorkoutLog` or
+  `WorkoutSet`.
+- **Library vs client copy in the same tables** (`clientProfileId` null vs set).
+  **Assign = deep copy** in one transaction, which also deactivates the previous copy,
+  so a client has one active program. A copy is never a live link: editing one client's
+  plan, or the template, never changes another client's.
+- **Applying a routine is server-side.** `POST /api/sessions/[id]/routine` sets
+  `routineId` and creates **zero-set `WorkoutLog` rows** (the ADR-041 "added, not yet
+  logged" shape) for the routine's exercises that are not already in the session. It is
+  idempotent and fires `WORKOUT_UPDATED`, so the client's device picks it up through the
+  existing refetch. No new client-side merge logic.
+- **Targets are display-only.**
+  - The logger shows a per-card target strip.
+  - Planned sets beyond the existing rows are **ghost rows** rendered from the routine
+    and never put in `exercises` state, so `hasDraftRows`, the save payload and the
+    poll guard are untouched.
+  - **Tapping a set number fills that row's target.** Nothing is ever auto-filled, so
+    planned numbers cannot land in history as performed. The input placeholders keep
+    showing the client's "previous" values.
+- **Rotation, not fixed weekdays.** "Next up" = the routine after the one used in the
+  client's most recent session with a `routineId` from that copy, wrapping around.
+  Reschedules, leaves and carry-forwards would make weekday pinning drift.
+- **Permissions (operator decisions):**
+  - Library authoring: TRAINER + admins (parity with ADR-039).
+  - Assign or edit a client's copy: admins for any branch client; trainers only with an
+    **active `PtPackage`** for that client.
+  - **Only the session's trainer applies a routine.** Clients cannot start one, but they
+    see the targets on their shared session page and their program read-only on
+    `/client/workouts`.
+- **The session page is the entry point, not the client page** (operator feedback
+  2026-10-19). When the client has no program, the logger's Start-routine card falls
+  back to the branch library and previews each routine's exercises with their targets.
+  Starting one assigns that program (a per-client copy) and applies the matching
+  routine from the copy, matched by `orderIndex`. These are two existing endpoints
+  composed client-side, so there is no new contract. Assigning from the client page
+  still works. The card always shows the full exercise list with targets, and day chips
+  switch the routine.
+- **Editable after start.** Routine exercises are ordinary logs once applied. The trainer
+  can add, remove, reorder and add sets freely, because the routine is guidance.
+- `RoutineSetType` is a template label only. Recording it on `WorkoutSet` would change
+  PR, volume and badge semantics, which needs its own decision.
+
+**Consequences:**
+
+- Zero change for clients without a program. The "Start routine" card only renders when
+  the client has an active copy, which makes adoption opt-in per client.
+- Applying a routine needs connectivity (one POST). Logging afterwards is as
+  offline-capable as before.
+- `routineId` lets a later phase report planned vs done per routine (adherence).
+- Deferred:
+  - the end-of-session "update routine?" prompt
+  - "save session as routine"
+  - supersets
+  - set type on logged sets
+  - auto-progression
+  - per-exercise rest defaulting the rest timer
+  - Flutter support
+    See `tasks/phase-28-training-routines.md`.
+
+**Migrations:** `20261018120000_add_training_routines` (additive). It must be applied to
+prod Neon **before** the code deploys, because `getSessionById` selects
+`SessionInstance.routineId`.
+
+**Amendment (2026-10-22): edge cases #2 and #5**
+
+- **Switch / remove a routine mid-session.** A "Change" control next to the routine title
+  (trainer only) opens a sheet to switch day or remove the routine. The server removes
+  only the previous routine's **untouched** exercises: no sets, not completed, no note,
+  and not shared with the new routine. Logged work is never deleted. The logger is keyed
+  by `session.id + routine.id` on both session pages so it rebuilds from the server on
+  any routine change. Its normal hydration keeps local state, and skips entirely when the
+  server returns zero logs, which would have left removed exercises on screen.
+- **Rotation counts trained sessions only.** "Next up" ignores routine sessions that are
+  not IN_PROGRESS/COMPLETED or have no logged set, so an abandoned or emptied session
+  doesn't advance the rotation.
+- **Concurrent assigns** (left as is): a program can only be assigned per client, from that
+  client's page or from the session's library fallback, and only by admins or that
+  client's trainers. Two simultaneous assigns can leave two active copies; the newest wins.

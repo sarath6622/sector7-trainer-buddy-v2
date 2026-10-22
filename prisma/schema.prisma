@@ -182,6 +182,15 @@ enum SwapStatus {
   CANCELLED
 }
 
+// ADR-053: Hevy's per-set labels on a routine template. Template-only — logged
+// WorkoutSets carry no set type (PR/volume semantics unchanged).
+enum RoutineSetType {
+  WARMUP
+  NORMAL
+  FAILURE
+  DROP
+}
+
 // ─── BRANCH ──────────────────────────────────────────
 
 model Branch {
@@ -229,6 +238,7 @@ model Branch {
   tvControlState       TvControlState?
   tvAnnouncements      TvAnnouncement[]
   tvEvents             TvEvent[]
+  routinePrograms      RoutineProgram[]
 
   @@map("branches")
 }
@@ -457,6 +467,7 @@ model ClientProfile {
   communityReactions   CommunityReaction[]
   communityComments    CommunityComment[]
   rescheduleRequests   RescheduleRequest[]
+  routinePrograms      RoutineProgram[]
 
   @@index([branchId])
   @@map("client_profiles")
@@ -603,11 +614,16 @@ model SessionInstance {
   isCarryForward   Boolean       @default(false)
   carryForwardFromMonth DateTime?
   notes            String?
+  // ADR-053: the routine this session was started from (null = free log).
+  // Drives "Next up" rotation and lets both devices re-render the targets after
+  // a reload. SetNull: deleting a routine never touches workout history.
+  routineId        String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
   branch   Branch          @relation(fields: [branchId], references: [id])
   schedule SessionSchedule? @relation(fields: [scheduleId], references: [id])
+  routine  Routine?        @relation(fields: [routineId], references: [id], onDelete: SetNull)
   client   ClientProfile   @relation("InstanceClient", fields: [clientProfileId], references: [id])
   trainer  TrainerProfile  @relation("InstanceTrainer", fields: [trainerProfileId], references: [id])
 
@@ -731,6 +747,7 @@ model Exercise {
   isCompound       Boolean          @default(false)
 
   workoutLogs      WorkoutLog[]
+  routineExercises RoutineExercise[]
   badgeDefinitions BadgeDefinition[]
   communityPosts   CommunityPost[]
 
@@ -1327,4 +1344,91 @@ model TvEvent {
 
   @@index([branchId, isActive, eventAt])
   @@map("tv_events")
+}
+
+// ─── TRAINING ROUTINES (ADR-053) ─────────────────────
+
+/// Hevy's "folder" / Hevy Coach's "program": an ordered rotation of routines
+/// (Day A / Day B / Day C).
+///   clientProfileId NULL → branch library template (trainers + admins edit).
+///   clientProfileId SET  → that client's own COPY, made on assign. Library
+///                          edits never propagate into it.
+/// At most one client copy per client has isActive=true (service-enforced in
+/// the assign transaction — Prisma can't express a partial unique index).
+model RoutineProgram {
+  id              String   @id @default(cuid())
+  branchId        String
+  clientProfileId String?
+  sourceProgramId String?
+  name            String
+  notes           String?
+  isActive        Boolean  @default(true)
+  isArchived      Boolean  @default(false)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  branch   Branch         @relation(fields: [branchId], references: [id])
+  client   ClientProfile? @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  routines Routine[]
+
+  @@index([branchId, clientProfileId])
+  @@map("routine_programs")
+}
+
+model Routine {
+  id         String   @id @default(cuid())
+  programId  String
+  name       String
+  notes      String?
+  orderIndex Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  program   RoutineProgram    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  exercises RoutineExercise[]
+  sessions  SessionInstance[]
+
+  @@index([programId])
+  @@map("routines")
+}
+
+model RoutineExercise {
+  id         String   @id @default(cuid())
+  routineId  String
+  exerciseId String
+  orderIndex Int
+  restSec    Int?
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  routine  Routine      @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise Exercise     @relation(fields: [exerciseId], references: [id])
+  sets     RoutineSet[]
+
+  // Mirrors the logger's one-card-per-exercise-per-session rule.
+  @@unique([routineId, exerciseId])
+  @@index([routineId])
+  @@map("routine_exercises")
+}
+
+/// Planned targets for one set. min == max → fixed reps; both set and
+/// different → a rep range. All targets optional (e.g. no weight = "pick a
+/// working weight", the per-client "previous" hint covers it).
+model RoutineSet {
+  id                String         @id @default(cuid())
+  routineExerciseId String
+  setNumber         Int
+  setType           RoutineSetType @default(NORMAL)
+  targetRepsMin     Int?
+  targetRepsMax     Int?
+  targetWeightKg    Float?
+  targetDurationSec Int?
+  targetStepsCount  Int?
+  targetDistance    Float?
+
+  routineExercise RoutineExercise @relation(fields: [routineExerciseId], references: [id], onDelete: Cascade)
+
+  @@index([routineExerciseId])
+  @@map("routine_sets")
 }

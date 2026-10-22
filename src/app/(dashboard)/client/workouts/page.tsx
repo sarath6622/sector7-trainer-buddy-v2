@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { MyProgramCard } from '@/components/routines/MyProgramCard';
 
 interface WorkoutLog {
   id: string;
@@ -139,6 +140,9 @@ export default function ClientWorkoutsPage() {
           Review your training sessions and progress
         </p>
       </div>
+
+      {/* ADR-053: the program the trainer assigned (read-only) */}
+      <MyProgramCard />
 
       {/* Quick stats */}
       {!loading && workouts.length > 0 && (

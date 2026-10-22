@@ -39,6 +39,7 @@ import {
 import { BadgeGrid, type EarnedBadge, type LockedBadge } from '@/components/badges/BadgeGrid';
 import { ProfileImageUploader } from '@/components/forms/ProfileImageUploader';
 import ProgressLineChart from '@/components/charts/ProgressLineChart';
+import { ClientProgramCard } from '@/components/routines/ClientProgramCard';
 import WorkoutProgressionPanel, {
   type ExerciseSummary,
 } from '@/components/charts/WorkoutProgressionPanel';
@@ -448,9 +449,7 @@ export default function ClientProfilePage() {
           emergencyContactPhone: form.emergencyContactPhone || undefined,
           height: form.height ? parseFloat(form.height) : undefined,
           intakeWeight: form.intakeWeight ? parseFloat(form.intakeWeight) : undefined,
-          intakeBodyFat: form.intakeBodyFat
-            ? parseFloat(form.intakeBodyFat)
-            : undefined,
+          intakeBodyFat: form.intakeBodyFat ? parseFloat(form.intakeBodyFat) : undefined,
           medicalConditions: form.medicalConditions || undefined,
           fitnessGoals: form.fitnessGoals || undefined,
           sessionDurationOverrideMin: form.sessionDurationOverrideMin
@@ -1373,6 +1372,15 @@ export default function ClientProfilePage() {
                 <p className="text-xs text-emerald-400">Password reset successfully.</p>
               )}
             </Section>
+
+            {/* ADR-053: training program */}
+            {client.clientProfile?.id && (
+              <ClientProgramCard
+                clientProfileId={client.clientProfile.id}
+                clientName={`${client.firstName} ${client.lastName}`}
+                editBasePath="/admin/routines"
+              />
+            )}
 
             {/* Badges */}
             <Section title="Achievement Badges">

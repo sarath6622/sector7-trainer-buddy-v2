@@ -501,6 +501,64 @@ export const updateWorkoutSchema = z.object({
   notes: z.string().optional(),
 });
 
+// ─── Training routines (ADR-053) ─────────────────────────────────────────────
+// A program is edited as one nested document (program → routines → exercises
+// → sets) and saved with a single PUT. Array order IS the order — no
+// orderIndex/setNumber on the wire, the service derives them.
+
+export const routineSetTypeSchema = z.enum(['WARMUP', 'NORMAL', 'FAILURE', 'DROP']);
+
+export const routineSetInputSchema = z
+  .object({
+    setType: routineSetTypeSchema.optional(),
+    targetRepsMin: z.number().int().min(1).max(200).nullable().optional(),
+    targetRepsMax: z.number().int().min(1).max(200).nullable().optional(),
+    targetWeightKg: z.number().min(0).max(1000).nullable().optional(),
+    targetDurationSec: z.number().int().min(1).max(36000).nullable().optional(),
+    targetStepsCount: z.number().int().min(1).max(100000).nullable().optional(),
+    targetDistance: z.number().positive().max(1000).nullable().optional(),
+  })
+  .refine(
+    (s) => s.targetRepsMin == null || s.targetRepsMax == null || s.targetRepsMax >= s.targetRepsMin,
+    { message: 'Max reps must be at least min reps', path: ['targetRepsMax'] },
+  );
+
+export const routineExerciseInputSchema = z.object({
+  exerciseId: cuidSchema,
+  restSec: z.number().int().min(0).max(600).nullable().optional(),
+  notes: z.string().trim().max(500).nullable().optional(),
+  sets: z.array(routineSetInputSchema).min(1, 'Add at least one set').max(10),
+});
+
+export const routineInputSchema = z
+  .object({
+    // Existing routine id — sent back on PUT so sessions linked to this
+    // routine stay linked. Omitted for new routines.
+    id: z.string().min(1).optional(),
+    name: z.string().trim().min(1, 'Routine name is required').max(80),
+    notes: z.string().trim().max(1000).nullable().optional(),
+    exercises: z.array(routineExerciseInputSchema).min(1, 'Add at least one exercise').max(30),
+  })
+  .refine((r) => new Set(r.exercises.map((e) => e.exerciseId)).size === r.exercises.length, {
+    // Mirrors the logger's one-card-per-exercise-per-session rule.
+    message: 'An exercise can appear only once per routine',
+    path: ['exercises'],
+  });
+
+export const routineProgramInputSchema = z.object({
+  name: z.string().trim().min(1, 'Program name is required').max(80),
+  notes: z.string().trim().max(2000).nullable().optional(),
+  routines: z.array(routineInputSchema).min(1, 'Add at least one routine').max(14),
+});
+
+export const assignRoutineProgramSchema = z.object({
+  clientProfileId: cuidSchema,
+});
+
+export const applySessionRoutineSchema = z.object({
+  routineId: cuidSchema,
+});
+
 export const syncWorkoutsSchema = z.object({
   sessionInstanceId: cuidSchema,
   logs: z.array(
@@ -957,3 +1015,7 @@ export type CreateTvAnnouncementInput = z.infer<typeof createTvAnnouncementSchem
 export type UpdateTvAnnouncementInput = z.infer<typeof updateTvAnnouncementSchema>;
 export type CreateTvEventInput = z.infer<typeof createTvEventSchema>;
 export type UpdateTvEventInput = z.infer<typeof updateTvEventSchema>;
+export type RoutineSetInput = z.infer<typeof routineSetInputSchema>;
+export type RoutineExerciseInput = z.infer<typeof routineExerciseInputSchema>;
+export type RoutineInput = z.infer<typeof routineInputSchema>;
+export type RoutineProgramInput = z.infer<typeof routineProgramInputSchema>;

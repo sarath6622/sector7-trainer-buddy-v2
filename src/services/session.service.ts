@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
+import { SESSION_ROUTINE_SELECT } from '@/services/routine.service';
 import {
   notifySessionStarted,
   notifyNoShow,
@@ -484,6 +485,9 @@ export async function getSessionById({ sessionId, branchId, trainerProfileId }: 
         },
         orderBy: [{ orderIndex: 'asc' }, { id: 'asc' }],
       },
+      // ADR-053: targets for the WorkoutLogger when the session was started
+      // from a routine. Null for free-logged sessions.
+      routine: { select: SESSION_ROUTINE_SELECT },
     },
   });
 
@@ -850,9 +854,7 @@ export interface OverrunScanResult {
  * `notification_logs` (metadata.sessionInstanceId + metadata.stage) and
  * auto-close is self-limiting because the row leaves IN_PROGRESS.
  */
-export async function processOverrunReminders(
-  now: Date = new Date(),
-): Promise<OverrunScanResult> {
+export async function processOverrunReminders(now: Date = new Date()): Promise<OverrunScanResult> {
   const open = await findOpenSessionsForScan();
 
   if (open.length === 0) return { scanned: 0, remindersSent: 0, autoClosed: 0 };

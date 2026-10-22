@@ -3,6 +3,7 @@ import {
   Users,
   Calendar,
   ClipboardList,
+  ClipboardCheck,
   Dumbbell,
   TrendingUp,
   Settings,
@@ -47,6 +48,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   },
   // Programs
   { label: 'Exercises', href: '/admin/exercises', icon: Dumbbell, group: 'Programs' },
+  { label: 'Routines', href: '/admin/routines', icon: ClipboardCheck, group: 'Programs' },
   { label: 'Badges', href: '/admin/badges', icon: Trophy, group: 'Programs' },
   { label: 'Kickboxing', href: '/admin/kickboxing', icon: Activity, group: 'Programs' },
   { label: 'CrossFit', href: '/admin/crossfit', icon: Dumbbell, group: 'Programs' },
@@ -85,6 +87,7 @@ export const TRAINER_NAV_ITEMS: NavItem[] = [
   { label: 'Leaves', href: '/trainer/leaves', icon: CalendarDays, group: 'My Work' },
   // Programs
   { label: 'Exercises', href: '/trainer/exercises', icon: Dumbbell, group: 'Programs' },
+  { label: 'Routines', href: '/trainer/routines', icon: ClipboardCheck, group: 'Programs' },
   // Insights
   { label: 'Analytics', href: '/trainer/analytics', icon: BarChart3, group: 'Insights' },
   // Community

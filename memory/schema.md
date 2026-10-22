@@ -1094,3 +1094,73 @@ weight and/or body fat is supplied, so a client's progress history starts the da
 joined rather than whenever someone first remembered to log a weigh-in.
 
 Do not read `intakeWeight` / `intakeBodyFat` as current values anywhere.
+
+---
+
+## Training Routines (2026-10-18, ADR-053)
+
+Hevy-style routines grouped into programs. Additive only: four new tables, one
+enum and one nullable FK. **`WorkoutLog` / `WorkoutSet` are unchanged.**
+
+### New Enum: RoutineSetType
+
+`WARMUP | NORMAL | FAILURE | DROP`. These are template labels only. Logged
+`WorkoutSet`s carry no set type, so PR, badge and volume semantics are unchanged.
+
+### New Model: RoutineProgram (`routine_programs`)
+
+`id, branchId, clientProfileId?, sourceProgramId?, name, notes?, isActive (default true),
+isArchived (default false), createdByUserId, createdAt, updatedAt`.
+
+- `clientProfileId NULL` → **branch library template** (trainers + admins author).
+- `clientProfileId SET` → **a client's own copy**, deep-copied on assign
+  (`sourceProgramId` = the template). Library edits never propagate.
+- At most one `isActive` copy per client. This is enforced in the assign transaction,
+  not by a partial unique index, which Prisma can't express.
+- FK `clientProfileId → client_profiles ON DELETE CASCADE` (a copy belongs to its client).
+- Index `(branchId, clientProfileId)`.
+
+### New Model: Routine (`routines`)
+
+`id, programId, name, notes?, orderIndex, createdAt, updatedAt`. FK program **CASCADE**.
+Back-relation `sessions SessionInstance[]`.
+
+### New Model: RoutineExercise (`routine_exercises`)
+
+`id, routineId, exerciseId, orderIndex, restSec?, notes?, createdAt`. FK routine CASCADE,
+exercise RESTRICT. **`@@unique([routineId, exerciseId])`** mirrors the logger's
+one-card-per-exercise-per-session rule.
+
+### New Model: RoutineSet (`routine_sets`)
+
+`id, routineExerciseId, setNumber, setType (default NORMAL), targetRepsMin?, targetRepsMax?,
+targetWeightKg?, targetDurationSec?, targetStepsCount?, targetDistance?`. FK CASCADE.
+`min == max` means fixed reps, and both set means a range. All targets are optional.
+`targetDistance` is in the exercise's `secondaryMetric` unit (KM/METERS).
+
+### Altered: SessionInstance
+
+`routineId String?` → `Routine` **ON DELETE SET NULL**. Set when the trainer applies a
+routine to the session. It drives the "Next up" rotation and lets both devices render
+the targets. Deleting a routine never touches workout history.
+
+### Altered back-relations
+
+`Branch.routinePrograms`, `ClientProfile.routinePrograms`, `Exercise.routineExercises`.
+
+### Audit Actions Registered
+
+`ROUTINE_PROGRAM_CREATED`, `ROUTINE_PROGRAM_UPDATED`, `ROUTINE_PROGRAM_ARCHIVED`,
+`ROUTINE_PROGRAM_ASSIGNED`, `ROUTINE_PROGRAM_UNASSIGNED`, `SESSION_ROUTINE_APPLIED`,
+`SESSION_ROUTINE_DETACHED`.
+
+### Migration
+
+- `20261018120000_add_training_routines`: SQL generated schema-to-schema
+  (`migrate diff --from-schema-datamodel`, so no DB was touched and the
+  `mobile_refresh_tokens` drift trap was avoided). **Applied to local Docker only**
+  (`db execute --url` plus a manual `_prisma_migrations` row). **NOT applied to
+  prod Neon yet.** It is additive, so apply it to Neon _before_ deploying the code:
+  the new client selects `routineId` in `getSessionById`.
+- Seed: `scripts/seed-routine-library.ts --url <db>` creates one "Push / Pull / Legs"
+  library program per branch (idempotent; refuses to run without an explicit `--url`).
