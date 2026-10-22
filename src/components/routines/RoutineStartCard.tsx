@@ -67,6 +67,7 @@ export function RoutineStartCard({
   sessionInstanceId,
   disabled,
   compact = false,
+  onChoosingProgramChange,
   onApplied,
 }: {
   clientProfileId: string;
@@ -75,6 +76,8 @@ export function RoutineStartCard({
   /** True while the logger has unsaved edits — applying waits for the save. */
   disabled?: boolean;
   compact?: boolean;
+  /** Inline only: true while "Choose a program" is on screen (the logger hides its header). */
+  onChoosingProgramChange?: (choosing: boolean) => void;
   onApplied: () => void;
 }) {
   const [source, setSource] = useState<RoutineSource | null>(null);
@@ -108,6 +111,7 @@ export function RoutineStartCard({
       disabled={disabled}
       bleed={!compact}
       onSkip={compact ? undefined : () => setDismissed(true)}
+      onChoosingProgramChange={compact ? undefined : onChoosingProgramChange}
       onApplied={() => {
         setSheetOpen(false);
         onApplied();
@@ -167,6 +171,7 @@ function RoutinePicker({
   bleed,
   currentRoutineId = null,
   onSkip,
+  onChoosingProgramChange,
   onApplied,
 }: {
   source: RoutineSource;
@@ -180,6 +185,7 @@ function RoutinePicker({
   currentRoutineId?: string | null;
   /** Inline, client without a program: "Log without a program". */
   onSkip?: () => void;
+  onChoosingProgramChange?: (choosing: boolean) => void;
   onApplied: () => void;
 }) {
   const programs = source.kind === 'client' ? [source.program] : source.programs;
@@ -190,6 +196,11 @@ function RoutinePicker({
     choosingProgram ? null : (programs[0]?.id ?? null),
   );
   const program = programs.find((p) => p.id === programId);
+  const showingProgramList = !program;
+  useEffect(() => {
+    onChoosingProgramChange?.(showingProgramList);
+    return () => onChoosingProgramChange?.(false);
+  }, [showingProgramList, onChoosingProgramChange]);
   const nextRoutineId = source.kind === 'client' ? source.program.nextRoutineId : null;
 
   const [routineId, setRoutineId] = useState<string | null>(
@@ -201,8 +212,10 @@ function RoutinePicker({
   );
   const [applying, setApplying] = useState(false);
 
+  // Inline: the same card as "What are we training?" (MuscleGroupPicker) but
+  // square — sits inside the page margins, not full-bleed.
   const panelClass = bleed
-    ? '-mx-4 space-y-4 border-y border-white/[0.06] bg-card px-4 py-5'
+    ? 'space-y-4 border border-white/5 bg-card/60 p-4 shadow-sm'
     : 'space-y-4';
 
   // ── Step 1: no program yet → choose one ──
@@ -210,8 +223,11 @@ function RoutinePicker({
     return (
       <div className={panelClass}>
         <div>
-          <h3 className="text-2xl font-bold tracking-tight">Choose a program</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Training program
+          </p>
+          <h3 className="mt-0.5 text-base font-bold leading-tight">Choose a program</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
             {/* One string: as split JSX text the space after the name was dropped. */}
             {`${clientName ?? 'This client'} doesn’t have one yet. Its days rotate automatically each session.`}
           </p>
@@ -333,11 +349,11 @@ function RoutinePicker({
         </button>
       )}
       <div className="min-w-0">
-        <p className="truncate text-[11px] font-medium uppercase tracking-widest text-muted-foreground/70">
+        <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           {program.name}
           {isNext ? ' · Next in rotation' : ''}
         </p>
-        <h3 className="mt-1 truncate text-2xl font-bold tracking-tight">{routine.name}</h3>
+        <h3 className="mt-0.5 truncate text-lg font-bold leading-tight">{routine.name}</h3>
       </div>
 
       {/* Day selector — neutral segmented control; a dot marks the next routine */}

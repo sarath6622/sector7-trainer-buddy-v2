@@ -626,6 +626,9 @@ export function WorkoutLogger({
   // True while a text input inside the logger has focus (phone keyboard up) —
   // hides the floating "+" so it can't sit on top of the row being typed.
   const [inputFocused, setInputFocused] = useState(false);
+  // ADR-053: "Choose a program" is on screen — the Workout Log heading and the
+  // Log/History switch mean nothing yet, so the header is hidden.
+  const [choosingProgram, setChoosingProgram] = useState(false);
   // Today's focus — the curated muscle groups the trainer has committed to
   // for this session. Fed by the empty-state picker's Continue and seeded from
   // already-logged exercises; shown as the TODAY chip row.
@@ -1585,7 +1588,11 @@ export function WorkoutLogger({
       {/* ── Header ── ADR-053: when the session follows a routine, the routine
       IS the title ("Push Day") instead of the generic "Workout Log" label —
       no separate banner competing with the session hero. */}
-      <div className="flex items-start justify-between gap-2">
+      <div
+        className={`flex items-start justify-between gap-2 ${
+          choosingProgram && view === 'log' ? 'hidden' : ''
+        }`}
+      >
         <div className="min-w-0 pt-2.5">
           <div className="flex min-w-0 items-center gap-2">
             {routine && view === 'log' ? (
@@ -2079,6 +2086,7 @@ export function WorkoutLogger({
                 clientName={clientName}
                 sessionInstanceId={sessionInstanceId}
                 disabled={hasUnsaved}
+                onChoosingProgramChange={setChoosingProgram}
                 onApplied={() => onRoutineChanged?.()}
               />
             )}

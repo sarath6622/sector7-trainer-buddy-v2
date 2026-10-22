@@ -378,7 +378,8 @@ export function MuscleGroupPicker({
     );
   }
 
-  return <div className="rounded-2xl border border-white/5 bg-card/60 p-4 shadow-sm">{inner}</div>;
+  // Square corners — matches the routine card above it on the session page.
+  return <div className="border border-white/5 bg-card/60 p-4 shadow-sm">{inner}</div>;
 }
 
 function SuggestionsSkeleton({ onCancel }: { onCancel?: () => void }) {
