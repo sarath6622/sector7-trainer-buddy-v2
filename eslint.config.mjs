@@ -21,6 +21,14 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-explicit-any": "error",
     },
   },
+  {
+    // Playwright fixtures hand each fixture a `use()` callback, which the React
+    // hooks rule mistakes for React's `use` hook. No React runs in these files.
+    files: ["tests/e2e/**/*.ts", "playwright.config.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;
