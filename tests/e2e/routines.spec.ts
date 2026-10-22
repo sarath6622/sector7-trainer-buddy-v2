@@ -1,5 +1,20 @@
+import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { testDb } from './support/db';
+
+/**
+ * Client without a program: when the library holds more than one program the
+ * card opens on "Choose a program" — pick the test's own program. With a
+ * single library program it goes straight to the days, so this is a no-op.
+ */
+async function pickProgram(page: Page, programName: string) {
+  const chooser = page.getByRole('heading', { name: 'Choose a program' });
+  const days = page.getByRole('button', { name: /^Start / });
+  await expect(chooser.or(days).first()).toBeVisible();
+  if (await chooser.isVisible()) {
+    await page.getByRole('button', { name: new RegExp(`^${programName}`) }).click();
+  }
+}
 
 // ADR-053 training routines, end to end: trainer starts a routine from the
 // session page, logs a set against its targets; the client sees the targets
@@ -19,8 +34,10 @@ test.describe('training routines', () => {
     // Opening a SCHEDULED session as its trainer starts it.
     await page.goto(`/trainer/session/${sessionId}`);
 
-    // No program yet → the card offers the library, newest program first.
-    await expect(page.getByText(/No program yet\. Starting assigns it to/)).toBeVisible();
+    // No program yet → "Choose a program", then the day.
+    await expect(page.getByRole('heading', { name: 'Choose a program' })).toBeVisible();
+    await page.getByRole('button', { name: new RegExp(`^${libraryProgram.name}`) }).click();
+    await expect(page.getByText(`Assigns ${libraryProgram.name} to`)).toBeVisible();
     await page.getByRole('button', { name: new RegExp(`^${arms.name}`) }).click();
     await expect(page.getByRole('heading', { name: arms.name })).toBeVisible();
     await expect(page.getByText('Bicep Curl')).toBeVisible();
@@ -86,6 +103,7 @@ test.describe('training routines', () => {
 
     // Trainer starts the session and the routine.
     await trainerPage.goto(`/trainer/session/${sessionId}`);
+    await pickProgram(trainerPage, libraryProgram.name);
     await trainerPage.getByRole('button', { name: `Start ${upper.name}` }).click();
     await expect(trainerPage.getByRole('heading', { level: 2, name: upper.name })).toBeVisible();
 
@@ -122,6 +140,7 @@ test.describe('training routines', () => {
     };
 
     await page.goto(`/trainer/session/${sessionId}`);
+    await pickProgram(page, libraryProgram.name);
     await page.getByRole('button', { name: `Start ${upper.name}` }).click();
     await expect(page.getByRole('heading', { level: 2, name: upper.name })).toBeVisible();
 
@@ -149,6 +168,7 @@ test.describe('training routines', () => {
     const db = testDb();
 
     await page.goto(`/trainer/session/${sessionId}`);
+    await pickProgram(page, libraryProgram.name);
     await page.getByRole('button', { name: /^E2E Arms/ }).click();
     await page.getByRole('button', { name: `Start ${arms.name}` }).click();
     await expect(page.getByRole('heading', { level: 2, name: arms.name })).toBeVisible();
@@ -199,6 +219,7 @@ test.describe('training routines', () => {
     const db = testDb();
 
     await page.goto(`/trainer/session/${sessionId}`);
+    await pickProgram(page, libraryProgram.name);
     await page.getByRole('button', { name: `Start ${upper.name}` }).click();
     await expect(page.getByRole('heading', { level: 2, name: upper.name })).toBeVisible();
 

@@ -144,7 +144,13 @@ describe('RoutineStartCard', () => {
       />,
     );
 
-    expect(await screen.findByText('No program yet. Starting assigns it to Rohit.')).toBeTruthy();
+    // One program in the library → straight to choosing the day, with the
+    // assignment spelled out under the Start button.
+    expect(
+      await screen.findByText(
+        'Assigns Push / Pull / Legs to Rohit. Next sessions continue the rotation.',
+      ),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^Pull Day/ }));
     fireEvent.click(screen.getByRole('button', { name: /Start Pull Day/ }));
 
@@ -170,6 +176,73 @@ describe('RoutineStartCard', () => {
       <RoutineStartCard clientProfileId={CLIENT} sessionInstanceId={SESSION} onApplied={vi.fn()} />,
     );
     await waitFor(() => expect(calls.some((c) => c.url === '/api/routine-programs')).toBe(true));
+    expect(container.textContent).toBe('');
+  });
+
+  it('asks to choose a program first when the library has several, then shows its days', async () => {
+    calls = [];
+    const second = { ...program('lib-2', null, 'ul'), name: 'Upper / Lower' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        calls.push({ url, method: 'GET' });
+        if (url === `/api/routine-programs/clients/${CLIENT}`) return json(null);
+        if (url === '/api/routine-programs') {
+          return json([
+            { id: 'lib-2', name: 'Upper / Lower', routines: [] },
+            { id: 'lib-1', name: 'Push / Pull / Legs', routines: [] },
+          ]);
+        }
+        if (url === '/api/routine-programs/lib-1') return json(program('lib-1', null, 'lib'));
+        if (url === '/api/routine-programs/lib-2') return json(second);
+        return new Response('{}', { status: 404 });
+      }),
+    );
+    render(
+      <RoutineStartCard
+        clientProfileId={CLIENT}
+        clientName="Rohit"
+        sessionInstanceId={SESSION}
+        onApplied={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Choose a program' })).toBeTruthy();
+    expect(screen.getByText(/Rohit doesn.t have one yet/)).toBeTruthy();
+    // No day list or Start button until a program is picked.
+    expect(screen.queryByRole('button', { name: /^Start / })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Upper \/ Lower/ }));
+    expect(screen.getByRole('button', { name: /Start Push Day/ })).toBeTruthy();
+    expect(screen.getByText('All programs')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('All programs'));
+    expect(screen.getByRole('heading', { name: 'Choose a program' })).toBeTruthy();
+  });
+
+  it('"Log without a program" hides the card for the session', async () => {
+    calls = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === `/api/routine-programs/clients/${CLIENT}`) return json(null);
+        if (url === '/api/routine-programs') {
+          return json([
+            { id: 'lib-1', name: 'A', routines: [] },
+            { id: 'lib-2', name: 'B', routines: [] },
+          ]);
+        }
+        if (url === '/api/routine-programs/lib-1') return json(program('lib-1', null, 'a'));
+        if (url === '/api/routine-programs/lib-2') return json(program('lib-2', null, 'b'));
+        return new Response('{}', { status: 404 });
+      }),
+    );
+    const { container } = render(
+      <RoutineStartCard clientProfileId={CLIENT} sessionInstanceId={SESSION} onApplied={vi.fn()} />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Log without a program' }));
     expect(container.textContent).toBe('');
   });
 });

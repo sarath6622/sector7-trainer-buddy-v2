@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ClipboardCheck, Play, Undo2 } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Play, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatRest, summarizeExerciseTarget } from '@/lib/routine-format';
 import { RoutineSheet } from './RoutineSheet';
@@ -79,6 +79,8 @@ export function RoutineStartCard({
 }) {
   const [source, setSource] = useState<RoutineSource | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // "Log without a program" — hides the card for this visit only.
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,7 +97,7 @@ export function RoutineStartCard({
     };
   }, [clientProfileId]);
 
-  if (!source) return null;
+  if (!source || dismissed) return null;
 
   const picker = (
     <RoutinePicker
@@ -105,6 +107,7 @@ export function RoutineStartCard({
       sessionInstanceId={sessionInstanceId}
       disabled={disabled}
       bleed={!compact}
+      onSkip={compact ? undefined : () => setDismissed(true)}
       onApplied={() => {
         setSheetOpen(false);
         onApplied();
@@ -163,6 +166,7 @@ function RoutinePicker({
   disabled,
   bleed,
   currentRoutineId = null,
+  onSkip,
   onApplied,
 }: {
   source: RoutineSource;
@@ -174,11 +178,18 @@ function RoutinePicker({
   bleed: boolean;
   /** Set when the session already follows a routine — the picker then switches. */
   currentRoutineId?: string | null;
+  /** Inline, client without a program: "Log without a program". */
+  onSkip?: () => void;
   onApplied: () => void;
 }) {
   const programs = source.kind === 'client' ? [source.program] : source.programs;
-  const [programId, setProgramId] = useState(programs[0]?.id ?? '');
-  const program = programs.find((p) => p.id === programId) ?? programs[0];
+  // Client without a program and more than one in the library: step 1 is
+  // choosing the program (programId null), step 2 is choosing the day.
+  const choosingProgram = source.kind === 'library' && programs.length > 1;
+  const [programId, setProgramId] = useState<string | null>(
+    choosingProgram ? null : (programs[0]?.id ?? null),
+  );
+  const program = programs.find((p) => p.id === programId);
   const nextRoutineId = source.kind === 'client' ? source.program.nextRoutineId : null;
 
   const [routineId, setRoutineId] = useState<string | null>(
@@ -190,7 +201,62 @@ function RoutinePicker({
   );
   const [applying, setApplying] = useState(false);
 
-  if (!program || !routine) return null;
+  const panelClass = bleed
+    ? '-mx-4 space-y-4 border-y border-white/[0.06] bg-card px-4 py-5'
+    : 'space-y-4';
+
+  // ── Step 1: no program yet → choose one ──
+  if (!program) {
+    return (
+      <div className={panelClass}>
+        <div>
+          <h3 className="text-2xl font-bold tracking-tight">Choose a program</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {/* One string: as split JSX text the space after the name was dropped. */}
+            {`${clientName ?? 'This client'} doesn’t have one yet. Its days rotate automatically each session.`}
+          </p>
+        </div>
+        <ul className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+          {programs.map((p) => {
+            const exerciseCount = p.routines.reduce((n, r) => n + r.exercises.length, 0);
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProgramId(p.id);
+                    setRoutineId(p.routines[0]?.id ?? null);
+                  }}
+                  className="flex min-h-16 w-full items-center gap-3 py-3 text-left active:bg-white/[0.03]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-base font-semibold">{p.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {p.routines.length} {p.routines.length === 1 ? 'day' : 'days'} ·{' '}
+                      {p.routines.map((r) => r.name).join(', ')}
+                    </p>
+                    <p className="text-xs text-muted-foreground/70">{exerciseCount} exercises</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            className="h-10 w-full text-sm font-medium text-muted-foreground active:text-foreground"
+          >
+            Log without a program
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (!routine) return null;
 
   async function start(target: RoutineDetailDto) {
     if (disabled) {
@@ -253,46 +319,26 @@ function RoutinePicker({
 
   // Neutral panel, same language as the exercise cards (full-bleed, hairline
   // edges, no tint). The Start button is the only accent on it.
+  // ── Step 2: choose the day ──
   return (
-    <div
-      className={
-        bleed ? '-mx-4 space-y-4 border-y border-white/[0.06] bg-card px-4 py-5' : 'space-y-4'
-      }
-    >
+    <div className={panelClass}>
+      {choosingProgram && (
+        <button
+          type="button"
+          onClick={() => setProgramId(null)}
+          className="-ml-1 flex h-8 items-center gap-0.5 text-xs font-medium text-muted-foreground active:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          All programs
+        </button>
+      )}
       <div className="min-w-0">
         <p className="truncate text-[11px] font-medium uppercase tracking-widest text-muted-foreground/70">
           {program.name}
           {isNext ? ' · Next in rotation' : ''}
         </p>
         <h3 className="mt-1 truncate text-2xl font-bold tracking-tight">{routine.name}</h3>
-        {source.kind === 'library' && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            No program yet. Starting assigns it to {clientName ?? 'this client'}.
-          </p>
-        )}
       </div>
-
-      {/* Program switcher — library mode with more than one program */}
-      {programs.length > 1 && (
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1" style={{ scrollbarWidth: 'none' }}>
-          {programs.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => {
-                setProgramId(p.id);
-                setRoutineId(p.routines[0]?.id ?? null);
-              }}
-              className={`h-8 shrink-0 rounded-full border px-3 text-[11px] font-semibold transition-colors ${
-                p.id === program.id
-                  ? 'border-white/25 text-foreground'
-                  : 'border-white/[0.08] text-muted-foreground'
-              }`}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Day selector — neutral segmented control; a dot marks the next routine */}
       {program.routines.length > 1 && (
@@ -366,6 +412,12 @@ function RoutinePicker({
               ? `Switch to ${routine.name}`
               : `Start ${routine.name}`}
       </button>
+      {source.kind === 'library' && (
+        <p className="-mt-1 text-center text-xs text-muted-foreground">
+          Assigns {program.name} to {clientName ?? 'this client'}. Next sessions continue the
+          rotation.
+        </p>
+      )}
     </div>
   );
 }
