@@ -93,6 +93,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
   }, [status, router, update]);
 
+  // ADR-055: deactivated while signed in (e.g. marked as left the gym). The
+  // session refetch on focus picks this up; sign out and explain on /login.
+  const accessBlocked = session?.user?.accessBlocked ?? null;
+  useEffect(() => {
+    if (accessBlocked) void signOut({ callbackUrl: `/login?reason=${accessBlocked}` });
+  }, [accessBlocked]);
+
   // iOS standalone PWA cold-start: WebKit briefly lays the document out taller
   // than the screen, leaving a phantom scrollable region that drags the whole
   // layout when swiped. The document never legitimately scrolls here — only

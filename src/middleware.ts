@@ -33,6 +33,16 @@ function landingPath(token: { role?: unknown; roles?: unknown }, request: NextRe
   return defaultPathFor(tokenRoles(token), request.cookies.get(SURFACE_COOKIE)?.value);
 }
 
+/**
+ * /login, carrying why the user was cut off when they were deactivated after
+ * signing in (ADR-055), so the form can explain instead of failing silently.
+ */
+function loginUrl(token: { accessBlocked?: unknown }, request: NextRequest) {
+  const url = new URL('/login', request.url);
+  if (typeof token.accessBlocked === 'string') url.searchParams.set('reason', token.accessBlocked);
+  return url;
+}
+
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
@@ -99,7 +109,10 @@ export async function middleware(request: NextRequest) {
 
   // Root path → redirect to role-specific dashboard
   if (pathname === '/') {
-    return NextResponse.redirect(new URL(landingPath(token, request) ?? '/login', request.url));
+    const landing = landingPath(token, request);
+    return NextResponse.redirect(
+      landing ? new URL(landing, request.url) : loginUrl(token, request),
+    );
   }
 
   // Role-based route protection for dashboard pages
@@ -110,7 +123,7 @@ export async function middleware(request: NextRequest) {
   ) {
     const surfaces = surfacesFor(tokenRoles(token));
     if (surfaces.length === 0) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(loginUrl(token, request));
     }
 
     const surface = surfaceOf(pathname);

@@ -144,6 +144,11 @@ export const updateStaffAccessSchema = z
     message: 'Provide accessLevel or isActive',
   });
 
+// ─── ADMIN: CLIENT MEMBERSHIP (ADR-055) ──────────────
+
+/** false = the client has left the gym; login is refused with a renew notice. */
+export const updateClientMembershipSchema = z.object({ isActive: z.boolean() });
+
 export const listUsersSchema = paginationSchema.extend({
   role: userRoleSchema.optional(),
   search: z.string().trim().max(100).optional(),

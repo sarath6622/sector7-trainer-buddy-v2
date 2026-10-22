@@ -4,6 +4,27 @@
 
 ---
 
+## Left-the-gym clients: deactivate + renew notice at login (2026-10-22)
+
+### S7-AUTH-02: Mark a client as left, block their login with a renew-membership message
+
+- **Agent:** @backend + @ui + @qa
+- **Completed:** 2026-10-22, on `main` working tree, **not committed, not deployed. No migration.**
+- **Decisions:** ADR-055.
+- **Files Changed:**
+  - `src/lib/access-blocked.ts` (created): reason codes, notice copy, `accessBlockedReason()`
+  - `src/lib/auth.ts`: `authorize()` throws the reason after a correct password; `token.accessBlocked`
+  - `src/middleware.ts`: `/login?reason=` on revoked-token redirects
+  - `src/app/(auth)/login/page.tsx`: amber notice, Sign in disabled until the email changes
+  - `src/app/(dashboard)/layout.tsx`: signs out a user cut off mid-session
+  - `src/app/api/admin/users/[id]/membership/route.ts` (created), `user.service.ts#updateClientMembership`
+  - `src/app/(dashboard)/admin/clients/[id]/page.tsx`: App Access section; delete dialog reworded
+- **Tests:** auth.test.ts (also fixed the stale `findUnique` mock: 6 pre-existing failures now
+  pass), middleware-roles, user-service, `client-membership-api.test.ts`, e2e `membership.spec.ts`.
+  The 20 failures in user-service/user-api are pre-existing (same count on clean HEAD).
+
+---
+
 ## Staff & Access — per-person roles, Head Coach (2026-10-22)
 
 ### S7-AUTH-01: Admin / Head Coach / Trainer accounts, surface switcher, role revalidation

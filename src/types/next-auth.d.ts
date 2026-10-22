@@ -25,6 +25,8 @@ declare module 'next-auth' {
       lastName: string;
       trainerProfileId: string | null;
       clientProfileId: string | null;
+      /** ADR-055: why a signed-in user was cut off (deactivated / left the gym). */
+      accessBlocked: import('@/lib/access-blocked').AccessBlockedReason | null;
     };
   }
 }
@@ -39,5 +41,6 @@ declare module 'next-auth/jwt' {
     lastName: string;
     trainerProfileId: string | null;
     clientProfileId: string | null;
+    accessBlocked?: import('@/lib/access-blocked').AccessBlockedReason | null;
   }
 }

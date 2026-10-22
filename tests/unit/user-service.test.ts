@@ -607,3 +607,86 @@ describe('deleteUser', () => {
     });
   });
 });
+
+// ─── updateClientMembership (ADR-055) ───────────────────────────────
+
+describe('updateClientMembership', () => {
+  it('marks a client as left, scoped to the branch, and audits it', async () => {
+    mockedPrisma.user.findFirst.mockResolvedValue({
+      id: 'u1',
+      roles: ['CLIENT'],
+      isActive: true,
+    } as never);
+
+    const result = await userService.updateClientMembership('u1', false, 'branch-1', 'admin-1');
+
+    expect(result).toEqual({ id: 'u1', isActive: false });
+    expect(mockedPrisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'u1', branchId: 'branch-1', deletedAt: null, roles: { has: 'CLIENT' } },
+      }),
+    );
+    expect(mockedPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { isActive: false },
+    });
+    expect(mockedAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'CLIENT_MEMBERSHIP_DEACTIVATED',
+        actorId: 'admin-1',
+        subjectId: 'u1',
+        oldValue: { isActive: true },
+        newValue: { isActive: false },
+        branchId: 'branch-1',
+      }),
+    );
+  });
+
+  it('reactivates a client who came back', async () => {
+    mockedPrisma.user.findFirst.mockResolvedValue({
+      id: 'u1',
+      roles: ['CLIENT'],
+      isActive: false,
+    } as never);
+
+    await userService.updateClientMembership('u1', true, 'branch-1', 'admin-1');
+
+    expect(mockedAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'CLIENT_MEMBERSHIP_REACTIVATED' }),
+    );
+  });
+
+  it('is a no-op (no write, no audit) when nothing changes', async () => {
+    mockedPrisma.user.findFirst.mockResolvedValue({
+      id: 'u1',
+      roles: ['CLIENT'],
+      isActive: false,
+    } as never);
+
+    await userService.updateClientMembership('u1', false, 'branch-1', 'admin-1');
+
+    expect(mockedPrisma.user.update).not.toHaveBeenCalled();
+    expect(mockedAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('throws 404 for a non-client or a client in another branch', async () => {
+    mockedPrisma.user.findFirst.mockResolvedValue(null);
+
+    await expect(
+      userService.updateClientMembership('u1', false, 'branch-1', 'admin-1'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', statusCode: 404 });
+  });
+
+  it('refuses a client who is also staff (Staff & Access owns that)', async () => {
+    mockedPrisma.user.findFirst.mockResolvedValue({
+      id: 'u1',
+      roles: ['CLIENT', 'TRAINER'],
+      isActive: true,
+    } as never);
+
+    await expect(
+      userService.updateClientMembership('u1', false, 'branch-1', 'admin-1'),
+    ).rejects.toMatchObject({ code: 'STAFF_ACCOUNT', statusCode: 409 });
+    expect(mockedPrisma.user.update).not.toHaveBeenCalled();
+  });
+});

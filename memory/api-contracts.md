@@ -71,6 +71,14 @@ PUT    /api/admin/users/[id]             → { ...updatedFields } → User
                                             corrects the stored intake values only — it does NOT rewrite the
                                             seeded ProgressEntry (see ADR-050).
 DELETE /api/admin/users/[id]             → {} → { success } (soft delete)
+PATCH  /api/admin/users/[id]/membership  → { isActive: boolean } → { data: { id, isActive } }   (ADR-055)
+                                            isActive=false marks a client as having left the gym (reversible,
+                                            unlike DELETE). Their login is refused with MEMBERSHIP_INACTIVE and
+                                            an open app signs them out within ~60s. No-op (no write, no audit)
+                                            when unchanged. Audit: CLIENT_MEMBERSHIP_DEACTIVATED / _REACTIVATED.
+                                            Errors: 404 NOT_FOUND (not a CLIENT / other branch / deleted),
+                                              409 STAFF_ACCOUNT (holds a staff role; use PATCH /api/admin/staff/[id]).
+                                            Auth: BRANCH_ADMIN | SUPER_ADMIN.
 GET    /api/admin/users/[id]/clients     → {} → { data: TrainerClient[] }
                                             For a trainer user. Returns clients with an active PtPackage
                                             assigned to this trainer in the caller's branch. Empty array

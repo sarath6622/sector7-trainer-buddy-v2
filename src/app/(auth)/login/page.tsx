@@ -1,14 +1,19 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 /* eslint-disable @next/next/no-img-element */
-import { signIn } from 'next-auth/react';
+import { signIn, signOut } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Lock, LogIn } from 'lucide-react';
 import { SURFACE_COOKIE, defaultPathFor } from '@/lib/roles';
+import {
+  ACCESS_BLOCKED_COPY,
+  isAccessBlockedReason,
+  type AccessBlockedReason,
+} from '@/lib/access-blocked';
 
 function readCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
@@ -19,12 +24,23 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl');
+  const reasonParam = searchParams.get('reason');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // ADR-055: right password, but the member has left (or staff was deactivated).
+  // Sign in stays disabled until they edit the email, so they can't keep retrying.
+  const [blocked, setBlocked] = useState<AccessBlockedReason | null>(
+    isAccessBlockedReason(reasonParam) ? reasonParam : null,
+  );
+
+  // Arrived here because access was revoked mid-session: drop the stale cookie.
+  useEffect(() => {
+    if (isAccessBlockedReason(reasonParam)) void signOut({ redirect: false });
+  }, [reasonParam]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +53,12 @@ function LoginForm() {
         password,
         redirect: false,
       });
+
+      if (isAccessBlockedReason(result?.error)) {
+        setBlocked(result.error);
+        setLoading(false);
+        return;
+      }
 
       if (result?.error) {
         setError('Invalid email or password');
@@ -116,7 +138,10 @@ function LoginForm() {
                   type="email"
                   placeholder="you@sector7.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setBlocked(null);
+                  }}
                   required
                   autoComplete="email"
                   className="h-11 rounded-xl border-white/[0.08] bg-white/[0.04] text-white placeholder:text-zinc-600 focus-visible:border-primary/50 focus-visible:ring-primary/20"
@@ -152,6 +177,23 @@ function LoginForm() {
                 </div>
               </div>
 
+              {blocked && (
+                <div
+                  role="alert"
+                  className="flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3"
+                >
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-amber-300">
+                      {ACCESS_BLOCKED_COPY[blocked].title}
+                    </p>
+                    <p className="text-xs leading-relaxed text-amber-200/80">
+                      {ACCESS_BLOCKED_COPY[blocked].body}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-sm text-red-400">
                   {error}
@@ -161,7 +203,7 @@ function LoginForm() {
               <Button
                 type="submit"
                 className="w-full h-11 gap-2 rounded-xl text-sm font-semibold"
-                disabled={loading}
+                disabled={loading || blocked !== null}
               >
                 {loading ? (
                   <>

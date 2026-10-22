@@ -6,6 +6,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     user: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       update: vi.fn(),
     },
   },
@@ -71,13 +72,13 @@ describe('authorize (credentials provider)', () => {
   });
 
   it('returns null when user not found', async () => {
-    mockedPrisma.user.findUnique.mockResolvedValue(null);
+    mockedPrisma.user.findFirst.mockResolvedValue(null);
     const result = await authorize({ email: 'test@test.com', password: 'pass123' });
     expect(result).toBeNull();
   });
 
-  it('returns null when user is inactive', async () => {
-    mockedPrisma.user.findUnique.mockResolvedValue({
+  function inactiveUser(roles: string[]) {
+    return {
       id: 'u1',
       email: 'test@test.com',
       passwordHash: 'hashed',
@@ -85,23 +86,43 @@ describe('authorize (credentials provider)', () => {
       deletedAt: null,
       firstName: 'Test',
       lastName: 'User',
-      role: 'CLIENT',
+      roles,
       branchId: 'b1',
-      phone: null,
-      profileImageUrl: null,
-      lastLoginAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
       trainerProfile: null,
-      clientProfile: null,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-    const result = await authorize({ email: 'test@test.com', password: 'pass123' });
+      clientProfile: roles.includes('CLIENT') ? { id: 'cp1' } : null,
+    } as never;
+  }
+
+  // ADR-055: a client who left the gym gets a renew-membership notice, not "invalid".
+  it('rejects a client who left the gym with MEMBERSHIP_INACTIVE', async () => {
+    mockedPrisma.user.findFirst.mockResolvedValue(inactiveUser(['CLIENT']));
+    mockedCompare.mockResolvedValue(true as never);
+
+    await expect(authorize({ email: 'test@test.com', password: 'pass123' })).rejects.toThrow(
+      'MEMBERSHIP_INACTIVE',
+    );
+    expect(mockedPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a deactivated staff member with ACCOUNT_DISABLED', async () => {
+    mockedPrisma.user.findFirst.mockResolvedValue(inactiveUser(['TRAINER']));
+    mockedCompare.mockResolvedValue(true as never);
+
+    await expect(authorize({ email: 'test@test.com', password: 'pass123' })).rejects.toThrow(
+      'ACCOUNT_DISABLED',
+    );
+  });
+
+  it('does not reveal an inactive account to a wrong password', async () => {
+    mockedPrisma.user.findFirst.mockResolvedValue(inactiveUser(['CLIENT']));
+    mockedCompare.mockResolvedValue(false as never);
+
+    const result = await authorize({ email: 'test@test.com', password: 'wrong' });
     expect(result).toBeNull();
   });
 
   it('returns null when user is soft-deleted', async () => {
-    mockedPrisma.user.findUnique.mockResolvedValue({
+    mockedPrisma.user.findFirst.mockResolvedValue({
       id: 'u1',
       email: 'test@test.com',
       passwordHash: 'hashed',
@@ -109,7 +130,7 @@ describe('authorize (credentials provider)', () => {
       deletedAt: new Date(),
       firstName: 'Test',
       lastName: 'User',
-      role: 'CLIENT',
+      roles: ['CLIENT'],
       branchId: 'b1',
       phone: null,
       profileImageUrl: null,
@@ -125,7 +146,7 @@ describe('authorize (credentials provider)', () => {
   });
 
   it('returns null when password is incorrect', async () => {
-    mockedPrisma.user.findUnique.mockResolvedValue({
+    mockedPrisma.user.findFirst.mockResolvedValue({
       id: 'u1',
       email: 'test@test.com',
       passwordHash: 'hashed',
@@ -133,7 +154,7 @@ describe('authorize (credentials provider)', () => {
       deletedAt: null,
       firstName: 'Test',
       lastName: 'User',
-      role: 'CLIENT',
+      roles: ['CLIENT'],
       branchId: 'b1',
       phone: null,
       profileImageUrl: null,
@@ -159,7 +180,7 @@ describe('authorize (credentials provider)', () => {
       deletedAt: null,
       firstName: 'John',
       lastName: 'Trainer',
-      role: 'TRAINER',
+      roles: ['TRAINER'],
       branchId: 'b1',
       phone: null,
       profileImageUrl: null,
@@ -171,7 +192,7 @@ describe('authorize (credentials provider)', () => {
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockedPrisma.user.findUnique.mockResolvedValue(mockUser as any);
+    mockedPrisma.user.findFirst.mockResolvedValue(mockUser as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockedCompare.mockResolvedValue(true as any);
     mockedPrisma.user.update.mockResolvedValue({} as never);
@@ -183,6 +204,7 @@ describe('authorize (credentials provider)', () => {
       email: 'trainer@sector7.com',
       name: 'John Trainer',
       role: 'TRAINER',
+      roles: ['TRAINER'],
       branchId: 'b1',
       firstName: 'John',
       lastName: 'Trainer',
@@ -200,7 +222,7 @@ describe('authorize (credentials provider)', () => {
       deletedAt: null,
       firstName: 'Test',
       lastName: 'User',
-      role: 'CLIENT',
+      roles: ['CLIENT'],
       branchId: 'b1',
       phone: null,
       profileImageUrl: null,
@@ -212,7 +234,7 @@ describe('authorize (credentials provider)', () => {
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockedPrisma.user.findUnique.mockResolvedValue(mockUser as any);
+    mockedPrisma.user.findFirst.mockResolvedValue(mockUser as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockedCompare.mockResolvedValue(true as any);
     mockedPrisma.user.update.mockResolvedValue({} as never);
@@ -339,6 +361,28 @@ describe('jwt role revalidation', () => {
 
     expect(token.roles).toEqual([]);
     expect(token.role).toBe('');
+  });
+
+  it('flags a client who left the gym so the app can explain (ADR-055)', async () => {
+    mockedPrisma.user.findUnique.mockResolvedValue(
+      dbUser({ roles: ['CLIENT'], isActive: false, clientProfile: { id: 'cp1' } }),
+    );
+
+    const token = await run({ id: 'u1', role: 'CLIENT', roles: ['CLIENT'] });
+
+    expect(token.roles).toEqual([]);
+    expect(token.accessBlocked).toBe('MEMBERSHIP_INACTIVE');
+  });
+
+  it('flags a deactivated staff member as ACCOUNT_DISABLED, active users as null', async () => {
+    mockedPrisma.user.findUnique.mockResolvedValueOnce(dbUser({ isActive: false }));
+    expect((await run({ id: 'u1', roles: ['BRANCH_ADMIN'] })).accessBlocked).toBe(
+      'ACCOUNT_DISABLED',
+    );
+
+    clearAccessCache();
+    mockedPrisma.user.findUnique.mockResolvedValueOnce(dbUser());
+    expect((await run({ id: 'u1', roles: ['BRANCH_ADMIN'] })).accessBlocked).toBeNull();
   });
 
   it('strips every role from a soft-deleted or missing user', async () => {

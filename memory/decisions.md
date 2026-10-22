@@ -1030,3 +1030,37 @@ of every `/trainer` page and `/api/trainer/*` route. There was no UI to create a
 - Test mocks of `hasRole` must accept arrays; `createMockSession` now sets `roles`.
 - Not built: self-service password change (admins set temporary passwords and staff
   can't change them yet), per-person 2FA, and finer-grained permissions inside the admin side.
+
+---
+
+## ADR-055: Clients Who Left the Gym Are Deactivated, and Told Why at Login
+
+**Date:** 2026-10-22
+**Status:** Accepted
+
+**Context:** Admins had no reversible way to cut off a client who left. The only button on
+the client page ("Deactivate", trash icon) actually soft-deletes (`deletedAt`), which hides
+the client from every list. And any blocked login showed "Invalid email or password", so a
+former member had no idea why they couldn't get in.
+
+**Decision:**
+
+- Reuse `User.isActive` (no migration). `PATCH /api/admin/users/[id]/membership` toggles it
+  for CLIENT-only users; anyone with a staff role is refused (`STAFF_ACCOUNT`), since Staff &
+  Access owns that. The client page has an "App Access" section with Mark as left / Reactivate.
+  The trash button's dialog now says Delete and points to Mark as left.
+- `authorize()` checks the password FIRST, then throws `MEMBERSHIP_INACTIVE` (client) or
+  `ACCOUNT_DISABLED` (staff). NextAuth returns the thrown message as `signIn().error`, and
+  /login shows a renew notice and disables Sign in until the email is edited. A wrong
+  password on an inactive account still gets the generic error, so the form can't be used
+  to find out which emails belong to past members. Deleted users still get the generic error.
+- Signed-in users: role revalidation (ADR-054) also sets `token.accessBlocked`. The
+  dashboard layout signs them out to `/login?reason=<code>`, and the middleware adds the same
+  `reason` when it bounces a role-less token. Codes and copy live in `src/lib/access-blocked.ts`.
+
+**Consequences:**
+
+- Deactivating does NOT end PT packages or cancel future sessions; those stay on trainer
+  calendars until handled by an admin.
+- Cut-off latency for an open app is up to ~60s (same as ADR-054).
+- The Flutter app (separate branch) does not use NextAuth credentials and doesn't show this notice.

@@ -4,6 +4,7 @@ import { auditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { createProgressEntry } from '@/services/progress.service';
 import { assertAdminAccessChangeAllowed } from '@/services/staff.service';
+import { STAFF_ROLES } from '@/lib/roles';
 import type { Prisma, UserRole, DayOfWeek } from '@prisma/client';
 
 interface ShiftInput {
@@ -676,6 +677,54 @@ export async function deleteUser(id: string, branchId: string, actorId: string) 
   });
 
   return { success: true };
+}
+
+/**
+ * Mark a client as having left the gym, or bring them back (ADR-055).
+ *
+ * Unlike `deleteUser` this is reversible and keeps them in the client list
+ * (under "Inactive"). Their next login is refused with a renew notice, and an
+ * open app signs them out within a minute (role revalidation in `lib/auth`).
+ * Staff are managed from Staff & Access, so anyone holding a staff role is refused.
+ */
+export async function updateClientMembership(
+  id: string,
+  isActive: boolean,
+  branchId: string,
+  actorId: string,
+) {
+  const user = await prisma.user.findFirst({
+    where: { id, branchId, deletedAt: null, roles: { has: 'CLIENT' } },
+    select: { id: true, roles: true, isActive: true },
+  });
+
+  if (!user) {
+    throw new AppError('NOT_FOUND', 'Client not found', 404);
+  }
+
+  if (user.roles.some((r) => (STAFF_ROLES as readonly string[]).includes(r))) {
+    throw new AppError(
+      'STAFF_ACCOUNT',
+      'This person is also staff. Change their access from Staff & Access.',
+      409,
+    );
+  }
+
+  if (user.isActive !== isActive) {
+    await prisma.user.update({ where: { id }, data: { isActive } });
+
+    await auditLog({
+      action: isActive ? 'CLIENT_MEMBERSHIP_REACTIVATED' : 'CLIENT_MEMBERSHIP_DEACTIVATED',
+      actorId,
+      subjectType: 'User',
+      subjectId: id,
+      oldValue: { isActive: user.isActive },
+      newValue: { isActive },
+      branchId,
+    });
+  }
+
+  return { id, isActive };
 }
 
 /**

@@ -20,8 +20,11 @@ import {
   MoveVertical,
   ArrowUpRight,
   ArrowDownRight,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { STAFF_ROLES } from '@/lib/roles';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Input } from '@/components/ui/input';
 import { DatePickerModal } from '@/components/ui/date-picker-modal';
@@ -114,6 +117,7 @@ interface ClientData {
   phone: string | null;
   isActive: boolean;
   role: string;
+  roles: string[];
   profileImageUrl: string | null;
   clientProfile: {
     id: string;
@@ -224,6 +228,9 @@ export default function ClientProfilePage() {
   const [resetSaving, setResetSaving] = useState(false);
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
+
+  const [membershipSaving, setMembershipSaving] = useState(false);
+  const [membershipError, setMembershipError] = useState('');
 
   const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>([]);
   const [lockedBadges, setLockedBadges] = useState<LockedBadge[]>([]);
@@ -493,11 +500,45 @@ export default function ClientProfilePage() {
     }
   }
 
+  // ADR-055: reversible "left the gym". Their login shows a renew notice.
+  async function handleMembership(isActive: boolean) {
+    if (!client) return;
+    if (!isActive) {
+      const ok = await confirm({
+        title: 'Mark as left the gym?',
+        description: `${client.firstName} won't be able to open the app. They'll see a message asking them to renew their membership. You can reactivate them any time.`,
+        confirmText: 'Mark as left',
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+    setMembershipSaving(true);
+    setMembershipError('');
+    try {
+      const res = await fetch(`/api/admin/users/${id}/membership`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setMembershipError(d.error ?? 'Failed to update membership');
+      } else {
+        setClient({ ...client, isActive });
+      }
+    } catch {
+      setMembershipError('Failed to update membership');
+    } finally {
+      setMembershipSaving(false);
+    }
+  }
+
   async function handleDelete() {
     const ok = await confirm({
-      title: 'Deactivate Client',
-      description: 'Are you sure you want to deactivate this client?',
-      confirmText: 'Deactivate',
+      title: 'Delete Client',
+      description:
+        'This removes the client from every list and cannot be undone here. If they have just left the gym, use "Mark as left" instead.',
+      confirmText: 'Delete',
       variant: 'destructive',
     });
     if (!ok) return;
@@ -1372,6 +1413,39 @@ export default function ClientProfilePage() {
                 <p className="text-xs text-emerald-400">Password reset successfully.</p>
               )}
             </Section>
+
+            {/* ADR-055: app access / left the gym. Staff are managed from Staff & Access. */}
+            {!client.roles?.some((r) => (STAFF_ROLES as readonly string[]).includes(r)) && (
+              <Section title="App Access">
+                <div className="flex items-center gap-3">
+                  <p className="flex-1 text-xs text-muted-foreground">
+                    {client.isActive
+                      ? 'Active member. They can sign in to the app.'
+                      : 'Marked as left. Sign-in is blocked and they are asked to renew their membership.'}
+                  </p>
+                  {client.isActive ? (
+                    <button
+                      onClick={() => handleMembership(false)}
+                      disabled={membershipSaving}
+                      className="flex shrink-0 items-center gap-1.5 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                    >
+                      <UserX className="h-3.5 w-3.5" />
+                      {membershipSaving ? 'Saving…' : 'Mark as left'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleMembership(true)}
+                      disabled={membershipSaving}
+                      className="flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+                    >
+                      <UserCheck className="h-3.5 w-3.5" />
+                      {membershipSaving ? 'Saving…' : 'Reactivate'}
+                    </button>
+                  )}
+                </div>
+                {membershipError && <p className="text-xs text-destructive">{membershipError}</p>}
+              </Section>
+            )}
 
             {/* ADR-053: training program */}
             {client.clientProfile?.id && (

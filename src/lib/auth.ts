@@ -4,6 +4,7 @@ import { getServerSession as getNextAuthServerSession } from 'next-auth';
 import { compare } from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { computePrimaryRole } from '@/lib/roles';
+import { accessBlockedReason, type AccessBlockedReason } from '@/lib/access-blocked';
 
 /** How long a server instance trusts a token's roles before re-reading them. */
 const ROLES_REVALIDATE_MS = 60_000;
@@ -12,6 +13,8 @@ interface FreshAccess {
   roles: string[];
   trainerProfileId: string | null;
   clientProfileId: string | null;
+  /** Set when the user was deactivated or deleted after signing in (ADR-055). */
+  accessBlocked: AccessBlockedReason | null;
   checkedAt: number;
 }
 
@@ -39,12 +42,14 @@ async function loadFreshAccess(userId: string): Promise<FreshAccess | null> {
         clientProfile: { select: { id: true } },
       },
     });
+    const accessBlocked = user ? accessBlockedReason(user) : 'ACCOUNT_DISABLED';
     const fresh: FreshAccess = {
       // A deactivated or deleted user keeps a session object but holds no roles,
       // so every role-gated route and page rejects them.
-      roles: user && user.isActive && !user.deletedAt ? user.roles : [],
+      roles: user && !accessBlocked ? user.roles : [],
       trainerProfileId: user?.trainerProfile?.id ?? null,
       clientProfileId: user?.clientProfile?.id ?? null,
+      accessBlocked,
       checkedAt: Date.now(),
     };
     accessCache.set(userId, fresh);
@@ -91,13 +96,21 @@ export const authOptions: NextAuthOptions = {
           },
         });
 
-        if (!user || !user.isActive || user.deletedAt) {
+        if (!user || user.deletedAt) {
           return null;
         }
 
         const isPasswordValid = await compare(credentials.password, user.passwordHash);
         if (!isPasswordValid) {
           return null;
+        }
+
+        // Only after the password checks out, so the login form can't be used to
+        // probe which emails belong to past members. NextAuth passes the thrown
+        // message back to signIn() as `error`, and /login shows the matching notice.
+        const blocked = accessBlockedReason(user);
+        if (blocked) {
+          throw new Error(blocked);
         }
 
         // Update last login
@@ -144,6 +157,7 @@ export const authOptions: NextAuthOptions = {
           token.role = fresh.roles.length > 0 ? computePrimaryRole(fresh.roles) : '';
           token.trainerProfileId = fresh.trainerProfileId;
           token.clientProfileId = fresh.clientProfileId;
+          token.accessBlocked = fresh.accessBlocked;
         }
       }
       return token;
@@ -160,6 +174,7 @@ export const authOptions: NextAuthOptions = {
         session.user.lastName = token.lastName as string;
         session.user.trainerProfileId = (token.trainerProfileId as string) ?? null;
         session.user.clientProfileId = (token.clientProfileId as string) ?? null;
+        session.user.accessBlocked = token.accessBlocked ?? null;
       }
       return session;
     },

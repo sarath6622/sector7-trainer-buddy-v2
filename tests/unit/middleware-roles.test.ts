@@ -78,6 +78,22 @@ describe('middleware multi-role access (ADR-054)', () => {
     expect(res.headers.get('location')).toBe(`${BASE}/login`);
   });
 
+  it('tells a client who left the gym why they were sent to /login (ADR-055)', async () => {
+    mockedGetToken.mockResolvedValue({
+      role: '',
+      roles: [],
+      branchId: 'b1',
+      accessBlocked: 'MEMBERSHIP_INACTIVE',
+    } as never);
+
+    expect((await middleware(req('/client'))).headers.get('location')).toBe(
+      `${BASE}/login?reason=MEMBERSHIP_INACTIVE`,
+    );
+    expect((await middleware(req('/'))).headers.get('location')).toBe(
+      `${BASE}/login?reason=MEMBERSHIP_INACTIVE`,
+    );
+  });
+
   it('does not bounce a revoked token away from /login (no redirect loop)', async () => {
     mockedGetToken.mockResolvedValue({ role: '', roles: [], branchId: 'b1' } as never);
 
