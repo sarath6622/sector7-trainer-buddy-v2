@@ -465,3 +465,9 @@
 - [ ] **S7-PC-09** | @backend | S | `src/app/api/admin/clients/expiring/route.ts` computes `usedSessions` with its own third copy of the window math. Fold into `billing-cycle`.
 - [ ] **S7-PC-10** | @ui | S | **Lint error blocking a clean `npm run lint`:** `src/components/packages/PackageCycleStrip.tsx:125` — "Cannot call impure function during render". Pre-existing, unrelated to the audit page, but it is an _error_ not a warning so CI would fail on it.
 - [ ] **S7-PC-11** | @architect | M | **Packages are not renewed in the system.** The audit shows **68 clients whose lifetime used exceeds lifetime paid**, and **48 of them have only ONE package row** (7 have none at all). One package was created at signup and never renewed while the client kept training for months, so the DB holds no record of the later payments — `lifetimePaid` is not a trustworthy "what they paid" figure for those clients. Decide whether renewals must create a new `PtPackage` (and enforce it in the admin flow) before any billing report is built on this data.
+
+---
+
+## Platform — iOS 26 Safari
+
+- [ ] **S7-IOS-01** | @ui | S | **Top bar blurred under the status bar on iPhone (iOS 26 Liquid Glass edge effect).** Apple has no API or meta tag to turn it off. WebKit reportedly skips the blur only when a viewport-fixed, full-width, opaque box taller than 10px touches the top edge. `sticky` on the header was tried and confirmed NOT to work on device. Shipped 2026-10-25: a fixed `bg-background` strip (`max(env(safe-area-inset-top), 12px)` tall) in `TopNav.tsx`, not yet verified on a device. If the blur remains, the fallback is pushing header content ~2rem down in standalone iOS (costs vertical space; ask before doing it). Revisit when Apple ships an official opt-out.

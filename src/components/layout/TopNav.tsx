@@ -68,7 +68,19 @@ export function TopNav({
       className="shrink-0 border-b border-border/50 bg-background"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
-      <div className="flex h-12 items-center justify-between px-3 lg:h-14 lg:px-4">
+      {/* iOS 26 edge-blur opt-out. Safari draws a Liquid Glass blur over
+          whatever sits under the status bar, and skips it only when a
+          viewport-fixed, full-width, opaque box (>10px tall) touches the top
+          edge. This header is in-flow (and `sticky` inside the app shell's
+          overflow container doesn't count), so a fixed strip in the header's
+          own colour stands in for it. No z-index: the `relative` row below
+          paints over it, and sheets/overlays opened later paint over both. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 top-0 bg-background"
+        style={{ height: 'max(env(safe-area-inset-top), 12px)' }}
+      />
+      <div className="relative flex h-12 items-center justify-between px-3 lg:h-14 lg:px-4">
         {/* Left side — logo */}
         <Link href="/" className="shrink-0 lg:hidden">
           <Logo className={hasSwitcher ? 'h-6 sm:h-7' : 'h-7'} />

@@ -11,7 +11,7 @@ export function initials(first: string, last: string) {
 /**
  * Compute the most-recent activity timestamp (ms) for a session — the latest
  * of `startedAt`, any `workoutLog.updatedAt`, or any `set.createdAt`. Used by
- * `SessionHero` for the "Xm idle" pill and by the trainer's `OthersChip`
+ * `SessionHero` for the "Idle Xm" pill and by the trainer's `OthersChip`
  * strip for cross-client idle escalation. Returns null if the session hasn't
  * started yet, so the caller can suppress the idle pill entirely.
  *
@@ -228,11 +228,11 @@ export function SessionHero({
                   label: `Rest paused · ${formatRestRemaining(restTimer.remaining)}`,
                 }
               : urgent && idleMs != null
-                ? { kind: 'idle-urgent', label: `${formatIdle(idleMs)} idle` }
+                ? { kind: 'idle-urgent', label: `Idle ${formatIdle(idleMs)}` }
                 : warn && idleMs != null
-                  ? { kind: 'idle-warn', label: `${formatIdle(idleMs)} idle` }
+                  ? { kind: 'idle-warn', label: `Idle ${formatIdle(idleMs)}` }
                   : showIdle && idleMs != null
-                    ? { kind: 'live', label: `${formatIdle(idleMs)} idle` }
+                    ? { kind: 'live', label: `Idle ${formatIdle(idleMs)}` }
                     : { kind: 'live', label: 'Live' };
 
   const pill = pillStyles[status.kind];
@@ -315,9 +315,7 @@ export function SessionHero({
                 )}
                 <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${pill.dot}`} />
               </span>
-              <span
-                className={`text-[10px] font-semibold uppercase tracking-wider tabular-nums ${pill.text}`}
-              >
+              <span className={`text-[11px] font-semibold tabular-nums ${pill.text}`}>
                 {status.label}
               </span>
             </span>

@@ -694,7 +694,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* ── Workout logger — page owns scroll, button stays pinned to bottom ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4">
         <WorkoutLogger
           // ADR-053: remount when the session's routine changes (start / switch /
           // remove) so the log is rebuilt from the server. The logger otherwise keeps
