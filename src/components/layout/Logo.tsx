@@ -3,30 +3,40 @@ import { cn } from '@/lib/utils';
 
 interface LogoProps {
   className?: string;
-  /** 'auto' = dark pill in light mode, transparent in dark mode. 'dark' = always on dark bg (no pill needed). */
+  /** 'auto' = follows the theme. 'dark' = always on a dark bg (white wordmark only). */
   variant?: 'auto' | 'dark';
 }
 
 /**
  * Sector 7 logo — uses the actual brand PNG.
  *
- * The PNG has white "SECTOR" text + orange 7 on transparent background.
- * In light mode, we place the logo on a dark rounded pill so the white text is visible.
- * In dark mode, the logo renders directly (white text is naturally visible).
+ * Two versions of the same artwork, identical size so the logo sits the same in both themes:
+ * - sector7-logo-cropped.png: white "SECTOR" + orange 7, for dark backgrounds.
+ * - sector7-logo-cropped-light.png: near-black "SECTOR" + orange 7, for light backgrounds.
  */
 export function Logo({ className, variant = 'auto' }: LogoProps) {
+  const imgClass = cn('w-auto object-contain', className);
+
+  if (variant === 'dark') {
+    return (
+      <div className="flex items-center">
+        <img src="/sector7-logo-cropped.png" alt="Sector 7 Fitness" className={imgClass} />
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={cn(
-        'flex items-center',
-        variant === 'auto' &&
-          'rounded-lg bg-zinc-900 px-3 py-1.5 dark:bg-transparent dark:px-0 dark:py-0 dark:rounded-none',
-      )}
-    >
+    <div className="flex items-center">
+      <img
+        src="/sector7-logo-cropped-light.png"
+        alt="Sector 7 Fitness"
+        className={cn(imgClass, 'dark:hidden')}
+      />
       <img
         src="/sector7-logo-cropped.png"
-        alt="Sector 7 Fitness"
-        className={cn('w-auto object-contain', className)}
+        alt=""
+        aria-hidden="true"
+        className={cn(imgClass, 'hidden dark:block')}
       />
     </div>
   );
