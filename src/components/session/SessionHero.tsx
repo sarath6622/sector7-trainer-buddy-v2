@@ -182,7 +182,7 @@ export function SessionHero({
     ? '#fbbf24' // amber while paused
     : overtime
       ? '#fb7185'
-      : '#c4b5fd';
+      : '#f97316';
 
   // Idle escalation — same thresholds the OthersChip uses so the active client
   // and inactive peers speak the same vocabulary.
@@ -253,9 +253,14 @@ export function SessionHero({
       aria-label={`${name}, ${status.label}`}
       // Full-bleed, square: both session pages wrap the hero in `px-3`, so
       // -mx-3 runs it edge to edge, matching the full-width exercise cards.
-      className="relative -mx-3 overflow-hidden bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 px-4 py-2.5 text-white shadow-lg shadow-purple-900/20"
+      className="relative -mx-3 overflow-hidden border-y border-white/10 bg-neutral-900 px-4 py-2.5 text-white"
     >
-      <div className="flex items-center gap-3">
+      {/* Warm brand glow bleeding in from the trailing edge. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_160%_at_100%_100%,rgba(234,88,12,0.45),transparent_70%)]"
+      />
+      <div className="relative flex items-center gap-3">
         {/* Avatar with story-ring progress */}
         <div className="relative h-12 w-12 shrink-0">
           <svg className="absolute inset-0 -rotate-90" viewBox="0 0 48 48">
@@ -264,7 +269,7 @@ export function SessionHero({
               cy="24"
               r={avatarRingR}
               fill="none"
-              stroke="rgba(255,255,255,0.18)"
+              stroke="rgba(255,255,255,0.12)"
               strokeWidth="2.5"
             />
             <circle
@@ -280,14 +285,14 @@ export function SessionHero({
               className="transition-[stroke-dashoffset] duration-500"
             />
           </svg>
-          <div className="absolute inset-[3px] flex items-center justify-center rounded-full bg-white/15 text-xs font-bold ring-1 ring-white/10">
+          <div className="absolute inset-[3px] flex items-center justify-center rounded-full bg-slate-800 text-xs font-bold ring-1 ring-white/10">
             {initials}
           </div>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <p className="truncate text-sm font-semibold leading-tight">{name}</p>
-            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider text-purple-100/70">
+            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider rounded bg-white/10 px-1.5 py-0.5 text-white/60">
               Session
             </span>
           </div>
@@ -329,7 +334,7 @@ export function SessionHero({
             className={`flex h-10 w-10 items-center justify-center rounded-full ring-1 transition-colors active:scale-95 ${
               isPaused
                 ? 'bg-amber-400/25 text-amber-100 ring-amber-300/50 hover:bg-amber-400/35'
-                : 'bg-white/15 text-white ring-white/20 hover:bg-white/25'
+                : 'bg-orange-500 text-white ring-orange-400/40 hover:bg-orange-400'
             }`}
           >
             {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
@@ -340,7 +345,7 @@ export function SessionHero({
               onClick={onEnd}
               disabled={ending}
               aria-label="End session"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/25 text-rose-100 ring-1 ring-rose-300/50 transition-colors hover:bg-rose-500/35 active:scale-95 disabled:opacity-50"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-800 text-white ring-1 ring-white/10 transition-colors hover:bg-neutral-700 active:scale-95 disabled:opacity-50"
             >
               <Square className="h-4 w-4" />
             </button>

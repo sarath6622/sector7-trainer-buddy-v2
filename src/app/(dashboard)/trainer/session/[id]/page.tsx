@@ -569,7 +569,7 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
         {/* ── Sticky tab card placeholder ── */}
         <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
           <div className="px-3 pt-2.5 pb-2.5">
-            <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-purple-600/40 to-indigo-700/40 px-3.5 py-2.5">
+            <div className="flex items-center gap-3 rounded-2xl bg-neutral-900 bg-gradient-to-r from-transparent to-orange-600/30 px-3.5 py-2.5">
               <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-white/15" />
               <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="h-3 w-28 animate-pulse rounded bg-white/15" />
