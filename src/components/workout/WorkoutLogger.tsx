@@ -30,6 +30,7 @@ import { Input } from '@/components/ui/input';
 import { BadgeCelebration } from '@/components/badges/BadgeCelebration';
 import { MuscleGroupPicker, GROUP_THEME, type PickedExercise } from './MuscleGroupPicker';
 import { WorkoutHistoryList } from './WorkoutHistoryList';
+import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { RoutineStartCard, RoutineSwitcher } from '@/components/routines/RoutineStartCard';
 import {
   SET_TYPE_LABEL,
@@ -654,11 +655,9 @@ export function WorkoutLogger({
     exerciseName: string;
     unit: string;
   } | null>(null);
-  // Top-level view inside the session screen. 'log' is the live workout
-  // logger; 'history' shows past sessions for the same client (read-only).
-  // Switching between them keeps state in WorkoutLogger so auto-save and
-  // pending picker state survive a quick peek at history.
-  const [view, setView] = useState<'log' | 'history'>('log');
+  // Past sessions for the same client (read-only), shown in a bottom sheet
+  // over the logger so auto-save and picker state are untouched by a peek.
+  const [historyOpen, setHistoryOpen] = useState(false);
   // True while a text input inside the logger has focus (phone keyboard up) —
   // hides the floating "+" so it can't sit on top of the row being typed.
   const [inputFocused, setInputFocused] = useState(false);
@@ -1624,14 +1623,10 @@ export function WorkoutLogger({
       {/* ── Header ── ADR-053: when the session follows a routine, the routine
       IS the title ("Push Day") instead of the generic "Workout Log" label —
       no separate banner competing with the session hero. */}
-      <div
-        className={`flex items-start justify-between gap-2 ${
-          choosingProgram && view === 'log' ? 'hidden' : ''
-        }`}
-      >
+      <div className={`flex items-start justify-between gap-2 ${choosingProgram ? 'hidden' : ''}`}>
         <div className="min-w-0 pt-2.5">
           <div className="flex min-w-0 items-center gap-2">
-            {routine && view === 'log' ? (
+            {routine ? (
               <>
                 <h2 className="truncate text-xl font-bold leading-tight tracking-tight">
                   {routine.name}
@@ -1659,14 +1654,10 @@ export function WorkoutLogger({
               <span className="truncate text-xs font-semibold text-foreground">{clientName}</span>
             </>
           )} */}
-            {view === 'log' && exercises.length > 0 && (
+            {exercises.length > 0 && (
               <>
-                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                  {exercises.length}
-                </span>
-                {/* ADR-037: surface completion progress alongside the total
-              count so the user can see "4 (2 done)" at a glance without
-              scanning every card. */}
+                {/* ADR-037: surface completion progress so the trainer sees
+              how far through the session they are without scanning cards. */}
                 {(() => {
                   const doneCount = exercises.filter((e) => e.isCompleted).length;
                   if (doneCount === 0) return null;
@@ -1678,1116 +1669,1081 @@ export function WorkoutLogger({
                 })()}
               </>
             )}
-            {view === 'log' && (
-              <AutoSaveIndicator status={autoSaveStatus} onRetry={() => void saveWorkout()} />
-            )}
+            <AutoSaveIndicator status={autoSaveStatus} onRetry={() => void saveWorkout()} />
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {/* Log/History tab strip — flips the body between the live logger
-              and the read-only history list. Both tabs sit to the left of the
-              "+" so the trainer reaches History without losing the add-
-              exercise affordance for the active session. */}
-          <div className="flex items-center rounded-xl bg-muted/40 p-0.5 mt-2.5 ring-1 ring-border/50">
-            <button
-              type="button"
-              onClick={() => setView('log')}
-              aria-pressed={view === 'log'}
-              className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
-                view === 'log'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Dumbbell className="h-3 w-3" />
-              Log
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setView('history');
-                setShowSearch(false);
-              }}
-              aria-pressed={view === 'history'}
-              className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
-                view === 'history'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <HistoryIcon className="h-3 w-3" />
-              History
-            </button>
-          </div>
+          {/* History opens past sessions in a bottom sheet over the logger. */}
+          <button
+            type="button"
+            onClick={() => {
+              setHistoryOpen(true);
+              setShowSearch(false);
+            }}
+            className="mt-2.5 flex items-center gap-1 rounded-xl bg-muted/40 px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground ring-1 ring-border/50 transition-colors hover:text-foreground"
+          >
+            <HistoryIcon className="h-3 w-3" />
+            History
+          </button>
         </div>
       </div>
 
-      {/* ── History view ── */}
-      {view === 'history' && clientProfileId && (
-        <WorkoutHistoryList
-          historyEndpoint={`/api/trainer/clients/${clientProfileId}/workout-history`}
-          activeSessionId={sessionInstanceId}
-        />
-      )}
-      {view === 'history' && !clientProfileId && (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
-          <HistoryIcon className="h-7 w-7 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            History is unavailable — client profile is missing.
-          </p>
-        </div>
+      {historyOpen && (
+        <BottomSheet
+          eyebrow="Workout history"
+          title="Past sessions"
+          onClose={() => setHistoryOpen(false)}
+        >
+          <div className="px-5 pb-6">
+            {clientProfileId ? (
+              <WorkoutHistoryList
+                historyEndpoint={`/api/trainer/clients/${clientProfileId}/workout-history`}
+                activeSessionId={sessionInstanceId}
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
+                <HistoryIcon className="h-7 w-7 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  History is unavailable. Client profile is missing.
+                </p>
+              </div>
+            )}
+          </div>
+        </BottomSheet>
       )}
 
-      {/* ── Log view body — every block below is gated so the History tab
-          renders nothing but the read-only history list. Wrapped in a single
-          guarded fragment to keep the diff small and the indentation flat. */}
-      {view === 'log' && (
-        <>
-          {/* ── Today's focus — colored pill row showing the muscle groups the
+      <>
+        {/* ── Today's focus — neutral pill row showing the muscle groups the
           trainer committed to via the picker. A quick visual reminder of the
           day's plan when juggling multiple sessions. ── */}
-          {focusGroupIds.size > 0 && (
-            <div className="-mt-1 flex items-center gap-1.5 overflow-x-auto pb-0.5">
-              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Today
-              </span>
-              <span className="shrink-0 text-[10px] text-muted-foreground/40">·</span>
-              {[...focusGroupIds].map((id) => {
-                const group = CURATED_MUSCLE_GROUPS.find((g) => g.id === id);
-                if (!group) return null;
-                const theme = GROUP_THEME[id];
-                return (
-                  <span
-                    key={id}
-                    className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${theme.bg} ${theme.text}`}
-                  >
-                    {group.label}
-                  </span>
-                );
-              })}
-            </div>
-          )}
+        {focusGroupIds.size > 0 && (
+          <div className="-mt-1 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Today
+            </span>
+            <span className="shrink-0 text-[10px] text-muted-foreground/40">·</span>
+            {[...focusGroupIds].map((id) => {
+              const group = CURATED_MUSCLE_GROUPS.find((g) => g.id === id);
+              if (!group) return null;
+              return (
+                <span
+                  key={id}
+                  className="shrink-0 rounded-full bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-foreground/80 ring-1 ring-border/60"
+                >
+                  {group.label}
+                </span>
+              );
+            })}
+          </div>
+        )}
 
-          {/* ── Exercise search modal ──
+        {/* ── Exercise search modal ──
               Two-zone layout: sticky header with input + filter chips,
               scrollable result body. Filters fire independently of the query
               so trainers can browse "all chest" without typing — important
               for new clients with no history. */}
-          {showSearch &&
-            (() => {
-              const closeSearch = () => {
-                setShowSearch(false);
-                setSearchQuery('');
-                setSearchResults([]);
-                setSearchRelaxed(false);
-                setSearchMuscleGroups(new Set());
-                setSearchExerciseType(null);
-                setSearchSelectedIds(new Set());
-              };
-              const hasFilter =
-                searchMuscleGroups.size > 0 || searchExerciseType !== null || !!searchQuery.trim();
-              const clearFilters = () => {
-                setSearchMuscleGroups(new Set());
-                setSearchExerciseType(null);
-              };
-              const toggleGroupChip = (id: CuratedMuscleGroupId) => {
-                setSearchMuscleGroups((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                });
-              };
-              const toggleResult = (id: string) => {
-                setSearchSelectedIds((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                });
-              };
-              const commitSelection = () => {
-                const picked = searchResults
-                  .filter((ex) => searchSelectedIds.has(ex.id))
-                  .map<PickedExercise>((ex) => ({
-                    exerciseId: ex.id,
-                    name: ex.name,
-                    targetMuscleGroup: ex.targetMuscleGroup,
-                    category: ex.category,
-                    exerciseType: ex.exerciseType,
-                    secondaryMetric: ex.secondaryMetric,
-                    lastSet: null,
-                  }));
-                if (picked.length === 0) return;
-                addExercisesFromPicker(picked);
-                closeSearch();
-              };
-              // Hide rows that are already in the current workout — the
-              // trainer can't usefully re-add them (the dedupe in
-              // `addExercisesFromPicker` would silently drop them anyway) and
-              // showing them clutters the catalog. Filter client-side so a
-              // single result page is the source of truth.
-              const loggedExerciseIds = new Set(exercises.map((e) => e.exerciseId));
-              const visibleResults = searchResults.filter((ex) => !loggedExerciseIds.has(ex.id));
-              const allHiddenByLog = searchResults.length > 0 && visibleResults.length === 0;
-              return (
-                <>
-                  <div
-                    className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-                    onClick={closeSearch}
-                  />
-                  <div className="fixed left-4 right-4 top-20 z-50 flex max-h-[80vh] flex-col rounded-2xl border bg-card shadow-2xl overflow-hidden">
-                    {/* ── Header: input + close ── */}
-                    <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
-                      <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <input
-                        ref={searchRef}
-                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                        placeholder="Search exercises…"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') closeSearch();
-                        }}
-                      />
-                      {searchQuery && (
-                        <button
-                          onClick={() => setSearchQuery('')}
-                          aria-label="Clear search"
-                          className="rounded-md p-1 text-muted-foreground hover:text-foreground"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+        {showSearch &&
+          (() => {
+            const closeSearch = () => {
+              setShowSearch(false);
+              setSearchQuery('');
+              setSearchResults([]);
+              setSearchRelaxed(false);
+              setSearchMuscleGroups(new Set());
+              setSearchExerciseType(null);
+              setSearchSelectedIds(new Set());
+            };
+            const hasFilter =
+              searchMuscleGroups.size > 0 || searchExerciseType !== null || !!searchQuery.trim();
+            const clearFilters = () => {
+              setSearchMuscleGroups(new Set());
+              setSearchExerciseType(null);
+            };
+            const toggleGroupChip = (id: CuratedMuscleGroupId) => {
+              setSearchMuscleGroups((prev) => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              });
+            };
+            const toggleResult = (id: string) => {
+              setSearchSelectedIds((prev) => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              });
+            };
+            const commitSelection = () => {
+              const picked = searchResults
+                .filter((ex) => searchSelectedIds.has(ex.id))
+                .map<PickedExercise>((ex) => ({
+                  exerciseId: ex.id,
+                  name: ex.name,
+                  targetMuscleGroup: ex.targetMuscleGroup,
+                  category: ex.category,
+                  exerciseType: ex.exerciseType,
+                  secondaryMetric: ex.secondaryMetric,
+                  lastSet: null,
+                }));
+              if (picked.length === 0) return;
+              addExercisesFromPicker(picked);
+              closeSearch();
+            };
+            // Hide rows that are already in the current workout — the
+            // trainer can't usefully re-add them (the dedupe in
+            // `addExercisesFromPicker` would silently drop them anyway) and
+            // showing them clutters the catalog. Filter client-side so a
+            // single result page is the source of truth.
+            const loggedExerciseIds = new Set(exercises.map((e) => e.exerciseId));
+            const visibleResults = searchResults.filter((ex) => !loggedExerciseIds.has(ex.id));
+            const allHiddenByLog = searchResults.length > 0 && visibleResults.length === 0;
+            return (
+              <>
+                <div
+                  className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+                  onClick={closeSearch}
+                />
+                <div className="fixed left-4 right-4 top-20 z-50 flex max-h-[80vh] flex-col rounded-2xl border bg-card shadow-2xl overflow-hidden">
+                  {/* ── Header: input + close ── */}
+                  <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
+                    <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <input
+                      ref={searchRef}
+                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                      placeholder="Search exercises…"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') closeSearch();
+                      }}
+                    />
+                    {searchQuery && (
                       <button
-                        onClick={closeSearch}
-                        aria-label="Close search"
-                        className="rounded-md bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                        onClick={() => setSearchQuery('')}
+                        aria-label="Clear search"
+                        className="rounded-md p-1 text-muted-foreground hover:text-foreground"
                       >
-                        Done
+                        <X className="h-3.5 w-3.5" />
                       </button>
-                    </div>
+                    )}
+                    <button
+                      onClick={closeSearch}
+                      aria-label="Close search"
+                      className="rounded-md bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                    >
+                      Done
+                    </button>
+                  </div>
 
-                    {/* ── Filter strip ──
+                  {/* ── Filter strip ──
                         Each filter (label + chips) is its own block with tight
                         internal spacing; the two blocks sit farther apart so
                         the eye groups them correctly. */}
-                    <div className="border-b border-border/50 px-3 pt-3 pb-3.5 space-y-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            Muscle group
-                          </p>
-                          {(searchMuscleGroups.size > 0 || searchExerciseType) && (
-                            <button
-                              onClick={clearFilters}
-                              className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-                            >
-                              Clear
-                            </button>
-                          )}
-                        </div>
-                        <div className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
-                          {/* "All" = no muscle-group filter. Active (and the
+                  <div className="border-b border-border/50 px-3 pt-3 pb-3.5 space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Muscle group
+                        </p>
+                        {(searchMuscleGroups.size > 0 || searchExerciseType) && (
+                          <button
+                            onClick={clearFilters}
+                            className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <div className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
+                        {/* "All" = no muscle-group filter. Active (and the
                               default) whenever nothing is selected so the
                               trainer can browse/search the whole catalog. */}
-                          <button
-                            onClick={() => setSearchMuscleGroups(new Set())}
-                            aria-pressed={searchMuscleGroups.size === 0}
-                            className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                              searchMuscleGroups.size === 0
-                                ? 'bg-foreground text-background'
-                                : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
-                            }`}
-                          >
-                            All
-                          </button>
-                          {CURATED_MUSCLE_GROUPS.map((g) => {
-                            const isOn = searchMuscleGroups.has(g.id);
-                            const theme = GROUP_THEME[g.id];
+                        <button
+                          onClick={() => setSearchMuscleGroups(new Set())}
+                          aria-pressed={searchMuscleGroups.size === 0}
+                          className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                            searchMuscleGroups.size === 0
+                              ? 'bg-foreground text-background'
+                              : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
+                          }`}
+                        >
+                          All
+                        </button>
+                        {CURATED_MUSCLE_GROUPS.map((g) => {
+                          const isOn = searchMuscleGroups.has(g.id);
+                          const theme = GROUP_THEME[g.id];
+                          return (
+                            <button
+                              key={g.id}
+                              onClick={() => toggleGroupChip(g.id)}
+                              aria-pressed={isOn}
+                              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                                isOn
+                                  ? `${theme.bg} ${theme.text} ring-1 ${theme.ring.split(' ')[0]}`
+                                  : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
+                              }`}
+                            >
+                              {g.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Type
+                      </p>
+                      <div className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
+                        <button
+                          onClick={() => setSearchExerciseType(null)}
+                          aria-pressed={searchExerciseType === null}
+                          className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                            searchExerciseType === null
+                              ? 'bg-foreground text-background'
+                              : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
+                          }`}
+                        >
+                          All
+                        </button>
+                        {(['WEIGHTED', 'BODYWEIGHT', 'DURATION', 'CARDIO'] as ExerciseType[]).map(
+                          (t) => {
+                            const cfg = TYPE_CONFIG[t];
+                            const isOn = searchExerciseType === t;
                             return (
                               <button
-                                key={g.id}
-                                onClick={() => toggleGroupChip(g.id)}
+                                key={t}
+                                onClick={() => setSearchExerciseType(isOn ? null : t)}
                                 aria-pressed={isOn}
                                 className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
                                   isOn
-                                    ? `${theme.bg} ${theme.text} ring-1 ${theme.ring.split(' ')[0]}`
+                                    ? `${cfg.bg} ${cfg.text} ring-1 ring-current/40`
                                     : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
                                 }`}
                               >
-                                {g.label}
+                                {cfg.label}
+                              </button>
+                            );
+                          },
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Results body ── */}
+                  <div className="flex-1 overflow-y-auto overscroll-contain">
+                    {searchLoading ? (
+                      <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Searching…
+                      </div>
+                    ) : visibleResults.length > 0 ? (
+                      <>
+                        {searchRelaxed && (
+                          <div className="flex items-start gap-2 border-b border-border/50 bg-amber-500/10 px-4 py-2.5">
+                            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                            <p className="text-[11px] leading-snug text-muted-foreground">
+                              No exact match for{' '}
+                              <span className="font-semibold text-foreground">
+                                “{searchQuery.trim()}”
+                              </span>{' '}
+                              — showing the closest exercises.
+                            </p>
+                          </div>
+                        )}
+                        <div className="divide-y divide-border/50">
+                          {visibleResults.map((ex) => {
+                            const cfg = TYPE_CONFIG[ex.exerciseType];
+                            const Icon = cfg.icon;
+                            const isSelected = searchSelectedIds.has(ex.id);
+                            return (
+                              <button
+                                key={ex.id}
+                                onClick={() => toggleResult(ex.id)}
+                                aria-pressed={isSelected}
+                                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                                  isSelected ? 'bg-primary/5' : 'active:bg-muted/60'
+                                }`}
+                              >
+                                <div
+                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
+                                >
+                                  <Icon className={`h-4 w-4 ${cfg.text}`} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-medium">{ex.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {ex.targetMuscleGroup}
+                                    {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
+                                    {` · ${cfg.label}`}
+                                  </p>
+                                </div>
+                                <div
+                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
+                                    isSelected
+                                      ? 'bg-primary text-primary-foreground'
+                                      : 'bg-muted text-muted-foreground'
+                                  }`}
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </div>
                               </button>
                             );
                           })}
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          Type
+                      </>
+                    ) : allHiddenByLog ? (
+                      <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15">
+                          <Check className="h-4 w-4 text-emerald-400" />
+                        </div>
+                        <p className="text-sm font-medium">Already in this workout</p>
+                        <p className="text-xs text-muted-foreground">
+                          Every match is already logged — try a different filter.
                         </p>
-                        <div className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
-                          <button
-                            onClick={() => setSearchExerciseType(null)}
-                            aria-pressed={searchExerciseType === null}
-                            className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                              searchExerciseType === null
-                                ? 'bg-foreground text-background'
-                                : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
-                            }`}
-                          >
-                            All
-                          </button>
-                          {(['WEIGHTED', 'BODYWEIGHT', 'DURATION', 'CARDIO'] as ExerciseType[]).map(
-                            (t) => {
-                              const cfg = TYPE_CONFIG[t];
-                              const isOn = searchExerciseType === t;
-                              return (
-                                <button
-                                  key={t}
-                                  onClick={() => setSearchExerciseType(isOn ? null : t)}
-                                  aria-pressed={isOn}
-                                  className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                                    isOn
-                                      ? `${cfg.bg} ${cfg.text} ring-1 ring-current/40`
-                                      : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'
-                                  }`}
-                                >
-                                  {cfg.label}
-                                </button>
-                              );
-                            },
-                          )}
-                        </div>
                       </div>
-                    </div>
-
-                    {/* ── Results body ── */}
-                    <div className="flex-1 overflow-y-auto overscroll-contain">
-                      {searchLoading ? (
-                        <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Searching…
-                        </div>
-                      ) : visibleResults.length > 0 ? (
-                        <>
-                          {searchRelaxed && (
-                            <div className="flex items-start gap-2 border-b border-border/50 bg-amber-500/10 px-4 py-2.5">
-                              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-                              <p className="text-[11px] leading-snug text-muted-foreground">
-                                No exact match for{' '}
-                                <span className="font-semibold text-foreground">
-                                  “{searchQuery.trim()}”
-                                </span>{' '}
-                                — showing the closest exercises.
-                              </p>
+                    ) : hasFilter ? (
+                      (() => {
+                        // Two failure modes: (a) chip filters narrowed the
+                        // catalog so a real query found nothing → offer a
+                        // one-tap "search globally for this query" escape;
+                        // (b) only the query is set → nothing we can clear
+                        // for them, fall back to the generic message.
+                        const chipsActive =
+                          searchMuscleGroups.size > 0 || searchExerciseType !== null;
+                        const q = searchQuery.trim();
+                        const canEscape = chipsActive && q.length > 0;
+                        return (
+                          <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted">
+                              <Search className="h-4 w-4 text-muted-foreground" />
                             </div>
-                          )}
-                          <div className="divide-y divide-border/50">
-                            {visibleResults.map((ex) => {
-                              const cfg = TYPE_CONFIG[ex.exerciseType];
-                              const Icon = cfg.icon;
-                              const isSelected = searchSelectedIds.has(ex.id);
-                              return (
-                                <button
-                                  key={ex.id}
-                                  onClick={() => toggleResult(ex.id)}
-                                  aria-pressed={isSelected}
-                                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                                    isSelected ? 'bg-primary/5' : 'active:bg-muted/60'
-                                  }`}
-                                >
-                                  <div
-                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
-                                  >
-                                    <Icon className={`h-4 w-4 ${cfg.text}`} />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-medium">{ex.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {ex.targetMuscleGroup}
-                                      {ex.equipmentRequired ? ` · ${ex.equipmentRequired}` : ''}
-                                      {` · ${cfg.label}`}
-                                    </p>
-                                  </div>
-                                  <div
-                                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
-                                      isSelected
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-muted text-muted-foreground'
-                                    }`}
-                                  >
-                                    <Check className="h-3.5 w-3.5" />
-                                  </div>
-                                </button>
-                              );
-                            })}
+                            <p className="text-sm font-medium">No exercises match</p>
+                            <p className="text-xs text-muted-foreground">
+                              {canEscape
+                                ? 'Your filters may be hiding it.'
+                                : 'Try a different filter or clear them all.'}
+                            </p>
+                            {canEscape && (
+                              <button
+                                onClick={clearFilters}
+                                className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground transition-opacity active:opacity-80"
+                              >
+                                <Search className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">Search all exercises for “{q}”</span>
+                              </button>
+                            )}
                           </div>
-                        </>
-                      ) : allHiddenByLog ? (
-                        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15">
-                            <Check className="h-4 w-4 text-emerald-400" />
-                          </div>
-                          <p className="text-sm font-medium">Already in this workout</p>
-                          <p className="text-xs text-muted-foreground">
-                            Every match is already logged — try a different filter.
-                          </p>
+                        );
+                      })()
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted">
+                          <Sparkles className="h-4 w-4 text-muted-foreground" />
                         </div>
-                      ) : hasFilter ? (
-                        (() => {
-                          // Two failure modes: (a) chip filters narrowed the
-                          // catalog so a real query found nothing → offer a
-                          // one-tap "search globally for this query" escape;
-                          // (b) only the query is set → nothing we can clear
-                          // for them, fall back to the generic message.
-                          const chipsActive =
-                            searchMuscleGroups.size > 0 || searchExerciseType !== null;
-                          const q = searchQuery.trim();
-                          const canEscape = chipsActive && q.length > 0;
-                          return (
-                            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted">
-                                <Search className="h-4 w-4 text-muted-foreground" />
-                              </div>
-                              <p className="text-sm font-medium">No exercises match</p>
-                              <p className="text-xs text-muted-foreground">
-                                {canEscape
-                                  ? 'Your filters may be hiding it.'
-                                  : 'Try a different filter or clear them all.'}
-                              </p>
-                              {canEscape && (
-                                <button
-                                  onClick={clearFilters}
-                                  className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground transition-opacity active:opacity-80"
-                                >
-                                  <Search className="h-3.5 w-3.5 shrink-0" />
-                                  <span className="truncate">Search all exercises for “{q}”</span>
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })()
-                      ) : (
-                        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted">
-                            <Sparkles className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <p className="text-sm font-medium">Filter or search the catalog</p>
-                          <p className="text-xs text-muted-foreground">
-                            Pick a muscle group above to browse, or start typing.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* ── Sticky footer: commit the current multi-select. Only
-                        renders when something is checked so the result list
-                        keeps its full height in the common "still browsing"
-                        state. */}
-                    {searchSelectedIds.size > 0 && (
-                      <div className="border-t border-border/50 bg-card px-3 py-2.5">
-                        <button
-                          onClick={commitSelection}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
-                        >
-                          Add {searchSelectedIds.size} to workout
-                          <span className="rounded-full bg-primary-foreground/20 px-2 py-0.5 text-[10px] font-bold">
-                            {searchSelectedIds.size}
-                          </span>
-                        </button>
+                        <p className="text-sm font-medium">Filter or search the catalog</p>
+                        <p className="text-xs text-muted-foreground">
+                          Pick a muscle group above to browse, or start typing.
+                        </p>
                       </div>
                     )}
                   </div>
-                </>
-              );
-            })()}
 
-          {/* ── Empty state — show muscle-group picker so the trainer can plan
+                  {/* ── Sticky footer: commit the current multi-select. Only
+                        renders when something is checked so the result list
+                        keeps its full height in the common "still browsing"
+                        state. */}
+                  {searchSelectedIds.size > 0 && (
+                    <div className="border-t border-border/50 bg-card px-3 py-2.5">
+                      <button
+                        onClick={commitSelection}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+                      >
+                        Add {searchSelectedIds.size} to workout
+                        <span className="rounded-full bg-primary-foreground/20 px-2 py-0.5 text-[10px] font-bold">
+                          {searchSelectedIds.size}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+
+        {/* ── Empty state — show muscle-group picker so the trainer can plan
           the session by tapping focus cards. `groupsOnly`: Continue commits
           the focus (which unmounts the picker via the size check below) and
           lands on the empty log — exercises are added from scratch via
           Search, never from the suggested-exercise list. Falls back to the
           dashed "no exercises" card if we don't know who the client is
           (clientProfileId is required for the recency hints). */}
-          {/* ADR-053: "Start routine" — only when the client has a program;
+        {/* ADR-053: "Start routine" — only when the client has a program;
           renders nothing otherwise, so the cold start below is unchanged. */}
-          {exercises.length === 0 &&
-            !showSearch &&
-            canApplyRoutine &&
-            clientProfileId &&
-            !routine && (
-              <RoutineStartCard
-                clientProfileId={clientProfileId}
-                clientName={clientName}
-                sessionInstanceId={sessionInstanceId}
-                disabled={hasUnsaved}
-                onChoosingProgramChange={setChoosingProgram}
-                onApplied={() => onRoutineChanged?.()}
-              />
-            )}
-          {exercises.length === 0 && !showSearch && clientProfileId && focusGroupIds.size === 0 && (
-            <MuscleGroupPicker
-              clientProfileId={clientProfileId}
-              sessionInstanceId={sessionInstanceId}
-              allowCancel={false}
-              groupsOnly
-              onAdd={addExercisesFromPicker}
-              onGroupsPicked={(ids) => setFocusGroupIds(new Set(ids))}
-            />
-          )}
-          {exercises.length === 0 &&
-            !showSearch &&
-            (!clientProfileId || focusGroupIds.size > 0) && (
-              <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-                  <Dumbbell className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-base font-semibold">No exercises yet</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Tap &ldquo;Add Exercise&rdquo; below to start logging
-                  </p>
-                </div>
-                <button
-                  onClick={openSearch}
-                  className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
-                >
-                  <Plus className="h-4 w-4" /> Add First Exercise
-                </button>
-              </div>
-            )}
-
-          {/* ── ADR-053: no routine yet — offer one above the cards ── */}
-          {exercises.length > 0 && !routine && canApplyRoutine && clientProfileId && (
+        {exercises.length === 0 &&
+          !showSearch &&
+          canApplyRoutine &&
+          clientProfileId &&
+          !routine && (
             <RoutineStartCard
-              compact
               clientProfileId={clientProfileId}
               clientName={clientName}
               sessionInstanceId={sessionInstanceId}
               disabled={hasUnsaved}
+              onChoosingProgramChange={setChoosingProgram}
               onApplied={() => onRoutineChanged?.()}
             />
           )}
+        {exercises.length === 0 && !showSearch && clientProfileId && focusGroupIds.size === 0 && (
+          <MuscleGroupPicker
+            clientProfileId={clientProfileId}
+            sessionInstanceId={sessionInstanceId}
+            allowCancel={false}
+            groupsOnly
+            onAdd={addExercisesFromPicker}
+            onGroupsPicked={(ids) => setFocusGroupIds(new Set(ids))}
+          />
+        )}
+        {exercises.length === 0 && !showSearch && (!clientProfileId || focusGroupIds.size > 0) && (
+          <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border/40 bg-muted/20 px-6 py-12 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+              <Dumbbell className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-base font-semibold">No exercises yet</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Tap &ldquo;Add Exercise&rdquo; below to start logging
+              </p>
+            </div>
+            <button
+              onClick={openSearch}
+              className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+            >
+              <Plus className="h-4 w-4" /> Add First Exercise
+            </button>
+          </div>
+        )}
 
-          {/* ── Exercise cards ── */}
-          {exercises.map((entry, exIdx) => {
-            const cfg = TYPE_CONFIG[entry.exerciseType] ?? TYPE_CONFIG.WEIGHTED;
-            const cols = colsFor(entry.exerciseType, entry.secondaryMetric);
-            const target = routineTargets.get(entry.exerciseId);
+        {/* ── ADR-053: no routine yet — offer one above the cards ── */}
+        {exercises.length > 0 && !routine && canApplyRoutine && clientProfileId && (
+          <RoutineStartCard
+            compact
+            clientProfileId={clientProfileId}
+            clientName={clientName}
+            sessionInstanceId={sessionInstanceId}
+            disabled={hasUnsaved}
+            onApplied={() => onRoutineChanged?.()}
+          />
+        )}
 
-            return (
-              <div
-                key={entry.tempId}
-                // Full-bleed: both pages that mount the logger wrap it in `px-4`,
-                // so -mx-4 takes the card edge to edge on a phone.
-                className={`-mx-4 overflow-hidden bg-card shadow-sm transition-opacity ${
-                  entry.isCompleted ? 'opacity-70' : ''
-                }`}
-                // Top/bottom hairlines only — no left accent stripe. The
-                // completed cue moved to the number tile (emerald) below.
-                style={{
-                  borderTop: '1px solid rgba(255,255,255,0.06)',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                {/* Card header — entire row toggles collapse so the trainer
+        {/* ── Exercise cards ── */}
+        {exercises.map((entry, exIdx) => {
+          const cfg = TYPE_CONFIG[entry.exerciseType] ?? TYPE_CONFIG.WEIGHTED;
+          const cols = colsFor(entry.exerciseType, entry.secondaryMetric);
+          const target = routineTargets.get(entry.exerciseId);
+
+          return (
+            <div
+              key={entry.tempId}
+              // Full-bleed: both pages that mount the logger wrap it in `px-4`,
+              // so -mx-4 takes the card edge to edge on a phone.
+              className={`-mx-4 overflow-hidden bg-card shadow-sm transition-opacity ${
+                entry.isCompleted ? 'opacity-70' : ''
+              }`}
+              // Top/bottom hairlines only — no left accent stripe. The
+              // completed cue moved to the number tile (emerald) below.
+              style={{
+                borderTop: '1px solid rgba(255,255,255,0.06)',
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
+              {/* Card header — entire row toggles collapse so the trainer
                 doesn't have to hit a tiny chevron. The action buttons
                 (progress, delete) stop propagation so they keep their own
                 tap targets. */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => toggleCollapse(entry.tempId)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      toggleCollapse(entry.tempId);
-                    }
-                  }}
-                  className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors active:bg-muted/30"
-                >
-                  {/* Position in the workout instead of the type icon.
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleCollapse(entry.tempId)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleCollapse(entry.tempId);
+                  }
+                }}
+                className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors active:bg-muted/30"
+              >
+                {/* Position in the workout instead of the type icon.
                   Emerald once the exercise is marked complete (ADR-037). */}
-                  <div
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold tabular-nums ${
-                      entry.isCompleted
-                        ? 'bg-emerald-500/15 text-emerald-500'
-                        : `${cfg.bg} ${cfg.text}`
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold tabular-nums ${
+                    entry.isCompleted
+                      ? 'bg-emerald-500/15 text-emerald-500'
+                      : `${cfg.bg} ${cfg.text}`
+                  }`}
+                >
+                  {exIdx + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`truncate text-sm font-semibold leading-tight ${
+                      entry.isCompleted ? 'text-muted-foreground line-through' : ''
                     }`}
                   >
-                    {exIdx + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`truncate text-sm font-semibold leading-tight ${
-                        entry.isCompleted ? 'text-muted-foreground line-through' : ''
-                      }`}
-                    >
-                      {entry.exerciseName}
-                    </p>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      <span className="text-[11px] text-muted-foreground">
-                        {entry.targetMuscle}
+                    {entry.exerciseName}
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground">{entry.targetMuscle}</span>
+                    {entry.isCompleted ? (
+                      // ADR-037: explicit "Completed" pill replaces the
+                      // set-count chip when complete so the state is
+                      // immediately legible at the row level.
+                      <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500">
+                        <Check className="h-2.5 w-2.5" />
+                        Completed
                       </span>
-                      {entry.isCompleted ? (
-                        // ADR-037: explicit "Completed" pill replaces the
-                        // set-count chip when complete so the state is
-                        // immediately legible at the row level.
-                        <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500">
-                          <Check className="h-2.5 w-2.5" />
-                          Completed
-                        </span>
-                      ) : (
-                        <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
-                        >
-                          {entry.sets.length} {entry.sets.length === 1 ? 'set' : 'sets'}
-                        </span>
-                      )}
-                      {/* ADR-052: a note is only readable with the card open,
+                    ) : (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}
+                      >
+                        {entry.sets.length} {entry.sets.length === 1 ? 'set' : 'sets'}
+                      </span>
+                    )}
+                    {/* ADR-052: a note is only readable with the card open,
                       so flag its existence on the header — otherwise a note
                       written last week is invisible behind a collapsed card
                       and the trainer has no reason to go looking. */}
-                      {allowExerciseNotes && entry.notes.trim() !== '' && (
-                        <span
-                          className="flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500"
-                          title={entry.notes}
-                        >
-                          <StickyNote className="h-2.5 w-2.5" />
-                          Note
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    {clientProfileId && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const unit = progressUnitFor(entry.exerciseType, entry.secondaryMetric);
-                          setProgressModal({
-                            exerciseId: entry.exerciseId,
-                            exerciseName: entry.exerciseName,
-                            unit,
-                          });
-                        }}
-                        className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition-colors active:bg-primary/10 active:text-primary"
-                        title="View progress"
+                    {allowExerciseNotes && entry.notes.trim() !== '' && (
+                      <span
+                        className="flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500"
+                        title={entry.notes}
                       >
-                        <TrendingUp className="h-4 w-4" />
-                      </button>
+                        <StickyNote className="h-2.5 w-2.5" />
+                        Note
+                      </span>
                     )}
-                    {/* Chevron is now decorative — the surrounding row handles the
-                    tap. Kept as a span (not a button) so it doesn't steal a
-                    tap target or nest interactives. */}
-                    <span
-                      aria-hidden
-                      className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground"
-                    >
-                      <motion.span
-                        animate={{ rotate: entry.collapsed ? 0 : 180 }}
-                        transition={{ duration: 0.2, ease: 'easeInOut' }}
-                        className="flex"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </motion.span>
-                    </span>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  {clientProfileId && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        removeExercise(entry.tempId);
+                        const unit = progressUnitFor(entry.exerciseType, entry.secondaryMetric);
+                        setProgressModal({
+                          exerciseId: entry.exerciseId,
+                          exerciseName: entry.exerciseName,
+                          unit,
+                        });
                       }}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground/60 transition-colors active:bg-destructive/10 active:text-destructive"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition-colors active:bg-primary/10 active:text-primary"
+                      title="View progress"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <TrendingUp className="h-4 w-4" />
                     </button>
-                  </div>
-                </div>
-
-                {/* Set table (collapsible) */}
-                <AnimatePresence initial={false}>
-                  {!entry.collapsed && (
-                    <motion.div
-                      key="content"
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.25, ease: 'easeInOut' }}
-                      style={{ overflow: 'hidden' }}
+                  )}
+                  {/* Chevron is now decorative — the surrounding row handles the
+                    tap. Kept as a span (not a button) so it doesn't steal a
+                    tap target or nest interactives. */}
+                  <span
+                    aria-hidden
+                    className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground"
+                  >
+                    <motion.span
+                      animate={{ rotate: entry.collapsed ? 0 : 180 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="flex"
                     >
-                      <div className="border-t border-border/40 px-4 pb-4 pt-3">
-                        {/* ADR-053: routine target strip */}
-                        {target && target.sets.length > 0 && (
-                          // Plain typographic line — no box, no accent: the
-                          // target is reference info, not an action.
-                          <div className="mb-3">
-                            <p className="flex items-baseline gap-2 text-[13px]">
-                              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
-                                Target
-                              </span>
-                              <span className="font-medium text-foreground">
-                                {summarizeExerciseTarget(
-                                  target.sets,
-                                  entry.exerciseType,
-                                  entry.secondaryMetric,
-                                )}
-                              </span>
-                              {target.restSec != null && (
-                                <>
-                                  <span aria-hidden className="text-muted-foreground/50">
-                                    ·
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    {formatRest(target.restSec)?.toLowerCase()}
-                                  </span>
-                                </>
-                              )}
-                            </p>
-                            {target.notes && (
-                              <p className="mt-1 text-xs text-muted-foreground">{target.notes}</p>
-                            )}
-                          </div>
-                        )}
-                        {/* Column header row */}
-                        <div
-                          className={`mb-2 grid items-center gap-2 ${getGridClass(cols.length)}`}
-                        >
-                          <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            #
-                          </span>
-                          {cols.map((col) => (
-                            <span
-                              key={col.key as string}
-                              className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                            >
-                              {col.label}
-                            </span>
-                          ))}
-                          {/* save-tick + remove columns (no labels) */}
-                          <span />
-                          <span />
-                        </div>
+                      <ChevronDown className="h-4 w-4" />
+                    </motion.span>
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeExercise(entry.tempId);
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground/60 transition-colors active:bg-destructive/10 active:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
 
-                        {/* Set rows */}
-                        <div className="space-y-2">
-                          {entry.sets.map((set, setIdx) => {
-                            // Green once the whole set's persisted values match
-                            // what's on screen — i.e. it's been saved and not
-                            // re-edited since. Partial rows never match (they're
-                            // excluded from the save payload).
-                            const setSaved = savedSignatures.has(
-                              setSignature(entry.exerciseId, normalizeSet(set)),
-                            );
-                            return (
-                              <div
-                                key={setIdx}
-                                className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
-                              >
-                                {/* Set number badge. ADR-053: when the routine
+              {/* Set table (collapsible) */}
+              <AnimatePresence initial={false}>
+                {!entry.collapsed && (
+                  <motion.div
+                    key="content"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <div className="border-t border-border/40 px-4 pb-4 pt-3">
+                      {/* ADR-053: routine target strip */}
+                      {target && target.sets.length > 0 && (
+                        // Plain typographic line — no box, no accent: the
+                        // target is reference info, not an action.
+                        <div className="mb-3">
+                          <p className="flex items-baseline gap-2 text-[13px]">
+                            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+                              Target
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {summarizeExerciseTarget(
+                                target.sets,
+                                entry.exerciseType,
+                                entry.secondaryMetric,
+                              )}
+                            </span>
+                            {target.restSec != null && (
+                              <>
+                                <span aria-hidden className="text-muted-foreground/50">
+                                  ·
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {formatRest(target.restSec)?.toLowerCase()}
+                                </span>
+                              </>
+                            )}
+                          </p>
+                          {target.notes && (
+                            <p className="mt-1 text-xs text-muted-foreground">{target.notes}</p>
+                          )}
+                        </div>
+                      )}
+                      {/* Column header row */}
+                      <div className={`mb-2 grid items-center gap-2 ${getGridClass(cols.length)}`}>
+                        <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          #
+                        </span>
+                        {cols.map((col) => (
+                          <span
+                            key={col.key as string}
+                            className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                          >
+                            {col.label}
+                          </span>
+                        ))}
+                        {/* save-tick + remove columns (no labels) */}
+                        <span />
+                        <span />
+                      </div>
+
+                      {/* Set rows */}
+                      <div className="space-y-2">
+                        {entry.sets.map((set, setIdx) => {
+                          // Green once the whole set's persisted values match
+                          // what's on screen — i.e. it's been saved and not
+                          // re-edited since. Partial rows never match (they're
+                          // excluded from the save payload).
+                          const setSaved = savedSignatures.has(
+                            setSignature(entry.exerciseId, normalizeSet(set)),
+                          );
+                          return (
+                            <div
+                              key={setIdx}
+                              className={`grid items-center gap-2 ${getGridClass(cols.length)}`}
+                            >
+                              {/* Set number badge. ADR-053: when the routine
                                 plans this set, the badge is a button that fills
                                 the row with its target (ringed to say so). */}
-                                <div className="flex items-center justify-center">
-                                  {(() => {
-                                    const setTarget = target?.sets.find(
-                                      (t) => t.setNumber === set.setNumber,
-                                    );
-                                    const targetText = setTarget
-                                      ? formatSetTarget(
-                                          setTarget,
-                                          entry.exerciseType,
-                                          entry.secondaryMetric,
-                                        )
-                                      : null;
-                                    const typeShort = setTarget
-                                      ? SET_TYPE_SHORT[setTarget.setType]
-                                      : null;
-                                    if (!setTarget || !targetText) {
-                                      return (
-                                        <span
-                                          className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-                                          style={{
-                                            backgroundColor: cfg.accent + '22',
-                                            color: cfg.accent,
-                                          }}
-                                        >
-                                          {typeShort ?? set.setNumber}
-                                        </span>
-                                      );
-                                    }
+                              <div className="flex items-center justify-center">
+                                {(() => {
+                                  const setTarget = target?.sets.find(
+                                    (t) => t.setNumber === set.setNumber,
+                                  );
+                                  const targetText = setTarget
+                                    ? formatSetTarget(
+                                        setTarget,
+                                        entry.exerciseType,
+                                        entry.secondaryMetric,
+                                      )
+                                    : null;
+                                  const typeShort = setTarget
+                                    ? SET_TYPE_SHORT[setTarget.setType]
+                                    : null;
+                                  if (!setTarget || !targetText) {
                                     return (
-                                      <button
-                                        type="button"
-                                        onClick={() => fillSetFromTarget(exIdx, setIdx, setTarget)}
-                                        aria-label={`Fill set ${set.setNumber} with target ${targetText}`}
-                                        title={`${SET_TYPE_LABEL[setTarget.setType]} · ${targetText}. Tap to fill`}
-                                        className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ring-2 ring-primary/60 active:scale-95"
+                                      <span
+                                        className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
                                         style={{
                                           backgroundColor: cfg.accent + '22',
                                           color: cfg.accent,
                                         }}
                                       >
                                         {typeShort ?? set.setNumber}
-                                      </button>
+                                      </span>
                                     );
-                                  })()}
-                                </div>
+                                  }
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => fillSetFromTarget(exIdx, setIdx, setTarget)}
+                                      aria-label={`Fill set ${set.setNumber} with target ${targetText}`}
+                                      title={`${SET_TYPE_LABEL[setTarget.setType]} · ${targetText}. Tap to fill`}
+                                      className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ring-2 ring-primary/60 active:scale-95"
+                                      style={{
+                                        backgroundColor: cfg.accent + '22',
+                                        color: cfg.accent,
+                                      }}
+                                    >
+                                      {typeShort ?? set.setNumber}
+                                    </button>
+                                  );
+                                })()}
+                              </div>
 
-                                {/* Dynamic fields */}
-                                {cols.map((col) => {
-                                  // Rest cell is a 3-state toggle: idle (tap to
-                                  // start rest), active (live countdown for the
-                                  // row that owns the running timer), done
-                                  // (recorded MM:SS value).
-                                  if (col.key === 'restSec') {
-                                    const isActiveTarget =
-                                      pendingRestTarget?.tempId === entry.tempId &&
-                                      pendingRestTarget?.setNumber === set.setNumber;
-                                    const hasValue = set.restSec !== undefined;
-                                    const isActive =
-                                      isActiveTarget &&
-                                      restTimerRemaining !== undefined &&
-                                      restTimerRemaining !== null;
+                              {/* Dynamic fields */}
+                              {cols.map((col) => {
+                                // Rest cell is a 3-state toggle: idle (tap to
+                                // start rest), active (live countdown for the
+                                // row that owns the running timer), done
+                                // (recorded MM:SS value).
+                                if (col.key === 'restSec') {
+                                  const isActiveTarget =
+                                    pendingRestTarget?.tempId === entry.tempId &&
+                                    pendingRestTarget?.setNumber === set.setNumber;
+                                  const hasValue = set.restSec !== undefined;
+                                  const isActive =
+                                    isActiveTarget &&
+                                    restTimerRemaining !== undefined &&
+                                    restTimerRemaining !== null;
 
-                                    if (hasValue) {
-                                      return (
-                                        <div
-                                          key={col.key as string}
-                                          className="flex h-11 items-center justify-center rounded-xl border border-zinc-800 bg-muted/20 text-sm font-semibold tabular-nums text-foreground"
-                                        >
-                                          {formatRestSec(set.restSec)}
-                                        </div>
-                                      );
-                                    }
-                                    if (isActive) {
-                                      return (
-                                        <div
-                                          key={col.key as string}
-                                          aria-live="polite"
-                                          className={`flex h-11 items-center justify-center gap-1 rounded-xl border text-sm font-bold tabular-nums ${
-                                            restTimerPaused
-                                              ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                                              : 'border-blue-500/50 bg-blue-500/15 text-blue-300'
-                                          }`}
-                                        >
-                                          {restTimerPaused && (
-                                            <span className="text-[10px] uppercase opacity-70">
-                                              ||
-                                            </span>
-                                          )}
-                                          {formatRestSec(restTimerRemaining ?? 0)}
-                                        </div>
-                                      );
-                                    }
-                                    // Idle: only enable the rest button once the
-                                    // trainer has logged the work for this set
-                                    // (kg + reps for WEIGHTED, reps for
-                                    // BODYWEIGHT, duration for DURATION). Resting
-                                    // before logging is almost always a mis-tap.
-                                    const setLogged = cols
-                                      .filter((c) => c.key !== 'restSec' && c.key !== 'notes')
-                                      .every(
-                                        (c) => (set[c.key] as number | undefined) !== undefined,
-                                      );
+                                  if (hasValue) {
                                     return (
-                                      <button
+                                      <div
                                         key={col.key as string}
-                                        onClick={() =>
-                                          requestRestForSet(entry.tempId, set.setNumber)
-                                        }
-                                        disabled={!setLogged}
-                                        aria-label={
-                                          setLogged
-                                            ? `Start rest after set ${set.setNumber}`
-                                            : `Log this set before starting rest`
-                                        }
-                                        className="flex h-11 items-center justify-center rounded-xl border border-blue-500/30 text-blue-400/70 transition-colors active:bg-blue-500/10 active:text-blue-400 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-muted-foreground/30 disabled:active:bg-transparent"
+                                        className="flex h-11 items-center justify-center rounded-xl border border-zinc-800 bg-muted/20 text-sm font-semibold tabular-nums text-foreground"
                                       >
-                                        <Clock className="h-4 w-4" />
-                                      </button>
+                                        {formatRestSec(set.restSec)}
+                                      </div>
                                     );
                                   }
-                                  {
-                                    const mode = inputModeFor(col.key);
-                                    const draftKey = `${exIdx}-${setIdx}-${col.key as string}`;
-                                    // Value the server would reject (0 reps,
-                                    // decimal reps, rest > 60 min) — the set
-                                    // stays a local draft until it's fixed, so
-                                    // flag the exact cell.
-                                    const fieldInvalid = !isSetFieldValid(
-                                      col.key,
-                                      set[col.key] as number | string | undefined,
-                                    );
+                                  if (isActive) {
                                     return (
-                                      <Input
+                                      <div
                                         key={col.key as string}
-                                        // text + inputMode (vs type="number") avoids Safari's
-                                        // number-input quirks (mid-keystroke validation, scroll-
-                                        // wheel mutations, trailing-zero stripping) while still
-                                        // surfacing the right mobile keypad.
-                                        type="text"
-                                        // "Set 1 kg" / "Set 2 reps" — for screen readers and
-                                        // the Playwright e2e tests.
-                                        aria-label={`Set ${set.setNumber} ${col.label}`}
-                                        inputMode={mode}
-                                        pattern={mode === 'decimal' ? '[0-9]*\\.?[0-9]*' : '[0-9]*'}
-                                        enterKeyHint="done"
-                                        autoComplete="off"
-                                        placeholder={placeholderFor(
-                                          col.key,
-                                          priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
-                                        )}
-                                        // text-base = 16px: below this iOS Safari auto-zooms on
-                                        // focus even with user-scalable=no in PWA standalone.
-                                        // Saved rows turn green so the trainer knows the value
-                                        // is persisted; editing flips the row back to neutral.
-                                        className={`h-11 rounded-xl text-center text-base font-semibold tabular-nums border focus-visible:ring-0 ${
-                                          fieldInvalid
-                                            ? 'border-red-500/70 text-red-400 focus:border-red-500'
-                                            : setSaved
-                                              ? 'border-emerald-600/40 text-emerald-400 focus:border-blue-500'
-                                              : 'border-zinc-700 focus:border-blue-500'
+                                        aria-live="polite"
+                                        className={`flex h-11 items-center justify-center gap-1 rounded-xl border text-sm font-bold tabular-nums ${
+                                          restTimerPaused
+                                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                                            : 'border-blue-500/50 bg-blue-500/15 text-blue-300'
                                         }`}
-                                        value={
-                                          col.key === 'notes'
-                                            ? set.notes
-                                            : (cellDrafts[draftKey] ??
-                                              (set[col.key] as number | undefined) ??
-                                              '')
-                                        }
-                                        onChange={(e) => {
-                                          // Keep the raw keystrokes so in-progress
-                                          // decimals (e.g. "100." → "100.5") survive
-                                          // the round-trip through a numeric value.
-                                          if (col.key !== 'notes') {
-                                            setCellDrafts((d) => ({
-                                              ...d,
-                                              [draftKey]: e.target.value,
-                                            }));
-                                          }
-                                          updateSet(exIdx, setIdx, col.key, e.target.value);
-                                        }}
-                                        onTouchStart={(e) => {
-                                          const t = e.touches[0];
-                                          tapStart.current = t
-                                            ? { x: t.clientX, y: t.clientY }
-                                            : null;
-                                        }}
-                                        onTouchEnd={(e) => {
-                                          // iOS sizes its keyboard reveal from where the field sat when the
-                                          // finger lifted, so parking it on focus is too late: the view still
-                                          // jumps up, then snaps back. Take over the tap: park first, then
-                                          // focus (still inside the gesture, so the keyboard opens). Taps on
-                                          // an already-focused cell and drags that start here are left alone.
-                                          const el = e.currentTarget;
-                                          const start = tapStart.current;
-                                          const end = e.changedTouches[0];
-                                          tapStart.current = null;
-                                          if (document.activeElement === el || !start || !end)
-                                            return;
-                                          if (
-                                            Math.hypot(
-                                              end.clientX - start.x,
-                                              end.clientY - start.y,
-                                            ) > 10
-                                          )
-                                            return;
-                                          e.preventDefault();
-                                          parkAboveKeyboard(el);
-                                          el.focus({ preventScroll: true });
-                                        }}
-                                        onFocus={(e) => {
-                                          // Wait for the keyboard to start animating in, then
-                                          // scroll the focused cell to the middle of the visible
-                                          // area. Without this the focused row often sits behind
-                                          // the keyboard on small phones.
-                                          const el = e.currentTarget;
-                                          parkAboveKeyboard(el);
-                                          setTimeout(() => {
-                                            // Parked fields are already clear of
-                                            // the keyboard; re-centering would
-                                            // only add motion.
-                                            if (isClearOfKeyboard(el)) return;
-                                            el.scrollIntoView({
-                                              block: 'center',
-                                              behavior: 'smooth',
-                                            });
-                                          }, 300);
-                                        }}
-                                        onKeyDown={(e) => {
-                                          // Enter dismisses the keyboard. Native browsers don't
-                                          // advance focus across loose inputs and a form wrapper
-                                          // here would conflict with the existing autosave flow.
-                                          if (e.key === 'Enter') e.currentTarget.blur();
-                                        }}
-                                        onBlur={() => {
-                                          // Drop the raw draft so the cell shows the
-                                          // canonical parsed number once editing ends.
-                                          if (col.key !== 'notes') {
-                                            setCellDrafts((d) => {
-                                              if (!(draftKey in d)) return d;
-                                              const next = { ...d };
-                                              delete next[draftKey];
-                                              return next;
-                                            });
-                                          }
-                                        }}
-                                      />
+                                      >
+                                        {restTimerPaused && (
+                                          <span className="text-[10px] uppercase opacity-70">
+                                            ||
+                                          </span>
+                                        )}
+                                        {formatRestSec(restTimerRemaining ?? 0)}
+                                      </div>
                                     );
                                   }
-                                })}
+                                  // Idle: only enable the rest button once the
+                                  // trainer has logged the work for this set
+                                  // (kg + reps for WEIGHTED, reps for
+                                  // BODYWEIGHT, duration for DURATION). Resting
+                                  // before logging is almost always a mis-tap.
+                                  const setLogged = cols
+                                    .filter((c) => c.key !== 'restSec' && c.key !== 'notes')
+                                    .every((c) => (set[c.key] as number | undefined) !== undefined);
+                                  return (
+                                    <button
+                                      key={col.key as string}
+                                      onClick={() => requestRestForSet(entry.tempId, set.setNumber)}
+                                      disabled={!setLogged}
+                                      aria-label={
+                                        setLogged
+                                          ? `Start rest after set ${set.setNumber}`
+                                          : `Log this set before starting rest`
+                                      }
+                                      className="flex h-11 items-center justify-center rounded-xl border border-blue-500/30 text-blue-400/70 transition-colors active:bg-blue-500/10 active:text-blue-400 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-muted-foreground/30 disabled:active:bg-transparent"
+                                    >
+                                      <Clock className="h-4 w-4" />
+                                    </button>
+                                  );
+                                }
+                                {
+                                  const mode = inputModeFor(col.key);
+                                  const draftKey = `${exIdx}-${setIdx}-${col.key as string}`;
+                                  // Value the server would reject (0 reps,
+                                  // decimal reps, rest > 60 min) — the set
+                                  // stays a local draft until it's fixed, so
+                                  // flag the exact cell.
+                                  const fieldInvalid = !isSetFieldValid(
+                                    col.key,
+                                    set[col.key] as number | string | undefined,
+                                  );
+                                  return (
+                                    <Input
+                                      key={col.key as string}
+                                      // text + inputMode (vs type="number") avoids Safari's
+                                      // number-input quirks (mid-keystroke validation, scroll-
+                                      // wheel mutations, trailing-zero stripping) while still
+                                      // surfacing the right mobile keypad.
+                                      type="text"
+                                      // "Set 1 kg" / "Set 2 reps" — for screen readers and
+                                      // the Playwright e2e tests.
+                                      aria-label={`Set ${set.setNumber} ${col.label}`}
+                                      inputMode={mode}
+                                      pattern={mode === 'decimal' ? '[0-9]*\\.?[0-9]*' : '[0-9]*'}
+                                      enterKeyHint="done"
+                                      autoComplete="off"
+                                      placeholder={placeholderFor(
+                                        col.key,
+                                        priorSetFor(lastSetsByExId.get(entry.exerciseId), setIdx),
+                                      )}
+                                      // text-base = 16px: below this iOS Safari auto-zooms on
+                                      // focus even with user-scalable=no in PWA standalone.
+                                      // Saved rows turn green so the trainer knows the value
+                                      // is persisted; editing flips the row back to neutral.
+                                      className={`h-11 rounded-xl text-center text-base font-semibold tabular-nums border focus-visible:ring-0 ${
+                                        fieldInvalid
+                                          ? 'border-red-500/70 text-red-400 focus:border-red-500'
+                                          : setSaved
+                                            ? 'border-emerald-600/40 text-emerald-400 focus:border-blue-500'
+                                            : 'border-zinc-700 focus:border-blue-500'
+                                      }`}
+                                      value={
+                                        col.key === 'notes'
+                                          ? set.notes
+                                          : (cellDrafts[draftKey] ??
+                                            (set[col.key] as number | undefined) ??
+                                            '')
+                                      }
+                                      onChange={(e) => {
+                                        // Keep the raw keystrokes so in-progress
+                                        // decimals (e.g. "100." → "100.5") survive
+                                        // the round-trip through a numeric value.
+                                        if (col.key !== 'notes') {
+                                          setCellDrafts((d) => ({
+                                            ...d,
+                                            [draftKey]: e.target.value,
+                                          }));
+                                        }
+                                        updateSet(exIdx, setIdx, col.key, e.target.value);
+                                      }}
+                                      onTouchStart={(e) => {
+                                        const t = e.touches[0];
+                                        tapStart.current = t
+                                          ? { x: t.clientX, y: t.clientY }
+                                          : null;
+                                      }}
+                                      onTouchEnd={(e) => {
+                                        // iOS sizes its keyboard reveal from where the field sat when the
+                                        // finger lifted, so parking it on focus is too late: the view still
+                                        // jumps up, then snaps back. Take over the tap: park first, then
+                                        // focus (still inside the gesture, so the keyboard opens). Taps on
+                                        // an already-focused cell and drags that start here are left alone.
+                                        const el = e.currentTarget;
+                                        const start = tapStart.current;
+                                        const end = e.changedTouches[0];
+                                        tapStart.current = null;
+                                        if (document.activeElement === el || !start || !end) return;
+                                        if (
+                                          Math.hypot(end.clientX - start.x, end.clientY - start.y) >
+                                          10
+                                        )
+                                          return;
+                                        e.preventDefault();
+                                        parkAboveKeyboard(el);
+                                        el.focus({ preventScroll: true });
+                                      }}
+                                      onFocus={(e) => {
+                                        // Wait for the keyboard to start animating in, then
+                                        // scroll the focused cell to the middle of the visible
+                                        // area. Without this the focused row often sits behind
+                                        // the keyboard on small phones.
+                                        const el = e.currentTarget;
+                                        parkAboveKeyboard(el);
+                                        setTimeout(() => {
+                                          // Parked fields are already clear of
+                                          // the keyboard; re-centering would
+                                          // only add motion.
+                                          if (isClearOfKeyboard(el)) return;
+                                          el.scrollIntoView({
+                                            block: 'center',
+                                            behavior: 'smooth',
+                                          });
+                                        }, 300);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        // Enter dismisses the keyboard. Native browsers don't
+                                        // advance focus across loose inputs and a form wrapper
+                                        // here would conflict with the existing autosave flow.
+                                        if (e.key === 'Enter') e.currentTarget.blur();
+                                      }}
+                                      onBlur={() => {
+                                        // Drop the raw draft so the cell shows the
+                                        // canonical parsed number once editing ends.
+                                        if (col.key !== 'notes') {
+                                          setCellDrafts((d) => {
+                                            if (!(draftKey in d)) return d;
+                                            const next = { ...d };
+                                            delete next[draftKey];
+                                            return next;
+                                          });
+                                        }
+                                      }}
+                                    />
+                                  );
+                                }
+                              })}
 
-                                {/* Save tick — persist this row instantly
+                              {/* Save tick — persist this row instantly
                                 instead of waiting on the 5s auto-save. Shows a
                                 steady green check once the row's values are
                                 saved; an actionable (tappable) check while the
                                 set is complete but not yet persisted; disabled
                                 until the work fields are filled in. The
                                 auto-save still runs if it's never tapped. */}
-                                {(() => {
-                                  const setComplete = isSetComplete(set, entry.exerciseType);
-                                  return (
-                                    <button
-                                      onClick={saveNow}
-                                      disabled={
-                                        !setComplete || setSaved || autoSaveStatus === 'saving'
-                                      }
-                                      aria-label={
-                                        setSaved
-                                          ? `Set ${set.setNumber} saved`
-                                          : setComplete
-                                            ? `Save set ${set.setNumber} now`
-                                            : `Log this set before saving`
-                                      }
-                                      className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed ${
-                                        setSaved
-                                          ? 'border-emerald-600/40 bg-emerald-500/10 text-emerald-400'
-                                          : setComplete
-                                            ? 'border-emerald-500/50 text-emerald-400 active:bg-emerald-500/15'
-                                            : 'border-zinc-800 text-muted-foreground/30'
-                                      }`}
-                                    >
-                                      <Check className="h-4 w-4" />
-                                    </button>
-                                  );
-                                })()}
+                              {(() => {
+                                const setComplete = isSetComplete(set, entry.exerciseType);
+                                return (
+                                  <button
+                                    onClick={saveNow}
+                                    disabled={
+                                      !setComplete || setSaved || autoSaveStatus === 'saving'
+                                    }
+                                    aria-label={
+                                      setSaved
+                                        ? `Set ${set.setNumber} saved`
+                                        : setComplete
+                                          ? `Save set ${set.setNumber} now`
+                                          : `Log this set before saving`
+                                    }
+                                    className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed ${
+                                      setSaved
+                                        ? 'border-emerald-600/40 bg-emerald-500/10 text-emerald-400'
+                                        : setComplete
+                                          ? 'border-emerald-500/50 text-emerald-400 active:bg-emerald-500/15'
+                                          : 'border-zinc-800 text-muted-foreground/30'
+                                    }`}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </button>
+                                );
+                              })()}
 
-                                {/* Remove set — red so it reads clearly as a
+                              {/* Remove set — red so it reads clearly as a
                                 destructive action, distinct from the per-set
                                 save tick to its left. */}
-                                <button
-                                  onClick={() => removeSet(exIdx, setIdx)}
-                                  disabled={entry.sets.length <= 1}
-                                  className="flex h-11 w-11 items-center justify-center rounded-xl text-red-500/70 transition-colors active:bg-red-500/10 active:text-red-500 disabled:pointer-events-none disabled:opacity-20"
-                                >
-                                  <X className="h-4 w-4" />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
+                              <button
+                                onClick={() => removeSet(exIdx, setIdx)}
+                                disabled={entry.sets.length <= 1}
+                                className="flex h-11 w-11 items-center justify-center rounded-xl text-red-500/70 transition-colors active:bg-red-500/10 active:text-red-500 disabled:pointer-events-none disabled:opacity-20"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
 
-                        {/* ADR-053: ghost rows — planned sets not yet added.
+                      {/* ADR-053: ghost rows — planned sets not yet added.
                         Rendered from the routine only (never in `exercises`
                         state), so hasDraftRows / the save payload / the poll
                         guard can't see them. Tapping one adds a real row. */}
-                        {target && ghostTargets(target.sets, entry.sets.length).length > 0 && (
-                          <div className="mt-2 space-y-1.5">
-                            {ghostTargets(target.sets, entry.sets.length).map((g) => (
-                              <button
-                                key={g.setNumber}
-                                type="button"
-                                onClick={() => addSet(exIdx)}
-                                className="flex h-10 w-full items-center gap-3 rounded-xl border border-dashed border-border/40 px-2 text-left text-xs text-muted-foreground/70 active:bg-muted/30"
-                              >
-                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/40 text-[11px] font-bold">
-                                  {SET_TYPE_SHORT[g.setType] ?? g.setNumber}
-                                </span>
-                                <span className="truncate">
-                                  {formatSetTarget(g, entry.exerciseType, entry.secondaryMetric) ??
-                                    SET_TYPE_LABEL[g.setType]}
-                                </span>
-                                <Plus className="ml-auto h-3.5 w-3.5 shrink-0" />
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                      {target && ghostTargets(target.sets, entry.sets.length).length > 0 && (
+                        <div className="mt-2 space-y-1.5">
+                          {ghostTargets(target.sets, entry.sets.length).map((g) => (
+                            <button
+                              key={g.setNumber}
+                              type="button"
+                              onClick={() => addSet(exIdx)}
+                              className="flex h-10 w-full items-center gap-3 rounded-xl border border-dashed border-border/40 px-2 text-left text-xs text-muted-foreground/70 active:bg-muted/30"
+                            >
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/40 text-[11px] font-bold">
+                                {SET_TYPE_SHORT[g.setType] ?? g.setNumber}
+                              </span>
+                              <span className="truncate">
+                                {formatSetTarget(g, entry.exerciseType, entry.secondaryMetric) ??
+                                  SET_TYPE_LABEL[g.setType]}
+                              </span>
+                              <Plus className="ml-auto h-3.5 w-3.5 shrink-0" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
-                        {/* Add Set — rest is initiated per-row via the cell's
+                      {/* Add Set — rest is initiated per-row via the cell's
                         idle button, so the bottom row no longer needs a
                         separate Rest affordance. */}
-                        <div className="mt-3 space-y-2">
-                          <button
-                            onClick={() => addSet(exIdx)}
-                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            Add Set
-                          </button>
+                      <div className="mt-3 space-y-2">
+                        <button
+                          onClick={() => addSet(exIdx)}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Set
+                        </button>
 
-                          {/* ── ADR-052: per-exercise trainer note ──
+                        {/* ── ADR-052: per-exercise trainer note ──
                           Placed between Add Set and Mark complete: the note is
                           written once the work is logged and before the card
                           is signed off. Collapsed to a one-line "Add note"
                           button until it's needed — a textarea on every card
                           would double the height of a 6-exercise log on a
                           phone. Trainer-only (see `allowExerciseNotes`). */}
-                          {allowExerciseNotes &&
-                            (entry.notes.trim() !== '' || noteOpenFor[entry.tempId] ? (
-                              <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-2.5">
-                                <label
-                                  htmlFor={`note-${entry.tempId}`}
-                                  className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-500"
-                                >
-                                  <StickyNote className="h-3 w-3" />
-                                  Note
-                                </label>
-                                <textarea
-                                  id={`note-${entry.tempId}`}
-                                  value={entry.notes}
-                                  onChange={(e) => setExerciseNotes(entry.tempId, e.target.value)}
-                                  onFocus={(e) => {
-                                    // Same keyboard-occlusion dance the set
-                                    // cells do: on iOS standalone the keyboard
-                                    // overlays without resizing, so scroll the
-                                    // field above it on focus.
-                                    const el = e.target;
-                                    parkAboveKeyboard(el);
-                                    setTimeout(() => {
-                                      if (isClearOfKeyboard(el)) return;
-                                      el.scrollIntoView({
-                                        block: 'center',
-                                        behavior: 'smooth',
-                                      });
-                                    }, 300);
-                                  }}
-                                  rows={2}
-                                  // Matches workoutEntrySchema's cap, so the
-                                  // field can't compose a payload the server
-                                  // will 422.
-                                  maxLength={1000}
-                                  placeholder="e.g. went light — shoulder niggle on the last set"
-                                  className="w-full resize-y rounded-lg border border-border/50 bg-background/60 px-2.5 py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground/60 focus:border-amber-500/50 focus:outline-none"
-                                />
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setNoteOpenFor((prev) => ({ ...prev, [entry.tempId]: true }));
-                                  // Focus after the field mounts so the
-                                  // keyboard comes up on the same tap.
-                                  requestAnimationFrame(() =>
-                                    document.getElementById(`note-${entry.tempId}`)?.focus(),
-                                  );
-                                }}
-                                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-amber-500/30 py-2.5 text-xs font-semibold text-amber-500/80 transition-colors active:bg-amber-500/10"
+                        {allowExerciseNotes &&
+                          (entry.notes.trim() !== '' || noteOpenFor[entry.tempId] ? (
+                            <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-2.5">
+                              <label
+                                htmlFor={`note-${entry.tempId}`}
+                                className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-500"
                               >
-                                <StickyNote className="h-3.5 w-3.5" />
-                                Add note
-                              </button>
-                            ))}
+                                <StickyNote className="h-3 w-3" />
+                                Note
+                              </label>
+                              <textarea
+                                id={`note-${entry.tempId}`}
+                                value={entry.notes}
+                                onChange={(e) => setExerciseNotes(entry.tempId, e.target.value)}
+                                onFocus={(e) => {
+                                  // Same keyboard-occlusion dance the set
+                                  // cells do: on iOS standalone the keyboard
+                                  // overlays without resizing, so scroll the
+                                  // field above it on focus.
+                                  const el = e.target;
+                                  parkAboveKeyboard(el);
+                                  setTimeout(() => {
+                                    if (isClearOfKeyboard(el)) return;
+                                    el.scrollIntoView({
+                                      block: 'center',
+                                      behavior: 'smooth',
+                                    });
+                                  }, 300);
+                                }}
+                                rows={2}
+                                // Matches workoutEntrySchema's cap, so the
+                                // field can't compose a payload the server
+                                // will 422.
+                                maxLength={1000}
+                                placeholder="e.g. went light — shoulder niggle on the last set"
+                                className="w-full resize-y rounded-lg border border-border/50 bg-background/60 px-2.5 py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground/60 focus:border-amber-500/50 focus:outline-none"
+                              />
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setNoteOpenFor((prev) => ({ ...prev, [entry.tempId]: true }));
+                                // Focus after the field mounts so the
+                                // keyboard comes up on the same tap.
+                                requestAnimationFrame(() =>
+                                  document.getElementById(`note-${entry.tempId}`)?.focus(),
+                                );
+                              }}
+                              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-amber-500/30 py-2.5 text-xs font-semibold text-amber-500/80 transition-colors active:bg-amber-500/10"
+                            >
+                              <StickyNote className="h-3.5 w-3.5" />
+                              Add note
+                            </button>
+                          ))}
 
-                          {/* ADR-037: Mark-complete pill. Persists via the
+                        {/* ADR-037: Mark-complete pill. Persists via the
                           5s auto-save debounce. On mark this card collapses
                           + sorts to the bottom; the next incomplete card
                           auto-expands. On unmark the card stays open and
@@ -2799,91 +2755,90 @@ export function WorkoutLogger({
                             DURATION  → durationSec
                             CARDIO    → durationSec
                           Empty placeholder rows can't sneak through. */}
-                          {(() => {
-                            const has = (v: number | null | undefined) =>
-                              v !== undefined && v !== null;
-                            const setIsComplete = (s: SetData) => {
-                              switch (entry.exerciseType) {
-                                case 'WEIGHTED':
-                                  return has(s.reps) && has(s.weightKg);
-                                case 'BODYWEIGHT':
-                                  return has(s.reps);
-                                case 'DURATION':
-                                case 'CARDIO':
-                                  return has(s.durationSec);
-                              }
-                            };
-                            const hasLoggedSet = entry.sets.some(setIsComplete);
-                            const missingLabel =
-                              entry.exerciseType === 'WEIGHTED'
-                                ? 'Enter reps + kg'
-                                : entry.exerciseType === 'BODYWEIGHT'
-                                  ? 'Enter reps first'
-                                  : 'Enter duration first';
-                            if (entry.isCompleted) {
-                              return (
-                                <button
-                                  onClick={() => setExerciseCompleted(entry.tempId, false)}
-                                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
-                                >
-                                  Unmark complete
-                                </button>
-                              );
+                        {(() => {
+                          const has = (v: number | null | undefined) =>
+                            v !== undefined && v !== null;
+                          const setIsComplete = (s: SetData) => {
+                            switch (entry.exerciseType) {
+                              case 'WEIGHTED':
+                                return has(s.reps) && has(s.weightKg);
+                              case 'BODYWEIGHT':
+                                return has(s.reps);
+                              case 'DURATION':
+                              case 'CARDIO':
+                                return has(s.durationSec);
                             }
+                          };
+                          const hasLoggedSet = entry.sets.some(setIsComplete);
+                          const missingLabel =
+                            entry.exerciseType === 'WEIGHTED'
+                              ? 'Enter reps + kg'
+                              : entry.exerciseType === 'BODYWEIGHT'
+                                ? 'Enter reps first'
+                                : 'Enter duration first';
+                          if (entry.isCompleted) {
                             return (
                               <button
-                                onClick={() => setExerciseCompleted(entry.tempId, true)}
-                                disabled={!hasLoggedSet}
-                                aria-label={
-                                  hasLoggedSet
-                                    ? 'Mark exercise complete'
-                                    : `${missingLabel} before marking complete`
-                                }
-                                title={hasLoggedSet ? undefined : missingLabel}
-                                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500/15 py-3 text-sm font-semibold text-emerald-500 transition-colors active:bg-emerald-500/25 disabled:cursor-not-allowed disabled:bg-muted/30 disabled:text-muted-foreground/50 disabled:active:bg-muted/30"
+                                onClick={() => setExerciseCompleted(entry.tempId, false)}
+                                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/50 py-3 text-xs font-semibold text-muted-foreground transition-colors active:bg-muted/40"
                               >
-                                <Check className="h-4 w-4" />
-                                {hasLoggedSet ? 'Mark complete' : missingLabel}
+                                Unmark complete
                               </button>
                             );
-                          })()}
-                        </div>
+                          }
+                          return (
+                            <button
+                              onClick={() => setExerciseCompleted(entry.tempId, true)}
+                              disabled={!hasLoggedSet}
+                              aria-label={
+                                hasLoggedSet
+                                  ? 'Mark exercise complete'
+                                  : `${missingLabel} before marking complete`
+                              }
+                              title={hasLoggedSet ? undefined : missingLabel}
+                              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500/15 py-3 text-sm font-semibold text-emerald-500 transition-colors active:bg-emerald-500/25 disabled:cursor-not-allowed disabled:bg-muted/30 disabled:text-muted-foreground/50 disabled:active:bg-muted/30"
+                            >
+                              <Check className="h-4 w-4" />
+                              {hasLoggedSet ? 'Mark complete' : missingLabel}
+                            </button>
+                          );
+                        })()}
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
 
-          {/* ── Exercise Progress Modal ── */}
-          {progressModal && clientProfileId && (
-            <ExerciseProgressModal
-              clientProfileId={clientProfileId}
-              exerciseId={progressModal.exerciseId}
-              exerciseName={progressModal.exerciseName}
-              unit={progressModal.unit}
-              onClose={() => setProgressModal(null)}
-            />
-          )}
+        {/* ── Exercise Progress Modal ── */}
+        {progressModal && clientProfileId && (
+          <ExerciseProgressModal
+            clientProfileId={clientProfileId}
+            exerciseId={progressModal.exerciseId}
+            exerciseName={progressModal.exerciseName}
+            unit={progressModal.unit}
+            onClose={() => setProgressModal(null)}
+          />
+        )}
 
-          {/* ── Floating "+" — add exercises (opens the catalog search). Sticky
+        {/* ── Floating "+" — add exercises (opens the catalog search). Sticky
           to the bottom of the page's scroll area rather than `fixed`, so on
           the trainer page it stays above the rest-timer dock instead of
           covering it. The empty state keeps its own "Add First Exercise". ── */}
-          {exercises.length > 0 && !showSearch && !inputFocused && (
-            <div className="pointer-events-none sticky bottom-4 z-30 flex justify-end">
-              <button
-                onClick={openSearch}
-                aria-label="Add exercise"
-                className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/40 transition-transform active:scale-95"
-              >
-                <Plus className="h-6 w-6" />
-              </button>
-            </div>
-          )}
-        </>
-      )}
+        {exercises.length > 0 && !showSearch && !inputFocused && (
+          <div className="pointer-events-none sticky bottom-4 z-30 flex justify-end">
+            <button
+              onClick={openSearch}
+              aria-label="Add exercise"
+              className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/40 transition-transform active:scale-95"
+            >
+              <Plus className="h-6 w-6" />
+            </button>
+          </div>
+        )}
+      </>
     </div>
   );
 }
@@ -3008,48 +2963,10 @@ function ExerciseProgressModal({
       value: d.value,
     }));
 
-  // Prevent background scroll
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, []);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Sheet */}
-      <div className="relative z-10 w-full max-w-lg rounded-t-3xl bg-card pb-safe">
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
-
-        {/* Header */}
-        <div className="flex items-start justify-between px-5 pt-3 pb-4">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Exercise Progress
-            </p>
-            <h2 className="mt-0.5 text-lg font-bold">{exerciseName}</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {loading ? (
+    <BottomSheet eyebrow="Exercise Progress" title={exerciseName} onClose={onClose}>
+      {(expanded) =>
+        loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
@@ -3081,7 +2998,7 @@ function ExerciseProgressModal({
                     ? 'Duration per session'
                     : 'Performance over time'}
               </p>
-              <ResponsiveContainer width="100%" height={180}>
+              <ResponsiveContainer width="100%" height={expanded ? 340 : 180}>
                 <AreaChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="exGrad" x1="0" y1="0" x2="0" y2="1">
@@ -3139,9 +3056,9 @@ function ExerciseProgressModal({
               </ResponsiveContainer>
             </div>
           </div>
-        )}
-      </div>
-    </div>
+        )
+      }
+    </BottomSheet>
   );
 }
 
