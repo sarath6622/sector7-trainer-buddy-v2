@@ -1277,6 +1277,9 @@ Roles:
 ```
 GET    /api/routine-programs                         → { data: ProgramSummary[] }
        Library programs only. ?includeArchived=true to include archived. Role: STAFF.
+       ?detail=true → { data: ProgramDetail[] } instead: non-archived library programs fully
+       nested, newest first; ?limit=N caps it (max 50). Used by the session logger's routine
+       card so it loads the library in one request. Role: STAFF.
 POST   /api/routine-programs                         → body ProgramInput → 201 { data: ProgramDetail }
        Creates a LIBRARY program. Role: STAFF.
 GET    /api/routine-programs/[id]                    → { data: ProgramDetail }

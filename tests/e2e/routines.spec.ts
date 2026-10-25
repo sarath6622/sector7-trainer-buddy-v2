@@ -240,4 +240,58 @@ test.describe('training routines', () => {
       .toBeNull();
     expect(await db.workoutLog.count({ where: { sessionInstanceId: sessionId } })).toBe(0);
   });
+
+  test('routine card holds its place while loading and loads the library in one request', async ({
+    trainerPage: page,
+    sessionId,
+    clientWithoutProgram: _,
+    libraryProgram,
+  }) => {
+    const [upper] = libraryProgram.routines;
+    if (!upper) throw new Error('fixture program needs a routine');
+
+    // Slow the routine requests down like a phone on gym wifi, and record them.
+    const routineGets: string[] = [];
+    await page.route('**/api/routine-programs**', async (route) => {
+      if (route.request().method() === 'GET') {
+        routineGets.push(
+          new URL(route.request().url()).pathname + new URL(route.request().url()).search,
+        );
+        await new Promise((r) => setTimeout(r, 1_500));
+      }
+      await route.continue();
+    });
+
+    await page.goto(`/trainer/session/${sessionId}`);
+
+    // Placeholder first, in the card's spot, then the real card replaces it.
+    const skeleton = page.getByLabel('Loading routines');
+    await expect(skeleton).toBeVisible();
+    await page.screenshot({ path: 'test-results/routine-card-loading.png' });
+    await pickProgram(page, libraryProgram.name);
+    await expect(skeleton).toHaveCount(0);
+    await page.screenshot({ path: 'test-results/routine-card-loaded.png' });
+
+    // Client program, then the whole library in one go: no per-program fetches.
+    expect(
+      routineGets.filter((u) => /^\/api\/routine-programs\/(?!clients\/)[^/?]+$/.test(u)),
+    ).toEqual([]);
+    expect(
+      routineGets.filter((u) => u.startsWith('/api/routine-programs?detail=true')),
+    ).toHaveLength(1);
+
+    // The "Change" sheet is loaded when the routine starts, not when it opens.
+    await page.unroute('**/api/routine-programs**');
+    await page.getByRole('button', { name: `Start ${upper.name}` }).click();
+    await expect(page.getByRole('heading', { level: 2, name: upper.name })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Change routine' }).click();
+    const sheet = page.getByRole('dialog');
+    await expect(
+      sheet.getByRole('button', { name: /^Switch to |^Current routine/ }).first(),
+    ).toBeVisible({
+      timeout: 1_000,
+    });
+    await expect(sheet.getByText('Loading routines…')).toHaveCount(0);
+  });
 });

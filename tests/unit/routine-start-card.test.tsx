@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { RoutineStartCard } from '@/components/routines/RoutineStartCard';
+import { RoutineStartCard, clearRoutineSourceCache } from '@/components/routines/RoutineStartCard';
 
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
@@ -77,12 +77,8 @@ function stubFetch(clientProgram: unknown) {
     const method = init?.method ?? 'GET';
     calls.push({ url, method, body: init?.body as string | undefined });
     if (url === `/api/routine-programs/clients/${CLIENT}`) return json(clientProgram);
-    if (url === '/api/routine-programs') {
-      return json([{ id: 'lib-1', name: 'Push / Pull / Legs', routines: [] }]);
-    }
-    if (url === '/api/routine-programs/lib-1' && method === 'GET') {
-      return json(program('lib-1', null, 'lib'));
-    }
+    if (url === '/api/routine-programs?detail=true&limit=6')
+      return json([program('lib-1', null, 'lib')]);
     if (url === '/api/routine-programs/lib-1/assign') {
       return json(program('copy-1', CLIENT, 'copy'), 201);
     }
@@ -96,6 +92,7 @@ function stubFetch(clientProgram: unknown) {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  clearRoutineSourceCache();
 });
 
 describe('RoutineStartCard', () => {
@@ -114,7 +111,7 @@ describe('RoutineStartCard', () => {
     expect(screen.getByText('Lat Pulldown')).toBeTruthy();
     expect(screen.getByText(/3 × 12–15 reps · rest 1 min/)).toBeTruthy();
     // No library fallback when the client has a program.
-    expect(calls.some((c) => c.url === '/api/routine-programs')).toBe(false);
+    expect(calls.some((c) => c.url.startsWith('/api/routine-programs?'))).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: /Start Pull Day/ }));
     await waitFor(() => expect(onApplied).toHaveBeenCalled());
@@ -169,13 +166,18 @@ describe('RoutineStartCard', () => {
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         calls.push({ url: String(input), method: 'GET' });
-        return String(input) === '/api/routine-programs' ? json([]) : json(null);
+        return String(input) === '/api/routine-programs?detail=true&limit=6'
+          ? json([])
+          : json(null);
       }),
     );
     const { container } = render(
       <RoutineStartCard clientProfileId={CLIENT} sessionInstanceId={SESSION} onApplied={vi.fn()} />,
     );
-    await waitFor(() => expect(calls.some((c) => c.url === '/api/routine-programs')).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === '/api/routine-programs?detail=true&limit=6')).toBe(true),
+    );
+    await waitFor(() => expect(container.querySelector('[aria-busy]')).toBeNull());
     expect(container.textContent).toBe('');
   });
 
@@ -188,14 +190,8 @@ describe('RoutineStartCard', () => {
         const url = String(input);
         calls.push({ url, method: 'GET' });
         if (url === `/api/routine-programs/clients/${CLIENT}`) return json(null);
-        if (url === '/api/routine-programs') {
-          return json([
-            { id: 'lib-2', name: 'Upper / Lower', routines: [] },
-            { id: 'lib-1', name: 'Push / Pull / Legs', routines: [] },
-          ]);
-        }
-        if (url === '/api/routine-programs/lib-1') return json(program('lib-1', null, 'lib'));
-        if (url === '/api/routine-programs/lib-2') return json(second);
+        if (url === '/api/routine-programs?detail=true&limit=6')
+          return json([second, program('lib-1', null, 'lib')]);
         return new Response('{}', { status: 404 });
       }),
     );
@@ -228,14 +224,9 @@ describe('RoutineStartCard', () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url === `/api/routine-programs/clients/${CLIENT}`) return json(null);
-        if (url === '/api/routine-programs') {
-          return json([
-            { id: 'lib-1', name: 'A', routines: [] },
-            { id: 'lib-2', name: 'B', routines: [] },
-          ]);
+        if (url === '/api/routine-programs?detail=true&limit=6') {
+          return json([program('lib-1', null, 'a'), program('lib-2', null, 'b')]);
         }
-        if (url === '/api/routine-programs/lib-1') return json(program('lib-1', null, 'a'));
-        if (url === '/api/routine-programs/lib-2') return json(program('lib-2', null, 'b'));
         return new Response('{}', { status: 404 });
       }),
     );
@@ -244,5 +235,43 @@ describe('RoutineStartCard', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Log without a program' }));
     expect(container.textContent).toBe('');
+  });
+
+  it('shows a skeleton while loading instead of popping in late', async () => {
+    stubFetch({ ...program('copy-1', CLIENT, 'copy'), nextRoutineId: 'copy-b', lastUsed: null });
+    render(
+      <RoutineStartCard clientProfileId={CLIENT} sessionInstanceId={SESSION} onApplied={vi.fn()} />,
+    );
+    expect(screen.getByLabelText('Loading routines')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Start Pull Day/ })).toBeTruthy();
+    expect(screen.queryByLabelText('Loading routines')).toBeNull();
+  });
+
+  it('loads the library in one request, not one per program', async () => {
+    stubFetch(null);
+    render(
+      <RoutineStartCard clientProfileId={CLIENT} sessionInstanceId={SESSION} onApplied={vi.fn()} />,
+    );
+    await screen.findByRole('button', { name: /Start Push Day/ });
+    expect(calls.map((c) => c.url)).toEqual([
+      `/api/routine-programs/clients/${CLIENT}`,
+      '/api/routine-programs?detail=true&limit=6',
+    ]);
+  });
+
+  it('renders the cached routine immediately on remount', async () => {
+    stubFetch({ ...program('copy-1', CLIENT, 'copy'), nextRoutineId: 'copy-b', lastUsed: null });
+    const first = render(
+      <RoutineStartCard clientProfileId={CLIENT} sessionInstanceId={SESSION} onApplied={vi.fn()} />,
+    );
+    await screen.findByRole('button', { name: /Start Pull Day/ });
+    first.unmount();
+
+    render(
+      <RoutineStartCard clientProfileId={CLIENT} sessionInstanceId={SESSION} onApplied={vi.fn()} />,
+    );
+    // Synchronously — no skeleton, no wait.
+    expect(screen.getByRole('button', { name: /Start Pull Day/ })).toBeTruthy();
+    expect(screen.queryByLabelText('Loading routines')).toBeNull();
   });
 });

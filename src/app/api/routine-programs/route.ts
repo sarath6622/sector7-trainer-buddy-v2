@@ -7,6 +7,8 @@ import * as routineService from '@/services/routine.service';
 /**
  * GET /api/routine-programs — library programs (ADR-053). Trainers + admins.
  * ?includeArchived=true also returns archived programs.
+ * ?detail=true returns non-archived programs fully nested (ProgramDetail[]),
+ * optionally capped with ?limit=N.
  */
 export async function GET(req: Request) {
   try {
@@ -20,6 +22,14 @@ export async function GET(req: Request) {
     }
 
     const url = new URL(req.url);
+    if (url.searchParams.get('detail') === 'true') {
+      const limit = Number(url.searchParams.get('limit'));
+      const data = await routineService.listLibraryProgramDetails({
+        branchId: session.user.branchId,
+        take: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : undefined,
+      });
+      return NextResponse.json({ data });
+    }
     const data = await routineService.listLibraryPrograms({
       branchId: session.user.branchId,
       includeArchived: url.searchParams.get('includeArchived') === 'true',

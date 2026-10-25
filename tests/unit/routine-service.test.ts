@@ -270,6 +270,17 @@ describe('createLibraryProgram', () => {
   });
 });
 
+describe('listLibraryProgramDetails', () => {
+  it('returns non-archived library programs of the branch, fully nested, capped', async () => {
+    m.routineProgram.findMany.mockResolvedValue([]);
+    await routine.listLibraryProgramDetails({ branchId: BRANCH, take: 6 });
+    const args = m.routineProgram.findMany.mock.calls.at(-1)?.[0];
+    expect(args.where).toEqual({ branchId: BRANCH, clientProfileId: null, isArchived: false });
+    expect(args.take).toBe(6);
+    expect(args.select.routines.select.exercises).toBeTruthy();
+  });
+});
+
 describe('getProgram', () => {
   it("hides another client's copy behind a 404", async () => {
     m.routineProgram.findFirst.mockResolvedValue(detail({ clientProfileId: 'client-2' }));

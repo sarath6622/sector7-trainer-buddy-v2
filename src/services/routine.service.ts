@@ -334,6 +334,26 @@ export async function listLibraryPrograms({
   }));
 }
 
+/**
+ * Non-archived library programs, fully nested — what the session logger's
+ * "Choose a program" step needs in one round trip instead of list + one
+ * detail fetch per program.
+ */
+export async function listLibraryProgramDetails({
+  branchId,
+  take,
+}: {
+  branchId: string;
+  take?: number;
+}) {
+  return prisma.routineProgram.findMany({
+    where: { branchId, clientProfileId: null, isArchived: false },
+    orderBy: { updatedAt: 'desc' },
+    take,
+    select: PROGRAM_DETAIL_SELECT,
+  });
+}
+
 export async function createLibraryProgram({
   input,
   branchId,

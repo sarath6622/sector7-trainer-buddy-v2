@@ -5,12 +5,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Play, Undo2 } f
 import { toast } from 'sonner';
 import { formatRest, summarizeExerciseTarget } from '@/lib/routine-format';
 import { RoutineSheet } from './RoutineSheet';
-import type {
-  ClientProgramDto,
-  ProgramDetailDto,
-  ProgramSummaryDto,
-  RoutineDetailDto,
-} from './program-draft';
+import type { ClientProgramDto, ProgramDetailDto, RoutineDetailDto } from './program-draft';
 
 /**
  * Where the routine comes from:
@@ -32,22 +27,100 @@ async function loadSource(clientProfileId: string): Promise<RoutineSource | null
     const program = (await own.json()).data as ClientProgramDto | null;
     if (program && program.routines.length > 0) return { kind: 'client', program };
   }
-  const list = await fetch('/api/routine-programs');
+  // One round trip for the whole library (not list + a fetch per program).
+  const list = await fetch(`/api/routine-programs?detail=true&limit=${MAX_LIBRARY_PROGRAMS}`);
   if (!list.ok) return null;
-  const summaries = ((await list.json()).data as ProgramSummaryDto[]).slice(
-    0,
-    MAX_LIBRARY_PROGRAMS,
-  );
-  const details = await Promise.all(
-    summaries.map(async (s) => {
-      const res = await fetch(`/api/routine-programs/${s.id}`);
-      return res.ok ? ((await res.json()).data as ProgramDetailDto) : null;
-    }),
-  );
-  const programs = details.filter(
-    (p): p is ProgramDetailDto => p !== null && p.routines.length > 0,
+  const programs = ((await list.json()).data as ProgramDetailDto[]).filter(
+    (p) => p.routines.length > 0,
   );
   return programs.length > 0 ? { kind: 'library', programs } : null;
+}
+
+/**
+ * Last loaded source per client, kept for the page's lifetime. Remounts (the
+ * inline card turning compact once an exercise is logged, a soft refresh, the
+ * "Change" sheet) render it at once and refresh it in the background, so the
+ * card never blinks out and back in.
+ */
+const sourceCache = new Map<string, RoutineSource | null>();
+const inflight = new Map<string, Promise<RoutineSource | null>>();
+
+function fetchSource(clientProfileId: string): Promise<RoutineSource | null> {
+  const pending = inflight.get(clientProfileId);
+  if (pending) return pending;
+  const p = loadSource(clientProfileId)
+    .then((loaded) => {
+      sourceCache.set(clientProfileId, loaded);
+      return loaded;
+    })
+    .finally(() => inflight.delete(clientProfileId));
+  inflight.set(clientProfileId, p);
+  return p;
+}
+
+/** Test hook: module state outlives a single render. */
+export function clearRoutineSourceCache() {
+  sourceCache.clear();
+  inflight.clear();
+}
+
+/**
+ * `undefined` while the first load is pending, `null` when there is nothing
+ * to offer. Cached values render immediately and are revalidated.
+ */
+function useRoutineSource(clientProfileId: string) {
+  // Tagged with the client it belongs to, so a changed id never shows the
+  // previous client's routines while its own load is pending.
+  const [state, setState] = useState<{
+    id: string;
+    source: RoutineSource | null | undefined;
+    failed: boolean;
+  }>(() => ({ id: clientProfileId, source: sourceCache.get(clientProfileId), failed: false }));
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchSource(clientProfileId).then(
+      (loaded) => {
+        if (!cancelled) setState({ id: clientProfileId, source: loaded, failed: false });
+      },
+      () => {
+        if (!cancelled) setState((s) => ({ ...s, id: clientProfileId, failed: true }));
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [clientProfileId]);
+
+  return state.id === clientProfileId
+    ? { source: state.source, failed: state.failed }
+    : { source: sourceCache.get(clientProfileId), failed: false };
+}
+
+/** Placeholder with the routine card's shape, so it doesn't pop in late. */
+function RoutineCardSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      aria-label="Loading routines"
+      className="space-y-4 border border-white/5 bg-card/60 p-4 shadow-sm"
+    >
+      <div className="space-y-2">
+        <div className="h-2.5 w-24 animate-pulse rounded bg-white/[0.06]" />
+        <div className="h-5 w-40 animate-pulse rounded bg-white/[0.08]" />
+      </div>
+      <div className="h-11 animate-pulse rounded-xl bg-white/[0.05]" />
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="space-y-1.5">
+            <div className="h-3.5 w-36 animate-pulse rounded bg-white/[0.06]" />
+            <div className="h-3 w-28 animate-pulse rounded bg-white/[0.04]" />
+          </div>
+        ))}
+      </div>
+      <div className="h-12 animate-pulse rounded-xl bg-white/[0.06]" />
+    </div>
+  );
 }
 
 /**
@@ -80,27 +153,15 @@ export function RoutineStartCard({
   onChoosingProgramChange?: (choosing: boolean) => void;
   onApplied: () => void;
 }) {
-  const [source, setSource] = useState<RoutineSource | null>(null);
+  // Offline (`failed`): no routine card; the manual logging path is unaffected.
+  const { source, failed } = useRoutineSource(clientProfileId);
   const [sheetOpen, setSheetOpen] = useState(false);
   // "Log without a program" — hides the card for this visit only.
   const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const loaded = await loadSource(clientProfileId);
-        if (!cancelled) setSource(loaded);
-      } catch {
-        // Offline: no routine card; the manual logging path is unaffected.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [clientProfileId]);
-
-  if (!source || dismissed) return null;
+  if (dismissed || failed) return null;
+  if (source === undefined) return compact ? null : <RoutineCardSkeleton />;
+  if (!source) return null;
 
   const picker = (
     <RoutinePicker
@@ -315,6 +376,8 @@ function RoutinePicker({
         toast.error(json.error ?? 'Could not start routine');
         return;
       }
+      // Assignment / rotation changed — don't show the old source next time.
+      sourceCache.delete(clientProfileId);
       const added = json.data.addedExerciseIds.length as number;
       toast.success(
         currentRoutineId
@@ -460,24 +523,13 @@ export function RoutineSwitcher({
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [source, setSource] = useState<RoutineSource | null>(null);
+  // Loaded on mount, not on open, so the sheet usually opens already filled.
+  const { source, failed } = useRoutineSource(clientProfileId);
   const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const loaded = await loadSource(clientProfileId);
-        if (!cancelled) setSource(loaded);
-      } catch {
-        if (!cancelled) toast.error('Could not load routines. Check your connection.');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, clientProfileId]);
+    if (open && failed) toast.error('Could not load routines. Check your connection.');
+  }, [open, failed]);
 
   async function remove() {
     if (disabled) {
@@ -498,6 +550,7 @@ export function RoutineSwitcher({
           ? `Routine removed. ${removed} unlogged ${removed === 1 ? 'exercise' : 'exercises'} taken out`
           : 'Routine removed. Logged exercises kept',
       );
+      sourceCache.delete(clientProfileId);
       setOpen(false);
       onChanged();
     } catch {
@@ -541,7 +594,9 @@ export function RoutineSwitcher({
               }}
             />
           ) : (
-            <p className="py-6 text-center text-xs text-muted-foreground">Loading routines…</p>
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              {source === null || failed ? 'No routines to switch to' : 'Loading routines…'}
+            </p>
           )}
           <button
             type="button"
