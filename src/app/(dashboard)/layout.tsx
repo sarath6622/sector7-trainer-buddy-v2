@@ -104,14 +104,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // than the screen, leaving a phantom scrollable region that drags the whole
   // layout when swiped. The document never legitimately scrolls here — only
   // <main> does — so snap any stray document scroll back to 0.
+  //
+  // While a text field is focused, iOS animates its own document scroll to
+  // keep the field clear of the keyboard. Snapping on every scroll event fights
+  // that animation frame by frame (visible up/down jitter), so while editing
+  // wait for the scroll to settle and snap once.
   useEffect(() => {
-    const reset = () => {
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const snap = () => {
       if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    const reset = () => {
+      clearTimeout(settle);
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        settle = setTimeout(snap, 150);
+      } else {
+        snap();
+      }
     };
     window.addEventListener('scroll', reset, { passive: true });
     window.visualViewport?.addEventListener('resize', reset);
     reset();
     return () => {
+      clearTimeout(settle);
       window.removeEventListener('scroll', reset);
       window.visualViewport?.removeEventListener('resize', reset);
     };

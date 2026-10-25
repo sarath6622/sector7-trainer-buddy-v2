@@ -275,6 +275,40 @@ function primeMobileKeyboard() {
   setTimeout(() => ghost.remove(), 500);
 }
 
+// When a field in the lower part of the screen gains focus, iOS pans the whole
+// view up to clear the keyboard it's about to show, sized from where the field
+// sat at tap time. That drags the top nav + session hero off-screen until the
+// shell's scrollY=0 pin pulls it back (visible up/down jump). Moving the field
+// into the top third of its own scroll container *before* it focuses (set
+// cells call this from touchend) leaves iOS nothing to reveal. Fields already
+// that high are left alone.
+export function parkAboveKeyboard(el: HTMLElement) {
+  let scroller = el.parentElement;
+  while (scroller && scroller !== document.body) {
+    const { overflowY } = getComputedStyle(scroller);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      scroller.scrollHeight > scroller.clientHeight
+    ) {
+      break;
+    }
+    scroller = scroller.parentElement;
+  }
+  if (!scroller || scroller === document.body) return;
+  const box = scroller.getBoundingClientRect();
+  const target = box.top + box.height * 0.25;
+  const top = el.getBoundingClientRect().top;
+  if (top > box.top + box.height * 0.35) scroller.scrollTop += top - target;
+}
+
+// True when the field sits fully inside the on-screen area above the keyboard.
+export function isClearOfKeyboard(el: HTMLElement) {
+  const vv = window.visualViewport;
+  if (!vv) return false;
+  const r = el.getBoundingClientRect();
+  return r.top >= vv.offsetTop && r.bottom <= vv.offsetTop + vv.height - 24;
+}
+
 // Rest column is shown alongside the type-specific work columns. We surface
 // rest taken before the set instead of RPE — the rpe field still exists on
 // the model but is no longer entered here (other surfaces / future trainer
@@ -596,6 +630,8 @@ export function WorkoutLogger({
   const inFlightRef = useRef(false);
   const pendingRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Touch start point for the set-cell tap takeover (see parkAboveKeyboard).
+  const tapStart = useRef<{ x: number; y: number } | null>(null);
   const statusFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Structural changes (exercise add/remove/mark-complete) bypass the 5s
   // typing debounce so the peer's screen reflects the new state in <1s
@@ -2531,13 +2567,47 @@ export function WorkoutLogger({
                                           }
                                           updateSet(exIdx, setIdx, col.key, e.target.value);
                                         }}
+                                        onTouchStart={(e) => {
+                                          const t = e.touches[0];
+                                          tapStart.current = t
+                                            ? { x: t.clientX, y: t.clientY }
+                                            : null;
+                                        }}
+                                        onTouchEnd={(e) => {
+                                          // iOS sizes its keyboard reveal from where the field sat when the
+                                          // finger lifted, so parking it on focus is too late: the view still
+                                          // jumps up, then snaps back. Take over the tap: park first, then
+                                          // focus (still inside the gesture, so the keyboard opens). Taps on
+                                          // an already-focused cell and drags that start here are left alone.
+                                          const el = e.currentTarget;
+                                          const start = tapStart.current;
+                                          const end = e.changedTouches[0];
+                                          tapStart.current = null;
+                                          if (document.activeElement === el || !start || !end)
+                                            return;
+                                          if (
+                                            Math.hypot(
+                                              end.clientX - start.x,
+                                              end.clientY - start.y,
+                                            ) > 10
+                                          )
+                                            return;
+                                          e.preventDefault();
+                                          parkAboveKeyboard(el);
+                                          el.focus({ preventScroll: true });
+                                        }}
                                         onFocus={(e) => {
                                           // Wait for the keyboard to start animating in, then
                                           // scroll the focused cell to the middle of the visible
                                           // area. Without this the focused row often sits behind
                                           // the keyboard on small phones.
                                           const el = e.currentTarget;
+                                          parkAboveKeyboard(el);
                                           setTimeout(() => {
+                                            // Parked fields are already clear of
+                                            // the keyboard; re-centering would
+                                            // only add motion.
+                                            if (isClearOfKeyboard(el)) return;
                                             el.scrollIntoView({
                                               block: 'center',
                                               behavior: 'smooth',
@@ -2676,18 +2746,21 @@ export function WorkoutLogger({
                                   id={`note-${entry.tempId}`}
                                   value={entry.notes}
                                   onChange={(e) => setExerciseNotes(entry.tempId, e.target.value)}
-                                  onFocus={(e) =>
+                                  onFocus={(e) => {
                                     // Same keyboard-occlusion dance the set
                                     // cells do: on iOS standalone the keyboard
                                     // overlays without resizing, so scroll the
                                     // field above it on focus.
-                                    requestAnimationFrame(() =>
-                                      e.target.scrollIntoView({
+                                    const el = e.target;
+                                    parkAboveKeyboard(el);
+                                    setTimeout(() => {
+                                      if (isClearOfKeyboard(el)) return;
+                                      el.scrollIntoView({
                                         block: 'center',
                                         behavior: 'smooth',
-                                      }),
-                                    )
-                                  }
+                                      });
+                                    }, 300);
+                                  }}
                                   rows={2}
                                   // Matches workoutEntrySchema's cap, so the
                                   // field can't compose a payload the server

@@ -324,7 +324,14 @@ export default function ActiveSessionPage({ params }: { params: Promise<{ id: st
     if (!keyboardOpen) return;
     const el = document.activeElement;
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-      requestAnimationFrame(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+      requestAnimationFrame(() => {
+        // Already above the keyboard (the logger parks cells on tap): leave it,
+        // re-centering only adds a visible down-slide after the keyboard opens.
+        const vv = window.visualViewport;
+        const r = el.getBoundingClientRect();
+        if (vv && r.top >= vv.offsetTop && r.bottom <= vv.offsetTop + vv.height - 24) return;
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
     }
   }, [keyboardOpen]);
 
